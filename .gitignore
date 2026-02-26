@@ -7,7 +7,7 @@
 # normal ignores:
 *.exe
 nimcache
-/sanctum
+/scriptorium
 *.pdb
 *.ilk
 *.out

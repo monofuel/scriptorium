@@ -1,7 +1,7 @@
-## Tests for the sanctum CLI and core utilities.
+## Tests for the scriptorium CLI and core utilities.
 
 import std/[unittest, os, osproc, strutils]
-import sanctum/[init]
+import scriptorium/[init]
 
 proc makeTestRepo(path: string) =
   ## Create a minimal git repository at path suitable for testing.
@@ -11,25 +11,25 @@ proc makeTestRepo(path: string) =
   discard execCmdEx("git -C " & path & " config user.name Test")
   discard execCmdEx("git -C " & path & " commit --allow-empty -m initial")
 
-suite "sanctum --init":
-  test "creates sanctum/plan branch":
-    let tmp = getTempDir() / "sanctum_test_init_branch"
+suite "scriptorium --init":
+  test "creates scriptorium/plan branch":
+    let tmp = getTempDir() / "scriptorium_test_init_branch"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
     runInit(tmp)
 
-    let (_, rc) = execCmdEx("git -C " & tmp & " rev-parse --verify sanctum/plan")
+    let (_, rc) = execCmdEx("git -C " & tmp & " rev-parse --verify scriptorium/plan")
     check rc == 0
 
   test "plan branch contains correct folder structure":
-    let tmp = getTempDir() / "sanctum_test_init_structure"
+    let tmp = getTempDir() / "scriptorium_test_init_structure"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
     runInit(tmp)
 
-    let (files, _) = execCmdEx("git -C " & tmp & " ls-tree -r --name-only sanctum/plan")
+    let (files, _) = execCmdEx("git -C " & tmp & " ls-tree -r --name-only scriptorium/plan")
     check "spec.md" in files
     check "areas/.gitkeep" in files
     check "tickets/open/.gitkeep" in files
@@ -38,7 +38,7 @@ suite "sanctum --init":
     check "decisions/.gitkeep" in files
 
   test "raises on already initialized workspace":
-    let tmp = getTempDir() / "sanctum_test_init_dupe"
+    let tmp = getTempDir() / "scriptorium_test_init_dupe"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
@@ -47,7 +47,7 @@ suite "sanctum --init":
       runInit(tmp)
 
   test "raises on non-git directory":
-    let tmp = getTempDir() / "sanctum_test_not_a_repo"
+    let tmp = getTempDir() / "scriptorium_test_not_a_repo"
     createDir(tmp)
     defer: removeDir(tmp)
 

@@ -5,7 +5,7 @@ license     = "MIT"
 
 srcDir = "src"
 
-bin = @["sanctum"]
+bin = @["scriptorium"]
 
 requires "nim >= 2.0.0"
 requires "MCPort >= 1.0.0"

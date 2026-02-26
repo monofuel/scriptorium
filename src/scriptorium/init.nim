@@ -1,8 +1,8 @@
 import std/[os, osproc, streams, strformat, strutils]
 
 const
-  PlanBranch = "sanctum/plan"
-  SpecPlaceholder = "# Spec\n\nRun `sanctum plan` to build your spec with the Architect.\n"
+  PlanBranch = "scriptorium/plan"
+  SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
   PlanDirs = [
     "areas",
     "tickets/open",
@@ -32,16 +32,16 @@ proc gitCheck(dir: string, args: varargs[string]): int =
   p.close()
 
 proc runInit*(path: string) =
-  ## Initialize a new sanctum workspace in the given git repository.
+  ## Initialize a new scriptorium workspace in the given git repository.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()
 
   if gitCheck(target, "rev-parse", "--git-dir") != 0:
     raise newException(ValueError, fmt"{target} is not a git repository")
 
   if gitCheck(target, "rev-parse", "--verify", PlanBranch) == 0:
-    raise newException(ValueError, "workspace already initialized (sanctum/plan branch exists)")
+    raise newException(ValueError, "workspace already initialized (scriptorium/plan branch exists)")
 
-  let tmpPlan = getTempDir() / "sanctum_plan_init"
+  let tmpPlan = getTempDir() / "scriptorium_plan_init"
   if dirExists(tmpPlan):
     removeDir(tmpPlan)
 
@@ -57,11 +57,11 @@ proc runInit*(path: string) =
   writeFile(tmpPlan / "spec.md", SpecPlaceholder)
 
   gitRun(tmpPlan, "add", ".")
-  gitRun(tmpPlan, "commit", "-m", "sanctum: initialize plan branch")
+  gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
 
-  echo "Initialized sanctum workspace."
+  echo "Initialized scriptorium workspace."
   echo fmt"  Plan branch: {PlanBranch}"
   echo ""
   echo "Next steps:"
-  echo "  sanctum plan   — build your spec with the Architect"
-  echo "  sanctum run    — start the orchestrator"
+  echo "  scriptorium plan   — build your spec with the Architect"
+  echo "  scriptorium run    — start the orchestrator"

@@ -6,7 +6,7 @@
 ## rough plan
 
 
-have a top level tool, `sanctum` with commands like `sanctum --init` to create a workspace
+have a top level tool, `scriptorium` with commands like `scriptorium --init` to create a workspace
 - you work with 'the architect' (mayor, top manager) to create a spec
 - the spec gets built out into a larger concrete plan
 - strict heirarchy
@@ -33,12 +33,12 @@ have a top level tool, `sanctum` with commands like `sanctum --init` to create a
 
 - should work interchangeably with codex, claude-code, or my own typoi cli agent tool.
 
-- in contrast to gastown, the sanctum would be very opinionated with my own opinions.
+- in contrast to gastown, the scriptorium would be very opinionated with my own opinions.
 - as an agent orchestrator, it should be capable of making the 'v2' version of itself, or v3, v4, and so on.
 
 - we should probably have a folder like ./prompts/ that contains the base system prompts for the agents, like architect.md, manager.md, coding_agent.md, merging_agent.md, etc.
 
-- the sanctum should perform it's own upgrades to ensure it is working.
+- the scriptorium should perform it's own upgrades to ensure it is working.
 - we should have unit tests and small integration tests.
   - eg: architect tests, manager tests, coding agent tests, merging agent tests.
 
@@ -74,8 +74,8 @@ directly.
 
 ### V1 Capabilities
 
-- `sanctum --init` sets up a new workspace with a planning branch and blank `spec.md`
-- `sanctum run` starts the orchestrator daemon: HTTP MCP server + event loop
+- `scriptorium --init` sets up a new workspace with a planning branch and blank `spec.md`
+- `scriptorium run` starts the orchestrator daemon: HTTP MCP server + event loop
 - Architect is invoked when areas are missing; it reads `spec.md` and creates area files
 - Manager is invoked per area when that area has no open tickets; it reads the area file and creates tickets
 - Orchestrator assigns the oldest open ticket to a Coding Agent and manages the worktree
@@ -93,8 +93,8 @@ directly.
 
 ### V1 Operational Rules
 
-- `sanctum.json` is the only runtime config file in V1. `sanctum.toml` is not supported.
-- The orchestrator is the only writer to `sanctum/plan`.
+- `scriptorium.json` is the only runtime config file in V1. `scriptorium.toml` is not supported.
+- The orchestrator is the only writer to `scriptorium/plan`.
 - Every ticket state transition is a single git commit authored by the orchestrator.
 - A ticket is always in exactly one state directory (`open/`, `in-progress/`, or `done/`).
 - There is no "partially moved ticket" state in V1.
@@ -102,24 +102,24 @@ directly.
 
 ## Implementation
 
-Sanctum is written in **Nim**. Key libraries:
+scriptorium is written in **Nim**. Key libraries:
 
 - **MCPort** — MCP client/server over HTTP. Used for the orchestrator's MCP server and
   for any agent harness that needs to act as an MCP client.
-- **jsony** — fast JSON parsing/serialization. Used for `sanctum.json` config and all
+- **jsony** — fast JSON parsing/serialization. Used for `scriptorium.json` config and all
   internal structured data.
 
-Tests are always run with **`make test`**. The project being managed by sanctum must have
-a `Makefile` with a `test` target. Sanctum does not support configurable test commands —
+Tests are always run with **`make test`**. The project being managed by scriptorium must have
+a `Makefile` with a `test` target. scriptorium does not support configurable test commands —
 `make test` is the contract.
 
 
 ## Agent Prompts
 
 System prompts for each agent role (`architect`, `manager`, `coding_agent`, etc.) live in
-the sanctum source tree under `prompts/` and are embedded into the binary at compile time
+the scriptorium source tree under `prompts/` and are embedded into the binary at compile time
 using Nim's `staticRead`. They are not stored in the plan branch and are not configurable
-at runtime — changing a prompt means cutting a new release of sanctum.
+at runtime — changing a prompt means cutting a new release of scriptorium.
 
 This keeps the plan branch purely about the current project's state. Prompts are code,
 not data.
@@ -127,7 +127,7 @@ not data.
 
 ## Planning Branch
 
-All planning artifacts live in a dedicated `sanctum/plan` git branch, separate from the
+All planning artifacts live in a dedicated `scriptorium/plan` git branch, separate from the
 main codebase (similar to how `gh-pages` works). No database. Everything is a markdown
 file, every state change is a git commit. Full audit trail for free.
 
@@ -166,20 +166,20 @@ serve as the unit of work at the Coding Agent level.
 
 The top-level spec is a plain markdown document that describes what the project is, what
 it must do, and what done looks like. It is written collaboratively — the user runs
-`sanctum plan` and has a conversation with the Architect, which produces or revises
+`scriptorium plan` and has a conversation with the Architect, which produces or revises
 `spec.md`. The Architect owns this file; no other agent modifies it.
 
 A minimal spec.md:
 
 ```markdown
-# the_sanctum — V2 Spec
+# the_scriptorium — V2 Spec
 
 ## Goal
 A self-upgrading agent orchestrator. Given this spec, a running V1 instance should
 be able to produce a working V2.
 
 ## Requirements
-- Parallel coding agents (up to N, configured in sanctum.json)
+- Parallel coding agents (up to N, configured in scriptorium.json)
 - Statistics collection per ticket (model used, time taken, pass/fail)
 - Prediction of task difficulty based on ticket content
 
@@ -232,11 +232,11 @@ Each ticket is a markdown file. Moving the file between `open/`, `in-progress/`,
 **Worktree:** —
 
 ## Goal
-Create the `sanctum` binary with `--init` and `run` subcommands.
+Create the `scriptorium` binary with `--init` and `run` subcommands.
 
 ## Acceptance Criteria
-- [ ] `sanctum --init` creates the plan branch and folder structure
-- [ ] `sanctum run` starts a fully operational orchestrator loop
+- [ ] `scriptorium --init` creates the plan branch and folder structure
+- [ ] `scriptorium run` starts a fully operational orchestrator loop
 - [ ] Tests pass
 
 ## Notes
@@ -245,11 +245,11 @@ Create the `sanctum` binary with `--init` and `run` subcommands.
 
 ### Workflow
 
-Agents never commit to `sanctum/plan` directly. All plan branch mutations go through the
+Agents never commit to `scriptorium/plan` directly. All plan branch mutations go through the
 orchestrator's task queue. Agents only call simple MCP tools; the orchestrator enacts the
 consequences in deterministic code.
 
-1. User runs `sanctum plan` → interactive conversation with Architect → Architect calls `submit_spec(content)` → orchestrator writes and commits `spec.md`
+1. User runs `scriptorium plan` → interactive conversation with Architect → Architect calls `submit_spec(content)` → orchestrator writes and commits `spec.md`
 2. Architect calls `create_area(...)` for each domain → orchestrator writes area files and commits
 3. Manager is spawned per area → reads area file, calls `create_ticket(...)` via HTTP MCP → orchestrator writes ticket files into `tickets/open/` and commits
 4. Orchestrator picks the oldest open ticket, creates a code worktree, moves ticket to `in-progress/`
@@ -261,52 +261,52 @@ No agent decides when to run tests, when to merge, or when to move a ticket. Tho
 automatic consequences triggered by code, not by agent judgment.
 
 
-## CLI — `sanctum`
+## CLI — `scriptorium`
 
 ```
-sanctum --init [path]      Initialize a new sanctum workspace
-sanctum --import [path]    Adopt an existing repo (later version)
-sanctum run                Start the orchestrator (reads current spec, drives work)
-sanctum status             Show ticket counts and current agent activity
-sanctum plan               Conversation with the Architect to build or revise spec.md
-sanctum worktrees          List active git worktrees and which tickets they belong to
+scriptorium --init [path]      Initialize a new scriptorium workspace
+scriptorium --import [path]    Adopt an existing repo (later version)
+scriptorium run                Start the orchestrator (reads current spec, drives work)
+scriptorium status             Show ticket counts and current agent activity
+scriptorium plan               Conversation with the Architect to build or revise spec.md
+scriptorium worktrees          List active git worktrees and which tickets they belong to
 ```
 
-### `sanctum --init`
+### `scriptorium --init`
 
 Sets up the workspace:
-1. Creates the `sanctum/plan` branch (orphan — no shared history with main)
+1. Creates the `scriptorium/plan` branch (orphan — no shared history with main)
 2. Writes the folder structure (`areas/`, `tickets/open/`, `tickets/in-progress/`, `tickets/done/`, `decisions/`)
 3. Writes a blank `spec.md` placeholder
-4. Commits the skeleton to `sanctum/plan`
-5. Prints next steps: "Run `sanctum plan` to build your spec with the Architect"
+4. Commits the skeleton to `scriptorium/plan`
+5. Prints next steps: "Run `scriptorium plan` to build your spec with the Architect"
 
 No prompts are written — they are compiled into the binary.
 
-### `sanctum --import` *(later version)*
+### `scriptorium --import` *(later version)*
 
-Bootstraps sanctum onto an existing git repository that wasn't started with `sanctum --init`.
+Bootstraps scriptorium onto an existing git repository that wasn't started with `scriptorium --init`.
 The challenge: `spec.md` and the area files don't exist yet, but the codebase does.
 The Architect must reverse-engineer them from what's already there.
 
 Adoption process:
-1. Orchestrator creates the `sanctum/plan` branch and folder structure (same as `--init`)
+1. Orchestrator creates the `scriptorium/plan` branch and folder structure (same as `--init`)
 2. Orchestrator does a shallow crawl of the repo — file tree, README, existing docs, test
    structure — and passes a summary to the Architect as context
 3. Architect reads the codebase and drafts `spec.md` describing what the project *is* and
    what it *does*, as if writing the spec after the fact
 4. Architect decomposes the codebase into area files — one per logical domain found in the
    existing code — documenting what each area covers and what its current state is
-5. User reviews via `sanctum plan` and iterates with the Architect until the spec and areas
+5. User reviews via `scriptorium plan` and iterates with the Architect until the spec and areas
    accurately reflect the codebase
-6. From this point, `sanctum run` works normally — new tickets are written against a known
+6. From this point, `scriptorium run` works normally — new tickets are written against a known
    baseline rather than a blank slate
 
 The adopted spec is a description of reality, not a wishlist. Any gaps or problems the
 Architect identifies during adoption should be noted in the relevant area file so they can
 be ticketed and addressed later.
 
-### `sanctum run`
+### `scriptorium run`
 
 Starts the orchestrator as a long-running daemon. It runs forever, printing structured
 logs, and should be left running in a terminal or managed by a process supervisor. It does
@@ -314,28 +314,28 @@ not exit on its own — kill it to stop it.
 
 Main loop:
 1. Bind HTTP MCP server on a random localhost port (via MCPort)
-2. Check out `sanctum/plan` into a dedicated worktree (orchestrator only)
-3. If `spec.md` is empty or missing, log `WAITING: no spec — run 'sanctum plan'` and idle
+2. Check out `scriptorium/plan` into a dedicated worktree (orchestrator only)
+3. If `spec.md` is empty or missing, log `WAITING: no spec — run 'scriptorium plan'` and idle
 4. If `spec.md` exists but has no areas, spawn Architect — pass `spec.md` via stdin; Architect creates areas via HTTP MCP tools, then exits
 5. For each area with no open or in-progress tickets, spawn a Manager — pass area file + spec excerpt via stdin; Manager creates tickets via HTTP MCP tools, then exits
 6. Pick the oldest open ticket, create a code worktree, move ticket to `in-progress/`
-7. Spawn the Coding Agent harness — pass ticket + area context + spec excerpt via stdin; `SANCTUM_MCP_URL` and `SANCTUM_SESSION_TOKEN` via env
+7. Spawn the Coding Agent harness — pass ticket + area context + spec excerpt via stdin; `scriptorium_MCP_URL` and `scriptorium_SESSION_TOKEN` via env
 8. Agent works; all tool calls arrive at the HTTP MCP server; orchestrator drains task queue continuously
 9. On `submit_pr`: PR enters merge queue → merge master into branch → `make test` → fast-forward merge to master on pass, reopen ticket on fail
 10. Loop back to step 4
 
 If an escalation reaches the Architect and the Architect cannot resolve it, the daemon logs
-`BLOCKED: waiting for user — run 'sanctum plan'` and idles until the block is cleared.
+`BLOCKED: waiting for user — run 'scriptorium plan'` and idles until the block is cleared.
 All other tickets continue if they are unaffected by the block.
 
-### `sanctum plan`
+### `scriptorium plan`
 
 Opens an interactive conversation with the Architect in the terminal. This is the primary
-— and ideally only — interface between the human engineer and the sanctum system. The user
+— and ideally only — interface between the human engineer and the scriptorium system. The user
 should be able to describe what they want in plain language and trust the Architect to
 translate it into spec changes, new areas, and updated tickets.
 
-The Architect in `sanctum plan` has full read access to the plan branch: current `spec.md`,
+The Architect in `scriptorium plan` has full read access to the plan branch: current `spec.md`,
 all area files, all tickets (open, in-progress, done), and any pending escalations. It can
 call `submit_spec`, `create_area`, and `add_note` during the conversation, which take
 effect immediately on the plan branch.
@@ -346,14 +346,14 @@ Typical uses:
 - Clearing a block: reviewing a pending escalation and telling the Architect how to resolve it
 - Status check: "what's in progress right now and what's blocked?"
 
-`sanctum plan` exits when the user ends the conversation. `sanctum run` picks up any
+`scriptorium plan` exits when the user ends the conversation. `scriptorium run` picks up any
 changes to the plan branch automatically on its next loop iteration.
 
 
 ## Orchestrator & Task Queue
 
 The orchestrator is a simple event loop with a serial task queue. It is the only process
-that writes to `sanctum/plan` or performs git operations. Agents never touch the plan
+that writes to `scriptorium/plan` or performs git operations. Agents never touch the plan
 branch — they only call MCP tools that enqueue tasks in the orchestrator.
 
 **The rule:** agents report facts; the orchestrator enacts consequences in code.
@@ -365,7 +365,7 @@ processes them one at a time, in order.
 
 | Task | Triggered by | Effect |
 |---|---|---|
-| `write_spec(content)` | `submit_spec` MCP call from Architect | Writes `spec.md`, commits to `sanctum/plan` |
+| `write_spec(content)` | `submit_spec` MCP call from Architect | Writes `spec.md`, commits to `scriptorium/plan` |
 | `write_area(content)` | `create_area` MCP call from Architect | Writes area file under `areas/`, commits |
 | `create_ticket(spec)` | `create_ticket` MCP call from Manager | Writes ticket file into `tickets/open/`, commits |
 | `assign_ticket(id)` | Orchestrator (automatic) | Moves ticket to `in-progress/`, creates code worktree, commits |
@@ -422,9 +422,9 @@ Architect agent
   │  if resolved: answer flows back down to Coding Agent
   │  if not resolvable (ambiguous requirement, missing info, etc.):
   ▼
-BLOCKED — daemon logs "BLOCKED: run 'sanctum plan'"
+BLOCKED — daemon logs "BLOCKED: run 'scriptorium plan'"
   │  other unaffected tickets continue
-  │  user runs sanctum plan, discusses with Architect
+  │  user runs scriptorium plan, discusses with Architect
   ▼
 Block cleared — Architect calls answer_escalation(ticket_id, answer)
   │  answer passed back to waiting Coding Agent
@@ -437,7 +437,7 @@ asked, what was tried, and how it was resolved.
 
 ### Plan Branch Worktree
 
-The orchestrator maintains a dedicated worktree for `sanctum/plan`, separate from all code
+The orchestrator maintains a dedicated worktree for `scriptorium/plan`, separate from all code
 worktrees. It is the only writer. Agents receive ticket contents via stdin when spawned —
 they never read the plan worktree directly.
 
@@ -447,7 +447,7 @@ they never read the plan worktree directly.
 All agents — Architect, Manager, and Coding Agent — communicate with the orchestrator
 exclusively over HTTP MCP. The orchestrator runs a single HTTP MCP server on a random
 localhost port at startup. Every agent harness is given the server URL via the
-`SANCTUM_MCP_URL` and `SANCTUM_SESSION_TOKEN` environment variables when spawned.
+`scriptorium_MCP_URL` and `scriptorium_SESSION_TOKEN` environment variables when spawned.
 
 The MCP library used is **MCPort**, a Nim library for MCP client/server over HTTP.
 
@@ -461,7 +461,7 @@ Agents do not talk to each other or touch the filesystem outside their own workt
 Orchestrator (HTTP MCP server — MCPort)
   │   localhost, random port, all agents connect here
   │
-  ├── plan worktree  (sanctum/plan — orchestrator only)
+  ├── plan worktree  (scriptorium/plan — orchestrator only)
   │
   ├── Architect harness subprocess
   │     context delivered via stdin; tools called over HTTP MCP
@@ -576,7 +576,7 @@ model.
 | `codex` | All OpenAI models (`codex-5.3`, `codex-mini`) and `qwen3.5-35b-a3b` | Requires a fully compliant Responses API endpoint with `previous_response_id` support — llama.cpp llama-server does not qualify |
 | `typoi` | Any model; **sole support for `grok-code-fast-1`** | Custom CLI agent harness; used when no other harness supports the model |
 
-Harness selection is automatic based on the model name in `sanctum.json`:
+Harness selection is automatic based on the model name in `scriptorium.json`:
 
 ```json
 {
@@ -615,9 +615,9 @@ it can be promoted to the next model tier for that ticket. Promotion is logged i
 ticket file so the cost is visible. This is a manual escape hatch in V1; V2 will track
 patterns and suggest automatic promotion thresholds.
 
-### Configuration — `sanctum.json`
+### Configuration — `scriptorium.json`
 
-All configuration lives in `sanctum.json` at the workspace root. Parsed at startup using
+All configuration lives in `scriptorium.json` at the workspace root. Parsed at startup using
 the Nim `jsony` library. No TOML, no YAML.
 
 ```json

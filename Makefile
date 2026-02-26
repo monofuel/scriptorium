@@ -7,7 +7,7 @@ test:
 	done
 
 build:
-	nim c -o:sanctum src/sanctum.nim
+	nim c -o:scriptorium src/scriptorium.nim
 
 ci:
 	act -W .github/workflows/build.yml

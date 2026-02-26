@@ -1,41 +1,41 @@
 import std/[os, strformat]
-import ./sanctum/[init]
+import ./scriptorium/[init]
 
 const
   Version = "0.1.0"
-  Usage = """sanctum - agent orchestration system
+  Usage = """scriptorium - agent orchestration system
 
 Usage:
-  sanctum --init [path]    Initialize a new sanctum workspace
-  sanctum run              Start the orchestrator daemon
-  sanctum status           Show ticket counts and agent activity
-  sanctum plan             Conversation with the Architect to build or revise spec.md
-  sanctum worktrees        List active git worktrees and their tickets
-  sanctum --version        Print version
-  sanctum --help           Show this help"""
+  scriptorium --init [path]    Initialize a new scriptorium workspace
+  scriptorium run              Start the orchestrator daemon
+  scriptorium status           Show ticket counts and agent activity
+  scriptorium plan             Conversation with the Architect to build or revise spec.md
+  scriptorium worktrees        List active git worktrees and their tickets
+  scriptorium --version        Print version
+  scriptorium --help           Show this help"""
 
 proc cmdInit(path: string) =
-  ## Initialize a new sanctum workspace at the given path.
+  ## Initialize a new scriptorium workspace at the given path.
   runInit(path)
 
 proc cmdRun() =
   ## Start the orchestrator daemon.
-  echo "sanctum: run not yet implemented"
+  echo "scriptorium: run not yet implemented"
   quit(1)
 
 proc cmdStatus() =
   ## Show ticket counts and current agent activity.
-  echo "sanctum: status not yet implemented"
+  echo "scriptorium: status not yet implemented"
   quit(1)
 
 proc cmdPlan() =
   ## Open an interactive conversation with the Architect to build or revise spec.md.
-  echo "sanctum: plan not yet implemented"
+  echo "scriptorium: plan not yet implemented"
   quit(1)
 
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
-  echo "sanctum: worktrees not yet implemented"
+  echo "scriptorium: worktrees not yet implemented"
   quit(1)
 
 when isMainModule:
@@ -62,6 +62,6 @@ when isMainModule:
   of "--help", "-h":
     echo Usage
   else:
-    echo fmt"sanctum: unknown command '{args[0]}'"
+    echo fmt"scriptorium: unknown command '{args[0]}'"
     echo Usage
     quit(1)
