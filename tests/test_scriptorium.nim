@@ -1,6 +1,6 @@
 ## Tests for the scriptorium CLI and core utilities.
 
-import std/[unittest, os, osproc, strutils]
+import std/[os, osproc, sequtils, strutils, unittest]
 import scriptorium/[init, config, orchestrator]
 
 proc makeTestRepo(path: string) =
@@ -44,11 +44,26 @@ proc addAreaToPlan(repoPath: string, fileName: string, content: string) =
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-add-area")
   )
 
+proc addTicketToPlan(repoPath: string, state: string, fileName: string, content: string) =
+  ## Add one ticket file to a plan ticket state directory and commit it.
+  withPlanWorktree(repoPath, "add_ticket", proc(planPath: string) =
+    let relPath = "tickets" / state / fileName
+    writeFile(planPath / relPath, content)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add " & quoteShell(relPath))
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-add-ticket")
+  )
+
 proc planCommitCount(repoPath: string): int =
   ## Return the commit count reachable from the plan branch.
   let (output, rc) = execCmdEx("git -C " & quoteShell(repoPath) & " rev-list --count scriptorium/plan")
   doAssert rc == 0
   result = parseInt(output.strip())
+
+proc planTreeFiles(repoPath: string): seq[string] =
+  ## Return file paths from the plan branch tree.
+  let (output, rc) = execCmdEx("git -C " & quoteShell(repoPath) & " ls-tree -r --name-only scriptorium/plan")
+  doAssert rc == 0
+  result = output.splitLines().filterIt(it.len > 0)
 
 suite "scriptorium --init":
   test "creates scriptorium/plan branch":
@@ -226,6 +241,116 @@ suite "orchestrator planning bootstrap":
     let firstSync = syncAreasFromSpec(tmp, generator)
     let afterFirst = planCommitCount(tmp)
     let secondSync = syncAreasFromSpec(tmp, generator)
+    let afterSecond = planCommitCount(tmp)
+
+    check firstSync
+    check not secondSync
+    check callCount == 1
+    check afterFirst == before + 1
+    check afterSecond == afterFirst
+
+suite "orchestrator manager ticket bootstrap":
+  test "areas needing tickets excludes areas with open or in-progress work":
+    let tmp = getTempDir() / "scriptorium_test_areas_needing_tickets"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
+    addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
+    addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+
+    let needed = areasNeedingTickets(tmp)
+    check "areas/02-core.md" in needed
+    check "areas/01-cli.md" notin needed
+
+  test "sync tickets calls manager with configured coding model":
+    let tmp = getTempDir() / "scriptorium_test_sync_tickets_call"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n\n## Scope\n- CLI\n")
+    writeFile(tmp / "scriptorium.json", """{"models":{"coding":"grok-code-fast-1"}}""")
+
+    var callCount = 0
+    var capturedModel = ""
+    var capturedAreaPath = ""
+    var capturedAreaContent = ""
+    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+      ## Capture manager invocation arguments and return one ticket.
+      inc callCount
+      capturedModel = model
+      capturedAreaPath = areaPath
+      capturedAreaContent = areaContent
+      result = @[
+        TicketDocument(slug: "cli-bootstrap", content: "# Ticket 1\n")
+      ]
+
+    let before = planCommitCount(tmp)
+    let synced = syncTicketsFromAreas(tmp, generator)
+    let after = planCommitCount(tmp)
+
+    check synced
+    check callCount == 1
+    check capturedModel == "grok-code-fast-1"
+    check capturedAreaPath == "areas/01-cli.md"
+    check "## Scope" in capturedAreaContent
+    check after == before + 1
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0001-cli-bootstrap.md" in files
+
+    let (logOutput, rc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan"
+    )
+    check rc == 0
+    check "scriptorium: create tickets from areas" in logOutput
+
+  test "ticket IDs are monotonic based on existing highest ID":
+    let tmp = getTempDir() / "scriptorium_test_ticket_id_monotonic"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
+    addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
+    addTicketToPlan(tmp, "done", "0042-already-done.md", "# Done Ticket\n\n**Area:** old\n")
+
+    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+      ## Return one ticket per area for monotonic ID checks.
+      discard model
+      discard areaPath
+      discard areaContent
+      result = @[
+        TicketDocument(slug: "next-task", content: "# New Ticket\n")
+      ]
+
+    discard syncTicketsFromAreas(tmp, generator)
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0043-next-task.md" in files
+    check "tickets/open/0044-next-task.md" in files
+
+  test "sync tickets is idempotent on second run":
+    let tmp = getTempDir() / "scriptorium_test_sync_tickets_idempotent"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
+
+    var callCount = 0
+    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+      ## Return stable ticket output for idempotence checks.
+      inc callCount
+      discard model
+      discard areaPath
+      discard areaContent
+      result = @[
+        TicketDocument(slug: "stable-task", content: "# Stable Ticket\n")
+      ]
+
+    let before = planCommitCount(tmp)
+    let firstSync = syncTicketsFromAreas(tmp, generator)
+    let afterFirst = planCommitCount(tmp)
+    let secondSync = syncTicketsFromAreas(tmp, generator)
     let afterSecond = planCommitCount(tmp)
 
     check firstSync
