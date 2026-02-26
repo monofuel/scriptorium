@@ -2,6 +2,28 @@
 
 Scope: notes copied from `../Racha` issue-fixer daemon and CI automation for `codex` and `claude` backends only.
 
+for reference
+./claude-help.md
+./codex-help.md
+
+
+## Open questions to figure out
+
+- how do we handle long running tasks where agents are likely to get distracted or ask for help before completing the task?
+- racha was built for simple one-shot tasks. but how do we improve the system to handle more complex tasks?
+- we could hold open stdin/stdout and see if the agent gets stuck?
+  - does codex/claude handle stdout well? how does gastown handle this.
+- we can use mcp tools for communication, but how do we handle nudging agents that get stuck and stop progressing?
+
+- ok stdin/stdout handling sounds like a bad idea, too complicated.
+
+- grok says:
+```
+gastown is Non blocking — because the CLI is started in prompt_mode: "none" and all communication is file-based (mail/hooks/beads), the agent doesn't sit there waiting on your terminal stdin.
+```
+
+- ok so we can just set prompt mode to none so they don't expect input?
+
 ## Daemon Dispatch Flow
 
 Source files:
