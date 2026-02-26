@@ -23,6 +23,7 @@ const
   MergeQueueEnqueueCommitPrefix = "scriptorium: enqueue merge request"
   MergeQueueDoneCommitPrefix = "scriptorium: complete ticket"
   MergeQueueReopenCommitPrefix = "scriptorium: reopen ticket"
+  MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   ManagedWorktreeRoot = ".scriptorium/worktrees"
   TicketBranchPrefix = "scriptorium/ticket-"
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"
@@ -368,6 +369,24 @@ proc parseMergeQueueItem(pendingPath: string, content: string): MergeQueueItem =
   )
   if result.ticketPath.len == 0 or result.ticketId.len == 0 or result.branch.len == 0 or result.worktree.len == 0:
     raise newException(ValueError, fmt"invalid merge queue item: {pendingPath}")
+
+proc ticketPathInState(planPath: string, stateDir: string, item: MergeQueueItem): string =
+  ## Return the expected ticket path for one ticket state directory.
+  result = planPath / stateDir / extractFilename(item.ticketPath)
+
+proc clearActiveQueueInPlanPath(planPath: string): bool =
+  ## Clear queue/merge/active.md when it contains a pending item path.
+  let activePath = planPath / PlanMergeQueueActivePath
+  if fileExists(activePath) and readFile(activePath).strip().len > 0:
+    writeFile(activePath, "")
+    result = true
+
+proc commitMergeQueueCleanup(planPath: string, ticketId: string) =
+  ## Commit merge queue cleanup changes when tracked files were modified.
+  gitRun(planPath, "add", "-A", PlanMergeQueueDir)
+  if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+    let suffix = if ticketId.len > 0: " " & ticketId else: ""
+    gitRun(planPath, "commit", "-m", MergeQueueCleanupCommitPrefix & suffix)
 
 proc listMergeQueueItems(planPath: string): seq[MergeQueueItem] =
   ## Return merge queue items ordered by file name.
@@ -781,17 +800,29 @@ proc processMergeQueue*(repoPath: string): bool =
   ## Process at most one merge queue item and apply success/failure transitions.
   result = withPlanWorktree(repoPath, proc(planPath: string): bool =
     discard ensureMergeQueueInitializedInPlanPath(planPath)
+    let activePath = planPath / PlanMergeQueueActivePath
 
     let queueItems = listMergeQueueItems(planPath)
     if queueItems.len == 0:
+      if clearActiveQueueInPlanPath(planPath):
+        commitMergeQueueCleanup(planPath, "")
+        return true
       return false
 
     let item = queueItems[0]
-    let activePath = planPath / PlanMergeQueueActivePath
     writeFile(activePath, item.pendingPath & "\n")
-
+    let queuePath = planPath / item.pendingPath
     let ticketPath = planPath / item.ticketPath
     if not fileExists(ticketPath):
+      let doneTicketPath = ticketPathInState(planPath, PlanTicketsDoneDir, item)
+      let openTicketPath = ticketPathInState(planPath, PlanTicketsOpenDir, item)
+      let hasTerminalTicket = fileExists(doneTicketPath) or fileExists(openTicketPath)
+      if hasTerminalTicket:
+        if fileExists(queuePath):
+          removeFile(queuePath)
+        writeFile(activePath, "")
+        commitMergeQueueCleanup(planPath, item.ticketId)
+        return true
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {item.ticketPath}")
 
     let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", "master"])
@@ -799,7 +830,6 @@ proc processMergeQueue*(repoPath: string): bool =
     if mergeMasterResult.exitCode == 0:
       testResult = runCommandCapture(item.worktree, "make", @["test"])
 
-    let queuePath = planPath / item.pendingPath
     var mergedToMaster = false
     if mergeMasterResult.exitCode == 0 and testResult.exitCode == 0:
       let mergeToMasterResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =

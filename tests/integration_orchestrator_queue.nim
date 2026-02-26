@@ -88,6 +88,22 @@ proc latestPlanCommits(repoPath: string, count: int): seq[string] =
   doAssert rc == 0
   result = output.splitLines().filterIt(it.len > 0)
 
+proc moveTicketStateInPlan(repoPath: string, fromRelPath: string, toRelPath: string, commitMessage: string) =
+  ## Move one ticket between plan state directories and commit the fixture mutation.
+  withPlanWorktree(repoPath, "move_ticket_state", proc(planPath: string) =
+    moveFile(planPath / fromRelPath, planPath / toRelPath)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add -A tickets")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
+  )
+
+proc writeActiveQueueInPlan(repoPath: string, activeValue: string, commitMessage: string) =
+  ## Write queue/merge/active.md and commit it on the plan branch.
+  withPlanWorktree(repoPath, "write_active_queue", proc(planPath: string) =
+    writeFile(planPath / "queue/merge/active.md", activeValue)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add queue/merge/active.md")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
+  )
+
 suite "integration orchestrator merge queue":
   test "IT-01 agent run enqueues exactly one merge request with metadata":
     withTempRepo("scriptorium_integration_it01_", proc(repoPath: string) =
@@ -293,4 +309,39 @@ suite "integration orchestrator merge queue":
       check commits[0] == "scriptorium: record agent run 0002-second"
       check commits[1] == "scriptorium: assign ticket 0002-second"
       check commits[2] == "scriptorium: complete ticket 0001"
+    )
+
+  test "IT-08 recovery after partial queue transition converges without duplicate moves":
+    withTempRepo("scriptorium_integration_it08_", proc(repoPath: string) =
+      runInit(repoPath)
+      addPassingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, assignment, "recover me")
+      moveTicketStateInPlan(
+        repoPath,
+        assignment.inProgressTicket,
+        "tickets/done/0001-first.md",
+        "integration-partial-done-transition",
+      )
+      writeActiveQueueInPlan(
+        repoPath,
+        "queue/merge/pending/0001-0001.md\n",
+        "integration-partial-active-state",
+      )
+
+      let firstProcessed = processMergeQueue(repoPath)
+      let secondProcessed = processMergeQueue(repoPath)
+      check firstProcessed
+      check not secondProcessed
+
+      let files = planTreeFiles(repoPath)
+      check "tickets/done/0001-first.md" in files
+      check "tickets/open/0001-first.md" notin files
+      check "tickets/in-progress/0001-first.md" notin files
+      check pendingQueueFiles(repoPath).len == 0
+
+      let activeFile = readPlanFile(repoPath, "queue/merge/active.md")
+      check activeFile.strip().len == 0
     )
