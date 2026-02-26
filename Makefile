@@ -1,4 +1,4 @@
-.PHONY: test build
+.PHONY: test build ci
 
 test:
 	@for f in tests/test_*.nim; do \
@@ -8,3 +8,6 @@ test:
 
 build:
 	nim c -o:sanctum src/sanctum.nim
+
+ci:
+	act -W .github/workflows/build.yml
