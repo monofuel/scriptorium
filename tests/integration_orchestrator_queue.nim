@@ -4,6 +4,9 @@ import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
   scriptorium/[agent_runner, config, init, orchestrator]
 
+const
+  OrchestratorBasePort = 18000
+
 proc runCmdOrDie(cmd: string) =
   ## Run a shell command and fail immediately when it exits non-zero.
   let (output, rc) = execCmdEx(cmd)
@@ -102,6 +105,15 @@ proc writeActiveQueueInPlan(repoPath: string, activeValue: string, commitMessage
     writeFile(planPath / "queue/merge/active.md", activeValue)
     runCmdOrDie("git -C " & quoteShell(planPath) & " add queue/merge/active.md")
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
+  )
+
+proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
+  ## Write a unique local orchestrator endpoint configuration for test isolation.
+  let basePort = OrchestratorBasePort + (getCurrentProcessId().int mod 1000)
+  let orchestratorPort = basePort + portOffset
+  writeFile(
+    repoPath / "scriptorium.json",
+    fmt"""{{"endpoints":{{"local":"http://127.0.0.1:{orchestratorPort}"}}}}""",
   )
 
 suite "integration orchestrator merge queue":
@@ -292,11 +304,7 @@ suite "integration orchestrator merge queue":
       defer:
         putEnv("PATH", oldPath)
 
-      let orchestratorPort = 18000 + (getCurrentProcessId().int mod 1000)
-      writeFile(
-        repoPath / "scriptorium.json",
-        fmt"""{{"endpoints":{{"local":"http://127.0.0.1:{orchestratorPort}"}}}}""",
-      )
+      writeOrchestratorEndpointConfig(repoPath, 0)
       runOrchestratorForTicks(repoPath, 1)
 
       let files = planTreeFiles(repoPath)
@@ -344,4 +352,48 @@ suite "integration orchestrator merge queue":
 
       let activeFile = readPlanFile(repoPath, "queue/merge/active.md")
       check activeFile.strip().len == 0
+    )
+
+  test "IT-09 red master blocks assignment of open tickets":
+    withTempRepo("scriptorium_integration_it09_", proc(repoPath: string) =
+      runInit(repoPath)
+      addFailingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+      writeOrchestratorEndpointConfig(repoPath, 1)
+
+      runOrchestratorForTicks(repoPath, 1)
+
+      let files = planTreeFiles(repoPath)
+      check "tickets/open/0001-first.md" in files
+      check "tickets/in-progress/0001-first.md" notin files
+    )
+
+  test "IT-10 global halt while red resumes after master health is restored":
+    withTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
+      runInit(repoPath)
+      addPassingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m integration-ticket-output")
+      discard enqueueMergeRequest(repoPath, assignment, "merge me")
+
+      addFailingMakefile(repoPath)
+      writeOrchestratorEndpointConfig(repoPath, 2)
+      runOrchestratorForTicks(repoPath, 1)
+
+      var files = planTreeFiles(repoPath)
+      check "tickets/in-progress/0001-first.md" in files
+      check "tickets/done/0001-first.md" notin files
+      check pendingQueueFiles(repoPath).len == 1
+
+      addPassingMakefile(repoPath)
+      runOrchestratorForTicks(repoPath, 1)
+
+      files = planTreeFiles(repoPath)
+      check "tickets/done/0001-first.md" in files
+      check "tickets/in-progress/0001-first.md" notin files
+      check pendingQueueFiles(repoPath).len == 0
     )

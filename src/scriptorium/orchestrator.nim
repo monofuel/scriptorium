@@ -32,6 +32,7 @@ const
   AgentMessagePreviewChars = 1200
   AgentStdoutPreviewChars = 1200
   MergeQueueOutputPreviewChars = 2000
+  MasterHealthCheckTarget = "test"
   IdleSleepMs = 200
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
@@ -72,6 +73,11 @@ type
     address: string,
     port: int,
   ]
+
+  MasterHealthState = object
+    head*: string
+    healthy*: bool
+    initialized*: bool
 
 var shouldRun {.volatile.} = true
 
@@ -963,6 +969,36 @@ proc hasPlanBranch(repoPath: string): bool =
   ## Return true when the repository has the scriptorium plan branch.
   result = gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) == 0
 
+proc masterHeadCommit(repoPath: string): string =
+  ## Return the current master branch commit SHA.
+  let process = startProcess(
+    "git",
+    args = @["-C", repoPath, "rev-parse", "master"],
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  let output = process.outputStream.readAll()
+  let rc = process.waitForExit()
+  process.close()
+  if rc != 0:
+    raise newException(IOError, fmt"git rev-parse master failed: {output.strip()}")
+  result = output.strip()
+
+proc checkMasterHealth(repoPath: string): bool =
+  ## Run the master health check command and return true on success.
+  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
+    runCommandCapture(masterPath, "make", @[MasterHealthCheckTarget])
+  )
+  result = checkResult.exitCode == 0
+
+proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
+  ## Return cached master health, refreshing only when the master commit changes.
+  let currentHead = masterHeadCommit(repoPath)
+  if (not state.initialized) or state.head != currentHead:
+    state.head = currentHead
+    state.healthy = checkMasterHealth(repoPath)
+    state.initialized = true
+  result = state.healthy
+
 proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: OrchestratorEndpoint, maxTicks: int) =
   ## Start HTTP transport and execute the orchestrator idle event loop.
   shouldRun = true
@@ -972,12 +1008,14 @@ proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: 
   createThread(serverThread, runHttpServer, (httpServer, endpoint.address, endpoint.port))
 
   var ticks = 0
+  var masterHealthState = MasterHealthState()
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
     if hasPlanBranch(repoPath):
-      discard processMergeQueue(repoPath)
-      discard executeOldestOpenTicket(repoPath)
+      if isMasterHealthy(repoPath, masterHealthState):
+        discard processMergeQueue(repoPath)
+        discard executeOldestOpenTicket(repoPath)
     sleep(IdleSleepMs)
     inc ticks
 
