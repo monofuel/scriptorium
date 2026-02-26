@@ -1,7 +1,7 @@
 import
   std/[algorithm, os, osproc, posix, sets, streams, strformat, strutils, tempfiles, uri],
   mcport,
-  ./config
+  ./[agent_runner, config]
 
 const
   PlanBranch = "scriptorium/plan"
@@ -15,9 +15,14 @@ const
   AreaFieldPrefix = "**Area:**"
   WorktreeFieldPrefix = "**Worktree:**"
   TicketAssignCommitPrefix = "scriptorium: assign ticket"
+  TicketAgentRunCommitPrefix = "scriptorium: record agent run"
   ManagedWorktreeRoot = ".scriptorium/worktrees"
   TicketBranchPrefix = "scriptorium/ticket-"
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"
+  DefaultAgentAttempt = 1
+  DefaultAgentMaxAttempts = 2
+  AgentMessagePreviewChars = 1200
+  AgentStdoutPreviewChars = 1200
   IdleSleepMs = 200
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
@@ -172,6 +177,60 @@ proc setTicketWorktree(ticketContent: string, worktreePath: string): string =
     lines.add("")
     lines.add(WorktreeFieldPrefix & " " & worktreePath)
   result = lines.join("\n") & "\n"
+
+proc truncateTail(value: string, maxChars: int): string =
+  ## Return at most maxChars from the end of value.
+  if maxChars < 1:
+    result = ""
+  elif value.len <= maxChars:
+    result = value
+  else:
+    result = value[(value.len - maxChars)..^1]
+
+proc buildCodingAgentPrompt(ticketRelPath: string, ticketContent: string): string =
+  ## Build the coding-agent prompt from ticket context.
+  result =
+    "You are the coding agent for this ticket.\n" &
+    "Implement the requested work and keep changes minimal and safe.\n\n" &
+    "Ticket path:\n" &
+    ticketRelPath & "\n\n" &
+    "Ticket content:\n" &
+    ticketContent.strip() & "\n"
+
+proc formatAgentRunNote(model: string, runResult: AgentRunResult): string =
+  ## Format a markdown note summarizing one coding-agent run.
+  let messagePreview = truncateTail(runResult.lastMessage.strip(), AgentMessagePreviewChars)
+  let stdoutPreview = truncateTail(runResult.stdout.strip(), AgentStdoutPreviewChars)
+  result =
+    "## Agent Run\n" &
+    fmt"- Model: {model}\n" &
+    fmt"- Backend: {runResult.backend}\n" &
+    fmt"- Exit Code: {runResult.exitCode}\n" &
+    fmt"- Attempt: {runResult.attempt}\n" &
+    fmt"- Attempt Count: {runResult.attemptCount}\n" &
+    fmt"- Timeout: {runResult.timeoutKind}\n" &
+    fmt"- Log File: {runResult.logFile}\n" &
+    fmt"- Last Message File: {runResult.lastMessageFile}\n"
+
+  if messagePreview.len > 0:
+    result &=
+      "\n### Agent Last Message\n" &
+      "```text\n" &
+      messagePreview & "\n" &
+      "```\n"
+
+  if stdoutPreview.len > 0:
+    result &=
+      "\n### Agent Stdout Tail\n" &
+      "```text\n" &
+      stdoutPreview & "\n" &
+      "```\n"
+
+proc appendAgentRunNote(ticketContent: string, model: string, runResult: AgentRunResult): string =
+  ## Append a formatted coding-agent run note to a ticket markdown document.
+  let base = ticketContent.strip()
+  let note = formatAgentRunNote(model, runResult).strip()
+  result = base & "\n\n" & note & "\n"
 
 proc listMarkdownFiles(basePath: string): seq[string] =
   ## Collect markdown files recursively and return sorted absolute paths.
@@ -482,6 +541,63 @@ proc cleanupStaleTicketWorktrees*(repoPath: string): seq[string] =
         removeDir(path)
       result.add(path)
 
+proc executeAssignedTicket*(
+  repoPath: string,
+  assignment: TicketAssignment,
+  runner: AgentRunner = runAgent,
+): AgentRunResult =
+  ## Run the coding agent for an assigned in-progress ticket and persist run notes.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  if assignment.inProgressTicket.len == 0:
+    raise newException(ValueError, "in-progress ticket path is required")
+  if assignment.worktree.len == 0:
+    raise newException(ValueError, "assignment worktree path is required")
+
+  let cfg = loadConfig(repoPath)
+  let ticketRelPath = assignment.inProgressTicket
+  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+    let ticketPath = planPath / ticketRelPath
+    if not fileExists(ticketPath):
+      raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+    readFile(ticketPath)
+  )
+
+  let request = AgentRunRequest(
+    prompt: buildCodingAgentPrompt(ticketRelPath, ticketContent),
+    workingDir: assignment.worktree,
+    model: cfg.models.coding,
+    ticketId: ticketIdFromTicketPath(ticketRelPath),
+    attempt: DefaultAgentAttempt,
+    skipGitRepoCheck: true,
+    maxAttempts: DefaultAgentMaxAttempts,
+  )
+  let agentResult = runner(request)
+  result = agentResult
+
+  discard withPlanWorktree(repoPath, proc(planPath: string): int =
+    let ticketPath = planPath / ticketRelPath
+    if not fileExists(ticketPath):
+      raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+
+    let currentContent = readFile(ticketPath)
+    let updatedContent = appendAgentRunNote(currentContent, cfg.models.coding, agentResult)
+    writeFile(ticketPath, updatedContent)
+    gitRun(planPath, "add", ticketRelPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      let ticketName = splitFile(ticketRelPath).name
+      gitRun(planPath, "commit", "-m", TicketAgentRunCommitPrefix & " " & ticketName)
+    0
+  )
+
+proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
+  ## Assign the oldest open ticket and execute it with the coding agent.
+  let assignment = assignOldestOpenTicket(repoPath)
+  if assignment.inProgressTicket.len == 0:
+    result = AgentRunResult()
+  else:
+    result = executeAssignedTicket(repoPath, assignment, runner)
+
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
   let server = newMcpServer(OrchestratorServerName, OrchestratorServerVersion)
@@ -506,7 +622,11 @@ proc runHttpServer(args: ServerThreadArgs) {.thread.} =
   ## Run the MCP HTTP server in a background thread.
   args.httpServer.serve(args.port, args.address)
 
-proc runOrchestratorLoop(httpServer: HttpMcpServer, endpoint: OrchestratorEndpoint, maxTicks: int) =
+proc hasPlanBranch(repoPath: string): bool =
+  ## Return true when the repository has the scriptorium plan branch.
+  result = gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) == 0
+
+proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: OrchestratorEndpoint, maxTicks: int) =
   ## Start HTTP transport and execute the orchestrator idle event loop.
   shouldRun = true
   installSignalHandlers()
@@ -518,6 +638,8 @@ proc runOrchestratorLoop(httpServer: HttpMcpServer, endpoint: OrchestratorEndpoi
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
+    if hasPlanBranch(repoPath):
+      discard executeOldestOpenTicket(repoPath)
     sleep(IdleSleepMs)
     inc ticks
 
@@ -529,11 +651,11 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int) =
   ## Run the orchestrator loop for a bounded number of ticks. Used by tests.
   let endpoint = loadOrchestratorEndpoint(repoPath)
   let httpServer = createOrchestratorServer()
-  runOrchestratorLoop(httpServer, endpoint, maxTicks)
+  runOrchestratorLoop(repoPath, httpServer, endpoint, maxTicks)
 
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
   let endpoint = loadOrchestratorEndpoint(repoPath)
   echo fmt"scriptorium: orchestrator listening on http://{endpoint.address}:{endpoint.port}"
   let httpServer = createOrchestratorServer()
-  runOrchestratorLoop(httpServer, endpoint, -1)
+  runOrchestratorLoop(repoPath, httpServer, endpoint, -1)

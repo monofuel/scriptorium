@@ -2,7 +2,7 @@
 
 import
   std/[os, osproc, sequtils, strutils, unittest],
-  scriptorium/[init, config, orchestrator]
+  scriptorium/[agent_runner, config, init, orchestrator]
 
 proc makeTestRepo(path: string) =
   ## Create a minimal git repository at path suitable for testing.
@@ -439,3 +439,58 @@ suite "orchestrator ticket assignment":
     let removed = cleanupStaleTicketWorktrees(tmp)
     check assignment.worktree in removed
     check assignment.worktree notin gitWorktreePaths(tmp)
+
+suite "orchestrator coding agent execution":
+  test "executeAssignedTicket runs agent and appends run summary":
+    let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    let before = planCommitCount(tmp)
+
+    var callCount = 0
+    var capturedRequest = AgentRunRequest()
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Capture one request and return a deterministic successful run result.
+      inc callCount
+      capturedRequest = request
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: """{"type":"message","text":"done"}""",
+        logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+        lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+        lastMessage: "Implemented the ticket.",
+        timeoutKind: "none",
+      )
+
+    let runResult = executeAssignedTicket(tmp, assignment, fakeRunner)
+    let after = planCommitCount(tmp)
+
+    check callCount == 1
+    check capturedRequest.model == "codex-mini"
+    check capturedRequest.workingDir == assignment.worktree
+    check capturedRequest.ticketId == "0001"
+    check "Ticket 1" in capturedRequest.prompt
+    check runResult.exitCode == 0
+    check after == before + 1
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/in-progress/0001-first.md"
+    )
+    check ticketRc == 0
+    check "## Agent Run" in ticketContent
+    check "- Model: codex-mini" in ticketContent
+    check "- Exit Code: 0" in ticketContent
+
+    let (commitOutput, commitRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan"
+    )
+    check commitRc == 0
+    check "scriptorium: record agent run 0001-first" in commitOutput
