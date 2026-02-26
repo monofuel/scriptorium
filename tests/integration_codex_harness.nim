@@ -6,17 +6,32 @@ import
 
 const
   DefaultIntegrationModel = "gpt-5.1-codex-mini"
+  CodexAuthPathEnv = "CODEX_AUTH_FILE"
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
   result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
 
+proc codexAuthPath(): string =
+  ## Return the configured Codex auth file path used for OAuth credentials.
+  let overridePath = getEnv(CodexAuthPathEnv, "").strip()
+  if overridePath.len > 0:
+    result = overridePath
+  else:
+    result = expandTilde("~/.codex/auth.json")
+
+proc hasCodexAuth(): bool =
+  ## Return true when API keys or a Codex OAuth auth file are available.
+  let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
+  result = hasApiKey or fileExists(codexAuthPath())
+
 suite "integration codex harness":
   test "real codex exec one-shot smoke test":
-    let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
     let codexPath = findExe("codex")
     doAssert codexPath.len > 0, "codex binary is required for integration tests"
-    doAssert hasApiKey, "OPENAI_API_KEY or CODEX_API_KEY is required for integration tests"
+    doAssert hasCodexAuth(),
+      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
+      codexAuthPath() & ")"
 
     let tmpDir = createTempDir("scriptorium_integration_codex_", "", getTempDir())
     defer:

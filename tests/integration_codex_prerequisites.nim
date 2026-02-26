@@ -20,13 +20,24 @@ proc runHarnessWithEnv(
   pathValue: string,
   openAiKey: string,
   codexKey: string,
+  authFilePath: string,
+  includeHostPath: bool = true,
 ): tuple[output: string, exitCode: int] =
   ## Run the integration harness binary with a controlled environment.
+  let inheritedPath = if includeHostPath: getEnv("PATH", "") else: ""
+  let fullPath =
+    if pathValue.len > 0 and inheritedPath.len > 0:
+      pathValue & ":" & inheritedPath
+    elif pathValue.len > 0:
+      pathValue
+    else:
+      inheritedPath
   let command =
     "env -i " &
-    "PATH=" & quoteShell(pathValue) & " " &
+    "PATH=" & quoteShell(fullPath) & " " &
     "OPENAI_API_KEY=" & quoteShell(openAiKey) & " " &
     "CODEX_API_KEY=" & quoteShell(codexKey) & " " &
+    "CODEX_AUTH_FILE=" & quoteShell(authFilePath) & " " &
     quoteShell(binaryPath)
   result = runCmd(command)
 
@@ -47,13 +58,15 @@ suite "integration codex prerequisites":
       tmpDir,
       "dummy-openai-key",
       "dummy-codex-key",
+      tmpDir / "missing-auth.json",
+      false,
     )
 
     check runResult.exitCode != 0
     check "codex binary is required for integration tests" in runResult.output
 
-  test "IT-07 fails clearly when API keys are missing":
-    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_keys_", "", getTempDir())
+  test "IT-07 fails clearly when API keys and OAuth auth are missing":
+    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_auth_", "", getTempDir())
     defer:
       removeDir(tmpDir)
 
@@ -62,7 +75,35 @@ suite "integration codex prerequisites":
     writeExecutableScript(fakeBinDir / "codex", "exit 0\n")
 
     let harnessBinary = buildCodexHarnessBinary(tmpDir)
-    let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "")
+    let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", tmpDir / "missing-auth.json")
 
     check runResult.exitCode != 0
-    check "OPENAI_API_KEY or CODEX_API_KEY is required for integration tests" in runResult.output
+    check "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests" in runResult.output
+
+  test "IT-07 accepts OAuth auth file when API keys are missing":
+    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_oauth_", "", getTempDir())
+    defer:
+      removeDir(tmpDir)
+
+    let fakeBinDir = tmpDir / "bin"
+    createDir(fakeBinDir)
+    writeExecutableScript(fakeBinDir / "codex", """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"message","text":"ok"}\n'
+printf 'ok\n' > "$last_message"
+""")
+
+    let authFilePath = tmpDir / "oauth-auth.json"
+    writeFile(authFilePath, """{"tokens":{"access_token":"test"}}""")
+    let harnessBinary = buildCodexHarnessBinary(tmpDir)
+    let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", authFilePath)
+
+    check runResult.exitCode == 0
+    check "[OK] real codex exec one-shot smoke test" in runResult.output
