@@ -6,5 +6,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: treeform/setup-nim-action@v2
-    - run: nimble test -y
+    - uses: treeform/setup-nim-action@v6
+    - run: nimby sync -g nimby.lock
+    - run: make test

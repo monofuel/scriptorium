@@ -12,3 +12,4 @@ nimcache
 *.ilk
 *.out
 .*
+!.github
