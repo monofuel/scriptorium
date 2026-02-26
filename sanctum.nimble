@@ -8,3 +8,4 @@ srcDir = "src"
 bin = @["sanctum"]
 
 requires "nim >= 2.0.0"
+requires "MCPort >= 1.0.0"
