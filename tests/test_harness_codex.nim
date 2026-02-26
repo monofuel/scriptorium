@@ -40,6 +40,10 @@ suite "harness codex":
 
     let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
     check args == @[
+      "-c",
+      "developer_instructions=\"\"",
+      "-c",
+      "mcp_servers={}",
       "exec",
       "--json",
       "--output-last-message",

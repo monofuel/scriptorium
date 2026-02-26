@@ -13,3 +13,5 @@ nimcache
 *.out
 .*
 !.github
+!.codex
+!.codex/*

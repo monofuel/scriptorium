@@ -31,8 +31,8 @@ suite "integration codex harness":
       ticketId: "integration-smoke",
       skipGitRepoCheck: true,
       logRoot: tmpDir / "logs",
-      hardTimeoutMs: 180_000,
-      noOutputTimeoutMs: 60_000,
+      hardTimeoutMs: 45_000,
+      noOutputTimeoutMs: 15_000,
     )
 
     let runResult = runCodex(request)

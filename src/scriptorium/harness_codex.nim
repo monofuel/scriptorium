@@ -3,6 +3,8 @@ import
 
 const
   DefaultCodexBinary = "codex"
+  DefaultCodexDeveloperInstructions = "developer_instructions=\"\""
+  DefaultCodexMcpServers = "mcp_servers={}"
   DefaultTicketId = "adhoc"
   DefaultAttempt = 1
   DefaultLogRoot = ".scriptorium/logs"
@@ -148,6 +150,10 @@ proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq
     raise newException(ValueError, "lastMessagePath is required")
 
   result = @[
+    "-c",
+    DefaultCodexDeveloperInstructions,
+    "-c",
+    DefaultCodexMcpServers,
     "exec",
     "--json",
     "--output-last-message",
