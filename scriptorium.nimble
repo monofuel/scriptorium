@@ -1,5 +1,5 @@
-version     = "0.1.0"
-author      = "Andre von Houck"
+version     = "1.0.0"
+author      = "Andrew Brower"
 description = "Agent orchestration system for managing hierarchical AI coding agents."
 license     = "MIT"
 
