@@ -386,8 +386,10 @@ proc buildArchitectPlanPrompt(repoPath: string, userPrompt: string, currentSpec:
   result =
     "You are the Architect for scriptorium.\n" &
     buildPlanScopePrompt(repoPath) & "\n" &
-    "Update spec.md based on the user request.\n" &
-    "Use file tools to edit spec.md directly.\n\n" &
+    "Act as the planning liaison for the engineer.\n" &
+    "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md.\n" &
+    "Only edit spec.md when the engineer is asking to change plan content.\n" &
+    "When editing is needed, use file tools to edit spec.md directly.\n\n" &
     "User request:\n" &
     userPrompt.strip() & "\n\n" &
     "Current spec.md:\n" &
@@ -1597,8 +1599,10 @@ proc buildInteractivePlanPrompt*(repoPath: string, spec: string, history: seq[Pl
   result =
     "You are the Architect for scriptorium.\n" &
     buildPlanScopePrompt(repoPath) & "\n" &
-    "Update spec.md based on the user request.\n" &
-    "You may edit spec.md directly using your file tools.\n\n" &
+    "Act as the planning liaison for the engineer.\n" &
+    "If the engineer is discussing or asking questions, reply directly and do not edit spec.md.\n" &
+    "Only edit spec.md when the engineer asks to change plan content.\n" &
+    "When editing is needed, you may edit spec.md directly using your file tools.\n\n" &
     "Current spec.md:\n" &
     spec.strip() & "\n"
 

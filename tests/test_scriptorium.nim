@@ -351,6 +351,8 @@ suite "orchestrator plan spec update":
     check "Run `scriptorium plan`" in capturedFirstSpec
     check "expand scope" in capturedFirstUserRequest
     check "Only edit spec.md in this working directory." in capturedFirstUserRequest
+    check "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md." in capturedFirstUserRequest
+    check "Only edit spec.md when the engineer is asking to change plan content." in capturedFirstUserRequest
     check after == before + 1
     check afterUnchanged == after
     check specRc == 0
@@ -1163,6 +1165,8 @@ suite "interactive planning":
     check "Added feature B to spec." in prompt
     check "add feature C" in prompt
     check "Only edit spec.md in this working directory." in prompt
+    check "If the engineer is discussing or asking questions, reply directly and do not edit spec.md." in prompt
+    check "Only edit spec.md when the engineer asks to change plan content." in prompt
 
   test "turn commits when spec changes":
     let tmp = getTempDir() / "scriptorium_test_interactive_commit"
