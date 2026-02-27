@@ -74,13 +74,17 @@ directly.
 
 ### V1 Capabilities
 
+**Design split:** the human and Architect own `spec.md` — that is their only shared artifact.
+Everything downstream is owned by `scriptorium run` and happens autonomously.
+
 - `scriptorium --init` sets up a new workspace with a planning branch and blank `spec.md`
-- `scriptorium run` starts the orchestrator daemon: HTTP MCP server + event loop
-- Architect is invoked when areas are missing; it reads `spec.md` and creates area files
-- Manager is invoked per area when that area has no open tickets; it reads the area file and creates tickets
-- Orchestrator assigns the oldest open ticket to a Coding Agent and manages the worktree
-- Coding Agent works on the ticket and calls `submit_pr()` when finished
-- Merge queue: merge master into branch → `make test` → fast-forward merge to master on pass, reopen on fail
+- `scriptorium plan` is the human's only interface: build and revise `spec.md` with the Architect
+- `scriptorium run` owns everything downstream from spec:
+  - Architect decomposes spec into area files (when areas are missing)
+  - Manager decomposes each area into tickets (when area has no open tickets)
+  - Orchestrator assigns the oldest open ticket to a Coding Agent and manages the worktree
+  - Coding Agent works the ticket and signals completion via `submit_pr()`
+  - Merge queue: merge master into branch → `make test` → fast-forward on pass, reopen on fail
 - Master must stay green; if it breaks, all work halts until it is fixed
 
 ### V1 Out of Scope
@@ -249,13 +253,13 @@ Agents never commit to `scriptorium/plan` directly. All plan branch mutations go
 orchestrator's task queue. Agents only call simple MCP tools; the orchestrator enacts the
 consequences in deterministic code.
 
-1. User runs `scriptorium plan` → interactive conversation with Architect → Architect calls `submit_spec(content)` → orchestrator writes and commits `spec.md`
-2. Architect calls `create_area(...)` for each domain → orchestrator writes area files and commits
-3. Manager is spawned per area → reads area file, calls `create_ticket(...)` via HTTP MCP → orchestrator writes ticket files into `tickets/open/` and commits
+1. User runs `scriptorium plan` → conversation with Architect → `spec.md` is revised and committed to plan branch
+2. User runs `scriptorium run` → orchestrator reads spec, invokes Architect to decompose it into area files → committed to plan branch
+3. For each area, orchestrator invokes Manager → Manager creates ticket files in `tickets/open/` → committed to plan branch
 4. Orchestrator picks the oldest open ticket, creates a code worktree, moves ticket to `in-progress/`
-5. Coding Agent works in its worktree; if stuck, calls `ask_manager(question)` → escalates up the chain as needed
-6. Coding Agent calls `submit_pr(summary)` → PR enters merge queue → orchestrator merges master into branch, runs tests → on pass: fast-forward merge to master, ticket moves to `done/` → on fail: ticket moves back to `open/` with failure notes
-7. Loop repeats until no open tickets remain
+5. Coding Agent works in its worktree; if stuck, escalates up the chain as needed
+6. Coding Agent signals `submit_pr(summary)` → PR enters merge queue → orchestrator merges master into branch, runs tests → on pass: fast-forward merge to master, ticket moves to `done/` → on fail: ticket moves back to `open/` with failure notes
+7. Loop repeats from step 2 until no open tickets remain; if spec changes, areas and tickets are refreshed on the next iteration
 
 No agent decides when to run tests, when to merge, or when to move a ticket. Those are
 automatic consequences triggered by code, not by agent judgment.
@@ -314,20 +318,17 @@ logs, and should be left running in a terminal or managed by a process superviso
 not exit on its own — kill it to stop it.
 
 Main loop:
-1. Bind HTTP MCP server on a random localhost port (via MCPort)
-2. Check out `scriptorium/plan` into a dedicated worktree (orchestrator only)
-3. If `spec.md` is empty or missing, log `WAITING: no spec — run 'scriptorium plan'` and idle
-4. If `spec.md` exists but has no areas, spawn Architect — pass `spec.md` via stdin; Architect creates areas via HTTP MCP tools, then exits
-5. For each area with no open or in-progress tickets, spawn a Manager — pass area file + spec excerpt via stdin; Manager creates tickets via HTTP MCP tools, then exits
-6. Pick the oldest open ticket, create a code worktree, move ticket to `in-progress/`
-7. Spawn the Coding Agent harness — pass ticket + area context + spec excerpt via stdin; `scriptorium_MCP_URL` and `scriptorium_SESSION_TOKEN` via env
-8. Agent works; all tool calls arrive at the HTTP MCP server; orchestrator drains task queue continuously
-9. On `submit_pr`: PR enters merge queue → merge master into branch → `make test` → fast-forward merge to master on pass, reopen ticket on fail
-10. Loop back to step 4
+1. If `spec.md` is empty or missing → log `WAITING: no spec — run 'scriptorium plan'` and idle
+2. If no area files exist → invoke Architect to decompose spec into areas; commit to plan branch
+3. For each area with no open or in-progress tickets → invoke Manager to generate tickets from that area; commit to plan branch
+4. Assign the oldest open ticket: create a code worktree, move ticket to `in-progress/`
+5. Spawn the Coding Agent on that worktree; on `submit_pr()` enqueue in the merge queue
+6. Process merge queue: merge master into worktree branch → `make test` → fast-forward master on pass, reopen ticket on fail
+7. Loop back to step 1
 
-If an escalation reaches the Architect and the Architect cannot resolve it, the daemon logs
+If master is unhealthy (failing `make test`), all work halts until it is green again.
+If an escalation cannot be resolved automatically, the daemon logs
 `BLOCKED: waiting for user — run 'scriptorium plan'` and idles until the block is cleared.
-All other tickets continue if they are unaffected by the block.
 
 ### `scriptorium plan`
 
@@ -340,24 +341,17 @@ command list.
 `scriptorium plan <prompt>` is the one-shot automation path: a single Architect call
 rewrites `spec.md` and commits if the content changed.
 
-The interactive mode is the primary — and ideally only — interface between the human
-engineer and the scriptorium system. The user should be able to describe what they want in
-plain language and trust the Architect to translate it into spec changes, new areas, and
-updated tickets.
-
-The Architect in `scriptorium plan` has full read access to the plan branch: current `spec.md`,
-all area files, all tickets (open, in-progress, done), and any pending escalations. It can
-call `submit_spec`, `create_area`, and `add_note` during the conversation, which take
-effect immediately on the plan branch.
+**`scriptorium plan` owns `spec.md` and nothing else.** Areas, tickets, and code are all
+derived from the spec and are managed entirely by `scriptorium run`. The human's only job
+is to keep the spec accurate; everything downstream flows from that automatically.
 
 Typical uses:
 - Initial spec creation: "here's what I want to build, help me write the spec"
-- Mid-project revision: "the auth library doesn't support X, we need to rethink area 03"
-- Clearing a block: reviewing a pending escalation and telling the Architect how to resolve it
-- Status check: "what's in progress right now and what's blocked?"
+- Mid-project revision: "the auth library doesn't support X, we need to rethink the spec"
+- Clearing a block: the daemon logged `BLOCKED` — run `scriptorium plan` to resolve it
 
 `scriptorium plan` exits when the user ends the conversation. `scriptorium run` picks up any
-changes to the plan branch automatically on its next loop iteration.
+changes to the spec automatically on its next loop iteration.
 
 
 ## Orchestrator & Task Queue
