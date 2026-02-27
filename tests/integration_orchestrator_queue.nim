@@ -14,6 +14,8 @@ proc runCmdOrDie(cmd: string) =
 
 proc makeTestRepo(path: string) =
   ## Create a minimal git repository at path suitable for integration tests.
+  if dirExists(path):
+    removeDir(path)
   createDir(path)
   runCmdOrDie("git -C " & quoteShell(path) & " init")
   runCmdOrDie("git -C " & quoteShell(path) & " config user.email test@test.com")
@@ -502,4 +504,62 @@ suite "integration orchestrator merge queue":
 
       validateTicketStateInvariant(repoPath)
       validateTransitionCommitInvariant(repoPath)
+    )
+
+  test "IT-12 one-shot plan runner reads repo path context and commits spec only":
+    withTempRepo("scriptorium_integration_it12_", proc(repoPath: string) =
+      runInit(repoPath)
+      writeFile(repoPath / "source-marker.txt", "integration-marker\n")
+      runCmdOrDie("git -C " & quoteShell(repoPath) & " add source-marker.txt")
+      runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-source-marker")
+
+      var callCount = 0
+      var capturedPrompt = ""
+      var capturedRepoPath = ""
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Read the repo path from prompt context and update spec.md in plan worktree.
+        inc callCount
+        capturedPrompt = request.prompt
+        let repoPathMarker = "Repository root path (read project source files from here):\n"
+        let markerIndex = request.prompt.find(repoPathMarker)
+        doAssert markerIndex >= 0
+        let pathStart = markerIndex + repoPathMarker.len
+        let pathEnd = request.prompt.find('\n', pathStart)
+        doAssert pathEnd > pathStart
+        let repoPathFromPrompt = request.prompt[pathStart..<pathEnd].strip()
+        capturedRepoPath = repoPathFromPrompt
+        let marker = readFile(repoPathFromPrompt / "source-marker.txt").strip()
+        writeFile(request.workingDir / "spec.md", "# Integration Spec\n\n- marker: " & marker & "\n")
+
+        result = AgentRunResult(
+          backend: harnessCodex,
+          command: @["codex", "exec"],
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          stdout: "",
+          logFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.jsonl",
+          lastMessageFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.last_message.txt",
+          lastMessage: "Updated spec",
+          timeoutKind: "none",
+        )
+
+      let changed = updateSpecFromArchitect(repoPath, "sync source marker", fakeRunner)
+
+      check changed
+      check callCount == 1
+      check capturedRepoPath == repoPath
+      check "Only edit spec.md in this working directory." in capturedPrompt
+
+      let specBody = readPlanFile(repoPath, "spec.md")
+      check "# Integration Spec" in specBody
+      check "- marker: integration-marker" in specBody
+
+      let files = planTreeFiles(repoPath)
+      check "spec.md" in files
+      check "areas/01-out-of-scope.md" notin files
+
+      let commits = latestPlanCommits(repoPath, 1)
+      check commits.len == 1
+      check commits[0] == "scriptorium: update spec from architect"
     )

@@ -14,6 +14,8 @@ var
 
 proc makeTestRepo(path: string) =
   ## Create a minimal git repository at path suitable for testing.
+  if dirExists(path):
+    removeDir(path)
   createDir(path)
   discard execCmdEx("git -C " & path & " init")
   discard execCmdEx("git -C " & path & " config user.email test@test.com")
@@ -286,29 +288,56 @@ suite "scriptorium CLI":
     check output == expected
 
 suite "orchestrator plan spec update":
-  test "updateSpecFromArchitect writes spec and commits with mocked updater":
+  test "updateSpecFromArchitect runs in plan worktree, reads repo path, and commits":
     let tmp = getTempDir() / "scriptorium_test_plan_update_spec"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
     runInit(tmp)
 
+    writeFile(tmp / "source-marker.txt", "alpha\n")
+    runCmdOrDie("git -C " & quoteShell(tmp) & " add source-marker.txt")
+    runCmdOrDie("git -C " & quoteShell(tmp) & " commit -m test-add-source-marker")
+
     var callCount = 0
     var capturedFirstModel = ""
+    var capturedFirstWorkingDir = ""
+    var capturedFirstRepoPath = ""
     var capturedFirstSpec = ""
-    var capturedFirstPrompt = ""
-    proc updater(model: string, currentSpec: string, prompt: string): string =
-      ## Return a deterministic updated spec document for plan command tests.
+    var capturedFirstUserRequest = ""
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Read source via repo path from prompt and update spec.md in plan worktree.
       inc callCount
+      let repoPathMarker = "Repository root path (read project source files from here):\n"
+      let repoPathMarkerIndex = req.prompt.find(repoPathMarker)
+      doAssert repoPathMarkerIndex >= 0
+      let repoPathStart = repoPathMarkerIndex + repoPathMarker.len
+      let repoPathEnd = req.prompt.find('\n', repoPathStart)
+      doAssert repoPathEnd > repoPathStart
+      let repoPathFromPrompt = req.prompt[repoPathStart..<repoPathEnd].strip()
+      let priorSpec = readFile(req.workingDir / "spec.md")
+      let sourceMarker = readFile(repoPathFromPrompt / "source-marker.txt").strip()
+      writeFile(req.workingDir / "spec.md", "# Revised Spec\n\n- marker: " & sourceMarker & "\n")
+
       if callCount == 1:
-        capturedFirstModel = model
-        capturedFirstSpec = currentSpec
-        capturedFirstPrompt = prompt
-      result = "# Revised Spec\n\n- item\n"
+        capturedFirstModel = req.model
+        capturedFirstWorkingDir = req.workingDir
+        capturedFirstRepoPath = repoPathFromPrompt
+        capturedFirstSpec = priorSpec
+        capturedFirstUserRequest = req.prompt
+
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "Updated spec.",
+        timeoutKind: "none",
+      )
 
     let before = planCommitCount(tmp)
-    let changed = updateSpecFromArchitect(tmp, "expand scope", updater)
+    let changed = updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
     let after = planCommitCount(tmp)
-    let unchanged = updateSpecFromArchitect(tmp, "expand scope", updater)
+    let unchanged = updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
     let afterUnchanged = planCommitCount(tmp)
     let (specBody, specRc) = execCmdEx("git -C " & quoteShell(tmp) & " show scriptorium/plan:spec.md")
     let (logOutput, logRc) = execCmdEx("git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan")
@@ -317,14 +346,45 @@ suite "orchestrator plan spec update":
     check not unchanged
     check callCount == 2
     check capturedFirstModel == "codex-fake-unit-test-model"
+    check capturedFirstWorkingDir != tmp
+    check capturedFirstRepoPath == tmp
     check "Run `scriptorium plan`" in capturedFirstSpec
-    check capturedFirstPrompt == "expand scope"
+    check "expand scope" in capturedFirstUserRequest
+    check "Only edit spec.md in this working directory." in capturedFirstUserRequest
     check after == before + 1
     check afterUnchanged == after
     check specRc == 0
-    check specBody == "# Revised Spec\n\n- item\n"
+    check specBody == "# Revised Spec\n\n- marker: alpha\n"
     check logRc == 0
     check "scriptorium: update spec from architect" in logOutput
+
+  test "updateSpecFromArchitect rejects writes outside spec.md":
+    let tmp = getTempDir() / "scriptorium_test_plan_out_of_scope"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Write to spec.md and one out-of-scope path to trigger guard failure.
+      writeFile(req.workingDir / "spec.md", "# Updated Spec\n")
+      writeFile(req.workingDir / "areas/01-out-of-scope.md", "# Bad write\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    expect ValueError:
+      discard updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check after == before
+    check "areas/01-out-of-scope.md" notin files
 
 suite "orchestrator invariants":
   test "ticket state invariant fails when same ticket exists in multiple state directories":
@@ -1013,6 +1073,7 @@ suite "orchestrator final v1 flow":
 
 suite "interactive planning":
   test "prompt assembly includes spec, history, and user message":
+    let repoPath = "/tmp/repo"
     let spec = "# Spec\n\n- feature A\n"
     let history = @[
       PlanTurn(role: "engineer", text: "add feature B"),
@@ -1020,12 +1081,14 @@ suite "interactive planning":
     ]
     let userMsg = "add feature C"
 
-    let prompt = buildInteractivePlanPrompt(spec, history, userMsg)
+    let prompt = buildInteractivePlanPrompt(repoPath, spec, history, userMsg)
 
+    check repoPath in prompt
     check spec.strip() in prompt
     check "add feature B" in prompt
     check "Added feature B to spec." in prompt
     check "add feature C" in prompt
+    check "Only edit spec.md in this working directory." in prompt
 
   test "turn commits when spec changes":
     let tmp = getTempDir() / "scriptorium_test_interactive_commit"
@@ -1034,9 +1097,13 @@ suite "interactive planning":
     runInit(tmp)
 
     var callCount = 0
+    var capturedWorkingDir = ""
+    var capturedPrompt = ""
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Write new content to spec.md and return a deterministic result.
       inc callCount
+      capturedWorkingDir = req.workingDir
+      capturedPrompt = req.prompt
       writeFile(req.workingDir / "spec.md", "# Updated Spec\n\n- new item\n")
       result = AgentRunResult(
         backend: harnessCodex,
@@ -1063,6 +1130,8 @@ suite "interactive planning":
     check logRc == 0
     check "plan session turn 1" in logOutput
     check callCount == 1
+    check capturedWorkingDir != tmp
+    check tmp in capturedPrompt
 
   test "turn makes no commit when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"
@@ -1128,3 +1197,39 @@ suite "interactive planning":
     runInteractivePlanSession(tmp, fakeRunner, fakeInput)
 
     check callCount == 0
+
+  test "turn rejects writes outside spec.md":
+    let tmp = getTempDir() / "scriptorium_test_interactive_out_of_scope"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Write one out-of-scope file in the plan worktree.
+      writeFile(req.workingDir / "spec.md", "# Updated Spec\n")
+      writeFile(req.workingDir / "areas/02-out-of-scope.md", "# Nope\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    var msgIdx = 0
+    proc fakeInput(): string =
+      ## Yield one message then raise EOFError.
+      if msgIdx >= 1:
+        raise newException(EOFError, "done")
+      inc msgIdx
+      result = "hello"
+
+    let before = planCommitCount(tmp)
+    expect ValueError:
+      runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check after == before
+    check "areas/02-out-of-scope.md" notin files

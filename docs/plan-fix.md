@@ -28,34 +28,34 @@ This split is confusing and makes planning behavior drift between modes.
 - [ ] `PF-01` Lock current behavior with tests before refactor.
   - Add tests that assert current one-shot and interactive working-dir behavior so the migration is explicit.
 
-- [ ] `PF-02` Unify working dir to plan worktree.
+- [x] `PF-02` Unify working dir to plan worktree.
   - Change one-shot planning to use `workingDir = plan worktree` (matching interactive).
   - Pass repo root path to the Architect prompt so it can read source files.
   - Remove any code that sets one-shot working dir to repo root.
 
-- [ ] `PF-03` Add write guards.
+- [x] `PF-03` Add write guards.
   - After Architect execution, check which files were modified.
   - For `scriptorium plan`, allow `spec.md` changes only.
   - If Architect edits out-of-scope files, fail with clear error.
   - Implement guards as a configurable allowlist (not hardcoded to `spec.md`) so future commands can define their own allowed set.
 
-- [ ] `PF-04` Update Architect prompt scaffolding.
+- [x] `PF-04` Update Architect prompt scaffolding.
   - Include repo root path in prompt context.
   - Instruct Architect to read project source from that path and only edit `spec.md` in the working dir.
 
-- [ ] `PF-05` Add tests for new behavior.
+- [x] `PF-05` Add tests for new behavior.
   - Both modes use plan worktree as working dir.
   - Architect can read project source files via repo path.
   - Out-of-scope edits are rejected by write guards.
   - Integration test: fixture repo with a source marker, stub Architect reads it from repo path and writes to `spec.md`, assert commit on `scriptorium/plan`.
 
-- [ ] `PF-06` Clean up.
+- [x] `PF-06` Clean up.
   - Remove legacy working-dir branching logic.
   - Update README and command docs.
 
 ## Acceptance Criteria
 
-- [ ] One-shot and interactive planning use the same workdir model.
-- [ ] Architect can read project state in both modes.
-- [ ] Planning mode cannot silently mutate non-plan files.
-- [ ] `make test` passes.
+- [x] One-shot and interactive planning use the same workdir model.
+- [x] Architect can read project state in both modes.
+- [x] Planning mode cannot silently mutate non-plan files.
+- [x] `make test` passes.

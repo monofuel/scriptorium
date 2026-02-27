@@ -26,10 +26,17 @@ const
   MergeQueueReopenCommitPrefix = "scriptorium: reopen ticket"
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
+  PlanSpecTicketId = "plan-spec"
+  PlanSessionTicketId = "plan-session"
   ManagedWorktreeRoot = ".scriptorium/worktrees"
+  PlanLogRoot = "scriptorium-plan-logs"
+  PlanWriteScopeName = "scriptorium plan"
   TicketBranchPrefix = "scriptorium/ticket-"
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"
   DefaultAgentAttempt = 1
+  PlanDefaultMaxAttempts = 1
+  PlanNoOutputTimeoutMs = 120_000
+  PlanHardTimeoutMs = 300_000
   DefaultAgentMaxAttempts = 2
   AgentMessagePreviewChars = 1200
   AgentStdoutPreviewChars = 1200
@@ -58,7 +65,6 @@ type
     content*: string
 
   ManagerTicketGenerator* = proc(model: string, areaPath: string, areaContent: string): seq[TicketDocument]
-  ArchitectSpecUpdater* = proc(model: string, currentSpec: string, prompt: string): string
 
   PlanTurn* = object
     role*: string
@@ -310,53 +316,127 @@ proc appendAgentRunNote(ticketContent: string, model: string, runResult: AgentRu
 
 proc branchNameForTicket(ticketRelPath: string): string
 
-proc stripMarkdownCodeFence(value: string): string =
-  ## Remove a top-level markdown code fence wrapper when present.
-  let trimmed = value.strip()
-  if not trimmed.startsWith("```"):
-    return trimmed
+proc buildPlanScopePrompt(repoPath: string): string =
+  ## Build shared planning prompt context with read and write scope.
+  result =
+    "Repository root path (read project source files from here):\n" &
+    repoPath & "\n\n" &
+    "You are running in the scriptorium plan worktree.\n" &
+    "Only edit spec.md in this working directory.\n" &
+    "Do not edit any other files.\n"
 
-  let lines = trimmed.splitLines()
-  if lines.len < 3:
-    return trimmed
-  if lines[^1].strip() != "```":
-    return trimmed
-
-  result = lines[1..^2].join("\n").strip()
-
-proc buildArchitectPrompt(userPrompt: string, currentSpec: string): string =
-  ## Build the architect prompt used to revise spec.md.
+proc buildArchitectPlanPrompt(repoPath: string, userPrompt: string, currentSpec: string): string =
+  ## Build the one-shot architect prompt that edits spec.md in place.
   result =
     "You are the Architect for scriptorium.\n" &
+    buildPlanScopePrompt(repoPath) & "\n" &
     "Update spec.md based on the user request.\n" &
-    "Return only the full updated markdown for spec.md.\n\n" &
+    "Use file tools to edit spec.md directly.\n\n" &
     "User request:\n" &
     userPrompt.strip() & "\n\n" &
     "Current spec.md:\n" &
     currentSpec.strip() & "\n"
 
-proc runArchitectSpecUpdate(repoPath: string, model: string, currentSpec: string, prompt: string): string =
-  ## Run one architect model call and return the updated spec markdown text.
-  let runResult = runAgent(AgentRunRequest(
-    prompt: buildArchitectPrompt(prompt, currentSpec),
-    workingDir: repoPath,
+proc runPlanArchitectRequest(
+  runner: AgentRunner,
+  planPath: string,
+  model: string,
+  prompt: string,
+  ticketId: string,
+): AgentRunResult =
+  ## Run one architect planning pass with shared harness settings.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  result = runner(AgentRunRequest(
+    prompt: prompt,
+    workingDir: planPath,
     model: model,
-    ticketId: "plan-spec",
-    attempt: 1,
+    ticketId: ticketId,
+    attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
-    maxAttempts: 1,
+    logRoot: getTempDir() / PlanLogRoot,
+    noOutputTimeoutMs: PlanNoOutputTimeoutMs,
+    hardTimeoutMs: PlanHardTimeoutMs,
+    maxAttempts: PlanDefaultMaxAttempts,
   ))
-
-  var response = runResult.lastMessage.strip()
-  if response.len == 0:
-    response = runResult.stdout.strip()
-  response = stripMarkdownCodeFence(response)
-  if response.len == 0:
-    raise newException(ValueError, "architect returned empty spec content")
-  result = response
 
 proc listMarkdownFiles(basePath: string): seq[string]
 proc runCommandCapture(workingDir: string, command: string, args: seq[string]): tuple[exitCode: int, output: string]
+
+proc normalizeRelativeWritePath(rawPath: string): string =
+  ## Validate and normalize one relative path for write guard checks.
+  let clean = rawPath.strip().replace('\\', '/')
+  if clean.len == 0:
+    raise newException(ValueError, "write guard path cannot be empty")
+  if clean.startsWith("/") or (clean.len >= 2 and clean[1] == ':'):
+    raise newException(ValueError, fmt"write guard path must be relative: {clean}")
+
+  var parts: seq[string] = @[]
+  for part in clean.split('/'):
+    if part.len == 0 or part == ".":
+      continue
+    if part == "..":
+      raise newException(ValueError, fmt"write guard path cannot escape worktree: {clean}")
+    parts.add(part)
+
+  if parts.len == 0:
+    raise newException(ValueError, fmt"write guard path is invalid: {clean}")
+  result = parts.join("/")
+
+proc collectGitPathOutput(planPath: string, args: seq[string]): seq[string] =
+  ## Run one git command that emits relative paths and return non-empty lines.
+  let commandResult = runCommandCapture(planPath, "git", args)
+  if commandResult.exitCode != 0:
+    let argsText = args.join(" ")
+    raise newException(IOError, fmt"git {argsText} failed while checking write guards: {commandResult.output.strip()}")
+  for line in commandResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len > 0:
+      result.add(trimmed)
+
+proc listModifiedPathsInPlanPath(planPath: string): seq[string] =
+  ## Return modified and untracked relative paths in the plan worktree.
+  var seen = initHashSet[string]()
+  let commands = @[
+    @["diff", "--name-only", "--relative"],
+    @["diff", "--cached", "--name-only", "--relative"],
+    @["ls-files", "--others", "--exclude-standard"],
+  ]
+
+  for args in commands:
+    for rawPath in collectGitPathOutput(planPath, args):
+      let normalized = normalizeRelativeWritePath(rawPath)
+      if not seen.contains(normalized):
+        seen.incl(normalized)
+        result.add(normalized)
+  result.sort()
+
+proc enforceWriteAllowlist(planPath: string, allowedPaths: openArray[string], scopeName: string) =
+  ## Fail when modified paths are outside the provided relative-path allowlist.
+  if allowedPaths.len == 0:
+    raise newException(ValueError, "write allowlist cannot be empty")
+
+  var allowedSet = initHashSet[string]()
+  var allowedList: seq[string] = @[]
+  for path in allowedPaths:
+    let normalized = normalizeRelativeWritePath(path)
+    if not allowedSet.contains(normalized):
+      allowedSet.incl(normalized)
+      allowedList.add(normalized)
+  allowedList.sort()
+
+  var disallowed: seq[string] = @[]
+  for path in listModifiedPathsInPlanPath(planPath):
+    if not allowedSet.contains(path):
+      disallowed.add(path)
+
+  if disallowed.len > 0:
+    let disallowedText = disallowed.join(", ")
+    let allowedText = allowedList.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed files: {allowedText}.",
+    )
 
 proc ensureUniqueTicketStateInPlanPath(planPath: string) =
   ## Ensure each ticket markdown filename exists in exactly one state directory.
@@ -1015,27 +1095,30 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
 proc updateSpecFromArchitect*(
   repoPath: string,
   prompt: string,
-  updateSpec: ArchitectSpecUpdater,
+  runner: AgentRunner,
 ): bool =
-  ## Update spec.md from an architect updater and commit when content changes.
-  if updateSpec.isNil:
-    raise newException(ValueError, "architect spec updater is required")
+  ## Update spec.md from one architect run and commit when content changes.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
   if prompt.strip().len == 0:
     raise newException(ValueError, "plan prompt is required")
 
   let cfg = loadConfig(repoPath)
   result = withPlanWorktree(repoPath, proc(planPath: string): bool =
-    let specPath = planPath / PlanSpecPath
     let existingSpec = loadSpecFromPlanPath(planPath)
-    let updatedBody = updateSpec(cfg.models.architect, existingSpec, prompt).strip()
-    if updatedBody.len == 0:
-      raise newException(ValueError, "architect spec updater returned empty content")
+    discard runPlanArchitectRequest(
+      runner,
+      planPath,
+      cfg.models.architect,
+      buildArchitectPlanPrompt(repoPath, prompt, existingSpec),
+      PlanSpecTicketId,
+    )
+    enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
 
-    let updatedSpec = updatedBody & "\n"
+    let updatedSpec = loadSpecFromPlanPath(planPath)
     if updatedSpec == existingSpec:
       false
     else:
-      writeFile(specPath, updatedSpec)
       gitRun(planPath, "add", PlanSpecPath)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", PlanSpecCommitMessage)
@@ -1044,12 +1127,7 @@ proc updateSpecFromArchitect*(
 
 proc updateSpecFromArchitect*(repoPath: string, prompt: string): bool =
   ## Update spec.md using the default architect model backend.
-  result = updateSpecFromArchitect(
-    repoPath,
-    prompt,
-    proc(model: string, currentSpec: string, userPrompt: string): string =
-      runArchitectSpecUpdate(repoPath, model, currentSpec, userPrompt),
-  )
+  result = updateSpecFromArchitect(repoPath, prompt, runAgent)
 
 proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGenerator): bool =
   ## Generate and persist tickets for areas without active work.
@@ -1449,10 +1527,11 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
   shouldRun = false
 
-proc buildInteractivePlanPrompt*(spec: string, history: seq[PlanTurn], userMsg: string): string =
+proc buildInteractivePlanPrompt*(repoPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
   result =
     "You are the Architect for scriptorium.\n" &
+    buildPlanScopePrompt(repoPath) & "\n" &
     "Update spec.md based on the user request.\n" &
     "You may edit spec.md directly using your file tools.\n\n" &
     "Current spec.md:\n" &
@@ -1471,6 +1550,9 @@ proc runInteractivePlanSession*(
   input: PlanSessionInput = nil,
 ) =
   ## Run a multi-turn interactive planning session with the Architect.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+
   let cfg = loadConfig(repoPath)
   discard withPlanWorktree(repoPath, proc(planPath: string): int =
     echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
@@ -1515,18 +1597,15 @@ proc runInteractivePlanSession*(
 
       let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
-      let prompt = buildInteractivePlanPrompt(prevSpec, history, line)
-      let agentResult = runner(AgentRunRequest(
-        prompt: prompt,
-        workingDir: planPath,
-        model: cfg.models.architect,
-        ticketId: "plan-session",
-        attempt: 1,
-        skipGitRepoCheck: true,
-        maxAttempts: 1,
-        noOutputTimeoutMs: 120_000,
-        hardTimeoutMs: 300_000,
-      ))
+      let prompt = buildInteractivePlanPrompt(repoPath, prevSpec, history, line)
+      let agentResult = runPlanArchitectRequest(
+        runner,
+        planPath,
+        cfg.models.architect,
+        prompt,
+        PlanSessionTicketId,
+      )
+      enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
 
       var response = agentResult.lastMessage.strip()
       if response.len == 0:

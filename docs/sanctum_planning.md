@@ -3,7 +3,7 @@
 ## Goal
 
 Add an interactive multi-turn conversation mode to `scriptorium plan`, powered by Codex.
-The one-shot `scriptorium plan <prompt>` path remains unchanged for automation.
+The one-shot `scriptorium plan <prompt>` path uses the same execution model as interactive mode.
 
 ## Current Behavior
 
@@ -16,7 +16,8 @@ The one-shot `scriptorium plan <prompt>` path remains unchanged for automation.
 
 - `scriptorium plan` (no args) opens a multi-turn terminal conversation with the Architect.
 - Spec changes are committed automatically after each turn that modifies `spec.md`.
-- `scriptorium plan <prompt...>` (with args) is unchanged.
+- `scriptorium plan <prompt...>` (with args) also runs in the plan worktree.
+- Both modes pass repo-root path context for source reads and enforce `spec.md`-only writes.
 
 ## Interaction Model
 
@@ -28,9 +29,10 @@ The session is an orchestrator-driven REPL. Each turn:
    content + in-memory turn history + user message.
 4. Run Codex one-shot via the existing harness (`runAgent`) with the plan worktree
    as the working directory.
-5. Display Codex's text response.
-6. If `spec.md` changed, commit it to the plan branch with a session turn message.
-7. Loop.
+5. Enforce a write allowlist guard (`spec.md` only for `scriptorium plan`).
+6. Display Codex's text response.
+7. If `spec.md` changed, commit it to the plan branch with a session turn message.
+8. Loop.
 
 Codex edits `spec.md` directly in the plan worktree using its native file tools.
 No draft file, no explicit apply step. If the engineer runs `scriptorium plan`,
@@ -55,12 +57,10 @@ Turn history is kept in memory; no persistence for this phase.
 
 These are known limitations accepted for MVP. Each has a clear future improvement path.
 
-**Codex has full write access to the plan worktree.**
-The working directory passed to Codex is the plan worktree, which contains `areas/`,
-`tickets/`, `decisions/`, and `spec.md`. Codex can modify any of these with its file
-tools. For V1 this is acceptable — the Architect is trusted and the plan branch is
-append-friendly. Future: scope the working directory to a temp copy of just `spec.md`,
-or restrict Codex's file tools to a whitelist of paths.
+**Codex can still attempt broad edits, but writes are guarded post-run.**
+The working directory passed to Codex is the plan worktree, but planning commands now
+enforce an allowlist guard after each run. For `scriptorium plan`, only `spec.md` edits
+are allowed; out-of-scope edits fail the command.
 
 **No undo.** Commits happen automatically per turn. A bad turn is already in git history;
 recovery requires a manual `git revert` on the plan branch. Future: add a `/undo` command
@@ -86,7 +86,7 @@ give `scriptorium plan` its own dedicated worktree checkout.
 
 - [x] `SP-01` Add CLI mode split:
   - `scriptorium plan` (no args) → interactive mode.
-  - `scriptorium plan <prompt...>` → existing one-shot path, unchanged.
+  - `scriptorium plan <prompt...>` → one-shot mode using the same plan-worktree model.
   - Entry point: `src/scriptorium.nim`; one-shot path calls `updateSpecFromArchitect`.
   - Test: CLI parsing test verifies both routes.
 
@@ -129,14 +129,16 @@ give `scriptorium plan` its own dedicated worktree checkout.
 
 ## Rollout
 
-- Phase 1: ship interactive mode; one-shot path unchanged.
+- Phase 1: ship interactive mode with unified one-shot and interactive execution model.
 - Phase 2: add session persistence so an in-progress session survives a restart.
 - Phase 3: add Claude-code and typoi harness support.
 
 ## Definition of Done
 
 - `scriptorium plan` (no args) opens an interactive Architect conversation via Codex.
-- `scriptorium plan <prompt...>` still works for automation.
+- `scriptorium plan <prompt...>` works for automation using the same plan-worktree model.
+- Architect receives repo-root context for source reads in both modes.
+- Out-of-scope writes are rejected by write guards (`spec.md` only for plan mode).
 - Spec changes are committed automatically after each turn that modifies `spec.md`.
 - Turns that produce no spec change make no commit.
 - Unit and integration tests are green.

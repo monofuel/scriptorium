@@ -96,6 +96,11 @@ One-shot mode:
 scriptorium plan "Add CI checks for merge queue invariants"
 ```
 
+Planning execution model (both modes):
+- Architect runs in a temporary `scriptorium/plan` worktree.
+- Prompt includes repo-root path so Architect can read project source.
+- Post-run write guard allows only `spec.md`; any other file edits fail the command.
+
 Interactive planning commands:
 - `/show` prints current `spec.md`
 - `/help` lists commands
@@ -187,7 +192,7 @@ This split keeps PR CI safe while still running key-backed integration coverage 
 
 Near-term:
 - Finish deeper interactive planning integration coverage (multi-turn real codex session assertions).
-- Improve planning session ergonomics (session persistence/resume and safer scoped writes).
+- Improve planning session ergonomics (session persistence/resume).
 
 V2 direction:
 - Parallel coding agents with robust ticket locking.
