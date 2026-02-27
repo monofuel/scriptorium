@@ -1405,20 +1405,8 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
     state.initialized = true
   result = state.healthy
 
-proc runOrchestratorLoop(
-  repoPath: string,
-  httpServer: HttpMcpServer,
-  endpoint: OrchestratorEndpoint,
-  maxTicks: int,
-  runner: AgentRunner,
-) =
-  ## Start HTTP transport and execute the orchestrator idle event loop.
-  shouldRun = true
-  installSignalHandlers()
-
-  var serverThread: Thread[ServerThreadArgs]
-  createThread(serverThread, runHttpServer, (httpServer, endpoint.address, endpoint.port))
-
+proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
+  ## Execute the orchestrator polling loop for an optional bounded number of ticks.
   var ticks = 0
   var masterHealthState = MasterHealthState()
   while shouldRun:
@@ -1436,15 +1424,30 @@ proc runOrchestratorLoop(
     sleep(IdleSleepMs)
     inc ticks
 
+proc runOrchestratorLoop(
+  repoPath: string,
+  httpServer: HttpMcpServer,
+  endpoint: OrchestratorEndpoint,
+  maxTicks: int,
+  runner: AgentRunner,
+) =
+  ## Start HTTP transport and execute the orchestrator idle event loop.
+  shouldRun = true
+  installSignalHandlers()
+
+  var serverThread: Thread[ServerThreadArgs]
+  createThread(serverThread, runHttpServer, (httpServer, endpoint.address, endpoint.port))
+  runOrchestratorMainLoop(repoPath, maxTicks, runner)
+
   shouldRun = false
   httpServer.close()
   joinThread(serverThread)
 
 proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent) =
-  ## Run the orchestrator loop for a bounded number of ticks. Used by tests.
-  let endpoint = loadOrchestratorEndpoint(repoPath)
-  let httpServer = createOrchestratorServer()
-  runOrchestratorLoop(repoPath, httpServer, endpoint, maxTicks, runner)
+  ## Run a bounded orchestrator loop without starting the MCP HTTP server.
+  shouldRun = true
+  runOrchestratorMainLoop(repoPath, maxTicks, runner)
+  shouldRun = false
 
 proc buildInteractivePlanPrompt*(spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
