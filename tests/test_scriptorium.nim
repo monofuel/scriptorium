@@ -1,11 +1,12 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[os, osproc, sequtils, strutils, unittest],
+  std/[os, osproc, sequtils, strformat, strutils, unittest],
   scriptorium/[agent_runner, config, init, orchestrator]
 
 const
   CliBinaryName = "scriptorium_test_cli"
+  OrchestratorTestBasePort = 19000
 let
   ProjectRoot = getCurrentDir()
 var
@@ -38,6 +39,15 @@ proc runCliInRepo(repoPath: string, args: string): tuple[output: string, exitCod
   let command = "cd " & quoteShell(repoPath) & " && " & quoteShell(ensureCliBinary()) & " " & args
   result = execCmdEx(command)
 
+proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
+  ## Write a unique local orchestrator endpoint configuration for one test.
+  let basePort = OrchestratorTestBasePort + (getCurrentProcessId().int mod 1000)
+  let orchestratorPort = basePort + portOffset
+  writeFile(
+    repoPath / "scriptorium.json",
+    fmt"""{{"endpoints":{{"local":"http://127.0.0.1:{orchestratorPort}"}}}}""",
+  )
+
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
   ## Open scriptorium/plan in a temporary worktree for direct test mutations.
   let tmpPlan = getTempDir() / ("scriptorium_test_plan_" & suffix)
@@ -64,6 +74,14 @@ proc addAreaToPlan(repoPath: string, fileName: string, content: string) =
     writeFile(planPath / relPath, content)
     runCmdOrDie("git -C " & quoteShell(planPath) & " add " & quoteShell(relPath))
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-add-area")
+  )
+
+proc writeSpecInPlan(repoPath: string, content: string) =
+  ## Replace spec.md on scriptorium/plan and commit the change.
+  withPlanWorktree(repoPath, "write_spec", proc(planPath: string) =
+    writeFile(planPath / "spec.md", content)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add spec.md")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-write-spec")
   )
 
 proc addTicketToPlan(repoPath: string, state: string, fileName: string, content: string) =
@@ -816,6 +834,182 @@ suite "orchestrator merge queue":
     )
     check ticketRc == 0
     check "## Merge Queue Failure" in ticketContent
+
+suite "orchestrator final v1 flow":
+  test "blank spec tick skips orchestration and does not invoke agents":
+    let tmp = getTempDir() / "scriptorium_test_v1_36_blank_spec_guard"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addPassingMakefile(tmp)
+    writeOrchestratorEndpointConfig(tmp, 21)
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Count calls to verify no architect/manager/coding runner executes.
+      inc callCount
+      discard request
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    runOrchestratorForTicks(tmp, 1, fakeRunner)
+    let after = planCommitCount(tmp)
+
+    check callCount == 0
+    check after == before
+
+  test "runArchitectAreas commits files written by mocked architect runner":
+    let tmp = getTempDir() / "scriptorium_test_v1_37_run_architect_areas"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nBuild area files.\n")
+
+    var callCount = 0
+    var capturedRequest = AgentRunRequest()
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write one area file directly into areas/ from the plan worktree.
+      inc callCount
+      capturedRequest = request
+      writeFile(request.workingDir / "areas/01-arch.md", "# Area 01\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "areas written",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    let changed = runArchitectAreas(tmp, fakeRunner)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check changed
+    check callCount == 1
+    check capturedRequest.ticketId == "architect-areas"
+    check capturedRequest.model == "codex-fake-unit-test-model"
+    check "areas/01-arch.md" in files
+    check after == before + 1
+
+  test "runManagerTickets commits ticket files written by mocked manager runner":
+    let tmp = getTempDir() / "scriptorium_test_v1_38_run_manager_tickets"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
+    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
+
+    var callCount = 0
+    var capturedRequest = AgentRunRequest()
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write one ticket file directly into tickets/open/ for the target area.
+      inc callCount
+      capturedRequest = request
+      writeFile(
+        request.workingDir / "tickets/open/0001-core-task.md",
+        "# Ticket 1\n\n**Area:** 01-core\n",
+      )
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "tickets written",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    let changed = runManagerTickets(tmp, fakeRunner)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check changed
+    check callCount == 1
+    check capturedRequest.ticketId == "manager-01-core"
+    check capturedRequest.model == "codex-fake-unit-test-model"
+    check "tickets/open/0001-core-task.md" in files
+    check after == before + 1
+
+  test "runOrchestratorForTicks drives spec to done in one bounded tick with mocked runners":
+    let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nDeliver one full-flow ticket.\n")
+    writeOrchestratorEndpointConfig(tmp, 22)
+
+    var callOrder: seq[string] = @[]
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Emulate architect, manager, and coding agent by ticketId role markers.
+      callOrder.add(request.ticketId)
+      case request.ticketId
+      of "architect-areas":
+        writeFile(
+          request.workingDir / "areas/01-full-flow.md",
+          "# Area 01\n\n## Goal\n- Full flow.\n",
+        )
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: "areas done",
+          timeoutKind: "none",
+        )
+      of "manager-01-full-flow":
+        writeFile(
+          request.workingDir / "tickets/open/0001-full-flow.md",
+          "# Ticket 1\n\n**Area:** 01-full-flow\n",
+        )
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: "tickets done",
+          timeoutKind: "none",
+        )
+      of "0001":
+        writeFile(request.workingDir / "flow-output.txt", "done\n")
+        runCmdOrDie("git -C " & quoteShell(request.workingDir) & " add flow-output.txt")
+        runCmdOrDie("git -C " & quoteShell(request.workingDir) & " commit -m test-v1-39-flow-output")
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: "Done.\nsubmit_pr(\"ship flow\")",
+          timeoutKind: "none",
+        )
+      else:
+        raise newException(ValueError, "unexpected runner ticket id: " & request.ticketId)
+
+    runOrchestratorForTicks(tmp, 1, fakeRunner)
+
+    let files = planTreeFiles(tmp)
+    check callOrder == @["architect-areas", "manager-01-full-flow", "0001"]
+    check "areas/01-full-flow.md" in files
+    check "tickets/done/0001-full-flow.md" in files
+    check "tickets/open/0001-full-flow.md" notin files
+    check "tickets/in-progress/0001-full-flow.md" notin files
+    check "queue/merge/pending/0001-0001.md" notin files
+
+    let (masterFile, masterRc) = execCmdEx("git -C " & quoteShell(tmp) & " show master:flow-output.txt")
+    check masterRc == 0
+    check masterFile.strip() == "done"
+
+    validateTicketStateInvariant(tmp)
+    validateTransitionCommitInvariant(tmp)
 
 suite "interactive planning":
   test "prompt assembly includes spec, history, and user message":

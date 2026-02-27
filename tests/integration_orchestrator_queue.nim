@@ -107,6 +107,14 @@ proc writeActiveQueueInPlan(repoPath: string, activeValue: string, commitMessage
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
   )
 
+proc writeSpecInPlan(repoPath: string, content: string, commitMessage: string) =
+  ## Replace spec.md on the plan branch and commit fixture content.
+  withPlanWorktree(repoPath, "write_spec", proc(planPath: string) =
+    writeFile(planPath / "spec.md", content)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add spec.md")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
+  )
+
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   ## Write a unique local orchestrator endpoint configuration for test isolation.
   let basePort = OrchestratorBasePort + (getCurrentProcessId().int mod 1000)
@@ -270,10 +278,11 @@ suite "integration orchestrator merge queue":
       check "CONFLICT" in ticketContent
     )
 
-  test "IT-06 orchestrator tick processes queue before assigning next open ticket":
+  test "IT-06 orchestrator tick assigns and executes before merge queue processing":
     withTempRepo("scriptorium_integration_it06_", proc(repoPath: string) =
       runInit(repoPath)
       addPassingMakefile(repoPath)
+      writeSpecInPlan(repoPath, "# Spec\n\nDrive orchestrator tick.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
@@ -314,9 +323,9 @@ suite "integration orchestrator merge queue":
 
       let commits = latestPlanCommits(repoPath, 3)
       check commits.len == 3
-      check commits[0] == "scriptorium: record agent run 0002-second"
-      check commits[1] == "scriptorium: assign ticket 0002-second"
-      check commits[2] == "scriptorium: complete ticket 0001"
+      check commits[0] == "scriptorium: complete ticket 0001"
+      check commits[1] == "scriptorium: record agent run 0002-second"
+      check commits[2] == "scriptorium: assign ticket 0002-second"
     )
 
   test "IT-08 recovery after partial queue transition converges without duplicate moves":
@@ -358,6 +367,7 @@ suite "integration orchestrator merge queue":
     withTempRepo("scriptorium_integration_it09_", proc(repoPath: string) =
       runInit(repoPath)
       addFailingMakefile(repoPath)
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       writeOrchestratorEndpointConfig(repoPath, 1)
 
@@ -372,6 +382,7 @@ suite "integration orchestrator merge queue":
     withTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
       runInit(repoPath)
       addPassingMakefile(repoPath)
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
       let assignment = assignOldestOpenTicket(repoPath)

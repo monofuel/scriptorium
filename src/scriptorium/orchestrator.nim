@@ -13,6 +13,7 @@ const
   PlanMergeQueuePendingDir = "queue/merge/pending"
   PlanMergeQueueActivePath = "queue/merge/active.md"
   PlanSpecPath = "spec.md"
+  PlanSpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect."
   AreaCommitMessage = "scriptorium: update areas from spec"
   TicketCommitMessage = "scriptorium: create tickets from areas"
   AreaFieldPrefix = "**Area:**"
@@ -35,6 +36,9 @@ const
   MergeQueueOutputPreviewChars = 2000
   MasterHealthCheckTarget = "test"
   IdleSleepMs = 200
+  WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
+  ArchitectAreasTicketId = "architect-areas"
+  ManagerTicketIdPrefix = "manager-"
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
 
@@ -244,6 +248,31 @@ proc buildCodingAgentPrompt(ticketRelPath: string, ticketContent: string): strin
     "Ticket content:\n" &
     ticketContent.strip() & "\n"
 
+proc buildArchitectAreasPrompt(spec: string): string =
+  ## Build the architect prompt that writes area files directly into areas/.
+  result =
+    "You are the Architect for scriptorium.\n" &
+    "Read spec.md and write/update area markdown files directly under areas/.\n" &
+    "Use file tools to create only areas/*.md files.\n" &
+    "Do not edit tickets/, queue/, or spec.md in this task.\n\n" &
+    "Current spec.md:\n" &
+    spec.strip() & "\n"
+
+proc buildManagerTicketsPrompt(areaRelPath: string, areaContent: string, nextId: int): string =
+  ## Build the manager prompt that writes ticket files directly into tickets/open/.
+  let areaId = areaIdFromAreaPath(areaRelPath)
+  result =
+    "You are the Manager for scriptorium.\n" &
+    "Create ticket markdown files directly under tickets/open/.\n" &
+    "Each ticket filename must start with a zero-padded numeric ID, then a slug.\n" &
+    fmt"Start IDs at {nextId:04d} and increase monotonically for additional tickets.\n" &
+    fmt"Each ticket must include the line `{AreaFieldPrefix} {areaId}`.\n" &
+    "Do not edit areas/, queue/, or spec.md in this task.\n\n" &
+    "Area file:\n" &
+    areaRelPath & "\n\n" &
+    "Area content:\n" &
+    areaContent.strip() & "\n"
+
 proc formatAgentRunNote(model: string, runResult: AgentRunResult): string =
   ## Format a markdown note summarizing one coding-agent run.
   let messagePreview = truncateTail(runResult.lastMessage.strip(), AgentMessagePreviewChars)
@@ -338,6 +367,17 @@ proc ensureUniqueTicketStateInPlanPath(planPath: string) =
       if seen.contains(fileName):
         raise newException(ValueError, fmt"ticket exists in multiple state directories: {fileName}")
       seen.incl(fileName)
+
+proc hasRunnableSpecInPlanPath(planPath: string): bool =
+  ## Return true when spec.md exists and is not blank or the init placeholder.
+  let specPath = planPath / PlanSpecPath
+  if not fileExists(specPath):
+    return false
+
+  let specBody = readFile(specPath).strip()
+  if specBody.len == 0:
+    return false
+  result = specBody != PlanSpecPlaceholder.strip()
 
 proc ticketStateFromPath(path: string): string =
   ## Return ticket state directory name from one ticket markdown path.
@@ -881,6 +921,12 @@ proc validateTransitionCommitInvariant*(repoPath: string) =
         fmt"orchestrator transition commit must contain exactly one ticket transition: {subject} (found {transitionCount})",
       )
 
+proc hasRunnableSpec*(repoPath: string): bool =
+  ## Return true when spec.md is present and contains actionable content.
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
+    hasRunnableSpecInPlanPath(planPath)
+  )
+
 proc listActiveTicketWorktrees*(repoPath: string): seq[ActiveTicketWorktree] =
   ## Return active in-progress ticket worktrees from the plan branch.
   result = withPlanWorktree(repoPath, proc(planPath: string): seq[ActiveTicketWorktree] =
@@ -933,6 +979,37 @@ proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator)
       true
     else:
       false
+  )
+
+proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
+  ## Run one architect pass that writes area files directly in the plan worktree.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+
+  let cfg = loadConfig(repoPath)
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
+    if not hasRunnableSpecInPlanPath(planPath):
+      false
+    elif not areasMissingInPlanPath(planPath):
+      false
+    else:
+      let spec = loadSpecFromPlanPath(planPath)
+      discard runner(AgentRunRequest(
+        prompt: buildArchitectAreasPrompt(spec),
+        workingDir: planPath,
+        model: cfg.models.architect,
+        ticketId: ArchitectAreasTicketId,
+        attempt: DefaultAgentAttempt,
+        skipGitRepoCheck: true,
+        maxAttempts: DefaultAgentMaxAttempts,
+      ))
+
+      gitRun(planPath, "add", PlanAreasDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", AreaCommitMessage)
+        true
+      else:
+        false
   )
 
 proc updateSpecFromArchitect*(
@@ -998,6 +1075,42 @@ proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGener
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
           gitRun(planPath, "commit", "-m", TicketCommitMessage)
       hasChanges
+  )
+
+proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool =
+  ## Run manager passes that write ticket files directly in tickets/open/.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+
+  let cfg = loadConfig(repoPath)
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
+    if not hasRunnableSpecInPlanPath(planPath):
+      false
+    else:
+      let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
+      if areasToProcess.len == 0:
+        false
+      else:
+        for areaRelPath in areasToProcess:
+          let areaContent = readFile(planPath / areaRelPath)
+          let areaId = areaIdFromAreaPath(areaRelPath)
+          let nextId = nextTicketId(planPath)
+          discard runner(AgentRunRequest(
+            prompt: buildManagerTicketsPrompt(areaRelPath, areaContent, nextId),
+            workingDir: planPath,
+            model: cfg.models.coding,
+            ticketId: ManagerTicketIdPrefix & areaId,
+            attempt: DefaultAgentAttempt,
+            skipGitRepoCheck: true,
+            maxAttempts: DefaultAgentMaxAttempts,
+          ))
+
+        gitRun(planPath, "add", PlanTicketsOpenDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", TicketCommitMessage)
+          true
+        else:
+          false
   )
 
 proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
@@ -1292,7 +1405,13 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
     state.initialized = true
   result = state.healthy
 
-proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: OrchestratorEndpoint, maxTicks: int) =
+proc runOrchestratorLoop(
+  repoPath: string,
+  httpServer: HttpMcpServer,
+  endpoint: OrchestratorEndpoint,
+  maxTicks: int,
+  runner: AgentRunner,
+) =
   ## Start HTTP transport and execute the orchestrator idle event loop.
   shouldRun = true
   installSignalHandlers()
@@ -1307,8 +1426,13 @@ proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: 
       break
     if hasPlanBranch(repoPath):
       if isMasterHealthy(repoPath, masterHealthState):
-        discard processMergeQueue(repoPath)
-        discard executeOldestOpenTicket(repoPath)
+        if hasRunnableSpec(repoPath):
+          discard runArchitectAreas(repoPath, runner)
+          discard runManagerTickets(repoPath, runner)
+          discard executeOldestOpenTicket(repoPath, runner)
+          discard processMergeQueue(repoPath)
+        else:
+          echo WaitingNoSpecMessage
     sleep(IdleSleepMs)
     inc ticks
 
@@ -1316,11 +1440,11 @@ proc runOrchestratorLoop(repoPath: string, httpServer: HttpMcpServer, endpoint: 
   httpServer.close()
   joinThread(serverThread)
 
-proc runOrchestratorForTicks*(repoPath: string, maxTicks: int) =
+proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent) =
   ## Run the orchestrator loop for a bounded number of ticks. Used by tests.
   let endpoint = loadOrchestratorEndpoint(repoPath)
   let httpServer = createOrchestratorServer()
-  runOrchestratorLoop(repoPath, httpServer, endpoint, maxTicks)
+  runOrchestratorLoop(repoPath, httpServer, endpoint, maxTicks, runner)
 
 proc buildInteractivePlanPrompt*(spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
@@ -1423,4 +1547,4 @@ proc runOrchestrator*(repoPath: string) =
   let endpoint = loadOrchestratorEndpoint(repoPath)
   echo fmt"scriptorium: orchestrator listening on http://{endpoint.address}:{endpoint.port}"
   let httpServer = createOrchestratorServer()
-  runOrchestratorLoop(repoPath, httpServer, endpoint, -1)
+  runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent)
