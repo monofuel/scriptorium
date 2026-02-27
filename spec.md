@@ -1,3 +1,7 @@
 # Spec
 
-Run `scriptorium plan` to build your spec with the Architect.
+## Current Spec
+
+No feature requirements have been defined yet.
+
+The current spec state is only the default placeholder from `scriptorium plan`.
