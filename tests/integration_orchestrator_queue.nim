@@ -397,3 +397,98 @@ suite "integration orchestrator merge queue":
       check "tickets/in-progress/0001-first.md" notin files
       check pendingQueueFiles(repoPath).len == 0
     )
+
+  test "IT-11 end-to-end happy path from spec to done":
+    withTempRepo("scriptorium_integration_it11_", proc(repoPath: string) =
+      runInit(repoPath)
+      addPassingMakefile(repoPath)
+
+      var architectCalls = 0
+      var managerCalls = 0
+      proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
+        ## Return one deterministic area document from spec input.
+        inc architectCalls
+        check model == "codex-fake-unit-test-model"
+        check "Run `scriptorium plan`" in spec
+        result = @[
+          AreaDocument(
+            path: "01-e2e.md",
+            content: "# Area 01\n\n## Goal\n- Validate V1 happy path.\n",
+          )
+        ]
+
+      let syncedAreas = syncAreasFromSpec(repoPath, architectGenerator)
+      check syncedAreas
+      check architectCalls == 1
+
+      proc managerGenerator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+        ## Return one deterministic ticket for the generated area.
+        inc managerCalls
+        check model == "codex-fake-unit-test-model"
+        check areaPath == "areas/01-e2e.md"
+        check "Validate V1 happy path." in areaContent
+        result = @[
+          TicketDocument(
+            slug: "e2e-happy-path",
+            content: "# Ticket 1\n\nImplement end-to-end flow.\n",
+          )
+        ]
+
+      let syncedTickets = syncTicketsFromAreas(repoPath, managerGenerator)
+      check syncedTickets
+      check managerCalls == 1
+
+      let filesAfterPlanning = planTreeFiles(repoPath)
+      check "areas/01-e2e.md" in filesAfterPlanning
+      check "tickets/open/0001-e2e-happy-path.md" in filesAfterPlanning
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      check assignment.inProgressTicket == "tickets/in-progress/0001-e2e-happy-path.md"
+      writeFile(assignment.worktree / "e2e-output.txt", "done\n")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add e2e-output.txt")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m integration-it11-ticket-output")
+      let (ticketHead, ticketHeadRc) = execCmdEx("git -C " & quoteShell(assignment.worktree) & " rev-parse HEAD")
+      doAssert ticketHeadRc == 0
+
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Return a deterministic successful output that requests merge submission.
+        discard request
+        result = AgentRunResult(
+          backend: harnessCodex,
+          command: @["codex", "exec"],
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          stdout: "",
+          logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+          lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+          lastMessage: "Done.\nsubmit_pr(\"ship e2e\")",
+          timeoutKind: "none",
+        )
+
+      discard executeAssignedTicket(repoPath, assignment, fakeRunner)
+      let pending = pendingQueueFiles(repoPath)
+      check pending.len == 1
+      check pending[0] == "queue/merge/pending/0001-0001.md"
+
+      let processed = processMergeQueue(repoPath)
+      check processed
+      check pendingQueueFiles(repoPath).len == 0
+
+      let finalFiles = planTreeFiles(repoPath)
+      check "tickets/done/0001-e2e-happy-path.md" in finalFiles
+      check "tickets/open/0001-e2e-happy-path.md" notin finalFiles
+      check "tickets/in-progress/0001-e2e-happy-path.md" notin finalFiles
+
+      let (masterOutput, masterRc) = execCmdEx("git -C " & quoteShell(repoPath) & " show master:e2e-output.txt")
+      check masterRc == 0
+      check masterOutput.strip() == "done"
+
+      let (_, ancestorRc) = execCmdEx(
+        "git -C " & quoteShell(repoPath) & " merge-base --is-ancestor " & ticketHead.strip() & " master"
+      )
+      check ancestorRc == 0
+
+      validateTicketStateInvariant(repoPath)
+      validateTransitionCommitInvariant(repoPath)
+    )
