@@ -1,0 +1,6 @@
+{
+  "models": {
+    "architect": "gpt-5.3-codex-spark",
+    "coding": "gpt-5.1-codex-mini"
+  }
+}
