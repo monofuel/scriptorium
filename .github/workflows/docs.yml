@@ -21,12 +21,30 @@ jobs:
           mkdir -p "$target_doc_dir"
 
           if [ ! -f "$target_doc_dir/nimdoc.css" ] || [ ! -f "$target_doc_dir/dochack.js" ]; then
-            css_source="$(find "$HOME/.nimby" -path '*/doc/nimdoc.css' | head -n 1)"
-            js_source="$(find "$HOME/.nimby" -path '*/doc/dochack.js' | head -n 1)"
+            css_source=""
+            js_source=""
+
+            while IFS= read -r lib_dir; do
+              doc_dir="${lib_dir%/lib}/doc"
+              if [ -f "$doc_dir/nimdoc.css" ] && [ -f "$doc_dir/dochack.js" ]; then
+                css_source="$doc_dir/nimdoc.css"
+                js_source="$doc_dir/dochack.js"
+                break
+              fi
+            done < <(nim dump 2>/dev/null | grep -E '/lib$' || true)
 
             if [ -z "$css_source" ] || [ -z "$js_source" ]; then
-              echo "Could not locate nimdoc assets under ~/.nimby."
-              echo "Expected files: nimdoc.css and dochack.js"
+              css_source="$(find "$HOME/.nimby" /opt/hostedtoolcache /usr -path '*/doc/nimdoc.css' 2>/dev/null | head -n 1)"
+              js_source="$(find "$HOME/.nimby" /opt/hostedtoolcache /usr -path '*/doc/dochack.js' 2>/dev/null | head -n 1)"
+            fi
+
+            if [ -z "$css_source" ] || [ -z "$js_source" ]; then
+              echo "Could not locate nimdoc assets."
+              echo "Expected files: nimdoc.css and dochack.js in Nim doc directories."
+              echo "nim --version:"
+              nim --version
+              echo "nim dump candidate lib paths:"
+              nim dump 2>/dev/null | grep -E '/lib$' || true
               exit 1
             fi
 
