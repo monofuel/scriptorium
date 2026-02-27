@@ -1,0 +1,40 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: treeform/setup-nim-action@v6
+
+      - name: Verify integration secrets
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "OPENAI_API_KEY secret is required for integration tests."
+            exit 1
+          fi
+
+      - name: Install codex CLI
+        run: npm install -g @openai/codex@native
+
+      - name: Show codex version
+        run: codex --version
+
+      - name: Sync Nim dependencies
+        run: nimby sync -g nimby.lock
+
+      - name: Run integration tests
+        run: make integration-test
