@@ -320,6 +320,27 @@ suite "orchestrator invariants":
     expect ValueError:
       validateTicketStateInvariant(tmp)
 
+  test "transition commit invariant passes for orchestrator-managed state moves":
+    let tmp = getTempDir() / "scriptorium_test_invariant_transition_pass"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    discard assignOldestOpenTicket(tmp)
+    validateTransitionCommitInvariant(tmp)
+
+  test "transition commit invariant fails for non-orchestrator ticket move commit":
+    let tmp = getTempDir() / "scriptorium_test_invariant_transition_fail"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+    moveTicketStateInPlan(tmp, "open", "in-progress", "0001-first.md")
+
+    expect ValueError:
+      validateTransitionCommitInvariant(tmp)
+
 suite "orchestrator planning bootstrap":
   test "loads spec from plan branch":
     let tmp = getTempDir() / "scriptorium_test_plan_load_spec"

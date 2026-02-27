@@ -1,5 +1,5 @@
 import
-  std/[algorithm, os, osproc, posix, sets, streams, strformat, strutils, tempfiles, uri],
+  std/[algorithm, os, osproc, posix, sets, streams, strformat, strutils, tables, tempfiles, uri],
   mcport,
   ./[agent_runner, config]
 
@@ -320,6 +320,7 @@ proc runArchitectSpecUpdate(repoPath: string, model: string, currentSpec: string
   result = response
 
 proc listMarkdownFiles(basePath: string): seq[string]
+proc runCommandCapture(workingDir: string, command: string, args: seq[string]): tuple[exitCode: int, output: string]
 
 proc ensureUniqueTicketStateInPlanPath(planPath: string) =
   ## Ensure each ticket markdown filename exists in exactly one state directory.
@@ -330,6 +331,84 @@ proc ensureUniqueTicketStateInPlanPath(planPath: string) =
       if seen.contains(fileName):
         raise newException(ValueError, fmt"ticket exists in multiple state directories: {fileName}")
       seen.incl(fileName)
+
+proc ticketStateFromPath(path: string): string =
+  ## Return ticket state directory name from one ticket markdown path.
+  let normalized = path.replace('\\', '/')
+  if normalized.startsWith(PlanTicketsOpenDir & "/"):
+    result = PlanTicketsOpenDir
+  elif normalized.startsWith(PlanTicketsInProgressDir & "/"):
+    result = PlanTicketsInProgressDir
+  elif normalized.startsWith(PlanTicketsDoneDir & "/"):
+    result = PlanTicketsDoneDir
+
+proc isOrchestratorTransitionSubject(subject: string): bool =
+  ## Return true when one commit subject is an orchestrator ticket transition commit.
+  result =
+    subject.startsWith(TicketAssignCommitPrefix & " ") or
+    subject.startsWith(MergeQueueDoneCommitPrefix & " ") or
+    subject.startsWith(MergeQueueReopenCommitPrefix & " ")
+
+proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash: string): int =
+  ## Count ticket state transitions represented by one commit diff.
+  let diffResult = runCommandCapture(
+    repoPath,
+    "git",
+    @[
+      "diff",
+      "--name-status",
+      "--find-renames",
+      parentCommit,
+      commitHash,
+      "--",
+      PlanTicketsOpenDir,
+      PlanTicketsInProgressDir,
+      PlanTicketsDoneDir,
+    ],
+  )
+  if diffResult.exitCode != 0:
+    raise newException(IOError, fmt"git diff failed while auditing transitions: {diffResult.output.strip()}")
+
+  var removedByName = initTable[string, string]()
+  var addedByName = initTable[string, string]()
+  for line in diffResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0:
+      continue
+    let columns = trimmed.split('\t')
+    if columns.len < 2:
+      continue
+
+    let status = columns[0]
+    if status.startsWith("R"):
+      if columns.len < 3:
+        continue
+      let oldPath = columns[1]
+      let newPath = columns[2]
+      let oldState = ticketStateFromPath(oldPath)
+      let newState = ticketStateFromPath(newPath)
+      let oldName = extractFilename(oldPath)
+      let newName = extractFilename(newPath)
+      if oldState.len > 0 and newState.len > 0 and oldState != newState:
+        if oldName != newName:
+          raise newException(ValueError, fmt"invalid ticket rename across states in commit {commitHash}: {oldPath} -> {newPath}")
+        inc result
+    elif status == "D":
+      let oldPath = columns[1]
+      let oldState = ticketStateFromPath(oldPath)
+      if oldState.len > 0:
+        removedByName[extractFilename(oldPath)] = oldState
+    elif status == "A":
+      let newPath = columns[1]
+      let newState = ticketStateFromPath(newPath)
+      if newState.len > 0:
+        addedByName[extractFilename(newPath)] = newState
+
+  for ticketName, oldState in removedByName.pairs():
+    if addedByName.hasKey(ticketName):
+      let newState = addedByName[ticketName]
+      if oldState != newState:
+        inc result
 
 proc runCommandCapture(workingDir: string, command: string, args: seq[string]): tuple[exitCode: int, output: string] =
   ## Run a process and return combined stdout/stderr with its exit code.
@@ -757,6 +836,43 @@ proc validateTicketStateInvariant*(repoPath: string) =
     ensureUniqueTicketStateInPlanPath(planPath)
     0
   )
+
+proc validateTransitionCommitInvariant*(repoPath: string) =
+  ## Validate that each ticket state transition is exactly one orchestrator transition commit.
+  let logResult = runCommandCapture(
+    repoPath,
+    "git",
+    @["log", "--reverse", "--format=%H%x1f%P%x1f%s", PlanBranch],
+  )
+  if logResult.exitCode != 0:
+    raise newException(IOError, fmt"git log failed while auditing transitions: {logResult.output.strip()}")
+
+  for line in logResult.output.splitLines():
+    if line.strip().len == 0:
+      continue
+    let columns = line.split('\x1f')
+    if columns.len < 3:
+      raise newException(ValueError, fmt"invalid git log row while auditing transitions: {line}")
+
+    let commitHash = columns[0].strip()
+    let parentValue = columns[1].strip()
+    let subject = columns[2].strip()
+    let isTransitionSubject = isOrchestratorTransitionSubject(subject)
+
+    if parentValue.len == 0:
+      if isTransitionSubject:
+        raise newException(ValueError, fmt"transition commit cannot be root commit: {subject}")
+      continue
+
+    let parentCommit = parentValue.splitWhitespace()[0]
+    let transitionCount = transitionCountInCommit(repoPath, parentCommit, commitHash)
+    if transitionCount > 0 and not isTransitionSubject:
+      raise newException(ValueError, fmt"ticket state transition must use orchestrator transition commit: {subject}")
+    if isTransitionSubject and transitionCount != 1:
+      raise newException(
+        ValueError,
+        fmt"orchestrator transition commit must contain exactly one ticket transition: {subject} (found {transitionCount})",
+      )
 
 proc listActiveTicketWorktrees*(repoPath: string): seq[ActiveTicketWorktree] =
   ## Return active in-progress ticket worktrees from the plan branch.
