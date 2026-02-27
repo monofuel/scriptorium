@@ -21,35 +21,14 @@ jobs:
           mkdir -p "$target_doc_dir"
 
           if [ ! -f "$target_doc_dir/nimdoc.css" ] || [ ! -f "$target_doc_dir/dochack.js" ]; then
-            css_source=""
-            js_source=""
+            nim_version="$(nim --version | awk '/Version/ {print $4}')"
+            nim_tag_url="https://raw.githubusercontent.com/nim-lang/Nim/v${nim_version}/doc"
+            nim_devel_url="https://raw.githubusercontent.com/nim-lang/Nim/devel/doc"
 
-            while IFS= read -r lib_dir; do
-              doc_dir="${lib_dir%/lib}/doc"
-              if [ -f "$doc_dir/nimdoc.css" ] && [ -f "$doc_dir/dochack.js" ]; then
-                css_source="$doc_dir/nimdoc.css"
-                js_source="$doc_dir/dochack.js"
-                break
-              fi
-            done < <(nim dump 2>/dev/null | grep -E '/lib$' || true)
-
-            if [ -z "$css_source" ] || [ -z "$js_source" ]; then
-              css_source="$(find "$HOME/.nimby" /opt/hostedtoolcache /usr -path '*/doc/nimdoc.css' 2>/dev/null | head -n 1)"
-              js_source="$(find "$HOME/.nimby" /opt/hostedtoolcache /usr -path '*/doc/dochack.js' 2>/dev/null | head -n 1)"
-            fi
-
-            if [ -z "$css_source" ] || [ -z "$js_source" ]; then
-              echo "Could not locate nimdoc assets."
-              echo "Expected files: nimdoc.css and dochack.js in Nim doc directories."
-              echo "nim --version:"
-              nim --version
-              echo "nim dump candidate lib paths:"
-              nim dump 2>/dev/null | grep -E '/lib$' || true
-              exit 1
-            fi
-
-            cp "$css_source" "$target_doc_dir/nimdoc.css"
-            cp "$js_source" "$target_doc_dir/dochack.js"
+            curl -fsSL "$nim_tag_url/nimdoc.css" -o "$target_doc_dir/nimdoc.css" || \
+              curl -fsSL "$nim_devel_url/nimdoc.css" -o "$target_doc_dir/nimdoc.css"
+            curl -fsSL "$nim_tag_url/dochack.js" -o "$target_doc_dir/dochack.js" || \
+              curl -fsSL "$nim_devel_url/dochack.js" -o "$target_doc_dir/dochack.js"
           fi
 
       - run: nim doc --index:on --project --git.url:https://github.com/${{ github.repository }} --git.commit:master --out:${{ env.deploy-dir }} ${{ env.nim-src }}
