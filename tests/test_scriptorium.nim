@@ -1,7 +1,7 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[os, osproc, sequtils, strformat, strutils, unittest],
+  std/[os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
   scriptorium/[agent_runner, config, init, orchestrator]
 
 const
@@ -385,6 +385,80 @@ suite "orchestrator plan spec update":
 
     check after == before
     check "areas/01-out-of-scope.md" notin files
+
+  test "updateSpecFromArchitect recovers stale managed temp worktree conflicts":
+    let tmp = getTempDir() / "scriptorium_test_plan_stale_temp_conflict"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+
+    let stalePath = createTempDir("scriptorium_plan_", "", getTempDir())
+    removeDir(stalePath)
+    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree add " & quoteShell(stalePath) & " scriptorium/plan")
+    defer:
+      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree remove --force " & quoteShell(stalePath))
+      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree prune")
+      if dirExists(stalePath):
+        removeDir(stalePath)
+
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Update spec.md in the recovered temp worktree.
+      writeFile(req.workingDir / "spec.md", "# Updated Spec\n\n- recovered\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    let changed = updateSpecFromArchitect(tmp, "recover stale temp", fakeRunner)
+    let worktrees = gitWorktreePaths(tmp)
+
+    check changed
+    check stalePath notin worktrees
+
+  test "updateSpecFromArchitect keeps non-managed plan worktree conflicts intact":
+    let tmp = getTempDir() / "scriptorium_test_plan_manual_conflict"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+
+    let manualPath = getTempDir() / "scriptorium_manual_plan_conflict"
+    if dirExists(manualPath):
+      removeDir(manualPath)
+    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree add " & quoteShell(manualPath) & " scriptorium/plan")
+    defer:
+      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree remove --force " & quoteShell(manualPath))
+      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree prune")
+      if dirExists(manualPath):
+        removeDir(manualPath)
+
+    var runnerCalls = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Track invocations; this runner should not be called on add conflict.
+      inc runnerCalls
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    var errorMessage = ""
+    try:
+      discard updateSpecFromArchitect(tmp, "conflict", fakeRunner)
+    except IOError as err:
+      errorMessage = err.msg
+
+    let worktrees = gitWorktreePaths(tmp)
+    check runnerCalls == 0
+    check "already used by worktree" in errorMessage
+    check manualPath in worktrees
 
 suite "orchestrator invariants":
   test "ticket state invariant fails when same ticket exists in multiple state directories":
@@ -1233,3 +1307,37 @@ suite "interactive planning":
 
     check after == before
     check "areas/02-out-of-scope.md" notin files
+
+  test "interrupt-style input exits session cleanly":
+    let tmp = getTempDir() / "scriptorium_test_interactive_interrupt"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp)
+
+    var runnerCalls = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Track runner invocations; interrupted input should stop before agent calls.
+      inc runnerCalls
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    var inputCalls = 0
+    proc fakeInput(): string =
+      ## Simulate interrupted terminal input.
+      inc inputCalls
+      raise newException(IOError, "interrupted by signal")
+
+    let before = planCommitCount(tmp)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    let after = planCommitCount(tmp)
+
+    check inputCalls == 1
+    check runnerCalls == 0
+    check after == before

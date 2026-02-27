@@ -28,6 +28,7 @@ const
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
   PlanSpecTicketId = "plan-spec"
   PlanSessionTicketId = "plan-session"
+  PlanTempWorktreePrefix = "scriptorium_plan_"
   ManagedWorktreeRoot = ".scriptorium/worktrees"
   PlanLogRoot = "scriptorium-plan-logs"
   PlanWriteScopeName = "scriptorium plan"
@@ -113,7 +114,9 @@ type
     healthy*: bool
     initialized*: bool
 
-var shouldRun {.volatile.} = true
+var
+  shouldRun {.volatile.} = true
+  interactivePlanInterrupted {.volatile.} = false
 
 proc gitRun(dir: string, args: varargs[string]) =
   ## Run a git subcommand in dir and raise an IOError on non-zero exit.
@@ -135,14 +138,67 @@ proc gitCheck(dir: string, args: varargs[string]): int =
   result = process.waitForExit()
   process.close()
 
+proc parseWorktreeConflictPath(output: string): string =
+  ## Extract a conflicting worktree path from git worktree add stderr output.
+  let marker = "worktree at '"
+  let markerPos = output.rfind(marker)
+  if markerPos >= 0:
+    let pathStart = markerPos + marker.len
+    let pathEnd = output.find('\'', pathStart)
+    if pathEnd > pathStart:
+      result = output[pathStart..<pathEnd].strip()
+
+proc isManagedPlanTempWorktreePath(path: string): bool =
+  ## Return true when path is one of this tool's temporary plan worktrees.
+  var tempRoot = absolutePath(getTempDir()).replace('\\', '/')
+  if tempRoot.endsWith("/"):
+    tempRoot.setLen(tempRoot.len - 1)
+
+  let normalizedPath = absolutePath(path).replace('\\', '/')
+  result = normalizedPath.startsWith(tempRoot & "/" & PlanTempWorktreePrefix)
+
+proc recoverManagedPlanWorktreeConflict(repoPath: string, addOutput: string): bool =
+  ## Remove a stale managed temp worktree conflict and prune stale worktree metadata.
+  let conflictPath = parseWorktreeConflictPath(addOutput)
+  if conflictPath.len == 0:
+    result = false
+  elif not isManagedPlanTempWorktreePath(conflictPath):
+    result = false
+  else:
+    discard gitCheck(repoPath, "worktree", "remove", "--force", conflictPath)
+    discard gitCheck(repoPath, "worktree", "prune")
+    result = true
+
 proc withPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T): T =
   ## Open a temporary worktree for the plan branch, run operation, then remove it.
   if gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) != 0:
     raise newException(ValueError, "scriptorium/plan branch does not exist")
 
-  let planWorktree = createTempDir("scriptorium_plan_", "", getTempDir())
+  let planWorktree = createTempDir(PlanTempWorktreePrefix, "", getTempDir())
   removeDir(planWorktree)
-  gitRun(repoPath, "worktree", "add", planWorktree, PlanBranch)
+  var recoveredConflict = false
+  while true:
+    let addProcess = startProcess(
+      "git",
+      args = @["-C", repoPath, "worktree", "add", planWorktree, PlanBranch],
+      options = {poUsePath, poStdErrToStdOut},
+    )
+    let addOutput = addProcess.outputStream.readAll()
+    let addRc = addProcess.waitForExit()
+    addProcess.close()
+
+    if addRc == 0:
+      break
+
+    if recoveredConflict or not recoverManagedPlanWorktreeConflict(repoPath, addOutput):
+      raise newException(
+        IOError,
+        fmt"git worktree add {planWorktree} {PlanBranch} failed: {addOutput.strip()}",
+      )
+    recoveredConflict = true
+    if dirExists(planWorktree):
+      removeDir(planWorktree)
+
   defer:
     discard gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
 
@@ -1439,6 +1495,15 @@ proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   discard signalNumber
   shouldRun = false
 
+proc handleInteractivePlanCtrlC() {.noconv.} =
+  ## Request shutdown of one interactive planning session on Ctrl+C.
+  interactivePlanInterrupted = true
+
+proc inputErrorIndicatesInterrupt(message: string): bool =
+  ## Return true when one input error string indicates interrupted input.
+  let lower = message.toLowerAscii()
+  result = lower.contains("interrupted") or lower.contains("eintr")
+
 proc installSignalHandlers() =
   ## Install signal handlers used by the orchestrator run loop.
   setControlCHook(handleCtrlC)
@@ -1553,6 +1618,13 @@ proc runInteractivePlanSession*(
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
 
+  interactivePlanInterrupted = false
+  setControlCHook(handleInteractivePlanCtrlC)
+  defer:
+    when declared(unsetControlCHook):
+      unsetControlCHook()
+    interactivePlanInterrupted = false
+
   let cfg = loadConfig(repoPath)
   discard withPlanWorktree(repoPath, proc(planPath: string): int =
     echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
@@ -1560,6 +1632,10 @@ proc runInteractivePlanSession*(
     var turnNum = 0
 
     while true:
+      if interactivePlanInterrupted:
+        echo ""
+        break
+
       stdout.write("> ")
       flushFile(stdout)
       var line: string
@@ -1570,6 +1646,11 @@ proc runInteractivePlanSession*(
           line = input()
       except EOFError:
         break
+      except CatchableError as err:
+        if interactivePlanInterrupted or inputErrorIndicatesInterrupt(err.msg):
+          echo ""
+          break
+        raise err
 
       line = line.strip()
       if line.len == 0:
