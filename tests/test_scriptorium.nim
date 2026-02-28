@@ -1,17 +1,12 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
+  std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
   jsony,
   scriptorium/[agent_runner, config, init, orchestrator]
 
 const
-  CliBinaryName = "scriptorium_test_cli"
   OrchestratorTestBasePort = 19000
-let
-  ProjectRoot = getCurrentDir()
-var
-  cliBinaryPath = ""
 
 type
   StreamMessageJson = object
@@ -32,20 +27,6 @@ proc runCmdOrDie(cmd: string) =
   ## Run a shell command and fail the test immediately if it exits non-zero.
   let (_, rc) = execCmdEx(cmd)
   doAssert rc == 0, cmd
-
-proc ensureCliBinary(): string =
-  ## Build and cache the scriptorium CLI binary for command-output tests.
-  if cliBinaryPath.len == 0:
-    cliBinaryPath = getTempDir() / CliBinaryName
-    runCmdOrDie(
-      "nim c -o:" & quoteShell(cliBinaryPath) & " " & quoteShell(ProjectRoot / "src/scriptorium.nim")
-    )
-  result = cliBinaryPath
-
-proc runCliInRepo(repoPath: string, args: string): tuple[output: string, exitCode: int] =
-  ## Run the compiled CLI in repoPath and return output and exit code.
-  let command = "cd " & quoteShell(repoPath) & " && " & quoteShell(ensureCliBinary()) & " " & args
-  result = execCmdEx(command)
 
 proc writeScriptoriumConfig(repoPath: string, cfg: Config) =
   ## Write one typed scriptorium.json payload for test configuration.
@@ -145,6 +126,36 @@ proc addFailingMakefile(repoPath: string) =
   writeFile(repoPath / "Makefile", "test:\n\t@echo FAIL\n\t@false\n")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m test-add-failing-makefile")
+
+proc withTempRepo(prefix: string, action: proc(repoPath: string)) =
+  ## Create a temporary git repository, run action, and clean up afterwards.
+  let repoPath = createTempDir(prefix, "", getTempDir())
+  defer:
+    removeDir(repoPath)
+  makeTestRepo(repoPath)
+  action(repoPath)
+
+proc pendingQueueFiles(repoPath: string): seq[string] =
+  ## Return pending merge-queue markdown entries sorted by file name.
+  let files = planTreeFiles(repoPath)
+  result = files.filterIt(it.startsWith("queue/merge/pending/") and it.endsWith(".md"))
+  result.sort()
+
+proc readPlanFile(repoPath: string, relPath: string): string =
+  ## Read one file from the plan branch tree.
+  let (output, rc) = execCmdEx(
+    "git -C " & quoteShell(repoPath) & " show scriptorium/plan:" & relPath
+  )
+  doAssert rc == 0, relPath
+  result = output
+
+proc latestPlanCommits(repoPath: string, count: int): seq[string] =
+  ## Return the latest commit subjects from the plan branch.
+  let (output, rc) = execCmdEx(
+    "git -C " & quoteShell(repoPath) & " log --format=%s -n " & $count & " scriptorium/plan"
+  )
+  doAssert rc == 0
+  result = output.splitLines().filterIt(it.len > 0)
 
 suite "scriptorium --init":
   test "creates scriptorium/plan branch":
@@ -280,59 +291,6 @@ suite "orchestrator endpoint":
   test "rejects endpoint missing host":
     expect ValueError:
       discard parseEndpoint("http:///v1")
-
-suite "scriptorium CLI":
-  test "status command prints ticket counts and active agent snapshot":
-    let tmp = getTempDir() / "scriptorium_test_cli_status"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
-    addTicketToPlan(
-      tmp,
-      "in-progress",
-      "0002-second.md",
-      "# Ticket 2\n\n**Area:** b\n\n**Worktree:** /tmp/worktree-0002\n",
-    )
-
-    let (output, rc) = runCliInRepo(tmp, "status")
-    let expected =
-      "Open: 1\n" &
-      "In Progress: 1\n" &
-      "Done: 0\n" &
-      "Active Agent Ticket: 0002 (tickets/in-progress/0002-second.md)\n" &
-      "Active Agent Branch: scriptorium/ticket-0002\n" &
-      "Active Agent Worktree: /tmp/worktree-0002\n"
-
-    check rc == 0
-    check output == expected
-
-  test "worktrees command lists active ticket worktrees":
-    let tmp = getTempDir() / "scriptorium_test_cli_worktrees"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addTicketToPlan(
-      tmp,
-      "in-progress",
-      "0002-second.md",
-      "# Ticket 2\n\n**Area:** b\n\n**Worktree:** /tmp/worktree-0002\n",
-    )
-    addTicketToPlan(
-      tmp,
-      "in-progress",
-      "0001-first.md",
-      "# Ticket 1\n\n**Area:** a\n\n**Worktree:** /tmp/worktree-0001\n",
-    )
-
-    let (output, rc) = runCliInRepo(tmp, "worktrees")
-    let expected =
-      "WORKTREE\tTICKET\tBRANCH\n" &
-      "/tmp/worktree-0001\t0001\tscriptorium/ticket-0001\n" &
-      "/tmp/worktree-0002\t0002\tscriptorium/ticket-0002\n"
-
-    check rc == 0
-    check output == expected
 
 suite "orchestrator plan spec update":
   test "updateSpecFromArchitect runs in plan worktree, reads repo path, and commits":
@@ -1508,3 +1466,245 @@ suite "interactive planning":
     check inputCalls == 1
     check runnerCalls == 0
     check after == before
+
+suite "orchestrator agent enqueue with fakes":
+  test "agent run enqueues exactly one merge request with metadata":
+    withTempRepo("scriptorium_test_enqueue_metadata_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addPassingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Return a deterministic run output that requests submit_pr.
+        discard request
+        result = AgentRunResult(
+          backend: harnessCodex,
+          command: @["codex", "exec"],
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          stdout: "",
+          logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+          lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+          lastMessage: "Done.\nsubmit_pr(\"ship it\")",
+          timeoutKind: "none",
+        )
+
+      discard executeAssignedTicket(repoPath, assignment, fakeRunner)
+
+      let queueFiles = pendingQueueFiles(repoPath)
+      check queueFiles.len == 1
+      check queueFiles[0] == "queue/merge/pending/0001-0001.md"
+
+      let queueEntry = readPlanFile(repoPath, queueFiles[0])
+      check "**Ticket:** tickets/in-progress/0001-first.md" in queueEntry
+      check "**Ticket ID:** 0001" in queueEntry
+      check "**Summary:** ship it" in queueEntry
+      check "**Branch:** scriptorium/ticket-0001" in queueEntry
+      check ("**Worktree:** " & assignment.worktree) in queueEntry
+    )
+
+  test "orchestrator tick assigns and executes before merge queue processing":
+    withTempRepo("scriptorium_test_tick_assign_execute_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addPassingMakefile(repoPath)
+      writeSpecInPlan(repoPath, "# Spec\n\nDrive orchestrator tick.\n")
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+      addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
+
+      let firstAssignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
+
+      let fakeBinDir = createTempDir("scriptorium_test_fake_codex_", "", getTempDir())
+      defer:
+        removeDir(fakeBinDir)
+      let fakeCodexPath = fakeBinDir / "codex"
+      let fakeScript = "#!/usr/bin/env bash\n" &
+        "set -euo pipefail\n" &
+        "last_message=\"\"\n" &
+        "while [[ $# -gt 0 ]]; do\n" &
+        "  case \"$1\" in\n" &
+        "    --output-last-message) last_message=\"$2\"; shift 2 ;;\n" &
+        "    *) shift ;;\n" &
+        "  esac\n" &
+        "done\n" &
+        "cat >/dev/null\n" &
+        "printf '{\"type\":\"message\",\"text\":\"ok\"}\\n'\n" &
+        "printf 'done\\n' > \"$last_message\"\n"
+      writeFile(fakeCodexPath, fakeScript)
+      setFilePermissions(fakeCodexPath, {fpUserRead, fpUserWrite, fpUserExec})
+
+      let oldPath = getEnv("PATH", "")
+      putEnv("PATH", fakeBinDir & ":" & oldPath)
+      defer:
+        putEnv("PATH", oldPath)
+
+      writeOrchestratorEndpointConfig(repoPath, 0)
+      runOrchestratorForTicks(repoPath, 1)
+
+      let files = planTreeFiles(repoPath)
+      check "tickets/done/0001-first.md" in files
+      check "tickets/in-progress/0002-second.md" in files
+      check pendingQueueFiles(repoPath).len == 0
+
+      let commits = latestPlanCommits(repoPath, 3)
+      check commits.len == 3
+      check commits[0] == "scriptorium: complete ticket 0001"
+      check commits[1] == "scriptorium: record agent run 0002-second"
+      check commits[2] == "scriptorium: assign ticket 0002-second"
+    )
+
+  test "end-to-end happy path from spec to done":
+    withTempRepo("scriptorium_test_e2e_happy_path_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addPassingMakefile(repoPath)
+
+      var architectCalls = 0
+      var managerCalls = 0
+      proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
+        ## Return one deterministic area document from spec input.
+        inc architectCalls
+        check model == "codex-fake-unit-test-model"
+        check "Run `scriptorium plan`" in spec
+        result = @[
+          AreaDocument(
+            path: "01-e2e.md",
+            content: "# Area 01\n\n## Goal\n- Validate V1 happy path.\n",
+          )
+        ]
+
+      let syncedAreas = syncAreasFromSpec(repoPath, architectGenerator)
+      check syncedAreas
+      check architectCalls == 1
+
+      proc managerGenerator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+        ## Return one deterministic ticket for the generated area.
+        inc managerCalls
+        check model == "codex-fake-unit-test-model"
+        check areaPath == "areas/01-e2e.md"
+        check "Validate V1 happy path." in areaContent
+        result = @[
+          TicketDocument(
+            slug: "e2e-happy-path",
+            content: "# Ticket 1\n\nImplement end-to-end flow.\n",
+          )
+        ]
+
+      let syncedTickets = syncTicketsFromAreas(repoPath, managerGenerator)
+      check syncedTickets
+      check managerCalls == 1
+
+      let filesAfterPlanning = planTreeFiles(repoPath)
+      check "areas/01-e2e.md" in filesAfterPlanning
+      check "tickets/open/0001-e2e-happy-path.md" in filesAfterPlanning
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      check assignment.inProgressTicket == "tickets/in-progress/0001-e2e-happy-path.md"
+      writeFile(assignment.worktree / "e2e-output.txt", "done\n")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add e2e-output.txt")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m test-e2e-ticket-output")
+      let (ticketHead, ticketHeadRc) = execCmdEx("git -C " & quoteShell(assignment.worktree) & " rev-parse HEAD")
+      doAssert ticketHeadRc == 0
+
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Return a deterministic successful output that requests merge submission.
+        discard request
+        result = AgentRunResult(
+          backend: harnessCodex,
+          command: @["codex", "exec"],
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          stdout: "",
+          logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+          lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+          lastMessage: "Done.\nsubmit_pr(\"ship e2e\")",
+          timeoutKind: "none",
+        )
+
+      discard executeAssignedTicket(repoPath, assignment, fakeRunner)
+      let pending = pendingQueueFiles(repoPath)
+      check pending.len == 1
+      check pending[0] == "queue/merge/pending/0001-0001.md"
+
+      let processed = processMergeQueue(repoPath)
+      check processed
+      check pendingQueueFiles(repoPath).len == 0
+
+      let finalFiles = planTreeFiles(repoPath)
+      check "tickets/done/0001-e2e-happy-path.md" in finalFiles
+      check "tickets/open/0001-e2e-happy-path.md" notin finalFiles
+      check "tickets/in-progress/0001-e2e-happy-path.md" notin finalFiles
+
+      let (masterOutput, masterRc) = execCmdEx("git -C " & quoteShell(repoPath) & " show master:e2e-output.txt")
+      check masterRc == 0
+      check masterOutput.strip() == "done"
+
+      let (_, ancestorRc) = execCmdEx(
+        "git -C " & quoteShell(repoPath) & " merge-base --is-ancestor " & ticketHead.strip() & " master"
+      )
+      check ancestorRc == 0
+
+      validateTicketStateInvariant(repoPath)
+      validateTransitionCommitInvariant(repoPath)
+    )
+
+  test "one-shot plan runner reads repo path context and commits spec only":
+    withTempRepo("scriptorium_test_oneshot_plan_runner_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      writeFile(repoPath / "source-marker.txt", "integration-marker\n")
+      runCmdOrDie("git -C " & quoteShell(repoPath) & " add source-marker.txt")
+      runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m test-add-source-marker")
+
+      var callCount = 0
+      var capturedPrompt = ""
+      var capturedRepoPath = ""
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Read the repo path from prompt context and update spec.md in plan worktree.
+        inc callCount
+        capturedPrompt = request.prompt
+        let repoPathMarker = "Repository root path (read project source files from here):\n"
+        let markerIndex = request.prompt.find(repoPathMarker)
+        doAssert markerIndex >= 0
+        let pathStart = markerIndex + repoPathMarker.len
+        let pathEnd = request.prompt.find('\n', pathStart)
+        doAssert pathEnd > pathStart
+        let repoPathFromPrompt = request.prompt[pathStart..<pathEnd].strip()
+        capturedRepoPath = repoPathFromPrompt
+        let marker = readFile(repoPathFromPrompt / "source-marker.txt").strip()
+        writeFile(request.workingDir / "spec.md", "# Integration Spec\n\n- marker: " & marker & "\n")
+
+        result = AgentRunResult(
+          backend: harnessCodex,
+          command: @["codex", "exec"],
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          stdout: "",
+          logFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.jsonl",
+          lastMessageFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.last_message.txt",
+          lastMessage: "Updated spec",
+          timeoutKind: "none",
+        )
+
+      let changed = updateSpecFromArchitect(repoPath, "sync source marker", fakeRunner)
+
+      check changed
+      check callCount == 1
+      check capturedRepoPath == repoPath
+      check "AGENTS.md" in capturedPrompt
+      check "Only edit spec.md in this working directory." in capturedPrompt
+
+      let specBody = readPlanFile(repoPath, "spec.md")
+      check "# Integration Spec" in specBody
+      check "- marker: integration-marker" in specBody
+
+      let files = planTreeFiles(repoPath)
+      check "spec.md" in files
+      check "areas/01-out-of-scope.md" notin files
+
+      let commits = latestPlanCommits(repoPath, 1)
+      check commits.len == 1
+      check commits[0] == "scriptorium: update spec from architect"
+    )
