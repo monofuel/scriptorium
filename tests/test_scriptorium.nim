@@ -120,16 +120,31 @@ proc gitWorktreePaths(repoPath: string): seq[string] =
       result.add(line["worktree ".len..^1].strip())
 
 proc addPassingMakefile(repoPath: string) =
-  ## Add a Makefile with a passing `make test` target and commit it on master.
-  writeFile(repoPath / "Makefile", "test:\n\t@echo PASS\n")
+  ## Add a Makefile with passing quality-gate targets and commit it on master.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo PASS integration-test\n",
+  )
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m test-add-passing-makefile")
 
 proc addFailingMakefile(repoPath: string) =
-  ## Add a Makefile with a failing `make test` target and commit it on master.
-  writeFile(repoPath / "Makefile", "test:\n\t@echo FAIL\n\t@false\n")
+  ## Add a Makefile where `make test` fails and `make integration-test` is defined.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo FAIL test\n\t@false\n\nintegration-test:\n\t@echo PASS integration-test\n",
+  )
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m test-add-failing-makefile")
+
+proc addIntegrationFailingMakefile(repoPath: string) =
+  ## Add a Makefile where `make test` passes and `make integration-test` fails.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo FAIL integration-test\n\t@false\n",
+  )
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m test-add-integration-failing-makefile")
 
 proc withTempRepo(prefix: string, action: proc(repoPath: string)) =
   ## Create a temporary git repository, run action, and clean up afterwards.
@@ -1079,6 +1094,32 @@ suite "orchestrator merge queue":
     check ticketRc == 0
     check "## Merge Queue Failure" in ticketContent
 
+  test "processMergeQueue failure path reopens ticket when integration-test fails":
+    let tmp = getTempDir() / "scriptorium_test_merge_queue_integration_failure"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addIntegrationFailingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "integration failure")
+    let processed = processMergeQueue(tmp)
+    let files = planTreeFiles(tmp)
+
+    check processed
+    check "tickets/open/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
+    check "queue/merge/pending/0001-0001.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
+    )
+    check ticketRc == 0
+    check "## Merge Queue Failure" in ticketContent
+    check "make integration-test" in ticketContent
+    check "FAIL integration-test" in ticketContent
+
 suite "orchestrator final v1 flow":
   test "blank spec tick skips orchestration and does not invoke agents":
     let tmp = getTempDir() / "scriptorium_test_v1_36_blank_spec_guard"
@@ -1108,6 +1149,21 @@ suite "orchestrator final v1 flow":
 
     check callCount == 0
     check after == before
+
+  test "integration-test failure on master blocks assignment of open tickets":
+    let tmp = getTempDir() / "scriptorium_test_master_red_integration"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addIntegrationFailingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nNeed assignment.\n")
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    runOrchestratorForTicks(tmp, 1)
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
 
   test "runArchitectAreas commits files written by mocked architect runner":
     let tmp = getTempDir() / "scriptorium_test_v1_37_run_architect_areas"

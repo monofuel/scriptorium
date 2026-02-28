@@ -10,7 +10,7 @@ What V1 ships:
 - CLI commands: `--init`, `run`, `status`, `plan`, `worktrees`, `--version`, `--help`
 - Dedicated planning branch: `scriptorium/plan`
 - Automated flow: `spec.md` -> `areas/` -> `tickets/` -> code worktrees -> merge queue
-- Merge safety: merge `master` into ticket branch, run `make test`, then merge or reopen
+- Merge safety: merge `master` into ticket branch, run `make test` and `make integration-test`, then merge or reopen
 - Master-health gate: if `master` is red, orchestration halts
 - Codex harness with retries, timeout handling, JSONL logging, and integration tests
 
@@ -25,7 +25,7 @@ At a high level:
 5. Coding agent implements the ticket and signals completion via `submit_pr("...")`.
 6. Merge queue processes one item at a time:
    - merge `master` into ticket branch
-   - run `make test` in ticket worktree
+   - run `make test` and `make integration-test` in ticket worktree
    - on pass: fast-forward merge to `master`, move ticket to `tickets/done/`
    - on fail: move ticket back to `tickets/open/` and append failure notes
 
@@ -118,6 +118,10 @@ Interactive planning commands:
 ```bash
 scriptorium run
 ```
+
+Runtime quality gates:
+- Master health runs `make test` and `make integration-test` on `master` before scheduling work.
+- Merge queue runs the same two targets in each ticket worktree before fast-forwarding into `master`.
 
 ### 7) Logging
 

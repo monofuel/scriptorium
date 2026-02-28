@@ -55,16 +55,31 @@ proc addTicketToPlan(repoPath: string, state: string, fileName: string, content:
   )
 
 proc addPassingMakefile(repoPath: string) =
-  ## Add a passing make target for queue-processing tests.
-  writeFile(repoPath / "Makefile", "test:\n\t@echo PASS\n")
+  ## Add passing quality-gate targets for queue-processing tests.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo PASS integration-test\n",
+  )
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-passing-makefile")
 
 proc addFailingMakefile(repoPath: string) =
-  ## Add a failing make target for queue-processing tests.
-  writeFile(repoPath / "Makefile", "test:\n\t@echo FAIL\n\t@false\n")
+  ## Add a failing `make test` target with a defined `make integration-test` target.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo FAIL test\n\t@false\n\nintegration-test:\n\t@echo PASS integration-test\n",
+  )
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-failing-makefile")
+
+proc addIntegrationFailingMakefile(repoPath: string) =
+  ## Add a Makefile where `make test` passes and `make integration-test` fails.
+  writeFile(
+    repoPath / "Makefile",
+    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo FAIL integration-test\n\t@false\n",
+  )
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-integration-failing-makefile")
 
 proc planTreeFiles(repoPath: string): seq[string] =
   ## Return tracked file paths from the plan branch tree.
@@ -177,6 +192,30 @@ suite "integration orchestrator merge queue":
       check "## Merge Queue Failure" in ticketContent
       check "- Summary: expected failure" in ticketContent
       check "FAIL" in ticketContent
+    )
+
+  test "IT-03b queue failure when integration-test fails reopens ticket":
+    withTempRepo("scriptorium_integration_it03b_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addIntegrationFailingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+      let assignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, assignment, "integration failure")
+
+      let processed = processMergeQueue(repoPath)
+      check processed
+      check pendingQueueFiles(repoPath).len == 0
+
+      let files = planTreeFiles(repoPath)
+      check "tickets/open/0001-first.md" in files
+      check "tickets/in-progress/0001-first.md" notin files
+
+      let ticketContent = readPlanFile(repoPath, "tickets/open/0001-first.md")
+      check "## Merge Queue Failure" in ticketContent
+      check "- Summary: integration failure" in ticketContent
+      check "make integration-test" in ticketContent
+      check "FAIL integration-test" in ticketContent
     )
 
   test "IT-04 single-flight queue processing keeps second item pending":
@@ -320,3 +359,17 @@ suite "integration orchestrator merge queue":
       check pendingQueueFiles(repoPath).len == 0
     )
 
+  test "IT-11 integration-test failure on master blocks assignment of open tickets":
+    withTempRepo("scriptorium_integration_it11_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addIntegrationFailingMakefile(repoPath)
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
+      addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+      writeOrchestratorEndpointConfig(repoPath, 3)
+
+      runOrchestratorForTicks(repoPath, 1)
+
+      let files = planTreeFiles(repoPath)
+      check "tickets/open/0001-first.md" in files
+      check "tickets/in-progress/0001-first.md" notin files
+    )

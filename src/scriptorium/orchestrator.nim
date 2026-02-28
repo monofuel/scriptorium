@@ -52,7 +52,7 @@ const
   AgentMessagePreviewChars = 1200
   AgentStdoutPreviewChars = 1200
   MergeQueueOutputPreviewChars = 2000
-  MasterHealthCheckTarget = "test"
+  RequiredQualityTargets = ["test", "integration-test"]
   IdleSleepMs = 200
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
   ArchitectAreasTicketId = "architect-areas"
@@ -867,6 +867,34 @@ proc runCommandCapture(workingDir: string, command: string, args: seq[string]): 
   process.close()
   result = (exitCode: exitCode, output: output)
 
+proc runRequiredQualityChecks(workingDir: string): tuple[exitCode: int, output: string, failedTarget: string] =
+  ## Run required make quality targets in order and stop on first failure.
+  var combinedOutput = ""
+  var firstFailureExitCode = 0
+  var failedTarget = ""
+
+  for target in RequiredQualityTargets:
+    let targetResult = runCommandCapture(workingDir, "make", @[target])
+    let commandLine = &"$ make {target}"
+    let cleanOutput = targetResult.output.strip()
+    if combinedOutput.len > 0:
+      combinedOutput &= "\n\n"
+    if cleanOutput.len > 0:
+      combinedOutput &= commandLine & "\n" & cleanOutput
+    else:
+      combinedOutput &= commandLine
+
+    if targetResult.exitCode != 0 and firstFailureExitCode == 0:
+      firstFailureExitCode = targetResult.exitCode
+      failedTarget = target
+      break
+
+  result = (
+    exitCode: firstFailureExitCode,
+    output: combinedOutput,
+    failedTarget: failedTarget,
+  )
+
 proc withMasterWorktree[T](repoPath: string, operation: proc(masterPath: string): T): T =
   ## Open a deterministic /tmp worktree for master when needed, then remove it.
   if gitCheck(repoPath, "rev-parse", "--verify", "master") != 0:
@@ -1021,37 +1049,39 @@ proc listActiveTicketWorktreesInPlanPath(planPath: string): seq[ActiveTicketWork
     ))
   result.sort(proc(a: ActiveTicketWorktree, b: ActiveTicketWorktree): int = cmp(a.ticketPath, b.ticketPath))
 
-proc formatMergeFailureNote(summary: string, mergeOutput: string, testOutput: string): string =
+proc formatMergeFailureNote(summary: string, mergeOutput: string, checkOutput: string, failedStep: string): string =
   ## Format a ticket note for failed merge queue processing.
   let mergePreview = truncateTail(mergeOutput.strip(), MergeQueueOutputPreviewChars)
-  let testPreview = truncateTail(testOutput.strip(), MergeQueueOutputPreviewChars)
+  let checkPreview = truncateTail(checkOutput.strip(), MergeQueueOutputPreviewChars)
   result =
     "## Merge Queue Failure\n" &
     fmt"- Summary: {summary}\n"
+  if failedStep.len > 0:
+    result &= fmt"- Failed gate: {failedStep}\n"
   if mergePreview.len > 0:
     result &=
       "\n### Merge Output\n" &
       "```text\n" &
       mergePreview & "\n" &
       "```\n"
-  if testPreview.len > 0:
+  if checkPreview.len > 0:
     result &=
-      "\n### Test Output\n" &
+      "\n### Quality Check Output\n" &
       "```text\n" &
-      testPreview & "\n" &
+      checkPreview & "\n" &
       "```\n"
 
-proc formatMergeSuccessNote(summary: string, testOutput: string): string =
+proc formatMergeSuccessNote(summary: string, checkOutput: string): string =
   ## Format a ticket note for successful merge queue processing.
-  let testPreview = truncateTail(testOutput.strip(), MergeQueueOutputPreviewChars)
+  let checkPreview = truncateTail(checkOutput.strip(), MergeQueueOutputPreviewChars)
   result =
     "## Merge Queue Success\n" &
     fmt"- Summary: {summary}\n"
-  if testPreview.len > 0:
+  if checkPreview.len > 0:
     result &=
-      "\n### Test Output\n" &
+      "\n### Quality Check Output\n" &
       "```text\n" &
-      testPreview & "\n" &
+      checkPreview & "\n" &
       "```\n"
 
 proc listMarkdownFiles(basePath: string): seq[string] =
@@ -1660,22 +1690,28 @@ proc processMergeQueue*(repoPath: string): bool =
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {item.ticketPath}")
 
     let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", "master"])
-    var testResult = (exitCode: 0, output: "")
+    var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
-      testResult = runCommandCapture(item.worktree, "make", @["test"])
+      qualityCheckResult = runRequiredQualityChecks(item.worktree)
 
     var mergedToMaster = false
-    if mergeMasterResult.exitCode == 0 and testResult.exitCode == 0:
+    var failureOutput = qualityCheckResult.output
+    var failureStep = ""
+    if qualityCheckResult.failedTarget.len > 0:
+      failureStep = &"make {qualityCheckResult.failedTarget}"
+
+    if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0:
       let mergeToMasterResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
         runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
       )
       mergedToMaster = mergeToMasterResult.exitCode == 0
       if not mergedToMaster:
-        testResult = mergeToMasterResult
+        failureOutput = mergeToMasterResult.output
+        failureStep = "git merge --ff-only master"
 
-    if mergeMasterResult.exitCode == 0 and testResult.exitCode == 0 and mergedToMaster:
+    if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0 and mergedToMaster:
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
-      let successNote = formatMergeSuccessNote(item.summary, testResult.output).strip()
+      let successNote = formatMergeSuccessNote(item.summary, qualityCheckResult.output).strip()
       let updatedContent = readFile(ticketPath).strip() & "\n\n" & successNote & "\n"
       writeFile(ticketPath, updatedContent)
       moveFile(ticketPath, planPath / doneRelPath)
@@ -1689,7 +1725,12 @@ proc processMergeQueue*(repoPath: string): bool =
       true
     else:
       let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
-      let failureNote = formatMergeFailureNote(item.summary, mergeMasterResult.output, testResult.output).strip()
+      let failureNote = formatMergeFailureNote(
+        item.summary,
+        mergeMasterResult.output,
+        failureOutput,
+        failureStep,
+      ).strip()
       let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n"
       writeFile(ticketPath, updatedContent)
       moveFile(ticketPath, planPath / openRelPath)
@@ -1824,8 +1865,8 @@ proc masterHeadCommit(repoPath: string): string =
 
 proc checkMasterHealth(repoPath: string): bool =
   ## Run the master health check command and return true on success.
-  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
-    runCommandCapture(masterPath, "make", @[MasterHealthCheckTarget])
+  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string, failedTarget: string] =
+    runRequiredQualityChecks(masterPath)
   )
   result = checkResult.exitCode == 0
 
