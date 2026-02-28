@@ -44,12 +44,19 @@ printf 'done\n' > "$last_message"
         codexBinary: codexPath,
         logRoot: tmpDir / "logs",
       )
-      let result = runAgent(request)
+      var streamedEvents: seq[string] = @[]
+      var mutableRequest = request
+      mutableRequest.onEvent = proc(event: AgentStreamEvent) =
+        ## Capture streamed agent events for callback wiring assertions.
+        streamedEvents.add($event.kind & ":" & event.text)
+      let result = runAgent(mutableRequest)
 
       check result.backend == harnessCodex
       check result.exitCode == 0
       check result.timeoutKind == "none"
       check result.lastMessage.contains("done")
+      check streamedEvents.len > 0
+      check streamedEvents[0].contains("message:ok")
     )
 
   test "runAgent rejects unsupported backends for now":

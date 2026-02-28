@@ -38,6 +38,8 @@ const
   PlanDefaultMaxAttempts = 1
   PlanNoOutputTimeoutMs = 120_000
   PlanHardTimeoutMs = 300_000
+  PlanHeartbeatIntervalMs = 3000
+  PlanStreamPreviewChars = 140
   DefaultAgentMaxAttempts = 2
   AgentMessagePreviewChars = 1200
   AgentStdoutPreviewChars = 1200
@@ -300,6 +302,40 @@ proc truncateTail(value: string, maxChars: int): string =
   else:
     result = value[(value.len - maxChars)..^1]
 
+proc clipPlanStreamText(value: string): string =
+  ## Clip one stream message for concise interactive status rendering.
+  let normalized = value.replace('\n', ' ').replace('\r', ' ').strip()
+  if normalized.len <= PlanStreamPreviewChars:
+    result = normalized
+  elif PlanStreamPreviewChars > 3:
+    result = normalized[0..<(PlanStreamPreviewChars - 3)] & "..."
+  else:
+    result = normalized
+
+proc formatPlanStreamEvent(event: AgentStreamEvent): string =
+  ## Format one agent stream event for interactive planning output.
+  let text = clipPlanStreamText(event.text)
+  case event.kind
+  of agentEventHeartbeat:
+    result = "[thinking] still working..."
+  of agentEventReasoning:
+    if text.len > 0:
+      result = "[thinking] " & text
+    else:
+      result = "[thinking]"
+  of agentEventTool:
+    if text.len > 0:
+      result = "[tool] " & text
+    else:
+      result = "[tool]"
+  of agentEventStatus:
+    if text.len > 0:
+      result = "[status] " & text
+    else:
+      result = ""
+  of agentEventMessage:
+    result = ""
+
 proc buildCodingAgentPrompt(ticketRelPath: string, ticketContent: string): string =
   ## Build the coding-agent prompt from ticket context.
   result =
@@ -401,6 +437,8 @@ proc runPlanArchitectRequest(
   model: string,
   prompt: string,
   ticketId: string,
+  onEvent: AgentEventHandler = nil,
+  heartbeatIntervalMs: int = 0,
 ): AgentRunResult =
   ## Run one architect planning pass with shared harness settings.
   if runner.isNil:
@@ -415,7 +453,9 @@ proc runPlanArchitectRequest(
     logRoot: getTempDir() / PlanLogRoot,
     noOutputTimeoutMs: PlanNoOutputTimeoutMs,
     hardTimeoutMs: PlanHardTimeoutMs,
+    heartbeatIntervalMs: heartbeatIntervalMs,
     maxAttempts: PlanDefaultMaxAttempts,
+    onEvent: onEvent,
   ))
 
 proc listMarkdownFiles(basePath: string): seq[string]
@@ -1683,12 +1723,22 @@ proc runInteractivePlanSession*(
       let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
       let prompt = buildInteractivePlanPrompt(repoPath, prevSpec, history, line)
+      var lastStreamLine = "[thinking] working..."
+      echo lastStreamLine
+      let streamEventHandler = proc(event: AgentStreamEvent) =
+        ## Render live architect stream events in concise interactive form.
+        let rendered = formatPlanStreamEvent(event)
+        if rendered.len > 0 and rendered != lastStreamLine:
+          echo rendered
+          lastStreamLine = rendered
       let agentResult = runPlanArchitectRequest(
         runner,
         planPath,
         cfg.models.architect,
         prompt,
         PlanSessionTicketId,
+        streamEventHandler,
+        PlanHeartbeatIntervalMs,
       )
       enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
 

@@ -1,5 +1,6 @@
 import
-  std/[monotimes, os, osproc, posix, streams, strformat, strutils, times]
+  std/[monotimes, os, osproc, posix, streams, strformat, strutils, times],
+  jsony
 
 const
   DefaultCodexBinary = "codex"
@@ -12,10 +13,25 @@ const
   DefaultMaxAttempts = 1
   DefaultNoOutputTimeoutMs = 0
   DefaultHardTimeoutMs = 0
+  DefaultHeartbeatIntervalMs = 0
   OutputChunkSize = 4096
   ContinuationTailChars = 1200
 
 type
+  CodexStreamEventKind* = enum
+    codexEventHeartbeat = "heartbeat"
+    codexEventReasoning = "reasoning"
+    codexEventTool = "tool"
+    codexEventStatus = "status"
+    codexEventMessage = "message"
+
+  CodexStreamEvent* = object
+    kind*: CodexStreamEventKind
+    text*: string
+    rawLine*: string
+
+  CodexEventHandler* = proc(event: CodexStreamEvent)
+
   CodexTimeoutKind* = enum
     codexTimeoutNone = "none"
     codexTimeoutNoOutput = "no-output"
@@ -32,6 +48,8 @@ type
     logRoot*: string
     noOutputTimeoutMs*: int
     hardTimeoutMs*: int
+    heartbeatIntervalMs*: int
+    onEvent*: CodexEventHandler
     maxAttempts*: int
     continuationPrompt*: string
 
@@ -45,6 +63,34 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: CodexTimeoutKind
+
+  CodexJsonEventFields = object
+    name: string
+    toolName: string
+    status: string
+    state: string
+    phase: string
+    text: string
+    message: string
+    content: string
+    summary: string
+    delta: string
+
+  CodexJsonEnvelope = object
+    `type`: string
+    name: string
+    toolName: string
+    status: string
+    state: string
+    phase: string
+    text: string
+    message: string
+    content: string
+    summary: string
+    delta: string
+    tool: CodexJsonEventFields
+    data: CodexJsonEventFields
+    event: CodexJsonEventFields
 
 proc sanitizePathSegment(value: string): string =
   ## Sanitize a string so it can safely be used as a path segment.
@@ -98,6 +144,13 @@ proc resolveHardTimeoutMs(request: CodexRunRequest): int =
   else:
     result = DefaultHardTimeoutMs
 
+proc resolveHeartbeatIntervalMs(request: CodexRunRequest): int =
+  ## Resolve how often heartbeat events should be emitted in milliseconds.
+  if request.heartbeatIntervalMs > 0:
+    result = request.heartbeatIntervalMs
+  else:
+    result = DefaultHeartbeatIntervalMs
+
 proc elapsedMs(since: MonoTime): int64 =
   ## Return elapsed milliseconds from since until now.
   result = (getMonoTime() - since).inMilliseconds
@@ -120,7 +173,7 @@ proc waitForReadable(fd: cint, timeoutMs: int): bool =
     if selectRc < 0:
       if osLastError() == OSErrorCode(EINTR):
         continue
-      raise newException(IOError, fmt"select failed for codex output fd {fd}")
+      raise newException(IOError, &"select failed for codex output fd {fd}")
     result = selectRc > 0 and FD_ISSET(fd, readSet) != 0
     break
 
@@ -132,7 +185,7 @@ proc readOutputChunk(fd: cint): tuple[data: string, eof: bool] =
     if bytesRead < 0:
       if osLastError() == OSErrorCode(EINTR):
         continue
-      raise newException(IOError, fmt"read failed for codex output fd {fd}")
+      raise newException(IOError, &"read failed for codex output fd {fd}")
     if bytesRead == 0:
       result = ("", true)
     else:
@@ -184,10 +237,215 @@ proc buildContinuationPrompt(
       "Continue from the previous attempt and complete the ticket."
 
   result = originalPrompt.strip() & "\n\n" &
-    fmt"Attempt {previousResult.attempt} failed with exit code {previousResult.exitCode} (timeout: {previousResult.timeoutKind}).\n" &
+    &"Attempt {previousResult.attempt} failed with exit code {previousResult.exitCode} (timeout: {previousResult.timeoutKind}).\n" &
     "Last output excerpt:\n" &
     summaryTail & "\n\n" &
     continuationText & "\n"
+
+proc firstNonEmpty(values: varargs[string]): string =
+  ## Return the first non-empty trimmed value from values.
+  for value in values:
+    let trimmed = value.strip()
+    if trimmed.len > 0:
+      result = trimmed
+      break
+
+proc parseCodexJsonEnvelope(line: string, envelope: var CodexJsonEnvelope): bool =
+  ## Parse one codex JSON line into a typed envelope.
+  try:
+    envelope = fromJson(line, CodexJsonEnvelope)
+    result = true
+  except ValueError:
+    result = false
+
+proc resolveCodexEventType(envelope: CodexJsonEnvelope): string =
+  ## Resolve the normalized codex event type from one parsed envelope.
+  result = firstNonEmpty(envelope.`type`).toLowerAscii()
+
+proc resolveCodexToolName(envelope: CodexJsonEnvelope): string =
+  ## Resolve the best available tool name from one parsed envelope.
+  result = firstNonEmpty(
+    envelope.name,
+    envelope.toolName,
+    envelope.tool.name,
+    envelope.tool.toolName,
+    envelope.data.name,
+    envelope.data.toolName,
+    envelope.event.name,
+    envelope.event.toolName,
+  )
+
+proc resolveCodexToolState(envelope: CodexJsonEnvelope): string =
+  ## Resolve the best available tool state from one parsed envelope.
+  result = firstNonEmpty(
+    envelope.status,
+    envelope.state,
+    envelope.phase,
+    envelope.tool.status,
+    envelope.tool.state,
+    envelope.tool.phase,
+    envelope.data.status,
+    envelope.data.state,
+    envelope.data.phase,
+    envelope.event.status,
+    envelope.event.state,
+    envelope.event.phase,
+  )
+
+proc resolveCodexReasoningText(envelope: CodexJsonEnvelope): string =
+  ## Resolve the best available reasoning text from one parsed envelope.
+  result = firstNonEmpty(
+    envelope.summary,
+    envelope.text,
+    envelope.message,
+    envelope.content,
+    envelope.delta,
+    envelope.data.summary,
+    envelope.data.text,
+    envelope.data.message,
+    envelope.data.content,
+    envelope.data.delta,
+    envelope.event.summary,
+    envelope.event.text,
+    envelope.event.message,
+    envelope.event.content,
+    envelope.event.delta,
+  )
+
+proc resolveCodexMessageText(envelope: CodexJsonEnvelope): string =
+  ## Resolve the best available message text from one parsed envelope.
+  result = firstNonEmpty(
+    envelope.text,
+    envelope.message,
+    envelope.content,
+    envelope.delta,
+    envelope.data.text,
+    envelope.data.message,
+    envelope.data.content,
+    envelope.data.delta,
+    envelope.event.text,
+    envelope.event.message,
+    envelope.event.content,
+    envelope.event.delta,
+  )
+
+proc resolveCodexStatusValue(envelope: CodexJsonEnvelope): string =
+  ## Resolve the best available status value from one parsed envelope.
+  result = firstNonEmpty(
+    envelope.status,
+    envelope.state,
+    envelope.phase,
+    envelope.data.status,
+    envelope.data.state,
+    envelope.data.phase,
+    envelope.event.status,
+    envelope.event.state,
+    envelope.event.phase,
+  )
+
+proc buildToolEventText(eventType: string, toolName: string, toolState: string): string =
+  ## Build one user-facing tool event summary.
+  if toolName.len > 0 and toolState.len > 0:
+    result = toolName & " (" & toolState & ")"
+  elif toolName.len > 0:
+    result = toolName
+  elif toolState.len > 0:
+    result = eventType & " (" & toolState & ")"
+  else:
+    result = eventType
+
+proc buildStatusEventText(eventType: string, statusValue: string): string =
+  ## Build one user-facing status event summary.
+  if statusValue.len > 0:
+    result = eventType & " (" & statusValue & ")"
+  else:
+    result = eventType
+
+proc buildCodexStreamEventFromEnvelope(
+  line: string,
+  envelope: CodexJsonEnvelope,
+): CodexStreamEvent =
+  ## Convert one parsed envelope into a normalized stream event.
+  let eventType = resolveCodexEventType(envelope)
+  result = CodexStreamEvent(kind: codexEventStatus, text: "", rawLine: line)
+  if eventType.len == 0:
+    return
+
+  if eventType.contains("tool"):
+    let toolName = resolveCodexToolName(envelope)
+    let toolState = resolveCodexToolState(envelope)
+    result = CodexStreamEvent(
+      kind: codexEventTool,
+      text: buildToolEventText(eventType, toolName, toolState),
+      rawLine: line,
+    )
+  elif eventType.contains("reason") or eventType.contains("think") or eventType.contains("analysis"):
+    let text = resolveCodexReasoningText(envelope)
+    result = CodexStreamEvent(
+      kind: codexEventReasoning,
+      text: if text.len > 0: text else: eventType,
+      rawLine: line,
+    )
+  elif eventType == "message":
+    result = CodexStreamEvent(
+      kind: codexEventMessage,
+      text: resolveCodexMessageText(envelope),
+      rawLine: line,
+    )
+  else:
+    result = CodexStreamEvent(
+      kind: codexEventStatus,
+      text: buildStatusEventText(eventType, resolveCodexStatusValue(envelope)),
+      rawLine: line,
+    )
+
+proc buildCodexStreamEvent(line: string): CodexStreamEvent =
+  ## Parse one codex JSON line and normalize it into a stream event.
+  result = CodexStreamEvent(kind: codexEventStatus, text: "", rawLine: line)
+  if line.len == 0:
+    return
+
+  var envelope: CodexJsonEnvelope
+  let parsed = parseCodexJsonEnvelope(line, envelope)
+  if parsed:
+    result = buildCodexStreamEventFromEnvelope(line, envelope)
+
+proc emitCodexEvent(onEvent: CodexEventHandler, event: CodexStreamEvent) =
+  ## Emit one codex stream event when callbacks are configured.
+  if onEvent.isNil:
+    return
+  if event.kind == codexEventStatus and event.text.len == 0:
+    return
+  if event.kind == codexEventMessage and event.text.len == 0:
+    return
+  onEvent(event)
+
+proc emitCodexEventsFromChunk(
+  onEvent: CodexEventHandler,
+  pendingLine: var string,
+  chunk: string,
+) =
+  ## Parse one output chunk into JSONL lines and emit normalized events.
+  let combined = pendingLine & chunk
+  var lineStart = 0
+  for index in 0..<combined.len:
+    if combined[index] == '\n':
+      let line = combined[lineStart..<index].strip()
+      if line.len > 0:
+        emitCodexEvent(onEvent, buildCodexStreamEvent(line))
+      lineStart = index + 1
+
+  if lineStart < combined.len:
+    pendingLine = combined[lineStart..^1]
+  else:
+    pendingLine = ""
+
+proc flushPendingCodexEvents(onEvent: CodexEventHandler, pendingLine: var string) =
+  ## Emit one final event for buffered partial output when present.
+  let line = pendingLine.strip()
+  if line.len > 0:
+    emitCodexEvent(onEvent, buildCodexStreamEvent(line))
+  pendingLine = ""
 
 proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int): CodexRunResult =
   ## Run one codex attempt and capture streamed output, logs, and timeout state.
@@ -201,11 +459,12 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
   let codexBinary = if request.codexBinary.len > 0: request.codexBinary else: DefaultCodexBinary
   let noOutputTimeoutMs = resolveNoOutputTimeoutMs(request)
   let hardTimeoutMs = resolveHardTimeoutMs(request)
+  let heartbeatIntervalMs = resolveHeartbeatIntervalMs(request)
 
   let ticketDir = logRoot / sanitizePathSegment(ticketValue)
   createDir(ticketDir)
 
-  let attemptPrefix = fmt"attempt-{attemptValue:02d}"
+  let attemptPrefix = &"attempt-{attemptValue:02d}"
   let logFilePath = ticketDir / (attemptPrefix & ".jsonl")
   let lastMessagePath = ticketDir / (attemptPrefix & ".last_message.txt")
   let args = buildCodexExecArgs(
@@ -246,10 +505,25 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
   let outputFd = cint(process.outputHandle)
   let startTime = getMonoTime()
   var lastOutputTime = startTime
+  var lastHeartbeatTime = startTime
   var streamClosed = false
   var stopRequested = false
+  var pendingLine = ""
 
   while not stopRequested:
+    if heartbeatIntervalMs > 0 and not request.onEvent.isNil:
+      let now = getMonoTime()
+      if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
+        emitCodexEvent(
+          request.onEvent,
+          CodexStreamEvent(
+            kind: codexEventHeartbeat,
+            text: "still working",
+            rawLine: "",
+          ),
+        )
+        lastHeartbeatTime = now
+
     if hardTimeoutMs > 0 and elapsedMs(startTime) >= hardTimeoutMs.int64:
       result.timeoutKind = codexTimeoutHard
       process.kill()
@@ -267,6 +541,8 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
         result.stdout.add(chunk)
         logFile.write(chunk)
         lastOutputTime = getMonoTime()
+        lastHeartbeatTime = lastOutputTime
+        emitCodexEventsFromChunk(request.onEvent, pendingLine, chunk)
     elif streamClosed and process.peekExitCode() != -1:
       break
 
@@ -275,6 +551,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
         streamClosed = true
 
   result.exitCode = process.waitForExit()
+  flushPendingCodexEvents(request.onEvent, pendingLine)
   if fileExists(lastMessagePath):
     result.lastMessage = readFile(lastMessagePath)
 

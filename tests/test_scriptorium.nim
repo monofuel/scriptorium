@@ -307,6 +307,8 @@ suite "orchestrator plan spec update":
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Read source via repo path from prompt and update spec.md in plan worktree.
       inc callCount
+      check req.heartbeatIntervalMs == 0
+      check req.onEvent.isNil
       let repoPathMarker = "Repository root path (read project source files from here):\n"
       let repoPathMarkerIndex = req.prompt.find(repoPathMarker)
       doAssert repoPathMarkerIndex >= 0
@@ -1182,6 +1184,10 @@ suite "interactive planning":
       inc callCount
       capturedWorkingDir = req.workingDir
       capturedPrompt = req.prompt
+      check req.heartbeatIntervalMs > 0
+      check not req.onEvent.isNil
+      req.onEvent(AgentStreamEvent(kind: agentEventReasoning, text: "reading spec", rawLine: ""))
+      req.onEvent(AgentStreamEvent(kind: agentEventTool, text: "read_file (started)", rawLine: ""))
       writeFile(req.workingDir / "spec.md", "# Updated Spec\n\n- new item\n")
       result = AgentRunResult(
         backend: harnessCodex,

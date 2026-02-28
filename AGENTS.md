@@ -47,6 +47,18 @@ writeFile(filepath, content)
 
 This approach ensures full stack traces in CI environments and makes debugging straightforward.
 
+- format strings with & are preferred over fmt.
+- also, avoid calling functions inside of format strings as this can be confusing and error prone.
+- assigning to variables and then using them in the format string is easier to read and debug.
+```nim
+let
+  name = "monofuel"
+  scores = [100, 200, 300]
+  scoreString = scores.join(", ")
+echo &"Hello, {name}! You have {scoreString} points."
+```
+
+
 ### Nim Imports
 
 - std imports should be first, then libraries, and then local imports

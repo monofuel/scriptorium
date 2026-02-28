@@ -1,5 +1,10 @@
 .PHONY: test integration-test build ci
 
+build: scripotorium
+
+scriptorium: src/scriptorium.nim
+	nim c -o:scriptorium src/scriptorium.nim
+
 test:
 	@found=0; \
 	for f in tests/test_*.nim; do \
@@ -23,9 +28,6 @@ integration-test:
 	if [ $$found -eq 0 ]; then \
 		echo "No integration tests found in tests/integration_*.nim"; \
 	fi
-
-build:
-	nim c -o:scriptorium src/scriptorium.nim
 
 ci:
 	act -W .github/workflows/build.yml

@@ -90,6 +90,104 @@ printf 'final:%s\n' "$model" > "$last_message"
       check result.command[0] == codexPath
     )
 
+  test "runCodex emits heartbeat and parsed stream events":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-events.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+sleep 0.25
+printf '{"type":"reasoning","summary":"checking project docs"}\n'
+printf '{"type":"tool_call","name":"read_file","status":"started"}\n'
+printf '{"type":"tool_call","name":"read_file","status":"completed"}\n'
+printf '{"type":"message","text":"done"}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-events")
+      request.heartbeatIntervalMs = 100
+      var events: seq[string] = @[]
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Collect stream events for assertions.
+        events.add($event.kind & ":" & event.text)
+
+      let result = runCodex(request)
+
+      var sawHeartbeat = false
+      var sawReasoning = false
+      var sawToolStart = false
+      var sawToolDone = false
+      for event in events:
+        if event.startsWith("heartbeat:"):
+          sawHeartbeat = true
+        if event.contains("reasoning:checking project docs"):
+          sawReasoning = true
+        if event.contains("tool:read_file (started)"):
+          sawToolStart = true
+        if event.contains("tool:read_file (completed)"):
+          sawToolDone = true
+
+      check result.exitCode == 0
+      check sawHeartbeat
+      check sawReasoning
+      check sawToolStart
+      check sawToolDone
+    )
+
+  test "runCodex parses nested json event fields":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-nested-events.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"analysis","data":{"summary":"reading nested event"}}\n'
+printf '{"type":"tool_call","tool":{"tool_name":"read_file"},"state":"started"}\n'
+printf '{"type":"tool_call","event":{"toolName":"read_file","phase":"completed"}}\n'
+printf '{"type":"message","data":{"content":"done nested"}}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-nested-events")
+      var events: seq[string] = @[]
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Collect stream events for nested JSON assertions.
+        events.add($event.kind & ":" & event.text)
+
+      let result = runCodex(request)
+
+      var sawReasoning = false
+      var sawToolStart = false
+      var sawToolDone = false
+      var sawMessage = false
+      for event in events:
+        if event.contains("reasoning:reading nested event"):
+          sawReasoning = true
+        if event.contains("tool:read_file (started)"):
+          sawToolStart = true
+        if event.contains("tool:read_file (completed)"):
+          sawToolDone = true
+        if event.contains("message:done nested"):
+          sawMessage = true
+
+      check result.exitCode == 0
+      check sawReasoning
+      check sawToolStart
+      check sawToolDone
+      check sawMessage
+    )
+
   test "runCodex preserves malformed output lines without crashing":
     withTempHarnessDir(proc(tmpDir: string) =
       let codexPath = tmpDir / "fake-codex-malformed.sh"
