@@ -66,7 +66,13 @@ Create `scriptorium.json` in repo root:
 {
   "models": {
     "architect": "gpt-5.1-codex-mini",
-    "coding": "gpt-5.1-codex-mini"
+    "coding": "gpt-5.1-codex-mini",
+    "manager": "gpt-5.1-codex-mini"
+  },
+  "reasoning_effort": {
+    "architect": "medium",
+    "coding": "high",
+    "manager": "high"
   },
   "endpoints": {
     "local": "http://127.0.0.1:8097"

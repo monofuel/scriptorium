@@ -2,6 +2,7 @@
 
 import
   std/[os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
+  jsony,
   scriptorium/[agent_runner, config, init, orchestrator]
 
 const
@@ -11,6 +12,11 @@ let
   ProjectRoot = getCurrentDir()
 var
   cliBinaryPath = ""
+
+type
+  StreamMessageJson = object
+    `type`*: string
+    text*: string
 
 proc makeTestRepo(path: string) =
   ## Create a minimal git repository at path suitable for testing.
@@ -41,14 +47,17 @@ proc runCliInRepo(repoPath: string, args: string): tuple[output: string, exitCod
   let command = "cd " & quoteShell(repoPath) & " && " & quoteShell(ensureCliBinary()) & " " & args
   result = execCmdEx(command)
 
+proc writeScriptoriumConfig(repoPath: string, cfg: Config) =
+  ## Write one typed scriptorium.json payload for test configuration.
+  writeFile(repoPath / "scriptorium.json", cfg.toJson())
+
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   ## Write a unique local orchestrator endpoint configuration for one test.
   let basePort = OrchestratorTestBasePort + (getCurrentProcessId().int mod 1000)
   let orchestratorPort = basePort + portOffset
-  writeFile(
-    repoPath / "scriptorium.json",
-    fmt"""{{"endpoints":{{"local":"http://127.0.0.1:{orchestratorPort}"}}}}""",
-  )
+  var cfg = defaultConfig()
+  cfg.endpoints.local = &"http://127.0.0.1:{orchestratorPort}"
+  writeScriptoriumConfig(repoPath, cfg)
 
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
   ## Open scriptorium/plan in a temporary worktree for direct test mutations.
@@ -181,28 +190,53 @@ suite "scriptorium --init":
       runInit(tmp, quiet = true)
 
 suite "config":
-  test "defaults to fake unit-test codex model for both roles":
+  test "defaults to fake unit-test codex model for architect, coding, and manager roles":
     let cfg = defaultConfig()
     check cfg.models.architect == "codex-fake-unit-test-model"
     check cfg.models.coding == "codex-fake-unit-test-model"
+    check cfg.models.manager == "codex-fake-unit-test-model"
     check cfg.reasoningEffort.architect == ""
     check cfg.reasoningEffort.coding == ""
+    check cfg.reasoningEffort.manager == ""
 
   test "loads from scriptorium.json":
     let tmp = getTempDir() / "scriptorium_test_config"
     createDir(tmp)
     defer: removeDir(tmp)
-    writeFile(
-      tmp / "scriptorium.json",
-      """{"models":{"architect":"claude-opus-4-6","coding":"grok-code-fast-1"},"reasoning_effort":{"architect":"medium","coding":"high"},"endpoints":{"local":"http://localhost:1234/v1"}}""",
-    )
+    var writtenCfg = defaultConfig()
+    writtenCfg.models.architect = "claude-opus-4-6"
+    writtenCfg.models.coding = "grok-code-fast-1"
+    writtenCfg.models.manager = "gpt-5.1-codex-mini"
+    writtenCfg.reasoningEffort.architect = "medium"
+    writtenCfg.reasoningEffort.coding = "high"
+    writtenCfg.reasoningEffort.manager = "low"
+    writtenCfg.endpoints.local = "http://localhost:1234/v1"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
     check cfg.models.architect == "claude-opus-4-6"
     check cfg.models.coding == "grok-code-fast-1"
+    check cfg.models.manager == "gpt-5.1-codex-mini"
     check cfg.reasoningEffort.architect == "medium"
     check cfg.reasoningEffort.coding == "high"
+    check cfg.reasoningEffort.manager == "low"
     check cfg.endpoints.local == "http://localhost:1234/v1"
+
+  test "manager model remains independent when manager is unset":
+    let tmp = getTempDir() / "scriptorium_test_config_manager_independent"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.models.coding = "grok-code-fast-1"
+    writtenCfg.models.manager = ""
+    writtenCfg.reasoningEffort.coding = "high"
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.models.coding == "grok-code-fast-1"
+    check cfg.models.manager == "codex-fake-unit-test-model"
+    check cfg.reasoningEffort.coding == "high"
+    check cfg.reasoningEffort.manager == ""
 
   test "missing file returns defaults":
     let tmp = getTempDir() / "scriptorium_test_config_missing"
@@ -212,8 +246,10 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.models.architect == "codex-fake-unit-test-model"
     check cfg.models.coding == "codex-fake-unit-test-model"
+    check cfg.models.manager == "codex-fake-unit-test-model"
     check cfg.reasoningEffort.architect == ""
     check cfg.reasoningEffort.coding == ""
+    check cfg.reasoningEffort.manager == ""
 
   test "harness routing":
     check harness("claude-opus-4-6") == harnessClaudeCode
@@ -233,7 +269,9 @@ suite "orchestrator endpoint":
     let tmp = getTempDir() / "scriptorium_test_orchestrator_endpoint"
     createDir(tmp)
     defer: removeDir(tmp)
-    writeFile(tmp / "scriptorium.json", """{"endpoints":{"local":"http://localhost:1234/v1"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.endpoints.local = "http://localhost:1234/v1"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     let endpoint = loadOrchestratorEndpoint(tmp)
     check endpoint.address == "localhost"
@@ -306,7 +344,9 @@ suite "orchestrator plan spec update":
     writeFile(tmp / "source-marker.txt", "alpha\n")
     runCmdOrDie("git -C " & quoteShell(tmp) & " add source-marker.txt")
     runCmdOrDie("git -C " & quoteShell(tmp) & " commit -m test-add-source-marker")
-    writeFile(tmp / "scriptorium.json", """{"reasoning_effort":{"architect":"high"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.reasoningEffort.architect = "high"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
     var capturedFirstModel = ""
@@ -569,7 +609,9 @@ suite "orchestrator planning bootstrap":
     makeTestRepo(tmp)
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
-    writeFile(tmp / "scriptorium.json", """{"models":{"architect":"claude-opus-4-6"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.models.architect = "claude-opus-4-6"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
     var capturedModel = ""
@@ -635,13 +677,16 @@ suite "orchestrator manager ticket bootstrap":
     check "areas/02-core.md" in needed
     check "areas/01-cli.md" notin needed
 
-  test "sync tickets calls manager with configured coding model":
+  test "sync tickets calls manager with configured manager model":
     let tmp = getTempDir() / "scriptorium_test_sync_tickets_call"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n\n## Scope\n- CLI\n")
-    writeFile(tmp / "scriptorium.json", """{"models":{"coding":"grok-code-fast-1"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.models.coding = "grok-code-fast-1"
+    writtenCfg.models.manager = "gpt-5.1-codex-mini"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
     var capturedModel = ""
@@ -663,7 +708,7 @@ suite "orchestrator manager ticket bootstrap":
 
     check synced
     check callCount == 1
-    check capturedModel == "grok-code-fast-1"
+    check capturedModel == "gpt-5.1-codex-mini"
     check capturedAreaPath == "areas/01-cli.md"
     check "## Scope" in capturedAreaContent
     check after == before + 1
@@ -800,7 +845,9 @@ suite "orchestrator coding agent execution":
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
-    writeFile(tmp / "scriptorium.json", """{"reasoning_effort":{"coding":"high"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.reasoningEffort.coding = "high"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     let assignment = assignOldestOpenTicket(tmp)
     let before = planCommitCount(tmp)
@@ -817,7 +864,7 @@ suite "orchestrator coding agent execution":
         exitCode: 0,
         attempt: 1,
         attemptCount: 1,
-        stdout: """{"type":"message","text":"done"}""",
+        stdout: toJson(StreamMessageJson(`type`: "message", text: "done")),
         logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
         lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
         lastMessage: "Implemented the ticket.",
@@ -1024,7 +1071,9 @@ suite "orchestrator final v1 flow":
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nBuild area files.\n")
-    writeFile(tmp / "scriptorium.json", """{"reasoning_effort":{"architect":"high"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.reasoningEffort.architect = "high"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
     var capturedRequest = AgentRunRequest()
@@ -1062,14 +1111,25 @@ suite "orchestrator final v1 flow":
     runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
     addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
-    writeFile(tmp / "scriptorium.json", """{"reasoning_effort":{"coding":"high"}}""")
+    var writtenCfg = defaultConfig()
+    writtenCfg.reasoningEffort.coding = "low"
+    writtenCfg.reasoningEffort.manager = "high"
+    writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
     var capturedRequest = AgentRunRequest()
+    var capturedPromptRepoPath = ""
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       ## Write one ticket file directly into tickets/open/ for the target area.
       inc callCount
       capturedRequest = request
+      let repoPathMarker = "Repository root path (read project source files from here):\n"
+      let markerIndex = request.prompt.find(repoPathMarker)
+      doAssert markerIndex >= 0
+      let repoPathStart = markerIndex + repoPathMarker.len
+      let repoPathEnd = request.prompt.find('\n', repoPathStart)
+      doAssert repoPathEnd > repoPathStart
+      capturedPromptRepoPath = request.prompt[repoPathStart..<repoPathEnd].strip()
       writeFile(
         request.workingDir / "tickets/open/0001-core-task.md",
         "# Ticket 1\n\n**Area:** 01-core\n",
@@ -1093,8 +1153,78 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "manager-01-core"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
+    check capturedPromptRepoPath == tmp
+    check "Only edit files under tickets/open/ in this working directory." in capturedRequest.prompt
     check "tickets/open/0001-core-task.md" in files
     check after == before + 1
+
+  test "runManagerTickets rejects writes outside tickets/open":
+    let tmp = getTempDir() / "scriptorium_test_manager_write_guard"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
+    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
+
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write an out-of-scope plan file to trigger the manager write guard.
+      writeFile(
+        request.workingDir / "tickets/open/0001-core-task.md",
+        "# Ticket 1\n\n**Area:** 01-core\n",
+      )
+      writeFile(request.workingDir / "areas/99-out-of-scope.md", "# Bad write\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "tickets written",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    expect ValueError:
+      discard runManagerTickets(tmp, fakeRunner)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check after == before
+    check "tickets/open/0001-core-task.md" notin files
+    check "areas/99-out-of-scope.md" notin files
+
+  test "runManagerTickets rejects repository root mutations":
+    let tmp = getTempDir() / "scriptorium_test_manager_repo_guard"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
+    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
+
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write one repo-root file to trigger the manager repo mutation guard.
+      writeFile(
+        request.workingDir / "tickets/open/0001-core-task.md",
+        "# Ticket 1\n\n**Area:** 01-core\n",
+      )
+      writeFile(tmp / "manager-out-of-scope.txt", "bad write\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "tickets written",
+        timeoutKind: "none",
+      )
+
+    let before = planCommitCount(tmp)
+    expect ValueError:
+      discard runManagerTickets(tmp, fakeRunner)
+    let after = planCommitCount(tmp)
+    let files = planTreeFiles(tmp)
+
+    check after == before
+    check "tickets/open/0001-core-task.md" notin files
+    check fileExists(tmp / "manager-out-of-scope.txt")
 
   test "runOrchestratorForTicks drives spec to done in one bounded tick with mocked runners":
     let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"

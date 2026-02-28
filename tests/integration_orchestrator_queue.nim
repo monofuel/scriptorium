@@ -2,6 +2,7 @@
 
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
+  jsony,
   scriptorium/[agent_runner, config, init, orchestrator]
 
 const
@@ -117,14 +118,17 @@ proc writeSpecInPlan(repoPath: string, content: string, commitMessage: string) =
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
   )
 
+proc writeScriptoriumConfig(repoPath: string, cfg: Config) =
+  ## Write one typed scriptorium.json payload for integration test configuration.
+  writeFile(repoPath / "scriptorium.json", cfg.toJson())
+
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   ## Write a unique local orchestrator endpoint configuration for test isolation.
   let basePort = OrchestratorBasePort + (getCurrentProcessId().int mod 1000)
   let orchestratorPort = basePort + portOffset
-  writeFile(
-    repoPath / "scriptorium.json",
-    fmt"""{{"endpoints":{{"local":"http://127.0.0.1:{orchestratorPort}"}}}}""",
-  )
+  var cfg = defaultConfig()
+  cfg.endpoints.local = &"http://127.0.0.1:{orchestratorPort}"
+  writeScriptoriumConfig(repoPath, cfg)
 
 suite "integration orchestrator merge queue":
   test "IT-01 agent run enqueues exactly one merge request with metadata":

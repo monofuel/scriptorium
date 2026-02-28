@@ -32,6 +32,7 @@ const
   ManagedWorktreeRoot = ".scriptorium/worktrees"
   PlanLogRoot = "scriptorium-plan-logs"
   PlanWriteScopeName = "scriptorium plan"
+  ManagerWriteScopeName = "scriptorium manager"
   TicketBranchPrefix = "scriptorium/ticket-"
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"
   DefaultAgentAttempt = 1
@@ -355,13 +356,14 @@ proc buildArchitectAreasPrompt(spec: string): string =
     ],
   )
 
-proc buildManagerTicketsPrompt(areaRelPath: string, areaContent: string, nextId: int): string =
+proc buildManagerTicketsPrompt(repoPath: string, areaRelPath: string, areaContent: string, nextId: int): string =
   ## Build the manager prompt that writes ticket files directly into tickets/open/.
   let areaId = areaIdFromAreaPath(areaRelPath)
   let nextIdText = &"{nextId:04d}"
   result = renderPromptTemplate(
     ManagerTicketsTemplate,
     [
+      (name: "REPO_PATH", value: repoPath),
       (name: "NEXT_ID", value: nextIdText),
       (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
       (name: "AREA_ID", value: areaId),
@@ -479,9 +481,9 @@ proc normalizeRelativeWritePath(rawPath: string): string =
     raise newException(ValueError, fmt"write guard path is invalid: {clean}")
   result = parts.join("/")
 
-proc collectGitPathOutput(planPath: string, args: seq[string]): seq[string] =
+proc collectGitPathOutput(gitPath: string, args: seq[string]): seq[string] =
   ## Run one git command that emits relative paths and return non-empty lines.
-  let commandResult = runCommandCapture(planPath, "git", args)
+  let commandResult = runCommandCapture(gitPath, "git", args)
   if commandResult.exitCode != 0:
     let argsText = args.join(" ")
     raise newException(IOError, fmt"git {argsText} failed while checking write guards: {commandResult.output.strip()}")
@@ -490,8 +492,8 @@ proc collectGitPathOutput(planPath: string, args: seq[string]): seq[string] =
     if trimmed.len > 0:
       result.add(trimmed)
 
-proc listModifiedPathsInPlanPath(planPath: string): seq[string] =
-  ## Return modified and untracked relative paths in the plan worktree.
+proc listModifiedPathsInGitPath(gitPath: string): seq[string] =
+  ## Return modified and untracked relative paths in one git worktree path.
   var seen = initHashSet[string]()
   let commands = @[
     @["diff", "--name-only", "--relative"],
@@ -500,12 +502,16 @@ proc listModifiedPathsInPlanPath(planPath: string): seq[string] =
   ]
 
   for args in commands:
-    for rawPath in collectGitPathOutput(planPath, args):
+    for rawPath in collectGitPathOutput(gitPath, args):
       let normalized = normalizeRelativeWritePath(rawPath)
       if not seen.contains(normalized):
         seen.incl(normalized)
         result.add(normalized)
   result.sort()
+
+proc listModifiedPathsInPlanPath(planPath: string): seq[string] =
+  ## Return modified and untracked relative paths in the plan worktree.
+  result = listModifiedPathsInGitPath(planPath)
 
 proc enforceWriteAllowlist(planPath: string, allowedPaths: openArray[string], scopeName: string) =
   ## Fail when modified paths are outside the provided relative-path allowlist.
@@ -532,6 +538,88 @@ proc enforceWriteAllowlist(planPath: string, allowedPaths: openArray[string], sc
     raise newException(
       ValueError,
       fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed files: {allowedText}.",
+    )
+
+proc isPathInAllowedPrefix(path: string, prefix: string): bool =
+  ## Return true when one relative path is under one normalized allowlist prefix.
+  result = path == prefix or path.startsWith(prefix & "/")
+
+proc enforceWritePrefixAllowlist(planPath: string, allowedPrefixes: openArray[string], scopeName: string) =
+  ## Fail when modified paths are outside the provided relative-path prefix allowlist.
+  if allowedPrefixes.len == 0:
+    raise newException(ValueError, "write prefix allowlist cannot be empty")
+
+  var prefixSet = initHashSet[string]()
+  var prefixList: seq[string] = @[]
+  for prefix in allowedPrefixes:
+    let normalized = normalizeRelativeWritePath(prefix)
+    if not prefixSet.contains(normalized):
+      prefixSet.incl(normalized)
+      prefixList.add(normalized)
+  prefixList.sort()
+
+  var disallowed: seq[string] = @[]
+  for path in listModifiedPathsInPlanPath(planPath):
+    var allowed = false
+    for prefix in prefixList:
+      if isPathInAllowedPrefix(path, prefix):
+        allowed = true
+        break
+    if not allowed:
+      disallowed.add(path)
+
+  if disallowed.len > 0:
+    let disallowedText = disallowed.join(", ")
+    let allowedText = prefixList.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed prefixes: {allowedText}.",
+    )
+
+proc pathFingerprintInGitPath(gitPath: string, relPath: string): string =
+  ## Return a stable fingerprint for one relative path in one git worktree path.
+  let absPath = gitPath / relPath
+  if fileExists(absPath):
+    let hashResult = runCommandCapture(gitPath, "git", @["hash-object", "--", relPath])
+    if hashResult.exitCode != 0:
+      raise newException(IOError, fmt"git hash-object failed for {relPath}: {hashResult.output.strip()}")
+    result = hashResult.output.strip()
+  elif dirExists(absPath):
+    result = "<dir>"
+  else:
+    result = "<missing>"
+
+proc snapshotDirtyStateInGitPath(gitPath: string): Table[string, string] =
+  ## Snapshot dirty tracked and untracked paths with content fingerprints.
+  result = initTable[string, string]()
+  for path in listModifiedPathsInGitPath(gitPath):
+    result[path] = pathFingerprintInGitPath(gitPath, path)
+
+proc diffDirtyStatePaths(beforeState: Table[string, string], afterState: Table[string, string]): seq[string] =
+  ## Return dirty paths whose fingerprint changed between two snapshots.
+  var changedSet = initHashSet[string]()
+
+  for path, beforeFingerprint in beforeState.pairs():
+    if not afterState.hasKey(path) or afterState[path] != beforeFingerprint:
+      changedSet.incl(path)
+
+  for path in afterState.keys():
+    if not beforeState.hasKey(path):
+      changedSet.incl(path)
+
+  for path in changedSet:
+    result.add(path)
+  result.sort()
+
+proc enforceGitPathUnchanged(gitPath: string, beforeState: Table[string, string], scopeName: string) =
+  ## Fail when one git worktree path dirty-state snapshot changed.
+  let afterState = snapshotDirtyStateInGitPath(gitPath)
+  let changedPaths = diffDirtyStatePaths(beforeState, afterState)
+  if changedPaths.len > 0:
+    let changedText = changedPaths.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified repository files outside the plan worktree: {changedText}.",
     )
 
 proc ensureUniqueTicketStateInPlanPath(planPath: string) =
@@ -1242,7 +1330,7 @@ proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGener
       var hasChanges = false
       for areaRelPath in areasToProcess:
         let areaContent = readFile(planPath / areaRelPath)
-        let docs = generateTickets(cfg.models.coding, areaRelPath, areaContent)
+        let docs = generateTickets(cfg.models.manager, areaRelPath, areaContent)
         if writeTicketsForArea(planPath, areaRelPath, docs, nextId):
           hasChanges = true
 
@@ -1259,6 +1347,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
     raise newException(ValueError, "agent runner is required")
 
   let cfg = loadConfig(repoPath)
+  let repoDirtyStateBefore = snapshotDirtyStateInGitPath(repoPath)
   result = withPlanWorktree(repoPath, proc(planPath: string): bool =
     if not hasRunnableSpecInPlanPath(planPath):
       false
@@ -1272,15 +1361,17 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           let areaId = areaIdFromAreaPath(areaRelPath)
           let nextId = nextTicketId(planPath)
           discard runner(AgentRunRequest(
-            prompt: buildManagerTicketsPrompt(areaRelPath, areaContent, nextId),
+            prompt: buildManagerTicketsPrompt(repoPath, areaRelPath, areaContent, nextId),
             workingDir: planPath,
-            model: cfg.models.coding,
-            reasoningEffort: cfg.reasoningEffort.coding,
+            model: cfg.models.manager,
+            reasoningEffort: cfg.reasoningEffort.manager,
             ticketId: ManagerTicketIdPrefix & areaId,
             attempt: DefaultAgentAttempt,
             skipGitRepoCheck: true,
             maxAttempts: DefaultAgentMaxAttempts,
           ))
+          enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir], ManagerWriteScopeName)
+          enforceGitPathUnchanged(repoPath, repoDirtyStateBefore, ManagerWriteScopeName)
 
         gitRun(planPath, "add", PlanTicketsOpenDir)
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:

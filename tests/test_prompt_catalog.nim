@@ -38,6 +38,7 @@ suite "prompt catalog":
     check CodingAgentTemplate.contains("{{TICKET_PATH}}")
     check ArchitectAreasTemplate.contains("{{CURRENT_SPEC}}")
     check ManagerTicketsTemplate.contains("{{AREA_CONTENT}}")
+    check ManagerTicketsTemplate.contains("{{REPO_PATH}}")
     check PlanScopeTemplate.contains("{{REPO_PATH}}")
     check ArchitectPlanOneShotTemplate.contains("{{USER_REQUEST}}")
     check ArchitectPlanInteractiveTemplate.contains("{{USER_MESSAGE}}")

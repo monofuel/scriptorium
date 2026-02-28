@@ -1,7 +1,15 @@
 ## Integration tests for Codex harness prerequisite failure behavior.
 
 import
-  std/[os, osproc, strutils, tempfiles, unittest]
+  std/[os, osproc, strutils, tempfiles, unittest],
+  jsony
+
+type
+  OAuthTokensJson = object
+    access_token*: string
+
+  OAuthAuthJson = object
+    tokens*: OAuthTokensJson
 
 proc runCmd(command: string): tuple[output: string, exitCode: int] =
   ## Run a shell command and return combined output with the exit code.
@@ -96,12 +104,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 cat >/dev/null
-printf '{"type":"message","text":"ok"}\n'
-printf 'ok\n' > "$last_message"
+    printf '{"type":"message","text":"ok"}\n'
+    printf 'ok\n' > "$last_message"
 """)
 
     let authFilePath = tmpDir / "oauth-auth.json"
-    writeFile(authFilePath, """{"tokens":{"access_token":"test"}}""")
+    writeFile(authFilePath, toJson(OAuthAuthJson(tokens: OAuthTokensJson(access_token: "test"))))
     let harnessBinary = buildCodexHarnessBinary(tmpDir)
     let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", authFilePath)
 

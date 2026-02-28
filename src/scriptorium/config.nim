@@ -6,8 +6,10 @@ const
   ConfigFile = "scriptorium.json"
   DefaultArchitectModel = "codex-fake-unit-test-model"
   DefaultCodingModel = "codex-fake-unit-test-model"
+  DefaultManagerModel = "codex-fake-unit-test-model"
   DefaultArchitectReasoningEffort = ""
   DefaultCodingReasoningEffort = ""
+  DefaultManagerReasoningEffort = ""
 
 type
   Harness* = enum
@@ -18,10 +20,12 @@ type
   Models* = object
     architect*: string
     coding*: string
+    manager*: string
 
   ReasoningEffort* = object
     architect*: string
     coding*: string
+    manager*: string
 
   Endpoints* = object
     local*: string
@@ -37,10 +41,12 @@ proc defaultConfig*(): Config =
     models: Models(
       architect: DefaultArchitectModel,
       coding: DefaultCodingModel,
+      manager: DefaultManagerModel,
     ),
     reasoningEffort: ReasoningEffort(
       architect: DefaultArchitectReasoningEffort,
       coding: DefaultCodingReasoningEffort,
+      manager: DefaultManagerReasoningEffort,
     ),
     endpoints: Endpoints(
       local: "",
@@ -68,9 +74,13 @@ proc loadConfig*(repoPath: string): Config =
     result.models.architect = parsed.models.architect
   if parsed.models.coding.len > 0:
     result.models.coding = parsed.models.coding
+  if parsed.models.manager.len > 0:
+    result.models.manager = parsed.models.manager
   if parsed.reasoningEffort.architect.len > 0:
     result.reasoningEffort.architect = parsed.reasoningEffort.architect
   if parsed.reasoningEffort.coding.len > 0:
     result.reasoningEffort.coding = parsed.reasoningEffort.coding
+  if parsed.reasoningEffort.manager.len > 0:
+    result.reasoningEffort.manager = parsed.reasoningEffort.manager
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
