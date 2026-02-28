@@ -1,7 +1,7 @@
 import
   std/[algorithm, os, osproc, posix, sets, streams, strformat, strutils, tables, tempfiles, uri],
   mcport,
-  ./[agent_runner, config, prompt_catalog]
+  ./[agent_runner, config, logging, prompt_catalog]
 
 const
   PlanBranch = "scriptorium/plan"
@@ -1625,11 +1625,12 @@ proc createOrchestratorServer*(): HttpMcpServer =
 
 proc handleCtrlC() {.noconv.} =
   ## Stop the orchestrator loop on Ctrl+C.
+  logInfo("shutdown: Ctrl+C received")
   shouldRun = false
 
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
-  discard signalNumber
+  logInfo(fmt"shutdown: signal {signalNumber} received")
   shouldRun = false
 
 proc handleInteractivePlanCtrlC() {.noconv.} =
@@ -1692,15 +1693,31 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
-    if hasPlanBranch(repoPath):
-      if isMasterHealthy(repoPath, masterHealthState):
+    logDebug(fmt"tick {ticks}")
+    if not hasPlanBranch(repoPath):
+      logDebug("waiting: no plan branch")
+    else:
+      let healthy = isMasterHealthy(repoPath, masterHealthState)
+      if not healthy:
+        logWarn("master is unhealthy — skipping tick")
+      else:
         if hasRunnableSpec(repoPath):
-          discard runArchitectAreas(repoPath, runner)
-          discard runManagerTickets(repoPath, runner)
-          discard executeOldestOpenTicket(repoPath, runner)
-          discard processMergeQueue(repoPath)
+          let architectChanged = runArchitectAreas(repoPath, runner)
+          if architectChanged:
+            logInfo("architect: areas updated")
+          let managerChanged = runManagerTickets(repoPath, runner)
+          if managerChanged:
+            logInfo("manager: tickets created")
+          let agentResult = executeOldestOpenTicket(repoPath, runner)
+          if agentResult.exitCode != 0:
+            logError(fmt"coding agent exited {agentResult.exitCode}")
+          elif agentResult.command.len > 0:
+            logInfo(fmt"coding agent completed (exit 0)")
+          let mergeProcessed = processMergeQueue(repoPath)
+          if mergeProcessed:
+            logInfo("merge queue: item processed")
         else:
-          echo WaitingNoSpecMessage
+          logDebug(WaitingNoSpecMessage)
     sleep(IdleSleepMs)
     inc ticks
 
@@ -1868,7 +1885,11 @@ proc runInteractivePlanSession*(
 
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
+  initLog(repoPath)
   let endpoint = loadOrchestratorEndpoint(repoPath)
-  echo fmt"scriptorium: orchestrator listening on http://{endpoint.address}:{endpoint.port}"
+  logInfo(fmt"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
+  logInfo(fmt"repo: {repoPath}")
+  logInfo(fmt"log file: {logFilePath}")
   let httpServer = createOrchestratorServer()
+  defer: closeLog()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent)

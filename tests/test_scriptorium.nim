@@ -3,7 +3,7 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[agent_runner, config, init, orchestrator]
+  scriptorium/[agent_runner, config, init, logging, orchestrator]
 
 const
   OrchestratorTestBasePort = 19000
@@ -1708,3 +1708,47 @@ suite "orchestrator agent enqueue with fakes":
       check commits.len == 1
       check commits[0] == "scriptorium: update spec from architect"
     )
+
+suite "logging":
+  test "initLog creates directory and file":
+    let tmpDir = createTempDir("scriptorium_log_test_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "myproject"
+    createDir(fakeRepo)
+    initLog(fakeRepo)
+    defer: closeLog()
+    check logFilePath.len > 0
+    check fileExists(logFilePath)
+    check "/tmp/scriptorium/myproject/" in logFilePath
+    check "run_" in logFilePath
+
+  test "logInfo writes timestamped line to file":
+    let tmpDir = createTempDir("scriptorium_log_test_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "testproj"
+    createDir(fakeRepo)
+    initLog(fakeRepo)
+    logInfo("hello from test")
+    closeLog()
+    let content = readFile(logFilePath)
+    check "[INFO]" in content
+    check "hello from test" in content
+
+  test "log levels write correct labels":
+    let tmpDir = createTempDir("scriptorium_log_test_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "leveltest"
+    createDir(fakeRepo)
+    initLog(fakeRepo)
+    logDebug("dbg msg")
+    logWarn("wrn msg")
+    logError("err msg")
+    closeLog()
+    let content = readFile(logFilePath)
+    check "[DEBUG] dbg msg" in content
+    check "[WARN] wrn msg" in content
+    check "[ERROR] err msg" in content
+
+  test "log without initLog does not crash":
+    closeLog()
+    logInfo("should just echo, not crash")

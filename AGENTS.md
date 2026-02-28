@@ -15,6 +15,22 @@
 - Run `make integration-test` to run integration tests (`tests/integration_*.nim`) that may call real external services/tools (for example Codex)
 - Individual test files can be run with `nim r tests/test_scriptorium.nim`
 
+### Unit tests vs integration tests
+
+**Unit tests** (`tests/test_*.nim`) test individual functions and modules in isolation.
+Mocks and fakes belong here. If you are replacing a real dependency with a fake one, that is a unit test.
+
+**Integration tests** (`tests/integration_*.nim`) test that real components work together.
+Integration tests call real binaries, real APIs, and real services. They do NOT use mocks or fakes.
+The whole point of an integration test is to verify that the actual pieces fit together correctly.
+If you mock the thing you are integrating with, you are not testing integration — you are writing a unit test with extra steps.
+
+Rules:
+- If it uses a mock, fake, or stub for a core dependency, it is a unit test. Put it in `tests/test_*.nim`.
+- If it calls a real external tool or service (Codex, git, an HTTP API), it is an integration test. Put it in `tests/integration_*.nim`.
+- Do not put mocked tests in integration test files. Do not call real services in unit test files.
+- Integration tests may be slow, flaky, or require credentials. That is expected and fine.
+
 ## Nim
 
 ## Nim best practices
