@@ -405,6 +405,7 @@ suite "orchestrator plan spec update":
     check capturedFirstRepoPath == tmp
     check "Run `scriptorium plan`" in capturedFirstSpec
     check "expand scope" in capturedFirstUserRequest
+    check "AGENTS.md" in capturedFirstUserRequest
     check "Only edit spec.md in this working directory." in capturedFirstUserRequest
     check "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md." in capturedFirstUserRequest
     check "Only edit spec.md when the engineer is asking to change plan content." in capturedFirstUserRequest
@@ -880,6 +881,8 @@ suite "orchestrator coding agent execution":
     check capturedRequest.workingDir == assignment.worktree
     check capturedRequest.ticketId == "0001"
     check "Ticket 1" in capturedRequest.prompt
+    check tmp in capturedRequest.prompt
+    check "AGENTS.md" in capturedRequest.prompt
     check runResult.exitCode == 0
     check after == before + 1
 
@@ -1101,6 +1104,8 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "architect-areas"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
+    check tmp in capturedRequest.prompt
+    check "AGENTS.md" in capturedRequest.prompt
     check "areas/01-arch.md" in files
     check after == before + 1
 
@@ -1154,6 +1159,7 @@ suite "orchestrator final v1 flow":
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
     check capturedPromptRepoPath == tmp
+    check "AGENTS.md" in capturedRequest.prompt
     check "Only edit files under tickets/open/ in this working directory." in capturedRequest.prompt
     check "tickets/open/0001-core-task.md" in files
     check after == before + 1
@@ -1315,6 +1321,7 @@ suite "interactive planning":
     check "add feature B" in prompt
     check "Added feature B to spec." in prompt
     check "add feature C" in prompt
+    check "AGENTS.md" in prompt
     check "Only edit spec.md in this working directory." in prompt
     check "If the engineer is discussing or asking questions, reply directly and do not edit spec.md." in prompt
     check "Only edit spec.md when the engineer asks to change plan content." in prompt
@@ -1365,6 +1372,7 @@ suite "interactive planning":
     check callCount == 1
     check capturedWorkingDir != tmp
     check tmp in capturedPrompt
+    check "AGENTS.md" in capturedPrompt
 
   test "turn makes no commit when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"

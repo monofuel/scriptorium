@@ -36,7 +36,9 @@ suite "prompt catalog":
 
   test "template constants include expected placeholder markers":
     check CodingAgentTemplate.contains("{{TICKET_PATH}}")
+    check CodingAgentTemplate.contains("{{REPO_PATH}}")
     check ArchitectAreasTemplate.contains("{{CURRENT_SPEC}}")
+    check ArchitectAreasTemplate.contains("{{REPO_PATH}}")
     check ManagerTicketsTemplate.contains("{{AREA_CONTENT}}")
     check ManagerTicketsTemplate.contains("{{REPO_PATH}}")
     check PlanScopeTemplate.contains("{{REPO_PATH}}")

@@ -337,21 +337,23 @@ proc formatPlanStreamEvent(event: AgentStreamEvent): string =
   of agentEventMessage:
     result = ""
 
-proc buildCodingAgentPrompt(ticketRelPath: string, ticketContent: string): string =
+proc buildCodingAgentPrompt(repoPath: string, ticketRelPath: string, ticketContent: string): string =
   ## Build the coding-agent prompt from ticket context.
   result = renderPromptTemplate(
     CodingAgentTemplate,
     [
+      (name: "REPO_PATH", value: repoPath),
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
   )
 
-proc buildArchitectAreasPrompt(spec: string): string =
+proc buildArchitectAreasPrompt(repoPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
   result = renderPromptTemplate(
     ArchitectAreasTemplate,
     [
+      (name: "REPO_PATH", value: repoPath),
       (name: "CURRENT_SPEC", value: spec.strip()),
     ],
   )
@@ -1259,7 +1261,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
     else:
       let spec = loadSpecFromPlanPath(planPath)
       discard runner(AgentRunRequest(
-        prompt: buildArchitectAreasPrompt(spec),
+        prompt: buildArchitectAreasPrompt(repoPath, spec),
         workingDir: planPath,
         model: cfg.models.architect,
         reasoningEffort: cfg.reasoningEffort.architect,
@@ -1572,7 +1574,7 @@ proc executeAssignedTicket*(
   )
 
   let request = AgentRunRequest(
-    prompt: buildCodingAgentPrompt(ticketRelPath, ticketContent),
+    prompt: buildCodingAgentPrompt(repoPath, ticketRelPath, ticketContent),
     workingDir: assignment.worktree,
     model: cfg.models.coding,
     reasoningEffort: cfg.reasoningEffort.coding,

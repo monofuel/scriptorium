@@ -553,6 +553,7 @@ suite "integration orchestrator merge queue":
       check changed
       check callCount == 1
       check capturedRepoPath == repoPath
+      check "AGENTS.md" in capturedPrompt
       check "Only edit spec.md in this working directory." in capturedPrompt
 
       let specBody = readPlanFile(repoPath, "spec.md")
