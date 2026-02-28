@@ -37,6 +37,7 @@ suite "prompt catalog":
   test "template constants include expected placeholder markers":
     check CodingAgentTemplate.contains("{{TICKET_PATH}}")
     check CodingAgentTemplate.contains("{{REPO_PATH}}")
+    check CodingAgentTemplate.contains("submit_pr")
     check ArchitectAreasTemplate.contains("{{CURRENT_SPEC}}")
     check ArchitectAreasTemplate.contains("{{REPO_PATH}}")
     check ManagerTicketsTemplate.contains("{{AREA_CONTENT}}")
@@ -46,3 +47,4 @@ suite "prompt catalog":
     check ArchitectPlanInteractiveTemplate.contains("{{USER_MESSAGE}}")
     check CodexRetryContinuationTemplate.contains("{{TIMEOUT_KIND}}")
     check CodexRetryDefaultContinuationText.contains("Continue from the previous attempt")
+    check CodexRetryDefaultContinuationText.contains("submit_pr")

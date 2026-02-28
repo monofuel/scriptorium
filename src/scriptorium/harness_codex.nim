@@ -45,6 +45,7 @@ type
     workingDir*: string
     model*: string
     reasoningEffort*: string
+    mcpEndpoint*: string
     ticketId*: string
     attempt*: int
     codexBinary*: string
@@ -216,6 +217,23 @@ proc readOutputChunk(fd: cint): tuple[data: string, eof: bool] =
       result = (buffer, false)
     break
 
+proc buildMcpServersConfig(request: CodexRunRequest): string =
+  ## Build the codex mcp_servers config value for one run request.
+  let cleanEndpoint = request.mcpEndpoint.strip()
+  if cleanEndpoint.len == 0:
+    result = DefaultCodexMcpServers
+  else:
+    var endpointBase = cleanEndpoint
+    while endpointBase.endsWith("/"):
+      endpointBase.setLen(endpointBase.len - 1)
+
+    if endpointBase.len == 0:
+      result = DefaultCodexMcpServers
+    else:
+      let mcpUrl = endpointBase & "/mcp"
+      let escapedMcpUrl = mcpUrl.replace("\\", "\\\\").replace("\"", "\\\"")
+      result = &"mcp_servers={{scriptorium={{type=\"http\",url=\"{escapedMcpUrl}\"}}}}"
+
 proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq[string] =
   ## Build the codex exec argument list in a deterministic order.
   if request.workingDir.len == 0:
@@ -225,11 +243,12 @@ proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq
   if lastMessagePath.len == 0:
     raise newException(ValueError, "lastMessagePath is required")
 
+  let mcpServersConfig = buildMcpServersConfig(request)
   result = @[
     "-c",
     DefaultCodexDeveloperInstructions,
     "-c",
-    DefaultCodexMcpServers,
+    mcpServersConfig,
     "exec",
     "--json",
     "--output-last-message",
@@ -506,6 +525,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
       workingDir: request.workingDir,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
+      mcpEndpoint: request.mcpEndpoint,
       skipGitRepoCheck: request.skipGitRepoCheck,
     ),
     lastMessagePath,

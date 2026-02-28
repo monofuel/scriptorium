@@ -22,7 +22,7 @@ At a high level:
 2. Orchestrator reads `spec.md` and generates `areas/*.md` (Architect).
 3. Orchestrator generates `tickets/open/*.md` from areas (Manager).
 4. Oldest open ticket is assigned to a deterministic `/tmp/scriptorium/<repo-key>/worktrees/tickets/<ticket>/` worktree and moved to `tickets/in-progress/`.
-5. Coding agent implements the ticket and signals completion via `submit_pr("...")`.
+5. Coding agent implements the ticket and calls the `submit_pr` MCP tool with a summary.
 6. Merge queue processes one item at a time:
    - merge `master` into ticket branch
    - run `make test` and `make integration-test` in ticket worktree

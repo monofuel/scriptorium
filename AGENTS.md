@@ -38,6 +38,17 @@ Rules:
 - stick to nim for programming.
 - organize commands with a Makefile to make projects easy to automate.
 
+- we should NEVER rely on stdout scanning.
+- we should rely on proper reliable mcp tools whenever agents need to interact.
+- integration tests should properly test the full integration, do not mock things out, do not skip, do not use fakes.
+- when testing, do not rely on env var flags or skipping tests or any shenanigans. test the thing properly. if it fails, fail fast and fail loudly so it can be fixed.
+
+## Agent completion protocol
+
+- coding agents must call the `submit_pr` MCP tool when ticket work is complete.
+- include a short `summary` argument describing the completed changes.
+- orchestrator merge-queue enqueueing must use MCP tool state, not stdout parsing.
+
 ## Nim
 
 ## Nim best practices

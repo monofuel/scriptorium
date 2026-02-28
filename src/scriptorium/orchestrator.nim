@@ -1,5 +1,5 @@
 import
-  std/[algorithm, os, osproc, posix, sets, streams, strformat, strutils, tables, uri],
+  std/[algorithm, json, locks, os, osproc, posix, sets, streams, strformat, strutils, tables, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -59,6 +59,7 @@ const
   ManagerTicketIdPrefix = "manager-"
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
+  SubmitPrSummaryMaxBytes = 4096
 
 type
   OrchestratorEndpoint* = object
@@ -127,6 +128,34 @@ type
 var
   shouldRun {.volatile.} = true
   interactivePlanInterrupted {.volatile.} = false
+  submitPrLock: Lock
+  submitPrLockInitialized = false
+  submitPrSummaryLen = 0
+  submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
+
+proc ensureSubmitPrLockInitialized() {.gcsafe.} =
+  ## Initialize the shared submit_pr lock once.
+  if not submitPrLockInitialized:
+    initLock(submitPrLock)
+    submitPrLockInitialized = true
+
+proc recordSubmitPrSummary(summary: string) {.gcsafe.} =
+  ## Store the latest submit_pr summary reported by the coding agent.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    let storedLen = min(summary.len, SubmitPrSummaryMaxBytes)
+    submitPrSummaryLen = storedLen
+    if storedLen > 0:
+      copyMem(addr submitPrSummaryBuffer[0], unsafeAddr summary[0], storedLen)
+
+proc consumeSubmitPrSummary*(): string {.gcsafe.} =
+  ## Return and clear the latest submit_pr summary reported by the coding agent.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    if submitPrSummaryLen > 0:
+      result = newString(submitPrSummaryLen)
+      copyMem(addr result[0], addr submitPrSummaryBuffer[0], submitPrSummaryLen)
+    submitPrSummaryLen = 0
 
 proc gitRun(dir: string, args: varargs[string]) =
   ## Run a git subcommand in dir and raise an IOError on non-zero exit.
@@ -917,25 +946,6 @@ proc withMasterWorktree[T](repoPath: string, operation: proc(masterPath: string)
     discard gitCheck(repoPath, "worktree", "remove", "--force", masterWorktree)
 
   result = operation(masterWorktree)
-
-proc extractSubmitPrSummary*(text: string): string =
-  ## Extract submit_pr(summary) text from agent output when present.
-  let marker = "submit_pr("
-  let startIndex = text.find(marker)
-  if startIndex < 0:
-    return ""
-
-  let valueStart = startIndex + marker.len
-  let closeIndex = text.find(')', valueStart)
-  if closeIndex < 0:
-    return ""
-
-  var raw = text[valueStart..<closeIndex].strip()
-  if raw.startsWith("summary="):
-    raw = raw["summary=".len..^1].strip()
-  if raw.len >= 2 and ((raw[0] == '"' and raw[^1] == '"') or (raw[0] == '\'' and raw[^1] == '\'')):
-    raw = raw[1..^2]
-  result = raw.strip()
 
 proc queueFilePrefixNumber(fileName: string): int =
   ## Parse the numeric prefix from a merge queue file name.
@@ -1771,11 +1781,13 @@ proc executeAssignedTicket*(
     workingDir: assignment.worktree,
     model: cfg.models.coding,
     reasoningEffort: cfg.reasoningEffort.coding,
+    mcpEndpoint: cfg.endpoints.local,
     ticketId: ticketIdFromTicketPath(ticketRelPath),
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
     maxAttempts: DefaultAgentMaxAttempts,
   )
+  discard consumeSubmitPrSummary()
   let agentResult = runner(request)
   result = agentResult
 
@@ -1794,12 +1806,7 @@ proc executeAssignedTicket*(
     0
   )
 
-  let submitSummaryFromMessage = extractSubmitPrSummary(agentResult.lastMessage)
-  let submitSummary =
-    if submitSummaryFromMessage.len > 0:
-      submitSummaryFromMessage
-    else:
-      extractSubmitPrSummary(agentResult.stdout)
+  let submitSummary = consumeSubmitPrSummary()
   if submitSummary.len > 0:
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
 
@@ -1813,7 +1820,27 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
 
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
+  ensureSubmitPrLockInitialized()
   let server = newMcpServer(OrchestratorServerName, OrchestratorServerVersion)
+  let submitPrTool = McpTool(
+    name: "submit_pr",
+    description: "Signal that ticket work is complete and ready for merge queue",
+    inputSchema: %*{
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Short summary of changes"
+        }
+      },
+      "required": ["summary"]
+    },
+  )
+  let submitPrHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
+    let summary = arguments["summary"].getStr()
+    recordSubmitPrSummary(summary)
+    %*"Merge request enqueued."
+  server.registerTool(submitPrTool, submitPrHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
 proc handleCtrlC() {.noconv.} =

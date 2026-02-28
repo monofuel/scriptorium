@@ -41,6 +41,7 @@ printf 'done\n' > "$last_message"
         workingDir: worktreePath,
         model: "gpt-5.1-codex-mini",
         reasoningEffort: "high",
+        mcpEndpoint: "http://127.0.0.1:8097",
         ticketId: "0001",
         codexBinary: codexPath,
         logRoot: tmpDir / "logs",
@@ -57,6 +58,7 @@ printf 'done\n' > "$last_message"
       check result.timeoutKind == "none"
       check result.lastMessage.contains("done")
       check "model_reasoning_effort=\"high\"" in result.command
+      check "mcp_servers={scriptorium={type=\"http\",url=\"http://127.0.0.1:8097/mcp\"}}" in result.command
       check streamedEvents.len > 0
       check streamedEvents[0].contains("message:ok")
     )

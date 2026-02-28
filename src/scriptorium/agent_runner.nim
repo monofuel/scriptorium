@@ -22,6 +22,7 @@ type
     workingDir*: string
     model*: string
     reasoningEffort*: string
+    mcpEndpoint*: string
     ticketId*: string
     attempt*: int
     codexBinary*: string
@@ -81,6 +82,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       workingDir: request.workingDir,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
+      mcpEndpoint: request.mcpEndpoint,
       ticketId: request.ticketId,
       attempt: request.attempt,
       codexBinary: request.codexBinary,

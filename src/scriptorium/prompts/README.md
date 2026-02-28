@@ -18,3 +18,9 @@ All model-facing prompt text is centralized in this directory and bundled at com
 - `architect_plan_interactive.md`: per-turn interactive `scriptorium plan` prompt.
 - `codex_retry_continuation.md`: retry continuation prompt for codex harness.
 - `codex_retry_default_continuation.md`: default retry continuation sentence.
+
+## Agent Completion Tool
+
+Coding-agent prompts must instruct the model to call the `submit_pr` MCP tool
+when work is complete. The orchestrator uses that tool call to enqueue merge
+requests, so completion signaling must not rely on stdout text patterns.

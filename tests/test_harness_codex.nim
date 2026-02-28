@@ -68,6 +68,26 @@ suite "harness codex":
     let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
     check "model_reasoning_effort=\"high\"" in args
 
+  test "buildCodexExecArgs includes mcp server when endpoint is configured":
+    let request = CodexRunRequest(
+      workingDir: "/tmp/worktree",
+      model: "gpt-5.1-codex-mini",
+      mcpEndpoint: "http://127.0.0.1:8097",
+    )
+
+    let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
+    check "mcp_servers={scriptorium={type=\"http\",url=\"http://127.0.0.1:8097/mcp\"}}" in args
+
+  test "buildCodexExecArgs trims trailing slash from mcp endpoint":
+    let request = CodexRunRequest(
+      workingDir: "/tmp/worktree",
+      model: "gpt-5.1-codex-mini",
+      mcpEndpoint: "http://127.0.0.1:8097/",
+    )
+
+    let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
+    check "mcp_servers={scriptorium={type=\"http\",url=\"http://127.0.0.1:8097/mcp\"}}" in args
+
   test "buildCodexExecArgs includes reasoning effort override when configured":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",

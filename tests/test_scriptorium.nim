@@ -1,7 +1,7 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
+  std/[algorithm, json, os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest],
   jsony,
   scriptorium/[agent_runner, config, init, logging, orchestrator]
 
@@ -175,6 +175,14 @@ proc latestPlanCommits(repoPath: string, count: int): seq[string] =
   )
   doAssert rc == 0
   result = output.splitLines().filterIt(it.len > 0)
+
+proc callSubmitPrTool(summary: string) =
+  ## Simulate one coding-agent submit_pr MCP tool call.
+  discard consumeSubmitPrSummary()
+  let httpServer = createOrchestratorServer()
+  doAssert httpServer.server.toolHandlers.hasKey("submit_pr")
+  let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+  discard submitPrHandler(%*{"summary": summary})
 
 suite "scriptorium --init":
   test "creates scriptorium/plan branch":
@@ -895,6 +903,19 @@ suite "orchestrator ticket assignment":
     check assignment.worktree in removed
     check assignment.worktree notin gitWorktreePaths(tmp)
 
+suite "orchestrator mcp tools":
+  test "createOrchestratorServer registers submit_pr and consumeSubmitPrSummary clears state":
+    discard consumeSubmitPrSummary()
+    let httpServer = createOrchestratorServer()
+
+    check httpServer.server.tools.hasKey("submit_pr")
+    check httpServer.server.toolHandlers.hasKey("submit_pr")
+    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+    let toolResponse = submitPrHandler(%*{"summary": "ship tool"})
+    check toolResponse.getStr() == "Merge request enqueued."
+    check consumeSubmitPrSummary() == "ship tool"
+    check consumeSubmitPrSummary() == ""
+
 suite "orchestrator coding agent execution":
   test "executeAssignedTicket runs agent and appends run summary":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"
@@ -904,6 +925,7 @@ suite "orchestrator coding agent execution":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     var writtenCfg = defaultConfig()
     writtenCfg.reasoningEffort.coding = "high"
+    writtenCfg.endpoints.local = "http://127.0.0.1:19042"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -934,6 +956,7 @@ suite "orchestrator coding agent execution":
     check callCount == 1
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
+    check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
     check capturedRequest.workingDir == assignment.worktree
     check capturedRequest.ticketId == "0001"
     check "Ticket 1" in capturedRequest.prompt
@@ -956,7 +979,7 @@ suite "orchestrator coding agent execution":
     check commitRc == 0
     check "scriptorium: record agent run 0001-first" in commitOutput
 
-  test "executeAssignedTicket enqueues merge request from submit_pr":
+  test "executeAssignedTicket enqueues merge request from submit_pr MCP tool":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_enqueue"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
@@ -967,8 +990,9 @@ suite "orchestrator coding agent execution":
     let assignment = assignOldestOpenTicket(tmp)
     let before = planCommitCount(tmp)
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Return a deterministic run result that asks to submit a PR.
+      ## Return a deterministic run result and signal completion with submit_pr.
       discard request
+      callSubmitPrTool("ship it")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -978,7 +1002,7 @@ suite "orchestrator coding agent execution":
         stdout: "",
         logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
         lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
-        lastMessage: "Work complete.\nsubmit_pr(\"ship it\")",
+        lastMessage: "Work complete.",
         timeoutKind: "none",
       )
 
@@ -1373,12 +1397,13 @@ suite "orchestrator final v1 flow":
         writeFile(request.workingDir / "flow-output.txt", "done\n")
         runCmdOrDie("git -C " & quoteShell(request.workingDir) & " add flow-output.txt")
         runCmdOrDie("git -C " & quoteShell(request.workingDir) & " commit -m test-v1-39-flow-output")
+        callSubmitPrTool("ship flow")
         result = AgentRunResult(
           backend: harnessCodex,
           exitCode: 0,
           attempt: 1,
           attemptCount: 1,
-          lastMessage: "Done.\nsubmit_pr(\"ship flow\")",
+          lastMessage: "Done.",
           timeoutKind: "none",
         )
       else:
@@ -1615,8 +1640,9 @@ suite "orchestrator agent enqueue with fakes":
 
       let assignment = assignOldestOpenTicket(repoPath)
       proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-        ## Return a deterministic run output that requests submit_pr.
+        ## Return a deterministic run output and signal submit_pr through MCP.
         discard request
+        callSubmitPrTool("ship it")
         result = AgentRunResult(
           backend: harnessCodex,
           command: @["codex", "exec"],
@@ -1626,7 +1652,7 @@ suite "orchestrator agent enqueue with fakes":
           stdout: "",
           logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
           lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
-          lastMessage: "Done.\nsubmit_pr(\"ship it\")",
+          lastMessage: "Done.",
           timeoutKind: "none",
         )
 
@@ -1747,8 +1773,9 @@ suite "orchestrator agent enqueue with fakes":
       doAssert ticketHeadRc == 0
 
       proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-        ## Return a deterministic successful output that requests merge submission.
+        ## Return a deterministic successful output and request merge submission.
         discard request
+        callSubmitPrTool("ship e2e")
         result = AgentRunResult(
           backend: harnessCodex,
           command: @["codex", "exec"],
@@ -1758,7 +1785,7 @@ suite "orchestrator agent enqueue with fakes":
           stdout: "",
           logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
           lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
-          lastMessage: "Done.\nsubmit_pr(\"ship e2e\")",
+          lastMessage: "Done.",
           timeoutKind: "none",
         )
 
