@@ -31,7 +31,7 @@ proc gitCheck(dir: string, args: varargs[string]): int =
   result = p.waitForExit()
   p.close()
 
-proc runInit*(path: string) =
+proc runInit*(path: string, quiet: bool = false) =
   ## Initialize a new scriptorium workspace in the given git repository.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()
 
@@ -59,9 +59,10 @@ proc runInit*(path: string) =
   gitRun(tmpPlan, "add", ".")
   gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
 
-  echo "Initialized scriptorium workspace."
-  echo fmt"  Plan branch: {PlanBranch}"
-  echo ""
-  echo "Next steps:"
-  echo "  scriptorium plan   — build your spec with the Architect"
-  echo "  scriptorium run    — start the orchestrator"
+  if not quiet:
+    echo "Initialized scriptorium workspace."
+    echo fmt"  Plan branch: {PlanBranch}"
+    echo ""
+    echo "Next steps:"
+    echo "  scriptorium plan   — build your spec with the Architect"
+    echo "  scriptorium run    — start the orchestrator"

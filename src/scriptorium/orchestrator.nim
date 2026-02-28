@@ -1657,6 +1657,7 @@ proc runInteractivePlanSession*(
   repoPath: string,
   runner: AgentRunner = runAgent,
   input: PlanSessionInput = nil,
+  quiet: bool = false,
 ) =
   ## Run a multi-turn interactive planning session with the Architect.
   if runner.isNil:
@@ -1671,17 +1672,20 @@ proc runInteractivePlanSession*(
 
   let cfg = loadConfig(repoPath)
   discard withPlanWorktree(repoPath, proc(planPath: string): int =
-    echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
+    if not quiet:
+      echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
     var history: seq[PlanTurn] = @[]
     var turnNum = 0
 
     while true:
       if interactivePlanInterrupted:
-        echo ""
+        if not quiet:
+          echo ""
         break
 
-      stdout.write("> ")
-      flushFile(stdout)
+      if not quiet:
+        stdout.write("> ")
+        flushFile(stdout)
       var line: string
       try:
         if input.isNil:
@@ -1692,7 +1696,8 @@ proc runInteractivePlanSession*(
         break
       except CatchableError as err:
         if interactivePlanInterrupted or inputErrorIndicatesInterrupt(err.msg):
-          echo ""
+          if not quiet:
+            echo ""
           break
         raise err
 
@@ -1705,28 +1710,34 @@ proc runInteractivePlanSession*(
         break
       of "/show":
         let specPath = planPath / PlanSpecPath
-        if fileExists(specPath):
-          echo readFile(specPath)
-        else:
-          echo "scriptorium: spec.md not found"
+        if not quiet:
+          if fileExists(specPath):
+            echo readFile(specPath)
+          else:
+            echo "scriptorium: spec.md not found"
         continue
       of "/help":
-        echo "/show  — print current spec.md"
-        echo "/quit  — exit the session"
-        echo "/help  — show this list"
+        if not quiet:
+          echo "/show  — print current spec.md"
+          echo "/quit  — exit the session"
+          echo "/help  — show this list"
         continue
       else:
         if line.startsWith("/"):
-          echo fmt"scriptorium: unknown command '{line}'"
+          if not quiet:
+            echo fmt"scriptorium: unknown command '{line}'"
           continue
 
       let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
       let prompt = buildInteractivePlanPrompt(repoPath, prevSpec, history, line)
       var lastStreamLine = "[thinking] working..."
-      echo lastStreamLine
+      if not quiet:
+        echo lastStreamLine
       let streamEventHandler = proc(event: AgentStreamEvent) =
         ## Render live architect stream events in concise interactive form.
+        if quiet:
+          return
         let rendered = formatPlanStreamEvent(event)
         if rendered.len > 0 and rendered != lastStreamLine:
           echo rendered
@@ -1745,7 +1756,7 @@ proc runInteractivePlanSession*(
       var response = agentResult.lastMessage.strip()
       if response.len == 0:
         response = agentResult.stdout.strip()
-      if response.len > 0:
+      if response.len > 0 and not quiet:
         echo response
 
       history.add(PlanTurn(role: "engineer", text: line))
@@ -1755,7 +1766,8 @@ proc runInteractivePlanSession*(
       if newSpec != prevSpec:
         gitRun(planPath, "add", PlanSpecPath)
         gitRun(planPath, "commit", "-m", fmt"scriptorium: plan session turn {turnNum}")
-        echo fmt"[spec.md updated — turn {turnNum}]"
+        if not quiet:
+          echo fmt"[spec.md updated — turn {turnNum}]"
     0
   )
 

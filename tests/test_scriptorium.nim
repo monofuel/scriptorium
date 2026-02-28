@@ -143,7 +143,7 @@ suite "scriptorium --init":
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let (_, rc) = execCmdEx("git -C " & tmp & " rev-parse --verify scriptorium/plan")
     check rc == 0
@@ -153,7 +153,7 @@ suite "scriptorium --init":
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let (files, _) = execCmdEx("git -C " & tmp & " ls-tree -r --name-only scriptorium/plan")
     check "spec.md" in files
@@ -168,9 +168,9 @@ suite "scriptorium --init":
     makeTestRepo(tmp)
     defer: removeDir(tmp)
 
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     expect ValueError:
-      runInit(tmp)
+      runInit(tmp, quiet = true)
 
   test "raises on non-git directory":
     let tmp = getTempDir() / "scriptorium_test_not_a_repo"
@@ -178,7 +178,7 @@ suite "scriptorium --init":
     defer: removeDir(tmp)
 
     expect ValueError:
-      runInit(tmp)
+      runInit(tmp, quiet = true)
 
 suite "config":
   test "defaults to fake unit-test codex model for both roles":
@@ -239,7 +239,7 @@ suite "scriptorium CLI":
     let tmp = getTempDir() / "scriptorium_test_cli_status"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(
       tmp,
@@ -264,7 +264,7 @@ suite "scriptorium CLI":
     let tmp = getTempDir() / "scriptorium_test_cli_worktrees"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(
       tmp,
       "in-progress",
@@ -292,7 +292,7 @@ suite "orchestrator plan spec update":
     let tmp = getTempDir() / "scriptorium_test_plan_update_spec"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     writeFile(tmp / "source-marker.txt", "alpha\n")
     runCmdOrDie("git -C " & quoteShell(tmp) & " add source-marker.txt")
@@ -366,7 +366,7 @@ suite "orchestrator plan spec update":
     let tmp = getTempDir() / "scriptorium_test_plan_out_of_scope"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Write to spec.md and one out-of-scope path to trigger guard failure.
@@ -394,7 +394,7 @@ suite "orchestrator plan spec update":
     let tmp = getTempDir() / "scriptorium_test_plan_stale_temp_conflict"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let stalePath = createTempDir("scriptorium_plan_", "", getTempDir())
     removeDir(stalePath)
@@ -427,7 +427,7 @@ suite "orchestrator plan spec update":
     let tmp = getTempDir() / "scriptorium_test_plan_manual_conflict"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let manualPath = getTempDir() / "scriptorium_manual_plan_conflict"
     if dirExists(manualPath):
@@ -469,7 +469,7 @@ suite "orchestrator invariants":
     let tmp = getTempDir() / "scriptorium_test_invariant_duplicate_ticket_states"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -480,7 +480,7 @@ suite "orchestrator invariants":
     let tmp = getTempDir() / "scriptorium_test_invariant_transition_pass"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     discard assignOldestOpenTicket(tmp)
@@ -490,7 +490,7 @@ suite "orchestrator invariants":
     let tmp = getTempDir() / "scriptorium_test_invariant_transition_fail"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     moveTicketStateInPlan(tmp, "open", "in-progress", "0001-first.md")
 
@@ -501,7 +501,7 @@ suite "orchestrator invariants":
     let tmp = getTempDir() / "scriptorium_test_invariant_no_partial_move_on_crash"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     let before = planCommitCount(tmp)
 
@@ -526,7 +526,7 @@ suite "orchestrator planning bootstrap":
     let tmp = getTempDir() / "scriptorium_test_plan_load_spec"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let spec = loadSpecFromPlan(tmp)
     check "Run `scriptorium plan`" in spec
@@ -535,7 +535,7 @@ suite "orchestrator planning bootstrap":
     let tmp = getTempDir() / "scriptorium_test_plan_missing_spec"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     removeSpecFromPlan(tmp)
 
     expect ValueError:
@@ -545,7 +545,7 @@ suite "orchestrator planning bootstrap":
     let tmp = getTempDir() / "scriptorium_test_areas_missing"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     check areasMissing(tmp)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
@@ -555,7 +555,7 @@ suite "orchestrator planning bootstrap":
     let tmp = getTempDir() / "scriptorium_test_sync_areas_call"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     writeFile(tmp / "scriptorium.json", """{"models":{"architect":"claude-opus-4-6"}}""")
 
     var callCount = 0
@@ -584,7 +584,7 @@ suite "orchestrator planning bootstrap":
     let tmp = getTempDir() / "scriptorium_test_sync_areas_idempotent"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc generator(model: string, spec: string): seq[AreaDocument] =
@@ -613,7 +613,7 @@ suite "orchestrator manager ticket bootstrap":
     let tmp = getTempDir() / "scriptorium_test_areas_needing_tickets"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
@@ -626,7 +626,7 @@ suite "orchestrator manager ticket bootstrap":
     let tmp = getTempDir() / "scriptorium_test_sync_tickets_call"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n\n## Scope\n- CLI\n")
     writeFile(tmp / "scriptorium.json", """{"models":{"coding":"grok-code-fast-1"}}""")
 
@@ -668,7 +668,7 @@ suite "orchestrator manager ticket bootstrap":
     let tmp = getTempDir() / "scriptorium_test_ticket_id_monotonic"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "done", "0042-already-done.md", "# Done Ticket\n\n**Area:** old\n")
@@ -692,7 +692,7 @@ suite "orchestrator manager ticket bootstrap":
     let tmp = getTempDir() / "scriptorium_test_sync_tickets_idempotent"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
 
     var callCount = 0
@@ -723,7 +723,7 @@ suite "orchestrator ticket assignment":
     let tmp = getTempDir() / "scriptorium_test_oldest_open_ticket"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -734,7 +734,7 @@ suite "orchestrator ticket assignment":
     let tmp = getTempDir() / "scriptorium_test_assign_transition"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let before = planCommitCount(tmp)
@@ -752,7 +752,7 @@ suite "orchestrator ticket assignment":
     let tmp = getTempDir() / "scriptorium_test_assign_worktree"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -770,7 +770,7 @@ suite "orchestrator ticket assignment":
     let tmp = getTempDir() / "scriptorium_test_cleanup_worktree"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -785,7 +785,7 @@ suite "orchestrator coding agent execution":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -839,7 +839,7 @@ suite "orchestrator coding agent execution":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_enqueue"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -879,7 +879,7 @@ suite "orchestrator merge queue":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_init"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     let before = planCommitCount(tmp)
     let first = ensureMergeQueueInitialized(tmp)
@@ -899,7 +899,7 @@ suite "orchestrator merge queue":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_single_flight"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
@@ -923,7 +923,7 @@ suite "orchestrator merge queue":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_success"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -953,7 +953,7 @@ suite "orchestrator merge queue":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_failure"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addFailingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -978,7 +978,7 @@ suite "orchestrator final v1 flow":
     let tmp = getTempDir() / "scriptorium_test_v1_36_blank_spec_guard"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeOrchestratorEndpointConfig(tmp, 21)
 
@@ -1007,7 +1007,7 @@ suite "orchestrator final v1 flow":
     let tmp = getTempDir() / "scriptorium_test_v1_37_run_architect_areas"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nBuild area files.\n")
 
     var callCount = 0
@@ -1042,7 +1042,7 @@ suite "orchestrator final v1 flow":
     let tmp = getTempDir() / "scriptorium_test_v1_38_run_manager_tickets"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
     addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
 
@@ -1081,7 +1081,7 @@ suite "orchestrator final v1 flow":
     let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nDeliver one full-flow ticket.\n")
     writeOrchestratorEndpointConfig(tmp, 22)
@@ -1174,7 +1174,7 @@ suite "interactive planning":
     let tmp = getTempDir() / "scriptorium_test_interactive_commit"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     var callCount = 0
     var capturedWorkingDir = ""
@@ -1206,7 +1206,7 @@ suite "interactive planning":
       inc msgIdx
       result = "hello"
 
-    runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
 
     let (logOutput, logRc) = execCmdEx(
       "git -C " & quoteShell(tmp) & " log --oneline scriptorium/plan"
@@ -1221,7 +1221,7 @@ suite "interactive planning":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Return a result without modifying spec.md.
@@ -1244,7 +1244,7 @@ suite "interactive planning":
       result = "hello"
 
     let before = planCommitCount(tmp)
-    runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
 
     check after == before
@@ -1253,7 +1253,7 @@ suite "interactive planning":
     let tmp = getTempDir() / "scriptorium_test_interactive_commands"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -1278,7 +1278,7 @@ suite "interactive planning":
       result = cmds[cmdIdx]
       inc cmdIdx
 
-    runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
 
     check callCount == 0
 
@@ -1286,7 +1286,7 @@ suite "interactive planning":
     let tmp = getTempDir() / "scriptorium_test_interactive_out_of_scope"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Write one out-of-scope file in the plan worktree.
@@ -1311,7 +1311,7 @@ suite "interactive planning":
 
     let before = planCommitCount(tmp)
     expect ValueError:
-      runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+      runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -1322,7 +1322,7 @@ suite "interactive planning":
     let tmp = getTempDir() / "scriptorium_test_interactive_interrupt"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp)
+    runInit(tmp, quiet = true)
 
     var runnerCalls = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -1345,7 +1345,7 @@ suite "interactive planning":
       raise newException(IOError, "interrupted by signal")
 
     let before = planCommitCount(tmp)
-    runInteractivePlanSession(tmp, fakeRunner, fakeInput)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
 
     check inputCalls == 1
