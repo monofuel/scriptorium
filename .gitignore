@@ -3,6 +3,7 @@
 !*/
 !*.*
 !Makefile
+!Dockerfile
 
 # normal ignores:
 *.exe

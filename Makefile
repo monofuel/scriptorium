@@ -1,4 +1,7 @@
-.PHONY: test integration-test build ci
+.PHONY: test integration-test build docker-build docker-build-push ci
+
+DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
+DOCKER_PLATFORM ?= linux/amd64
 
 build: scriptorium
 
@@ -31,3 +34,17 @@ integration-test:
 
 ci:
 	act -W .github/workflows/build.yml
+
+docker-build:
+	docker buildx build \
+		--platform $(DOCKER_PLATFORM) \
+		--load \
+		--tag $(DOCKER_IMAGE) \
+		.
+
+docker-build-push:
+	docker buildx build \
+		--platform $(DOCKER_PLATFORM) \
+		--push \
+		--tag $(DOCKER_IMAGE) \
+		.
