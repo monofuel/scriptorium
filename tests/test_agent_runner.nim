@@ -52,15 +52,14 @@ printf 'done\n' > "$last_message"
         ## Capture streamed agent events for callback wiring assertions.
         streamedEvents.add($event.kind & ":" & event.text)
       let result = runAgent(mutableRequest)
+      let expectedMcpArg = "mcp_servers.scriptorium={url = \"http://127.0.0.1:8097/mcp\", enabled = true, required = true}"
 
       check result.backend == harnessCodex
       check result.exitCode == 0
       check result.timeoutKind == "none"
       check result.lastMessage.contains("done")
       check "model_reasoning_effort=\"high\"" in result.command
-      check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in result.command
-      check "mcp_servers.scriptorium.enabled=true" in result.command
-      check "mcp_servers.scriptorium.required=true" in result.command
+      check expectedMcpArg in result.command
       check streamedEvents.len > 0
       check streamedEvents[0].contains("message:ok")
     )
