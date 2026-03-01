@@ -34,6 +34,7 @@ type
     models*: Models
     reasoningEffort*: ReasoningEffort
     endpoints*: Endpoints
+    logLevel*: string
 
 proc defaultConfig*(): Config =
   ## Return a Config populated with default values.
@@ -84,3 +85,8 @@ proc loadConfig*(repoPath: string): Config =
     result.reasoningEffort.manager = parsed.reasoningEffort.manager
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
+  if parsed.logLevel.len > 0:
+    result.logLevel = parsed.logLevel
+  let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
+  if envLogLevel.len > 0:
+    result.logLevel = envLogLevel

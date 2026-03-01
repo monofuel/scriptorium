@@ -1,5 +1,5 @@
 import
-  std/[algorithm, json, locks, os, osproc, posix, sets, streams, strformat, strutils, tables, uri],
+  std/[algorithm, json, locks, os, osproc, posix, sets, streams, strformat, strutils, tables, times, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -53,6 +53,10 @@ const
   AgentStdoutPreviewChars = 1200
   MergeQueueOutputPreviewChars = 2000
   RequiredQualityTargets = ["test", "integration-test"]
+  GitCommandTimeoutMs = 60_000
+  QualityCheckTimeoutMs = 300_000
+  CodingAgentNoOutputTimeoutMs = 120_000
+  CodingAgentHardTimeoutMs = 300_000
   IdleSleepMs = 200
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
   ArchitectAreasTicketId = "architect-areas"
@@ -163,7 +167,12 @@ proc gitRun(dir: string, args: varargs[string]) =
   let allArgs = @["-C", dir] & argsSeq
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
-  let rc = process.waitForExit()
+  let rc = process.waitForExit(GitCommandTimeoutMs)
+  if rc == -1 and running(process):
+    process.kill()
+    process.close()
+    let argsStr = argsSeq.join(" ")
+    raise newException(IOError, fmt"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
   process.close()
   if rc != 0:
     let argsStr = argsSeq.join(" ")
@@ -174,7 +183,12 @@ proc gitCheck(dir: string, args: varargs[string]): int =
   let allArgs = @["-C", dir] & @args
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   discard process.outputStream.readAll()
-  result = process.waitForExit()
+  result = process.waitForExit(GitCommandTimeoutMs)
+  if result == -1 and running(process):
+    process.kill()
+    process.close()
+    let argsStr = (@args).join(" ")
+    raise newException(IOError, fmt"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
   process.close()
 
 proc parseWorktreeConflictPath(output: string): string =
@@ -621,7 +635,7 @@ proc runPlanArchitectRequest(
   ))
 
 proc listMarkdownFiles(basePath: string): seq[string]
-proc runCommandCapture(workingDir: string, command: string, args: seq[string]): tuple[exitCode: int, output: string]
+proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string]
 
 proc normalizeRelativeWritePath(rawPath: string): string =
   ## Validate and normalize one relative path for write guard checks.
@@ -883,7 +897,7 @@ proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash:
       if oldState != newState:
         inc result
 
-proc runCommandCapture(workingDir: string, command: string, args: seq[string]): tuple[exitCode: int, output: string] =
+proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string] =
   ## Run a process and return combined stdout/stderr with its exit code.
   let process = startProcess(
     command,
@@ -892,7 +906,12 @@ proc runCommandCapture(workingDir: string, command: string, args: seq[string]): 
     options = {poUsePath, poStdErrToStdOut},
   )
   let output = process.outputStream.readAll()
-  let exitCode = process.waitForExit()
+  let exitCode = process.waitForExit(timeoutMs)
+  if exitCode == -1 and running(process):
+    process.kill()
+    process.close()
+    let cmdStr = command & " " & args.join(" ")
+    raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
   process.close()
   result = (exitCode: exitCode, output: output)
 
@@ -1767,8 +1786,11 @@ proc executeAssignedTicket*(
   if assignment.worktree.len == 0:
     raise newException(ValueError, "assignment worktree path is required")
 
+  logDebug(fmt"executeAssignedTicket: loadConfig")
   let cfg = loadConfig(repoPath)
   let ticketRelPath = assignment.inProgressTicket
+
+  logDebug(fmt"executeAssignedTicket: reading ticket from plan worktree")
   let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
     let ticketPath = planPath / ticketRelPath
     if not fileExists(ticketPath):
@@ -1776,6 +1798,7 @@ proc executeAssignedTicket*(
     readFile(ticketPath)
   )
 
+  logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
   let request = AgentRunRequest(
     prompt: buildCodingAgentPrompt(repoPath, ticketRelPath, ticketContent),
     workingDir: assignment.worktree,
@@ -1785,12 +1808,25 @@ proc executeAssignedTicket*(
     ticketId: ticketIdFromTicketPath(ticketRelPath),
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
+    noOutputTimeoutMs: CodingAgentNoOutputTimeoutMs,
+    hardTimeoutMs: CodingAgentHardTimeoutMs,
     maxAttempts: DefaultAgentMaxAttempts,
   )
   discard consumeSubmitPrSummary()
+
+  logDebug(fmt"executeAssignedTicket: running coding agent")
   let agentResult = runner(request)
   result = agentResult
 
+  let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
+  let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
+  logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
+  if stdoutTail.len > 0:
+    logDebug(fmt"executeAssignedTicket: stdout tail: {stdoutTail}")
+  if messageTail.len > 0:
+    logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
+
+  logDebug(fmt"executeAssignedTicket: writing agent run notes to plan worktree")
   discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
     let ticketPath = planPath / ticketRelPath
     if not fileExists(ticketPath):
@@ -1808,14 +1844,20 @@ proc executeAssignedTicket*(
 
   let submitSummary = consumeSubmitPrSummary()
   if submitSummary.len > 0:
+    logInfo(fmt"coding agent called submit_pr, summary={submitSummary}")
+    logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
+  else:
+    logDebug("coding agent did not call submit_pr")
 
 proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
   ## Assign the oldest open ticket and execute it with the coding agent.
   let assignment = assignOldestOpenTicket(repoPath)
   if assignment.inProgressTicket.len == 0:
+    logDebug("no open tickets to execute")
     result = AgentRunResult()
   else:
+    logDebug(fmt"executing ticket: {assignment.inProgressTicket}")
     result = executeAssignedTicket(repoPath, assignment, runner)
 
 proc createOrchestratorServer*(): HttpMcpServer =
@@ -1843,11 +1885,6 @@ proc createOrchestratorServer*(): HttpMcpServer =
   server.registerTool(submitPrTool, submitPrHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
-proc handleCtrlC() {.noconv.} =
-  ## Stop the orchestrator loop on Ctrl+C.
-  logInfo("shutdown: Ctrl+C received")
-  shouldRun = false
-
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
   logInfo(fmt"shutdown: signal {signalNumber} received")
@@ -1864,7 +1901,6 @@ proc inputErrorIndicatesInterrupt(message: string): bool =
 
 proc installSignalHandlers() =
   ## Install signal handlers used by the orchestrator run loop.
-  setControlCHook(handleCtrlC)
   posix.signal(SIGINT, handlePosixSignal)
   posix.signal(SIGTERM, handlePosixSignal)
 
@@ -1913,31 +1949,62 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
-    logDebug(fmt"tick {ticks}")
-    if not hasPlanBranch(repoPath):
-      logDebug("waiting: no plan branch")
-    else:
-      let healthy = isMasterHealthy(repoPath, masterHealthState)
-      if not healthy:
-        logWarn("master is unhealthy — skipping tick")
+    try:
+      logDebug(fmt"tick {ticks}")
+      if not hasPlanBranch(repoPath):
+        logDebug("waiting: no plan branch")
       else:
-        if hasRunnableSpec(repoPath):
-          let architectChanged = runArchitectAreas(repoPath, runner)
-          if architectChanged:
-            logInfo("architect: areas updated")
-          let managerChanged = runManagerTickets(repoPath, runner)
-          if managerChanged:
-            logInfo("manager: tickets created")
-          let agentResult = executeOldestOpenTicket(repoPath, runner)
-          if agentResult.exitCode != 0:
-            logError(fmt"coding agent exited {agentResult.exitCode}")
-          elif agentResult.command.len > 0:
-            logInfo(fmt"coding agent completed (exit 0)")
-          let mergeProcessed = processMergeQueue(repoPath)
-          if mergeProcessed:
-            logInfo("merge queue: item processed")
+        logDebug(fmt"tick {ticks}: checking master health")
+        var t0 = epochTime()
+        let healthy = isMasterHealthy(repoPath, masterHealthState)
+        logDebug(fmt"tick {ticks}: master health check took {epochTime() - t0:.1f}s, healthy={healthy}")
+        if not healthy:
+          logWarn("master is unhealthy — skipping tick")
+        elif not shouldRun:
+          discard
         else:
-          logDebug(WaitingNoSpecMessage)
+          if hasRunnableSpec(repoPath):
+            logDebug(fmt"tick {ticks}: running architect")
+            t0 = epochTime()
+            let architectChanged = runArchitectAreas(repoPath, runner)
+            logDebug(fmt"tick {ticks}: architect took {epochTime() - t0:.1f}s, changed={architectChanged}")
+            if architectChanged:
+              logInfo("architect: areas updated")
+
+            if not shouldRun: break
+
+            logDebug(fmt"tick {ticks}: running manager")
+            t0 = epochTime()
+            let managerChanged = runManagerTickets(repoPath, runner)
+            logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
+            if managerChanged:
+              logInfo("manager: tickets created")
+
+            if not shouldRun: break
+
+            logDebug(fmt"tick {ticks}: running coding agent")
+            t0 = epochTime()
+            let agentResult = executeOldestOpenTicket(repoPath, runner)
+            logDebug(fmt"tick {ticks}: coding agent took {epochTime() - t0:.1f}s, exit={agentResult.exitCode}")
+            if agentResult.exitCode != 0:
+              logError(fmt"coding agent exited {agentResult.exitCode}")
+            elif agentResult.command.len > 0:
+              logInfo(fmt"coding agent completed (exit 0)")
+
+            if not shouldRun: break
+
+            logDebug(fmt"tick {ticks}: processing merge queue")
+            t0 = epochTime()
+            let mergeProcessed = processMergeQueue(repoPath)
+            logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
+            if mergeProcessed:
+              logInfo("merge queue: item processed")
+
+            logDebug(fmt"tick {ticks}: tick complete")
+          else:
+            logDebug(WaitingNoSpecMessage)
+    except CatchableError as e:
+      logError(fmt"tick {ticks} failed: {e.msg}")
     sleep(IdleSleepMs)
     inc ticks
 
@@ -1958,7 +2025,9 @@ proc runOrchestratorLoop(
 
   shouldRun = false
   httpServer.close()
+  logDebug("waiting for HTTP server thread to exit")
   joinThread(serverThread)
+  logDebug("HTTP server thread exited")
 
 proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent) =
   ## Run a bounded orchestrator loop without starting the MCP HTTP server.
@@ -2103,9 +2172,21 @@ proc runInteractivePlanSession*(
     0
   )
 
+proc applyLogLevelFromConfig(repoPath: string) =
+  ## Apply log level from config or environment variable.
+  let cfg = loadConfig(repoPath)
+  if cfg.logLevel.len > 0:
+    case cfg.logLevel.toLowerAscii()
+    of "debug": setLogLevel(lvlDebug)
+    of "info": setLogLevel(lvlInfo)
+    of "warn", "warning": setLogLevel(lvlWarn)
+    of "error": setLogLevel(lvlError)
+    else: logWarn(fmt"unknown log level '{cfg.logLevel}', using default")
+
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
   initLog(repoPath)
+  applyLogLevelFromConfig(repoPath)
   let endpoint = loadOrchestratorEndpoint(repoPath)
   logInfo(fmt"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
   logInfo(fmt"repo: {repoPath}")

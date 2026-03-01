@@ -14,7 +14,7 @@ const
   PositiveTimeoutMs = 300_000
   NegativeTimeoutMs = 120_000
   ShutdownTimeoutMs = 15_000
-  LogTailChars = 4000
+  LogTailChars = 16000
 
 let
   ProjectRoot = getCurrentDir()
