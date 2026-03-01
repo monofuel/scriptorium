@@ -7,7 +7,7 @@ import
 
 const
   CliBinaryName = "scriptorium_integration_live_orchestrator"
-  DefaultIntegrationModel = "gpt-5.1-codex-mini"
+  DefaultIntegrationModel = "gpt-5.3-codex"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   OrchestratorLiveBasePort = 23000
   PollIntervalMs = 500
