@@ -4,6 +4,9 @@ Git-native agent orchestration for software projects.
 
 Scriptorium keeps planning and execution state in Git, runs a strict Architect -> Manager -> Coding workflow, and merges work only when `master` stays green.
 
+WARNING: this is a work in progress and is not yet ready for general use.
+there is no warrenty, it is highly experimental, letting agents run loose is a bad idea but this is still a fun project. you should probably run this is a container.
+
 ## Status
 
 What V1 ships:
