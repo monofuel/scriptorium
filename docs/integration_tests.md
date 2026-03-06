@@ -6,6 +6,7 @@ This document describes the integration and end-to-end coverage currently implem
 
 - `make test`: runs unit tests in `tests/test_*.nim`.
 - `make integration-test`: runs integration tests in `tests/integration_*.nim`.
+- `make e2e-test`: runs live end-to-end tests in `tests/e2e_*.nim`.
 
 ## Integration Coverage (`make integration-test`)
 
@@ -94,6 +95,20 @@ Requires:
 - `codex` binary and valid Codex auth.
 - Network/API access for live model execution.
 
+### `tests/e2e_euler_live.nim`
+
+Coverage:
+- `IT-LIVE-E2E-01 spec to done lands multiples.nim on master`.
+
+What it validates:
+- Full live flow from seeded `spec.md` through Architect, Manager, Coding agent, MCP `submit_pr`, merge queue, and final merge to `master`.
+- Final repository artifact correctness for a small deterministic task.
+- Post-merge quality gates and direct program execution for `multiples.nim`.
+
+Requires:
+- `codex` binary and valid Codex auth.
+- Network/API access for live model execution.
+
 ## End-To-End Coverage Currently Present
 
 ### Live end-to-end (integration suite)
@@ -125,6 +140,11 @@ To run the full integration suite (including live tests) without expected failur
   - `CODEX_API_KEY`,
   - `CODEX_AUTH_FILE` (or `~/.codex/auth.json`).
 - Network access to the configured model provider must be available.
+
+## Shared Live Fixture Helpers
+
+- `tests/support/live_integration_support.nim` centralizes temporary live fixture repository setup under `/tmp/scriptorium/integration/`.
+- Live end-to-end tests should prefer these helpers so future cases reuse the same repo setup, CLI build caching, orchestrator startup, and plan-state inspection paths.
 
 ## Model Guidance For Live Tool Calling
 

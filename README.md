@@ -213,6 +213,16 @@ make integration-test
     - `OPENAI_API_KEY` or `CODEX_API_KEY`, or
     - OAuth file at `~/.codex/auth.json` (or `CODEX_AUTH_FILE` override)
 
+Live end-to-end tests:
+
+```bash
+make e2e-test
+```
+
+- Runs `tests/e2e_*.nim`
+- Uses real codex execution and full orchestrator flows
+- Requires the same codex/auth prerequisites as integration tests
+
 ## CI
 
 - `.github/workflows/build.yml`

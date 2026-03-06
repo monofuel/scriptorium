@@ -13,6 +13,7 @@ All model-facing prompt text is centralized in this directory and bundled at com
 - `coding_agent.md`: coding-agent ticket execution prompt.
 - `architect_areas.md`: Architect area generation prompt.
 - `manager_tickets.md`: Manager ticket generation prompt.
+- `agents_example.md`: generic example `AGENTS.md` content for generated fixture repositories.
 - `plan_scope.md`: shared plan worktree and read-scope context.
 - `architect_plan_oneshot.md`: one-shot `scriptorium plan <prompt>` prompt.
 - `architect_plan_interactive.md`: per-turn interactive `scriptorium plan` prompt.

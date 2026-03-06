@@ -1225,6 +1225,7 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "architect-areas"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
+    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "architect-areas"
     check tmp in capturedRequest.prompt
     check "AGENTS.md" in capturedRequest.prompt
     check "areas/01-arch.md" in files
@@ -1279,6 +1280,7 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "manager-01-core"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
+    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "manager" / "01-core"
     check capturedPromptRepoPath == tmp
     check "AGENTS.md" in capturedRequest.prompt
     check "Only edit files under tickets/open/ in this working directory." in capturedRequest.prompt

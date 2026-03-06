@@ -40,6 +40,8 @@ const
   PlanLogRoot = "scriptorium-plan-logs"
   PlanWriteScopeName = "scriptorium plan"
   ManagerWriteScopeName = "scriptorium manager"
+  ArchitectAreasLogDirName = "architect-areas"
+  ManagerLogDirName = "manager"
   TicketBranchPrefix = "scriptorium/ticket-"
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"
   DefaultAgentAttempt = 1
@@ -633,6 +635,14 @@ proc runPlanArchitectRequest(
     maxAttempts: PlanDefaultMaxAttempts,
     onEvent: onEvent,
   ))
+
+proc planAgentLogRoot(ticketId: string): string =
+  ## Return a temp log root for one plan-branch agent run.
+  let cleanTicketId = ticketId.strip()
+  if cleanTicketId.len > 0:
+    result = getTempDir() / PlanLogRoot / cleanTicketId
+  else:
+    result = getTempDir() / PlanLogRoot
 
 proc listMarkdownFiles(basePath: string): seq[string]
 proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string]
@@ -1475,6 +1485,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
         ticketId: ArchitectAreasTicketId,
         attempt: DefaultAgentAttempt,
         skipGitRepoCheck: true,
+        logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
         maxAttempts: DefaultAgentMaxAttempts,
       ))
 
@@ -1577,6 +1588,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
             ticketId: ManagerTicketIdPrefix & areaId,
             attempt: DefaultAgentAttempt,
             skipGitRepoCheck: true,
+            logRoot: planAgentLogRoot(ManagerLogDirName / areaId),
             maxAttempts: DefaultAgentMaxAttempts,
           ))
           enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir], ManagerWriteScopeName)
