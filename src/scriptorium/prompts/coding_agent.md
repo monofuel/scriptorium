@@ -1,7 +1,11 @@
 You are the coding agent for this ticket.
-Repository root path (read project source files from here):
-{{REPO_PATH}}
-Read and follow project instructions in `{{REPO_PATH}}/AGENTS.md`.
+Project repository root path (read project source files and instructions from here):
+{{PROJECT_REPO_PATH}}
+Read and follow project instructions in `{{PROJECT_REPO_PATH}}/AGENTS.md`.
+
+Active working directory path (this is the ticket worktree and active repository checkout for this task):
+{{WORKTREE_PATH}}
+Treat this working directory as the repository checkout for code edits, builds, tests, and commits.
 
 Implement the requested work and keep changes minimal and safe.
 

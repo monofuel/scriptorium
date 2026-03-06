@@ -345,7 +345,7 @@ suite "orchestrator plan spec update":
       inc callCount
       check req.heartbeatIntervalMs == 0
       check req.onEvent.isNil
-      let repoPathMarker = "Repository root path (read project source files from here):\n"
+      let repoPathMarker = "Project repository root path (read project source files and instructions from here):\n"
       let repoPathMarkerIndex = req.prompt.find(repoPathMarker)
       doAssert repoPathMarkerIndex >= 0
       let repoPathStart = repoPathMarkerIndex + repoPathMarker.len
@@ -391,6 +391,7 @@ suite "orchestrator plan spec update":
     check "Run `scriptorium plan`" in capturedFirstSpec
     check "expand scope" in capturedFirstUserRequest
     check "AGENTS.md" in capturedFirstUserRequest
+    check "Active working directory path (this is the scriptorium plan worktree):" in capturedFirstUserRequest
     check "Only edit spec.md in this working directory." in capturedFirstUserRequest
     check "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md." in capturedFirstUserRequest
     check "Only edit spec.md when the engineer is asking to change plan content." in capturedFirstUserRequest
@@ -962,6 +963,8 @@ suite "orchestrator coding agent execution":
     check "Ticket 1" in capturedRequest.prompt
     check tmp in capturedRequest.prompt
     check "AGENTS.md" in capturedRequest.prompt
+    check "Active working directory path (this is the ticket worktree and active repository checkout for this task):" in capturedRequest.prompt
+    check "Treat this working directory as the repository checkout for code edits, builds, tests, and commits." in capturedRequest.prompt
     check runResult.exitCode == 0
     check after == before + 1
 
@@ -1228,6 +1231,8 @@ suite "orchestrator final v1 flow":
     check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "architect-areas"
     check tmp in capturedRequest.prompt
     check "AGENTS.md" in capturedRequest.prompt
+    check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
+    check "Read `spec.md` in this working directory and write/update area markdown files directly under `areas/` in this working directory." in capturedRequest.prompt
     check "areas/01-arch.md" in files
     check after == before + 1
 
@@ -1250,7 +1255,7 @@ suite "orchestrator final v1 flow":
       ## Write one ticket file directly into tickets/open/ for the target area.
       inc callCount
       capturedRequest = request
-      let repoPathMarker = "Repository root path (read project source files from here):\n"
+      let repoPathMarker = "Project repository root path (read project source files and instructions from here):\n"
       let markerIndex = request.prompt.find(repoPathMarker)
       doAssert markerIndex >= 0
       let repoPathStart = markerIndex + repoPathMarker.len
@@ -1283,6 +1288,8 @@ suite "orchestrator final v1 flow":
     check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "manager" / "01-core"
     check capturedPromptRepoPath == tmp
     check "AGENTS.md" in capturedRequest.prompt
+    check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
+    check "Read `areas/`, `tickets/`, and `spec.md` from this working directory." in capturedRequest.prompt
     check "Only edit files under tickets/open/ in this working directory." in capturedRequest.prompt
     check "tickets/open/0001-core-task.md" in files
     check after == before + 1
@@ -1438,14 +1445,17 @@ suite "interactive planning":
     ]
     let userMsg = "add feature C"
 
-    let prompt = buildInteractivePlanPrompt(repoPath, spec, history, userMsg)
+    let planPath = "/tmp/plan-worktree"
+    let prompt = buildInteractivePlanPrompt(repoPath, planPath, spec, history, userMsg)
 
     check repoPath in prompt
+    check planPath in prompt
     check spec.strip() in prompt
     check "add feature B" in prompt
     check "Added feature B to spec." in prompt
     check "add feature C" in prompt
     check "AGENTS.md" in prompt
+    check "Active working directory path (this is the scriptorium plan worktree):" in prompt
     check "Only edit spec.md in this working directory." in prompt
     check "If the engineer is discussing or asking questions, reply directly and do not edit spec.md." in prompt
     check "Only edit spec.md when the engineer asks to change plan content." in prompt
@@ -1497,6 +1507,7 @@ suite "interactive planning":
     check capturedWorkingDir != tmp
     check tmp in capturedPrompt
     check "AGENTS.md" in capturedPrompt
+    check capturedWorkingDir in capturedPrompt
 
   test "turn makes no commit when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"
@@ -1832,7 +1843,7 @@ suite "orchestrator agent enqueue with fakes":
         ## Read the repo path from prompt context and update spec.md in plan worktree.
         inc callCount
         capturedPrompt = request.prompt
-        let repoPathMarker = "Repository root path (read project source files from here):\n"
+        let repoPathMarker = "Project repository root path (read project source files and instructions from here):\n"
         let markerIndex = request.prompt.find(repoPathMarker)
         doAssert markerIndex >= 0
         let pathStart = markerIndex + repoPathMarker.len
@@ -1862,6 +1873,7 @@ suite "orchestrator agent enqueue with fakes":
       check callCount == 1
       check capturedRepoPath == repoPath
       check "AGENTS.md" in capturedPrompt
+      check "Active working directory path (this is the scriptorium plan worktree):" in capturedPrompt
       check "Only edit spec.md in this working directory." in capturedPrompt
 
       let specBody = readPlanFile(repoPath, "spec.md")

@@ -513,35 +513,38 @@ proc formatPlanStreamEvent(event: AgentStreamEvent): string =
   of agentEventMessage:
     result = ""
 
-proc buildCodingAgentPrompt(repoPath: string, ticketRelPath: string, ticketContent: string): string =
+proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string): string =
   ## Build the coding-agent prompt from ticket context.
   result = renderPromptTemplate(
     CodingAgentTemplate,
     [
-      (name: "REPO_PATH", value: repoPath),
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: worktreePath),
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
   )
 
-proc buildArchitectAreasPrompt(repoPath: string, spec: string): string =
+proc buildArchitectAreasPrompt(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
   result = renderPromptTemplate(
     ArchitectAreasTemplate,
     [
-      (name: "REPO_PATH", value: repoPath),
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
       (name: "CURRENT_SPEC", value: spec.strip()),
     ],
   )
 
-proc buildManagerTicketsPrompt(repoPath: string, areaRelPath: string, areaContent: string, nextId: int): string =
+proc buildManagerTicketsPrompt(repoPath: string, planPath: string, areaRelPath: string, areaContent: string, nextId: int): string =
   ## Build the manager prompt that writes ticket files directly into tickets/open/.
   let areaId = areaIdFromAreaPath(areaRelPath)
   let nextIdText = &"{nextId:04d}"
   result = renderPromptTemplate(
     ManagerTicketsTemplate,
     [
-      (name: "REPO_PATH", value: repoPath),
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
       (name: "NEXT_ID", value: nextIdText),
       (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
       (name: "AREA_ID", value: areaId),
@@ -587,21 +590,22 @@ proc appendAgentRunNote(ticketContent: string, model: string, runResult: AgentRu
 
 proc branchNameForTicket(ticketRelPath: string): string
 
-proc buildPlanScopePrompt(repoPath: string): string =
+proc buildPlanScopePrompt(repoPath: string, planPath: string): string =
   ## Build shared planning prompt context with read and write scope.
   result = renderPromptTemplate(
     PlanScopeTemplate,
     [
-      (name: "REPO_PATH", value: repoPath),
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
     ],
   )
 
-proc buildArchitectPlanPrompt(repoPath: string, userPrompt: string, currentSpec: string): string =
+proc buildArchitectPlanPrompt(repoPath: string, planPath: string, userPrompt: string, currentSpec: string): string =
   ## Build the one-shot architect prompt that edits spec.md in place.
   result = renderPromptTemplate(
     ArchitectPlanOneShotTemplate,
     [
-      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath).strip()),
+      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "USER_REQUEST", value: userPrompt.strip()),
       (name: "CURRENT_SPEC", value: currentSpec.strip()),
     ],
@@ -1478,7 +1482,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
     else:
       let spec = loadSpecFromPlanPath(planPath)
       discard runner(AgentRunRequest(
-        prompt: buildArchitectAreasPrompt(repoPath, spec),
+        prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
         workingDir: planPath,
         model: cfg.models.architect,
         reasoningEffort: cfg.reasoningEffort.architect,
@@ -1516,7 +1520,7 @@ proc updateSpecFromArchitect*(
       planPath,
       cfg.models.architect,
       cfg.reasoningEffort.architect,
-      buildArchitectPlanPrompt(repoPath, prompt, existingSpec),
+      buildArchitectPlanPrompt(repoPath, planPath, prompt, existingSpec),
       PlanSpecTicketId,
     )
     enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
@@ -1581,7 +1585,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           let areaId = areaIdFromAreaPath(areaRelPath)
           let nextId = nextTicketId(planPath)
           discard runner(AgentRunRequest(
-            prompt: buildManagerTicketsPrompt(repoPath, areaRelPath, areaContent, nextId),
+            prompt: buildManagerTicketsPrompt(repoPath, planPath, areaRelPath, areaContent, nextId),
             workingDir: planPath,
             model: cfg.models.manager,
             reasoningEffort: cfg.reasoningEffort.manager,
@@ -1812,7 +1816,7 @@ proc executeAssignedTicket*(
 
   logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
   let request = AgentRunRequest(
-    prompt: buildCodingAgentPrompt(repoPath, ticketRelPath, ticketContent),
+    prompt: buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent),
     workingDir: assignment.worktree,
     model: cfg.models.coding,
     reasoningEffort: cfg.reasoningEffort.coding,
@@ -2047,7 +2051,7 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
   shouldRun = false
 
-proc buildInteractivePlanPrompt*(repoPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
+proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
   var conversationHistory = ""
   if history.len > 0:
@@ -2058,7 +2062,7 @@ proc buildInteractivePlanPrompt*(repoPath: string, spec: string, history: seq[Pl
   result = renderPromptTemplate(
     ArchitectPlanInteractiveTemplate,
     [
-      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath).strip()),
+      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "CURRENT_SPEC", value: spec.strip()),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
       (name: "USER_MESSAGE", value: userMsg.strip()),
@@ -2142,7 +2146,7 @@ proc runInteractivePlanSession*(
 
       let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
-      let prompt = buildInteractivePlanPrompt(repoPath, prevSpec, history, line)
+      let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, history, line)
       var lastStreamLine = "[thinking] working..."
       if not quiet:
         echo lastStreamLine

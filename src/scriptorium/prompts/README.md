@@ -2,6 +2,8 @@
 
 All model-facing prompt text is centralized in this directory and bundled at compile time via `staticRead()`.
 
+Prompt path terminology should stay aligned with `docs/terms.md`.
+
 ## Placeholder Style
 
 - Placeholders use `{{UPPER_SNAKE_CASE}}` markers.
