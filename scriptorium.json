@@ -1,11 +1,11 @@
 {
   "models": {
-    "architect": "gpt-5.3-codex",
-    "coding": "gpt-5.1-codex-mini",
-    "manager": "gpt-5.1-codex-mini"
+    "architect": "gpt-5.4",
+    "coding": "gpt-5.4",
+    "manager": "gpt-5.4"
   },
   "reasoning_effort": {
-    "coding": "high",
-    "manager": "high"
+    "coding": "medium",
+    "manager": "medium"
   }
 }
