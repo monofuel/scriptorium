@@ -44,9 +44,8 @@ suite "integration e2e euler live":
         doneTickets.len > 0 and pendingQueueFiles(repoPath).len == 0 and rc == 0
       )
       doAssert completed,
-        "orchestrator did not complete the live Euler flow.\n" &
-        "Plan files:\n" & planTreeFiles(repoPath).join("\n") & "\n\n" &
-        "Log tail:\n" & orchestratorLogTail(repoPath)
+        "orchestrator did not complete the live Euler flow.\n\n" &
+        e2eDebugContext(repoPath)
 
       let planFiles = planTreeFiles(repoPath)
       let areaFiles = planFiles.filterIt(it.startsWith("areas/") and it.endsWith(".md"))
@@ -66,20 +65,40 @@ suite "integration e2e euler live":
       let (_, masterProgramRc) = execCmdEx(
         "git -C " & quoteShell(repoPath) & " show master:multiples.nim"
       )
-      doAssert masterProgramRc == 0, "master is missing multiples.nim"
+      doAssert masterProgramRc == 0, "master is missing multiples.nim.\n\n" & e2eDebugContext(repoPath)
 
       let (testOutput, testRc) = execCmdEx("cd " & quoteShell(repoPath) & " && make test")
-      doAssert testRc == 0, "make test failed after live Euler flow.\n" & testOutput
+      doAssert testRc == 0,
+        "make test failed after live Euler flow.\n\n" &
+        testOutput & "\n\n" &
+        e2eDebugContext(repoPath)
 
       let (integrationOutput, integrationRc) = execCmdEx(
         "cd " & quoteShell(repoPath) & " && make integration-test"
       )
       doAssert integrationRc == 0,
-        "make integration-test failed after live Euler flow.\n" & integrationOutput
+        "make integration-test failed after live Euler flow.\n\n" &
+        integrationOutput & "\n\n" &
+        e2eDebugContext(repoPath)
 
-      let (runOutput, runRc) = execCmdEx("cd " & quoteShell(repoPath) & " && nim r multiples.nim")
-      doAssert runRc == 0, "nim r multiples.nim failed.\n" & runOutput
+      let (buildOutput, buildRc) = execCmdEx(
+        "cd " & quoteShell(repoPath) &
+        " && nim c --nimcache:.nimcache-verify -o:./multiples-verify-bin multiples.nim"
+      )
+      doAssert buildRc == 0,
+        "nim c multiples.nim failed.\n\n" &
+        buildOutput & "\n\n" &
+        e2eDebugContext(repoPath)
+
+      let (runOutput, runRc) = execCmdEx("cd " & quoteShell(repoPath) & " && ./multiples-verify-bin")
+      doAssert runRc == 0,
+        "running ./multiples-verify-bin failed.\n\n" &
+        runOutput & "\n\n" &
+        e2eDebugContext(repoPath)
       let outputLines = runOutput.splitLines().filterIt(it.strip().len > 0)
-      doAssert outputLines.len > 0, "nim r multiples.nim produced no output.\n" & runOutput
+      doAssert outputLines.len > 0,
+        "running ./multiples-verify-bin produced no output.\n\n" &
+        runOutput & "\n\n" &
+        e2eDebugContext(repoPath)
       check outputLines[^1].strip() == EulerExpectedAnswer
     )

@@ -45,3 +45,13 @@ jobs:
 
       - name: Run e2e tests
         run: make e2e-test
+
+      - name: Upload e2e debug artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-debug-artifacts
+          if-no-files-found: ignore
+          path: |
+            /tmp/scriptorium
+            /tmp/scriptorium-plan-logs

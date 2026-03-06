@@ -17,6 +17,8 @@ const
   ShutdownTimeoutMs = 15_000
   LogTailChars = 16_000
   EulerExpectedAnswer* = "233168"
+  EulerDebugBinary = "./multiples-test-bin"
+  EulerReleaseBinary = "./multiples-release-bin"
   AgentsExamplePath = "src/scriptorium/prompts/agents_example.md"
 
 let
@@ -129,9 +131,9 @@ proc addEulerMakefile*(repoPath: string) =
   let makefileContent =
     "EXPECTED=" & EulerExpectedAnswer & "\n\n" &
     "test:\n" &
-    "\t@test ! -f multiples.nim || { output=$$(nim r multiples.nim); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
+    "\t@test ! -f multiples.nim || { nim c --nimcache:.nimcache-test -o:" & EulerDebugBinary & " multiples.nim >/dev/null && output=$$(" & EulerDebugBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
     "integration-test:\n" &
-    "\t@test ! -f multiples.nim || { output=$$(nim c -r -d:release multiples.nim); test \"$$output\" = \"$(EXPECTED)\"; }\n"
+    "\t@test ! -f multiples.nim || { nim c --nimcache:.nimcache-release -d:release -o:" & EulerReleaseBinary & " multiples.nim >/dev/null && output=$$(" & EulerReleaseBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n"
   writeFile(repoPath / "Makefile", makefileContent)
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-live-add-euler-makefile")
@@ -212,6 +214,18 @@ proc orchestratorLogTail*(repoPath: string): string =
     result = truncateTail(readFile(logPath), LogTailChars)
   else:
     result = "<no orchestrator log found>"
+
+proc e2eDebugContext*(repoPath: string): string =
+  ## Return a compact debug context block for live E2E failures.
+  let
+    latestLogPath = latestOrchestratorLogPath(repoPath)
+    planFiles = planTreeFiles(repoPath).join("\n")
+    logTail = orchestratorLogTail(repoPath)
+  result =
+    "Fixture repo: " & repoPath & "\n" &
+    "Latest orchestrator log: " & latestLogPath & "\n\n" &
+    "Plan files:\n" & planFiles & "\n\n" &
+    "Log tail:\n" & logTail
 
 proc waitForCondition*(timeoutMs: int, pollMs: int, condition: proc(): bool): bool =
   ## Poll condition until true or timeout.
