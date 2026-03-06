@@ -88,7 +88,7 @@ Source file:
   - `gpt-5.2-codex`
 - Label-based codex model overrides:
   - `model-gpt-5.2-codex`
-  - `model-gpt-5.3-codex`
+  - `model-gpt-5.4`
 
 ### Claude
 

@@ -148,7 +148,7 @@ To run the full integration suite (including live tests) without expected failur
 
 ## Model Guidance For Live Tool Calling
 
-- `gpt-5.3-codex` is the default model for this repository's live MCP tool-calling integration tests.
+- `gpt-5.4` is the default model for this repository's live MCP tool-calling integration tests.
 - `gpt-5.1-codex-mini` is known bad for this repository's MCP tool-calling integration tests.
 
 ## Notes
