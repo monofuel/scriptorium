@@ -1,0 +1,47 @@
+name: End-To-End Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: treeform/setup-nim-action@v6
+
+      - name: Verify e2e secrets
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "OPENAI_API_KEY secret is required for e2e tests."
+            exit 1
+          fi
+
+      - name: Install codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Verify codex binary and features
+        run: |
+          which codex
+          codex --version
+          codex exec --help | sed -n '1,140p'
+          codex exec --help | grep -q -- '--json'
+
+      - name: Sync Nim dependencies
+        run: nimby sync -g nimby.lock
+
+      - name: Run e2e tests
+        run: make e2e-test

@@ -5,5 +5,6 @@ Read and follow project instructions in `{{PROJECT_REPO_PATH}}/AGENTS.md`.
 Active working directory path (this is the scriptorium plan worktree):
 {{WORKTREE_PATH}}
 Read and edit `spec.md` in this working directory.
+Treat `{{WORKTREE_PATH}}/spec.md` as the authoritative planning file.
 Only edit spec.md in this working directory.
 Do not edit any other files.

@@ -393,8 +393,11 @@ suite "orchestrator plan spec update":
     check "AGENTS.md" in capturedFirstUserRequest
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedFirstUserRequest
     check "Only edit spec.md in this working directory." in capturedFirstUserRequest
+    check "Treat `" in capturedFirstUserRequest
+    check "as the authoritative planning file." in capturedFirstUserRequest
     check "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md." in capturedFirstUserRequest
     check "Only edit spec.md when the engineer is asking to change plan content." in capturedFirstUserRequest
+    check "Inline convenience copy of `spec.md` from the plan worktree:" in capturedFirstUserRequest
     check after == before + 1
     check afterUnchanged == after
     check specRc == 0
@@ -1457,8 +1460,11 @@ suite "interactive planning":
     check "AGENTS.md" in prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in prompt
     check "Only edit spec.md in this working directory." in prompt
+    check "Treat `" in prompt
+    check "as the authoritative planning file." in prompt
     check "If the engineer is discussing or asking questions, reply directly and do not edit spec.md." in prompt
     check "Only edit spec.md when the engineer asks to change plan content." in prompt
+    check "Inline convenience copy of `spec.md` from the plan worktree:" in prompt
 
   test "turn commits when spec changes":
     let tmp = getTempDir() / "scriptorium_test_interactive_commit"
@@ -1875,6 +1881,8 @@ suite "orchestrator agent enqueue with fakes":
       check "AGENTS.md" in capturedPrompt
       check "Active working directory path (this is the scriptorium plan worktree):" in capturedPrompt
       check "Only edit spec.md in this working directory." in capturedPrompt
+      check "as the authoritative planning file." in capturedPrompt
+      check "Inline convenience copy of `spec.md` from the plan worktree:" in capturedPrompt
 
       let specBody = readPlanFile(repoPath, "spec.md")
       check "# Integration Spec" in specBody
