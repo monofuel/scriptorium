@@ -1650,6 +1650,163 @@ suite "interactive planning":
     check runnerCalls == 0
     check after == before
 
+suite "interactive ask session":
+  test "ask prompt includes read-only instruction and spec":
+    let tmp = getTempDir() / "scriptorium_test_ask_prompt"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let prompt = buildInteractiveAskPrompt(tmp, tmp, "# My Spec\n", @[], "what is this?")
+    check "read-only" in prompt.toLowerAscii()
+    check "Do NOT edit any files" in prompt
+    check "# My Spec" in prompt
+    check "what is this?" in prompt
+    check "AGENTS.md" in prompt
+
+  test "ask prompt includes conversation history":
+    let tmp = getTempDir() / "scriptorium_test_ask_history"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let history = @[
+      PlanTurn(role: "engineer", text: "hello"),
+      PlanTurn(role: "architect", text: "hi there"),
+    ]
+    let prompt = buildInteractiveAskPrompt(tmp, tmp, "# Spec\n", history, "follow up")
+    check "[engineer]: hello" in prompt
+    check "[architect]: hi there" in prompt
+    check "follow up" in prompt
+
+  test "ask session invokes runner and records history":
+    let tmp = getTempDir() / "scriptorium_test_ask_session"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    var capturedPrompt = ""
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Return a response without modifying any files.
+      inc callCount
+      capturedPrompt = req.prompt
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "The spec describes a CLI tool.",
+        timeoutKind: "none",
+      )
+
+    var msgIdx = 0
+    proc fakeInput(): string =
+      ## Yield one message then raise EOFError.
+      if msgIdx >= 1:
+        raise newException(EOFError, "done")
+      inc msgIdx
+      result = "what does the spec say?"
+
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+
+    check callCount == 1
+    check "what does the spec say?" in capturedPrompt
+    check "read-only" in capturedPrompt.toLowerAscii()
+
+  test "ask session makes no commits":
+    let tmp = getTempDir() / "scriptorium_test_ask_no_commit"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Return a response without modifying any files.
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "Here is my answer.",
+        timeoutKind: "none",
+      )
+
+    var msgIdx = 0
+    proc fakeInput(): string =
+      if msgIdx >= 1:
+        raise newException(EOFError, "done")
+      inc msgIdx
+      result = "tell me about the project"
+
+    let before = planCommitCount(tmp)
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+    let after = planCommitCount(tmp)
+
+    check after == before
+
+  test "ask session rejects writes":
+    let tmp = getTempDir() / "scriptorium_test_ask_rejects_writes"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Attempt to write a file, which should be rejected.
+      writeFile(req.workingDir / "spec.md", "# Modified Spec\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "I edited the spec.",
+        timeoutKind: "none",
+      )
+
+    var msgIdx = 0
+    proc fakeInput(): string =
+      if msgIdx >= 1:
+        raise newException(EOFError, "done")
+      inc msgIdx
+      result = "tell me something"
+
+    let before = planCommitCount(tmp)
+    expect ValueError:
+      runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+    let after = planCommitCount(tmp)
+    check after == before
+
+  test "/show, /help, /quit do not invoke runner in ask mode":
+    let tmp = getTempDir() / "scriptorium_test_ask_commands"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      inc callCount
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    let cmds = @["/show", "/help", "/quit"]
+    var cmdIdx = 0
+    proc fakeInput(): string =
+      if cmdIdx >= cmds.len:
+        raise newException(EOFError, "done")
+      result = cmds[cmdIdx]
+      inc cmdIdx
+
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+
+    check callCount == 0
+
 suite "orchestrator agent enqueue with fakes":
   test "agent run enqueues exactly one merge request with metadata":
     withTempRepo("scriptorium_test_enqueue_metadata_", proc(repoPath: string) =

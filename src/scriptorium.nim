@@ -12,6 +12,7 @@ Usage:
   scriptorium status           Show ticket counts and agent activity
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
+  scriptorium ask              Interactive read-only Q&A session with the Architect
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
   scriptorium --help           Show this help"""
@@ -53,6 +54,10 @@ proc cmdPlan(args: seq[string]) =
     else:
       echo "scriptorium: spec.md unchanged"
 
+proc cmdAsk() =
+  ## Start a read-only Q&A session with the Architect.
+  runInteractiveAskSession(getCurrentDir())
+
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
   let worktrees = listActiveTicketWorktrees(getCurrentDir())
@@ -78,6 +83,8 @@ when isMainModule:
   of "plan":
     let planArgs = if args.len > 1: args[1..^1] else: @[]
     cmdPlan(planArgs)
+  of "ask":
+    cmdAsk()
   of "worktrees":
     cmdWorktrees()
   of "--init":

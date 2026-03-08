@@ -28,6 +28,7 @@ const
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
   PlanSpecTicketId = "plan-spec"
   PlanSessionTicketId = "plan-session"
+  AskSessionTicketId = "ask-session"
   ManagedStateRootDirName = "scriptorium"
   ManagedWorktreeDirName = "worktrees"
   ManagedPlanWorktreeName = "plan"
@@ -39,6 +40,7 @@ const
   LegacyManagedWorktreeRoot = ".scriptorium/worktrees"
   PlanLogRoot = "scriptorium-plan-logs"
   PlanWriteScopeName = "scriptorium plan"
+  AskWriteScopeName = "scriptorium ask"
   ManagerWriteScopeName = "scriptorium manager"
   ArchitectAreasLogDirName = "architect-areas"
   ManagerLogDirName = "manager"
@@ -728,6 +730,16 @@ proc enforceWriteAllowlist(planPath: string, allowedPaths: openArray[string], sc
     raise newException(
       ValueError,
       fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed files: {allowedText}.",
+    )
+
+proc enforceNoWrites(planPath: string, scopeName: string) =
+  ## Fail when any files were modified in the plan worktree.
+  let modified = listModifiedPathsInPlanPath(planPath)
+  if modified.len > 0:
+    let modifiedText = modified.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified files in read-only mode: {modifiedText}.",
     )
 
 proc isPathInAllowedPrefix(path: string, prefix: string): bool =
@@ -2185,6 +2197,134 @@ proc runInteractivePlanSession*(
         gitRun(planPath, "commit", "-m", fmt"scriptorium: plan session turn {turnNum}")
         if not quiet:
           echo fmt"[spec.md updated — turn {turnNum}]"
+    0
+  )
+
+proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
+  ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
+  var conversationHistory = ""
+  if history.len > 0:
+    conversationHistory = "\nConversation history:\n"
+    for turn in history:
+      conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
+
+  result = renderPromptTemplate(
+    ArchitectAskInteractiveTemplate,
+    [
+      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
+      (name: "CURRENT_SPEC", value: spec.strip()),
+      (name: "CONVERSATION_HISTORY", value: conversationHistory),
+      (name: "USER_MESSAGE", value: userMsg.strip()),
+    ],
+  )
+
+proc runInteractiveAskSession*(
+  repoPath: string,
+  runner: AgentRunner = runAgent,
+  input: PlanSessionInput = nil,
+  quiet: bool = false,
+) =
+  ## Run a multi-turn read-only Q&A session with the Architect.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+
+  interactivePlanInterrupted = false
+  setControlCHook(handleInteractivePlanCtrlC)
+  defer:
+    when declared(unsetControlCHook):
+      unsetControlCHook()
+    interactivePlanInterrupted = false
+
+  let cfg = loadConfig(repoPath)
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    if not quiet:
+      echo "scriptorium: ask session (read-only, type /help for commands, /quit to exit)"
+    var history: seq[PlanTurn] = @[]
+
+    while true:
+      if interactivePlanInterrupted:
+        if not quiet:
+          echo ""
+        break
+
+      if not quiet:
+        stdout.write("> ")
+        flushFile(stdout)
+      var line: string
+      try:
+        if input.isNil:
+          line = readLine(stdin)
+        else:
+          line = input()
+      except EOFError:
+        break
+      except CatchableError as err:
+        if interactivePlanInterrupted or inputErrorIndicatesInterrupt(err.msg):
+          if not quiet:
+            echo ""
+          break
+        raise err
+
+      line = line.strip()
+      if line.len == 0:
+        continue
+
+      case line
+      of "/quit", "/exit":
+        break
+      of "/show":
+        let specPath = planPath / PlanSpecPath
+        if not quiet:
+          if fileExists(specPath):
+            echo readFile(specPath)
+          else:
+            echo "scriptorium: spec.md not found"
+        continue
+      of "/help":
+        if not quiet:
+          echo "/show  — print current spec.md"
+          echo "/quit  — exit the session"
+          echo "/help  — show this list"
+        continue
+      else:
+        if line.startsWith("/"):
+          if not quiet:
+            echo fmt"scriptorium: unknown command '{line}'"
+          continue
+
+      let spec = readFile(planPath / PlanSpecPath)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, line)
+      var lastStreamLine = "[thinking] working..."
+      if not quiet:
+        echo lastStreamLine
+      let streamEventHandler = proc(event: AgentStreamEvent) =
+        ## Render live architect stream events in concise interactive form.
+        if quiet:
+          return
+        let rendered = formatPlanStreamEvent(event)
+        if rendered.len > 0 and rendered != lastStreamLine:
+          echo rendered
+          lastStreamLine = rendered
+      let agentResult = runPlanArchitectRequest(
+        runner,
+        planPath,
+        cfg.models.architect,
+        cfg.reasoningEffort.architect,
+        prompt,
+        AskSessionTicketId,
+        streamEventHandler,
+        PlanHeartbeatIntervalMs,
+      )
+      enforceNoWrites(planPath, AskWriteScopeName)
+
+      var response = agentResult.lastMessage.strip()
+      if response.len == 0:
+        response = agentResult.stdout.strip()
+      if response.len > 0 and not quiet:
+        echo response
+
+      history.add(PlanTurn(role: "engineer", text: line))
+      history.add(PlanTurn(role: "architect", text: response))
     0
   )
 
