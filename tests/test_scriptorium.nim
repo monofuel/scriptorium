@@ -230,34 +230,37 @@ suite "scriptorium --init":
 suite "config":
   test "defaults to fake unit-test codex model for architect, coding, and manager roles":
     let cfg = defaultConfig()
-    check cfg.models.architect == "codex-fake-unit-test-model"
-    check cfg.models.coding == "codex-fake-unit-test-model"
-    check cfg.models.manager == "codex-fake-unit-test-model"
-    check cfg.reasoningEffort.architect == ""
-    check cfg.reasoningEffort.coding == ""
-    check cfg.reasoningEffort.manager == ""
+    check cfg.agents.architect.model == "codex-fake-unit-test-model"
+    check cfg.agents.coding.model == "codex-fake-unit-test-model"
+    check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.architect.harness == harnessCodex
+    check cfg.agents.coding.harness == harnessCodex
+    check cfg.agents.manager.harness == harnessCodex
+    check cfg.agents.architect.reasoningEffort == ""
+    check cfg.agents.coding.reasoningEffort == ""
+    check cfg.agents.manager.reasoningEffort == ""
 
   test "loads from scriptorium.json":
     let tmp = getTempDir() / "scriptorium_test_config"
     createDir(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.models.architect = "claude-opus-4-6"
-    writtenCfg.models.coding = "grok-code-fast-1"
-    writtenCfg.models.manager = "gpt-5.1-codex-mini"
-    writtenCfg.reasoningEffort.architect = "medium"
-    writtenCfg.reasoningEffort.coding = "high"
-    writtenCfg.reasoningEffort.manager = "low"
+    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6", reasoningEffort: "medium")
+    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
+    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.1-codex-mini", reasoningEffort: "low")
     writtenCfg.endpoints.local = "http://localhost:1234/v1"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
-    check cfg.models.architect == "claude-opus-4-6"
-    check cfg.models.coding == "grok-code-fast-1"
-    check cfg.models.manager == "gpt-5.1-codex-mini"
-    check cfg.reasoningEffort.architect == "medium"
-    check cfg.reasoningEffort.coding == "high"
-    check cfg.reasoningEffort.manager == "low"
+    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.architect.harness == harnessClaudeCode
+    check cfg.agents.coding.model == "grok-code-fast-1"
+    check cfg.agents.coding.harness == harnessTypoi
+    check cfg.agents.manager.model == "gpt-5.1-codex-mini"
+    check cfg.agents.manager.harness == harnessCodex
+    check cfg.agents.architect.reasoningEffort == "medium"
+    check cfg.agents.coding.reasoningEffort == "high"
+    check cfg.agents.manager.reasoningEffort == "low"
     check cfg.endpoints.local == "http://localhost:1234/v1"
 
   test "manager model remains independent when manager is unset":
@@ -265,16 +268,15 @@ suite "config":
     createDir(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.models.coding = "grok-code-fast-1"
-    writtenCfg.models.manager = ""
-    writtenCfg.reasoningEffort.coding = "high"
+    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
+    writtenCfg.agents.manager = AgentConfig()
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
-    check cfg.models.coding == "grok-code-fast-1"
-    check cfg.models.manager == "codex-fake-unit-test-model"
-    check cfg.reasoningEffort.coding == "high"
-    check cfg.reasoningEffort.manager == ""
+    check cfg.agents.coding.model == "grok-code-fast-1"
+    check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.coding.reasoningEffort == "high"
+    check cfg.agents.manager.reasoningEffort == ""
 
   test "missing file returns defaults":
     let tmp = getTempDir() / "scriptorium_test_config_missing"
@@ -282,20 +284,20 @@ suite "config":
     defer: removeDir(tmp)
 
     let cfg = loadConfig(tmp)
-    check cfg.models.architect == "codex-fake-unit-test-model"
-    check cfg.models.coding == "codex-fake-unit-test-model"
-    check cfg.models.manager == "codex-fake-unit-test-model"
-    check cfg.reasoningEffort.architect == ""
-    check cfg.reasoningEffort.coding == ""
-    check cfg.reasoningEffort.manager == ""
+    check cfg.agents.architect.model == "codex-fake-unit-test-model"
+    check cfg.agents.coding.model == "codex-fake-unit-test-model"
+    check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.architect.reasoningEffort == ""
+    check cfg.agents.coding.reasoningEffort == ""
+    check cfg.agents.manager.reasoningEffort == ""
 
-  test "harness routing":
-    check harness("claude-opus-4-6") == harnessClaudeCode
-    check harness("claude-haiku-4-5") == harnessClaudeCode
-    check harness("codex-fake-unit-test-model") == harnessCodex
-    check harness("gpt-4o") == harnessCodex
-    check harness("grok-code-fast-1") == harnessTypoi
-    check harness("local/qwen3.5-35b-a3b") == harnessTypoi
+  test "inferHarness routing":
+    check inferHarness("claude-opus-4-6") == harnessClaudeCode
+    check inferHarness("claude-haiku-4-5") == harnessClaudeCode
+    check inferHarness("codex-fake-unit-test-model") == harnessCodex
+    check inferHarness("gpt-4o") == harnessCodex
+    check inferHarness("grok-code-fast-1") == harnessTypoi
+    check inferHarness("local/qwen3.5-35b-a3b") == harnessTypoi
 
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
@@ -330,7 +332,7 @@ suite "orchestrator plan spec update":
     runCmdOrDie("git -C " & quoteShell(tmp) & " add source-marker.txt")
     runCmdOrDie("git -C " & quoteShell(tmp) & " commit -m test-add-source-marker")
     var writtenCfg = defaultConfig()
-    writtenCfg.reasoningEffort.architect = "high"
+    writtenCfg.agents.architect.reasoningEffort = "high"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -674,7 +676,7 @@ suite "orchestrator planning bootstrap":
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
     var writtenCfg = defaultConfig()
-    writtenCfg.models.architect = "claude-opus-4-6"
+    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6")
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -748,8 +750,8 @@ suite "orchestrator manager ticket bootstrap":
     runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n\n## Scope\n- CLI\n")
     var writtenCfg = defaultConfig()
-    writtenCfg.models.coding = "grok-code-fast-1"
-    writtenCfg.models.manager = "gpt-5.1-codex-mini"
+    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1")
+    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.1-codex-mini")
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -928,7 +930,7 @@ suite "orchestrator coding agent execution":
     runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     var writtenCfg = defaultConfig()
-    writtenCfg.reasoningEffort.coding = "high"
+    writtenCfg.agents.coding.reasoningEffort = "high"
     writtenCfg.endpoints.local = "http://127.0.0.1:19042"
     writeScriptoriumConfig(tmp, writtenCfg)
 
@@ -1202,7 +1204,7 @@ suite "orchestrator final v1 flow":
     runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nBuild area files.\n")
     var writtenCfg = defaultConfig()
-    writtenCfg.reasoningEffort.architect = "high"
+    writtenCfg.agents.architect.reasoningEffort = "high"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -1247,8 +1249,8 @@ suite "orchestrator final v1 flow":
     writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
     addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
     var writtenCfg = defaultConfig()
-    writtenCfg.reasoningEffort.coding = "low"
-    writtenCfg.reasoningEffort.manager = "high"
+    writtenCfg.agents.coding.reasoningEffort = "low"
+    writtenCfg.agents.manager.reasoningEffort = "high"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0

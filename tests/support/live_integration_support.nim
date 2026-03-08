@@ -145,9 +145,12 @@ proc writeScriptoriumConfig*(repoPath: string, cfg: Config) =
 proc writeLiveConfig*(repoPath: string, endpoint: string, codingModel: string = integrationModel()) =
   ## Write a live-test config that points all roles at the supplied endpoint.
   var cfg = defaultConfig()
-  cfg.models.architect = integrationModel()
-  cfg.models.manager = integrationModel()
-  cfg.models.coding = codingModel
+  let model = integrationModel()
+  let defaultHarness = inferHarness(model)
+  let codingHarness = inferHarness(codingModel)
+  cfg.agents.architect = AgentConfig(harness: defaultHarness, model: model)
+  cfg.agents.manager = AgentConfig(harness: defaultHarness, model: model)
+  cfg.agents.coding = AgentConfig(harness: codingHarness, model: codingModel)
   cfg.endpoints.local = endpoint
   writeScriptoriumConfig(repoPath, cfg)
 

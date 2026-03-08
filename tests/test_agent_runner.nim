@@ -1,7 +1,7 @@
 ## Unit tests for the backend-agnostic agent runner interface.
 
 import
-  std/[os, strutils, tempfiles, unittest],
+  std/[os, sequtils, strutils, tempfiles, unittest],
   scriptorium/[agent_runner, config]
 
 proc withTempAgentDir(action: proc(tmpDir: string)) =
@@ -18,7 +18,7 @@ proc writeExecutableScript(path: string, body: string) =
   setFilePermissions(path, {fpUserRead, fpUserWrite, fpUserExec})
 
 suite "agent runner":
-  test "runAgent routes codex models to codex backend":
+  test "runAgent routes codex harness to codex backend":
     withTempAgentDir(proc(tmpDir: string) =
       let codexPath = tmpDir / "fake-codex.sh"
       writeExecutableScript(codexPath, """
@@ -39,11 +39,12 @@ printf 'done\n' > "$last_message"
       let request = AgentRunRequest(
         prompt: "Write code.",
         workingDir: worktreePath,
+        harness: harnessCodex,
         model: "gpt-5.1-codex-mini",
         reasoningEffort: "high",
         mcpEndpoint: "http://127.0.0.1:8097",
         ticketId: "0001",
-        codexBinary: codexPath,
+        binary: codexPath,
         logRoot: tmpDir / "logs",
       )
       var streamedEvents: seq[string] = @[]
@@ -64,12 +65,46 @@ printf 'done\n' > "$last_message"
       check streamedEvents[0].contains("message:ok")
     )
 
-  test "runAgent rejects unsupported backends for now":
+  test "runAgent routes claude-code harness to claude-code backend":
+    withTempAgentDir(proc(tmpDir: string) =
+      let claudePath = tmpDir / "fake-claude.sh"
+      writeExecutableScript(claudePath, """
+cat >/dev/null
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}\n'
+printf '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn"}\n'
+""")
+
+      let worktreePath = tmpDir / "worktree"
+      createDir(worktreePath)
+      var request = AgentRunRequest(
+        prompt: "Write code.",
+        workingDir: worktreePath,
+        harness: harnessClaudeCode,
+        model: "claude-opus-4-6",
+        binary: claudePath,
+        logRoot: tmpDir / "logs",
+      )
+      var streamedEvents: seq[string] = @[]
+      request.onEvent = proc(event: AgentStreamEvent) =
+        ## Capture streamed agent events for callback wiring assertions.
+        streamedEvents.add($event.kind & ":" & event.text)
+      let result = runAgent(request)
+
+      check result.backend == harnessClaudeCode
+      check result.exitCode == 0
+      check result.timeoutKind == "none"
+      check result.lastMessage == "ok"
+      check streamedEvents.len > 0
+      check streamedEvents.anyIt("message" in it and "ok" in it)
+    )
+
+  test "runAgent rejects unimplemented backends":
     withTempAgentDir(proc(tmpDir: string) =
       let request = AgentRunRequest(
         prompt: "Write code.",
         workingDir: tmpDir,
-        model: "claude-opus-4-6",
+        harness: harnessTypoi,
+        model: "grok-code-fast-1",
       )
       expect ValueError:
         discard runAgent(request)

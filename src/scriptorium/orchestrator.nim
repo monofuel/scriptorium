@@ -616,8 +616,7 @@ proc buildArchitectPlanPrompt(repoPath: string, planPath: string, userPrompt: st
 proc runPlanArchitectRequest(
   runner: AgentRunner,
   planPath: string,
-  model: string,
-  reasoningEffort: string,
+  agentCfg: AgentConfig,
   prompt: string,
   ticketId: string,
   onEvent: AgentEventHandler = nil,
@@ -629,8 +628,9 @@ proc runPlanArchitectRequest(
   result = runner(AgentRunRequest(
     prompt: prompt,
     workingDir: planPath,
-    model: model,
-    reasoningEffort: reasoningEffort,
+    harness: agentCfg.harness,
+    model: agentCfg.model,
+    reasoningEffort: agentCfg.reasoningEffort,
     ticketId: ticketId,
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
@@ -1473,7 +1473,7 @@ proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator)
     let missing = areasMissingInPlanPath(planPath)
     if missing:
       let spec = loadSpecFromPlanPath(planPath)
-      let docs = generateAreas(cfg.models.architect, spec)
+      let docs = generateAreas(cfg.agents.architect.model, spec)
       discard writeAreasAndCommit(planPath, docs)
       true
     else:
@@ -1496,8 +1496,9 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
       discard runner(AgentRunRequest(
         prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
         workingDir: planPath,
-        model: cfg.models.architect,
-        reasoningEffort: cfg.reasoningEffort.architect,
+        harness: cfg.agents.architect.harness,
+        model: cfg.agents.architect.model,
+        reasoningEffort: cfg.agents.architect.reasoningEffort,
         ticketId: ArchitectAreasTicketId,
         attempt: DefaultAgentAttempt,
         skipGitRepoCheck: true,
@@ -1530,8 +1531,7 @@ proc updateSpecFromArchitect*(
     discard runPlanArchitectRequest(
       runner,
       planPath,
-      cfg.models.architect,
-      cfg.reasoningEffort.architect,
+      cfg.agents.architect,
       buildArchitectPlanPrompt(repoPath, planPath, prompt, existingSpec),
       PlanSpecTicketId,
     )
@@ -1566,7 +1566,7 @@ proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGener
       var hasChanges = false
       for areaRelPath in areasToProcess:
         let areaContent = readFile(planPath / areaRelPath)
-        let docs = generateTickets(cfg.models.manager, areaRelPath, areaContent)
+        let docs = generateTickets(cfg.agents.manager.model, areaRelPath, areaContent)
         if writeTicketsForArea(planPath, areaRelPath, docs, nextId):
           hasChanges = true
 
@@ -1599,8 +1599,9 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           discard runner(AgentRunRequest(
             prompt: buildManagerTicketsPrompt(repoPath, planPath, areaRelPath, areaContent, nextId),
             workingDir: planPath,
-            model: cfg.models.manager,
-            reasoningEffort: cfg.reasoningEffort.manager,
+            harness: cfg.agents.manager.harness,
+            model: cfg.agents.manager.model,
+            reasoningEffort: cfg.agents.manager.reasoningEffort,
             ticketId: ManagerTicketIdPrefix & areaId,
             attempt: DefaultAgentAttempt,
             skipGitRepoCheck: true,
@@ -1830,8 +1831,9 @@ proc executeAssignedTicket*(
   let request = AgentRunRequest(
     prompt: buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent),
     workingDir: assignment.worktree,
-    model: cfg.models.coding,
-    reasoningEffort: cfg.reasoningEffort.coding,
+    harness: cfg.agents.coding.harness,
+    model: cfg.agents.coding.model,
+    reasoningEffort: cfg.agents.coding.reasoningEffort,
     mcpEndpoint: cfg.endpoints.local,
     ticketId: ticketIdFromTicketPath(ticketRelPath),
     attempt: DefaultAgentAttempt,
@@ -1861,7 +1863,7 @@ proc executeAssignedTicket*(
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
 
     let currentContent = readFile(ticketPath)
-    let updatedContent = appendAgentRunNote(currentContent, cfg.models.coding, agentResult)
+    let updatedContent = appendAgentRunNote(currentContent, cfg.agents.coding.model, agentResult)
     writeFile(ticketPath, updatedContent)
     gitRun(planPath, "add", ticketRelPath)
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
@@ -2173,8 +2175,7 @@ proc runInteractivePlanSession*(
       let agentResult = runPlanArchitectRequest(
         runner,
         planPath,
-        cfg.models.architect,
-        cfg.reasoningEffort.architect,
+        cfg.agents.architect,
         prompt,
         PlanSessionTicketId,
         streamEventHandler,
@@ -2308,8 +2309,7 @@ proc runInteractiveAskSession*(
       let agentResult = runPlanArchitectRequest(
         runner,
         planPath,
-        cfg.models.architect,
-        cfg.reasoningEffort.architect,
+        cfg.agents.architect,
         prompt,
         AskSessionTicketId,
         streamEventHandler,

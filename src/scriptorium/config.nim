@@ -2,66 +2,78 @@ import
   std/[os, strutils],
   jsony
 
-const
-  ConfigFile = "scriptorium.json"
-  DefaultArchitectModel = "codex-fake-unit-test-model"
-  DefaultCodingModel = "codex-fake-unit-test-model"
-  DefaultManagerModel = "codex-fake-unit-test-model"
-  DefaultArchitectReasoningEffort = ""
-  DefaultCodingReasoningEffort = ""
-  DefaultManagerReasoningEffort = ""
-
 type
   Harness* = enum
     harnessClaudeCode = "claude-code"
     harnessCodex = "codex"
     harnessTypoi = "typoi"
 
-  Models* = object
-    architect*: string
-    coding*: string
-    manager*: string
+const
+  ConfigFile = "scriptorium.json"
+  DefaultModel = "codex-fake-unit-test-model"
+  DefaultHarness = harnessCodex
+  DefaultReasoningEffort = ""
 
-  ReasoningEffort* = object
-    architect*: string
-    coding*: string
-    manager*: string
+type
+  AgentConfig* = object
+    harness*: Harness
+    model*: string
+    reasoningEffort*: string
+
+  AgentConfigs* = object
+    architect*: AgentConfig
+    coding*: AgentConfig
+    manager*: AgentConfig
 
   Endpoints* = object
     local*: string
 
   Config* = object
-    models*: Models
-    reasoningEffort*: ReasoningEffort
+    agents*: AgentConfigs
     endpoints*: Endpoints
     logLevel*: string
+
+proc defaultAgentConfig(): AgentConfig =
+  ## Return an AgentConfig populated with default values.
+  AgentConfig(
+    harness: DefaultHarness,
+    model: DefaultModel,
+    reasoningEffort: DefaultReasoningEffort,
+  )
 
 proc defaultConfig*(): Config =
   ## Return a Config populated with default values.
   Config(
-    models: Models(
-      architect: DefaultArchitectModel,
-      coding: DefaultCodingModel,
-      manager: DefaultManagerModel,
-    ),
-    reasoningEffort: ReasoningEffort(
-      architect: DefaultArchitectReasoningEffort,
-      coding: DefaultCodingReasoningEffort,
-      manager: DefaultManagerReasoningEffort,
+    agents: AgentConfigs(
+      architect: defaultAgentConfig(),
+      coding: defaultAgentConfig(),
+      manager: defaultAgentConfig(),
     ),
     endpoints: Endpoints(
       local: "",
     ),
   )
 
-proc harness*(model: string): Harness =
-  ## Determine which agent harness to use for a given model name.
+proc inferHarness*(model: string): Harness =
+  ## Infer a harness from a model name prefix. Intended for test convenience only.
   if model.startsWith("claude-"):
     harnessClaudeCode
   elif model.startsWith("codex-") or model.startsWith("gpt-"):
     harnessCodex
   else:
     harnessTypoi
+
+proc mergeAgentConfig(base: var AgentConfig, parsed: AgentConfig) =
+  ## Merge non-empty parsed fields into base.
+  if parsed.model.len > 0:
+    base.model = parsed.model
+  if parsed.reasoningEffort.len > 0:
+    base.reasoningEffort = parsed.reasoningEffort
+  let parsedHarnessStr = $parsed.harness
+  if parsedHarnessStr.len > 0 and parsedHarnessStr != $DefaultHarness:
+    base.harness = parsed.harness
+  elif parsed.model.len > 0 and parsedHarnessStr == $DefaultHarness:
+    base.harness = inferHarness(parsed.model)
 
 proc loadConfig*(repoPath: string): Config =
   ## Load scriptorium.json from repoPath, falling back to defaults for missing fields.
@@ -71,18 +83,9 @@ proc loadConfig*(repoPath: string): Config =
   let raw = readFile(path)
   result = defaultConfig()
   let parsed = fromJson(raw, Config)
-  if parsed.models.architect.len > 0:
-    result.models.architect = parsed.models.architect
-  if parsed.models.coding.len > 0:
-    result.models.coding = parsed.models.coding
-  if parsed.models.manager.len > 0:
-    result.models.manager = parsed.models.manager
-  if parsed.reasoningEffort.architect.len > 0:
-    result.reasoningEffort.architect = parsed.reasoningEffort.architect
-  if parsed.reasoningEffort.coding.len > 0:
-    result.reasoningEffort.coding = parsed.reasoningEffort.coding
-  if parsed.reasoningEffort.manager.len > 0:
-    result.reasoningEffort.manager = parsed.reasoningEffort.manager
+  mergeAgentConfig(result.agents.architect, parsed.agents.architect)
+  mergeAgentConfig(result.agents.coding, parsed.agents.coding)
+  mergeAgentConfig(result.agents.manager, parsed.agents.manager)
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
   if parsed.logLevel.len > 0:
