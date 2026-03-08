@@ -64,6 +64,14 @@ proc integrationCodingHarness*(): Harness =
   else:
     result = inferHarness(integrationCodingModel())
 
+proc requiredAgentBinary*(): string =
+  ## Return the binary name needed for the configured test harness.
+  let h = integrationHarness()
+  case h
+  of harnessCodex: result = "codex"
+  of harnessClaudeCode: result = "claude"
+  of harnessTypoi: result = "typoi"
+
 proc codexAuthPath*(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.
   let overridePath = getEnv(CodexAuthPathEnv, "").strip()
@@ -80,7 +88,9 @@ proc hasAgentAuth*(): bool =
     let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
     result = hasApiKey or fileExists(codexAuthPath())
   of harnessClaudeCode:
-    result = getEnv("ANTHROPIC_API_KEY", "").len > 0
+    let hasApiKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
+    let hasOauth = fileExists(expandTilde("~/.claude/.credentials.json"))
+    result = hasApiKey or hasOauth
   of harnessTypoi:
     result = true
 

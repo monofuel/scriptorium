@@ -1,5 +1,5 @@
 import
-  std/[json, monotimes, os, osproc, posix, streams, strformat, strutils, times],
+  std/[envvars, json, monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, times],
   ./prompt_catalog
 
 const
@@ -458,10 +458,18 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
   defer:
     logFile.close()
 
+  # Build a filtered environment that removes CLAUDECODE to avoid nesting
+  # protection when scriptorium itself runs inside a Claude Code session.
+  var env = newStringTable()
+  for key, val in envPairs():
+    if key != "CLAUDECODE":
+      env[key] = val
+
   let process = startProcess(
     claudeBinary,
     workingDir = request.workingDir,
     args = args,
+    env = env,
     options = {poUsePath, poStdErrToStdOut}
   )
   defer:

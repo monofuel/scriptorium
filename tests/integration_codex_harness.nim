@@ -29,38 +29,42 @@ proc hasCodexAuth(): bool =
 
 suite "integration codex harness":
   test "real codex exec one-shot smoke test":
-    let codexPath = findExe("codex")
-    doAssert codexPath.len > 0, "codex binary is required for integration tests"
-    doAssert hasCodexAuth(),
-      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
-      codexAuthPath() & ")"
+    let harnessEnv = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
+    if harnessEnv.len > 0 and harnessEnv != "codex":
+      skip()
+    else:
+      let codexPath = findExe("codex")
+      doAssert codexPath.len > 0, "codex binary is required for integration tests"
+      doAssert hasCodexAuth(),
+        "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
+        codexAuthPath() & ")"
 
-    let tmpDir = createTempDir("scriptorium_integration_codex_", "", getTempDir())
-    defer:
-      removeDir(tmpDir)
+      let tmpDir = createTempDir("scriptorium_integration_codex_", "", getTempDir())
+      defer:
+        removeDir(tmpDir)
 
-    let worktreePath = tmpDir / "worktree"
-    createDir(worktreePath)
-    let request = CodexRunRequest(
-      prompt: "Reply with exactly: ok",
-      workingDir: worktreePath,
-      model: integrationModel(),
-      ticketId: "integration-smoke",
-      skipGitRepoCheck: true,
-      logRoot: tmpDir / "logs",
-      hardTimeoutMs: 45_000,
-      noOutputTimeoutMs: 15_000,
-    )
+      let worktreePath = tmpDir / "worktree"
+      createDir(worktreePath)
+      let request = CodexRunRequest(
+        prompt: "Reply with exactly: ok",
+        workingDir: worktreePath,
+        model: integrationModel(),
+        ticketId: "integration-smoke",
+        skipGitRepoCheck: true,
+        logRoot: tmpDir / "logs",
+        hardTimeoutMs: 45_000,
+        noOutputTimeoutMs: 15_000,
+      )
 
-    let runResult = runCodex(request)
-    doAssert runResult.exitCode == 0,
-      "codex exec failed with non-zero exit code.\n" &
-      "Model: " & integrationModel() & "\n" &
-      "Command: " & runResult.command.join(" ") & "\n" &
-      "Stdout:\n" & runResult.stdout
-    doAssert runResult.lastMessage.strip().len > 0,
-      "codex did not produce a last message.\n" &
-      "Last message file: " & runResult.lastMessageFile & "\n" &
-      "Stdout:\n" & runResult.stdout
-    check fileExists(runResult.logFile)
-    check fileExists(runResult.lastMessageFile)
+      let runResult = runCodex(request)
+      doAssert runResult.exitCode == 0,
+        "codex exec failed with non-zero exit code.\n" &
+        "Model: " & integrationModel() & "\n" &
+        "Command: " & runResult.command.join(" ") & "\n" &
+        "Stdout:\n" & runResult.stdout
+      doAssert runResult.lastMessage.strip().len > 0,
+        "codex did not produce a last message.\n" &
+        "Last message file: " & runResult.lastMessageFile & "\n" &
+        "Stdout:\n" & runResult.stdout
+      check fileExists(runResult.logFile)
+      check fileExists(runResult.lastMessageFile)
