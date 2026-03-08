@@ -27,8 +27,42 @@ var
   cliBinaryPath = ""
 
 proc integrationModel*(): string =
-  ## Return the configured integration model, or the default model.
-  result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
+  ## Return the configured integration model from env, or the default.
+  result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
+  if result.len == 0:
+    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
+
+proc integrationCodingModel*(): string =
+  ## Return the coding-role model override, falling back to integrationModel.
+  result = getEnv("SCRIPTORIUM_TEST_CODING_MODEL", "")
+  if result.len == 0:
+    result = integrationModel()
+
+proc integrationHarness*(): Harness =
+  ## Return the test harness from env, or infer from model.
+  let envVal = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip().toLowerAscii()
+  if envVal.len > 0:
+    case envVal
+    of "codex": result = harnessCodex
+    of "claude-code": result = harnessClaudeCode
+    of "typoi": result = harnessTypoi
+    else:
+      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
+  else:
+    result = inferHarness(integrationModel())
+
+proc integrationCodingHarness*(): Harness =
+  ## Return the coding-role harness override, falling back to integrationHarness.
+  let envVal = getEnv("SCRIPTORIUM_TEST_CODING_HARNESS", "").strip().toLowerAscii()
+  if envVal.len > 0:
+    case envVal
+    of "codex": result = harnessCodex
+    of "claude-code": result = harnessClaudeCode
+    of "typoi": result = harnessTypoi
+    else:
+      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_CODING_HARNESS: " & envVal)
+  else:
+    result = inferHarness(integrationCodingModel())
 
 proc codexAuthPath*(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.
@@ -38,10 +72,17 @@ proc codexAuthPath*(): string =
   else:
     result = expandTilde("~/.codex/auth.json")
 
-proc hasCodexAuth*(): bool =
-  ## Return true when API keys or a Codex OAuth auth file are available.
-  let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
-  result = hasApiKey or fileExists(codexAuthPath())
+proc hasAgentAuth*(): bool =
+  ## Return true when API keys are available for the configured test harness.
+  let h = integrationHarness()
+  case h
+  of harnessCodex:
+    let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
+    result = hasApiKey or fileExists(codexAuthPath())
+  of harnessClaudeCode:
+    result = getEnv("ANTHROPIC_API_KEY", "").len > 0
+  of harnessTypoi:
+    result = true
 
 proc runCmdOrDie*(cmd: string) =
   ## Run one shell command and fail immediately when it exits non-zero.
@@ -142,15 +183,16 @@ proc writeScriptoriumConfig*(repoPath: string, cfg: Config) =
   ## Write one typed scriptorium.json payload for integration configuration.
   writeFile(repoPath / "scriptorium.json", cfg.toJson())
 
-proc writeLiveConfig*(repoPath: string, endpoint: string, codingModel: string = integrationModel()) =
+proc writeLiveConfig*(repoPath: string, endpoint: string, codingModel: string = "") =
   ## Write a live-test config that points all roles at the supplied endpoint.
   var cfg = defaultConfig()
   let model = integrationModel()
-  let defaultHarness = inferHarness(model)
-  let codingHarness = inferHarness(codingModel)
-  cfg.agents.architect = AgentConfig(harness: defaultHarness, model: model)
-  cfg.agents.manager = AgentConfig(harness: defaultHarness, model: model)
-  cfg.agents.coding = AgentConfig(harness: codingHarness, model: codingModel)
+  let h = integrationHarness()
+  let cModel = if codingModel.len > 0: codingModel else: integrationCodingModel()
+  let cHarness = if codingModel.len > 0: inferHarness(codingModel) else: integrationCodingHarness()
+  cfg.agents.architect = AgentConfig(harness: h, model: model)
+  cfg.agents.manager = AgentConfig(harness: h, model: model)
+  cfg.agents.coding = AgentConfig(harness: cHarness, model: cModel)
   cfg.endpoints.local = endpoint
   writeScriptoriumConfig(repoPath, cfg)
 

@@ -31,7 +31,9 @@ proc runHttpServer(args: ServerThreadArgs) {.thread.} =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
+  result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
+  if result.len == 0:
+    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
 
 proc codexAuthPath(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.

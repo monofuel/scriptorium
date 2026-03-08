@@ -7,9 +7,8 @@ import
 suite "integration e2e euler live":
   test "IT-LIVE-E2E-01 spec to done lands multiples.nim on master":
     doAssert findExe("codex").len > 0, "codex binary is required for live orchestrator integration"
-    doAssert hasCodexAuth(),
-      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for live orchestrator integration (" &
-      codexAuthPath() & ")"
+    doAssert hasAgentAuth(),
+      "agent auth is required for live orchestrator integration (set OPENAI_API_KEY, CODEX_API_KEY, or ANTHROPIC_API_KEY)"
 
     withTempLiveRepo("scriptorium_integration_live_euler_", proc(repoPath: string) =
       initLiveRepo(repoPath)

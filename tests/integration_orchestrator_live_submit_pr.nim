@@ -7,9 +7,8 @@ import
 suite "integration orchestrator live submit_pr":
   test "IT-LIVE-03 real daemon path completes ticket via live submit_pr":
     doAssert findExe("codex").len > 0, "codex binary is required for live orchestrator integration"
-    doAssert hasCodexAuth(),
-      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for live orchestrator integration (" &
-      codexAuthPath() & ")"
+    doAssert hasAgentAuth(),
+      "agent auth is required for live orchestrator integration (set OPENAI_API_KEY, CODEX_API_KEY, or ANTHROPIC_API_KEY)"
 
     withTempLiveRepo("scriptorium_integration_live_it03_", proc(repoPath: string) =
       initLiveRepo(repoPath)
@@ -69,9 +68,8 @@ suite "integration orchestrator live submit_pr":
 
   test "IT-LIVE-04 live daemon does not enqueue when submit_pr is missing":
     doAssert findExe("codex").len > 0, "codex binary is required for live orchestrator integration"
-    doAssert hasCodexAuth(),
-      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for live orchestrator integration (" &
-      codexAuthPath() & ")"
+    doAssert hasAgentAuth(),
+      "agent auth is required for live orchestrator integration (set OPENAI_API_KEY, CODEX_API_KEY, or ANTHROPIC_API_KEY)"
 
     withTempLiveRepo("scriptorium_integration_live_it04_", proc(repoPath: string) =
       initLiveRepo(repoPath)

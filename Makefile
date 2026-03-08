@@ -1,4 +1,4 @@
-.PHONY: test integration-test e2e-test build docker-build docker-build-push ci
+.PHONY: test integration-test integration-test-claude e2e-test e2e-test-claude build docker-build docker-build-push ci
 
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
@@ -32,6 +32,11 @@ integration-test:
 		echo "No integration tests found in tests/integration_*.nim"; \
 	fi
 
+integration-test-claude:
+	SCRIPTORIUM_TEST_MODEL=claude-sonnet-4-6 \
+	SCRIPTORIUM_TEST_HARNESS=claude-code \
+	$(MAKE) integration-test
+
 e2e-test:
 	@found=0; \
 	for f in tests/e2e_*.nim; do \
@@ -43,6 +48,11 @@ e2e-test:
 	if [ $$found -eq 0 ]; then \
 		echo "No e2e tests found in tests/e2e_*.nim"; \
 	fi
+
+e2e-test-claude:
+	SCRIPTORIUM_TEST_MODEL=claude-sonnet-4-6 \
+	SCRIPTORIUM_TEST_HARNESS=claude-code \
+	$(MAKE) e2e-test
 
 ci:
 	act -W .github/workflows/build.yml
