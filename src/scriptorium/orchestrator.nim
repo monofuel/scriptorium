@@ -1858,7 +1858,9 @@ proc executeAssignedTicket*(
     maxAttempts: DefaultAgentMaxAttempts,
     onEvent: proc(event: AgentStreamEvent) =
       if event.kind == agentEventTool:
-        logDebug(fmt"coding[{ticketId}]: {event.text}"),
+        logDebug(fmt"coding[{ticketId}]: {event.text}")
+      elif event.kind == agentEventStatus:
+        logDebug(fmt"coding[{ticketId}]: status {event.text}"),
   )
   discard consumeSubmitPrSummary()
 
