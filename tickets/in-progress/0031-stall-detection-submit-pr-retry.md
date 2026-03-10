@@ -26,3 +26,5 @@ The harnesses already support bounded retry and continuation prompts for timeout
 - Each retry is logged with attempt number and ticket ID.
 - The continuation prompt includes the original ticket content.
 - Unit tests in `test_agent_runner.nim` or `test_scriptorium.nim` cover the stall-retry path with a fake/mock runner.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0031-stall-detection-submit-pr-retry
