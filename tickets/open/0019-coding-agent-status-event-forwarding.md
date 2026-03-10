@@ -61,3 +61,22 @@ The `submit_pr` MCP tool returned "Merge request enqueued."
 ```text
 ack to forward `agentEventStatus` events alongside the existing `agentEventTool` forwarding:\n\n```nim\nonEvent: proc(event: AgentStreamEvent) =\n  if event.kind == agentEventTool:\n    logDebug(fmt\"coding[{ticketId}]: {event.text}\")\n  elif event.kind == agentEventStatus:\n    logDebug(fmt\"coding[{ticketId}]: status {event.text}\"),\n```\n\nThe `submit_pr` MCP tool returned \"Merge request enqueued.\"","stop_reason":"end_turn","session_id":"77cb543d-81a7-433a-888b-868d8c03fbea","total_cost_usd":0.6368109999999999,"usage":{"input_tokens":39,"cache_creation_input_tokens":20458,"cache_read_input_tokens":784357,"output_tokens":4663,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":20458,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":39,"outputTokens":4663,"cacheReadInputTokens":784357,"cacheCreationInputTokens":20458,"webSearchRequests":0,"costUSD":0.6368109999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"529cc6ce-916c-4f69-b71a-670d0508fd6a"}
 ```
+
+## Merge Queue Failure
+- Summary: Forward agentEventStatus events from coding agent onEvent callback to orchestrator logs at DEBUG level with ticket ID prefix\n- Failed gate: make test\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+$ make test
+--- tests/test_agent_runner.nim ---
+Hint: used config file '/usr/lib/nim/config/nim.cfg' [Conf]
+Hint: used config file '/usr/lib/nim/config/config.nims' [Conf]
+Hint: used config file '/tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0019-coding-agent-status-event-forwarding/tests/config.nims' [Conf]
+........................................................................................................................................
+/tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0019-coding-agent-status-event-forwarding/src/scriptorium/config.nim(3, 3) Error: cannot open file: jsony
+make: *** [Makefile:12: test] Error 1
+```
