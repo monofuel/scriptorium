@@ -12,6 +12,5 @@ services:
     environment:
       - OPENAI_API_KEY
       - CODEX_API_KEY
-      - ANTHROPIC_API_KEY
     entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]

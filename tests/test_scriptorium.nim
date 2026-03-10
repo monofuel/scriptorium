@@ -1333,15 +1333,15 @@ suite "orchestrator final v1 flow":
 
     check changed
     check callCount == 1
-    check capturedRequest.ticketId == "manager-01-core"
+    check capturedRequest.ticketId == "manager-batch"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "manager" / "01-core"
+    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "manager" / "batch"
     check capturedPromptRepoPath == tmp
     check "AGENTS.md" in capturedRequest.prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
     check "Read `areas/`, `tickets/`, and `spec.md` from this working directory." in capturedRequest.prompt
-    check "Only edit files under tickets/open/ in this working directory." in capturedRequest.prompt
+    check "Only edit files under tickets/open/ and tickets/done/ in this working directory." in capturedRequest.prompt
     check "tickets/open/0001-core-task.md" in files
     check after == before + 1
 
@@ -1413,6 +1413,92 @@ suite "orchestrator final v1 flow":
     check "tickets/open/0001-core-task.md" notin files
     check fileExists(tmp / "manager-out-of-scope.txt")
 
+  test "runManagerTickets batches multiple areas into a single runner call":
+    let tmp = getTempDir() / "scriptorium_test_manager_batch_multi_area"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    writeSpecInPlan(tmp, "# Spec\n\nMulti-area batch test.\n")
+    addAreaToPlan(tmp, "01-alpha.md", "# Area 01\n\n## Scope\n- Alpha\n")
+    addAreaToPlan(tmp, "02-beta.md", "# Area 02\n\n## Scope\n- Beta\n")
+    addAreaToPlan(tmp, "03-gamma.md", "# Area 03\n\n## Scope\n- Gamma\n")
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write ticket files for all three areas in one call.
+      inc callCount
+      writeFile(
+        request.workingDir / "tickets/open/0001-alpha-task.md",
+        "# Ticket 1\n\n**Area:** 01-alpha\n",
+      )
+      writeFile(
+        request.workingDir / "tickets/open/0002-beta-task.md",
+        "# Ticket 2\n\n**Area:** 02-beta\n",
+      )
+      writeFile(
+        request.workingDir / "tickets/open/0003-gamma-task.md",
+        "# Ticket 3\n\n**Area:** 03-gamma\n",
+      )
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "batch tickets written",
+        timeoutKind: "none",
+      )
+
+    let changed = runManagerTickets(tmp, fakeRunner)
+    let files = planTreeFiles(tmp)
+
+    check changed
+    check callCount == 1
+    check "tickets/open/0001-alpha-task.md" in files
+    check "tickets/open/0002-beta-task.md" in files
+    check "tickets/open/0003-gamma-task.md" in files
+
+  test "done tickets suppress areas from areasNeedingTickets":
+    let tmp = getTempDir() / "scriptorium_test_done_ticket_suppression"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
+    addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
+    addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
+
+    let needed = areasNeedingTickets(tmp)
+    check "areas/02-pending-area.md" in needed
+    check "areas/01-done-area.md" notin needed
+
+  test "runManagerTickets write guard accepts tickets/done writes":
+    let tmp = getTempDir() / "scriptorium_test_manager_done_write_guard"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    writeSpecInPlan(tmp, "# Spec\n\nDone write guard test.\n")
+    addAreaToPlan(tmp, "01-impl.md", "# Area 01\n\n## Scope\n- Impl\n")
+
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write a done ticket to verify the write guard accepts tickets/done/.
+      writeFile(
+        request.workingDir / "tickets/done/0001-impl-done.md",
+        "# Done\n\n**Area:** 01-impl\n",
+      )
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done ticket written",
+        timeoutKind: "none",
+      )
+
+    let changed = runManagerTickets(tmp, fakeRunner)
+    let files = planTreeFiles(tmp)
+
+    check changed
+    check "tickets/done/0001-impl-done.md" in files
+
   test "runOrchestratorForTicks drives spec to done in one bounded tick with mocked runners":
     let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"
     makeTestRepo(tmp)
@@ -1440,7 +1526,7 @@ suite "orchestrator final v1 flow":
           lastMessage: "areas done",
           timeoutKind: "none",
         )
-      of "manager-01-full-flow":
+      of "manager-batch":
         writeFile(
           request.workingDir / "tickets/open/0001-full-flow.md",
           "# Ticket 1\n\n**Area:** 01-full-flow\n",
@@ -1472,7 +1558,7 @@ suite "orchestrator final v1 flow":
     runOrchestratorForTicks(tmp, 1, fakeRunner)
 
     let files = planTreeFiles(tmp)
-    check callOrder == @["architect-areas", "manager-01-full-flow", "0001"]
+    check callOrder == @["architect-areas", "manager-batch", "0001"]
     check "areas/01-full-flow.md" in files
     check "tickets/done/0001-full-flow.md" in files
     check "tickets/open/0001-full-flow.md" notin files

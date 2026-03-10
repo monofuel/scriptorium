@@ -543,20 +543,22 @@ proc buildArchitectAreasPrompt(repoPath: string, planPath: string, spec: string)
     ],
   )
 
-proc buildManagerTicketsPrompt(repoPath: string, planPath: string, areaRelPath: string, areaContent: string, nextId: int): string =
-  ## Build the manager prompt that writes ticket files directly into tickets/open/.
-  let areaId = areaIdFromAreaPath(areaRelPath)
-  let nextIdText = &"{nextId:04d}"
+proc buildManagerTicketsBatchPrompt(repoPath: string, planPath: string,
+    areas: seq[tuple[relPath: string, content: string]], nextId: int): string =
+  ## Build a batch manager prompt covering all areas in a single session.
+  var areasBlock = ""
+  for area in areas:
+    let areaId = areaIdFromAreaPath(area.relPath)
+    areasBlock.add(&"### Area: {areaId}\nPath: {area.relPath}\nContent:\n{area.content.strip()}\n\n")
+  let startIdText = &"{nextId:04d}"
   result = renderPromptTemplate(
-    ManagerTicketsTemplate,
+    ManagerTicketsBatchTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "WORKTREE_PATH", value: planPath),
-      (name: "NEXT_ID", value: nextIdText),
+      (name: "START_ID", value: startIdText),
       (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
-      (name: "AREA_ID", value: areaId),
-      (name: "AREA_PATH", value: areaRelPath),
-      (name: "AREA_CONTENT", value: areaContent.strip()),
+      (name: "AREAS_BLOCK", value: areasBlock.strip()),
     ],
   )
 
@@ -1155,9 +1157,9 @@ proc listMarkdownFiles(basePath: string): seq[string] =
     result.sort()
 
 proc collectActiveTicketAreas(planPath: string): HashSet[string] =
-  ## Collect area identifiers that currently have open or in-progress tickets.
+  ## Collect area identifiers that have open, in-progress, or done tickets.
   result = initHashSet[string]()
-  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir]:
     for ticketPath in listMarkdownFiles(planPath / stateDir):
       let areaId = parseAreaFromTicketContent(readFile(ticketPath))
       if areaId.len > 0:
@@ -1586,7 +1588,7 @@ proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGener
   )
 
 proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool =
-  ## Run manager passes that write ticket files directly in tickets/open/.
+  ## Run a single batched manager pass that writes ticket files for all areas.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
 
@@ -1600,30 +1602,30 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
       if areasToProcess.len == 0:
         false
       else:
+        var areas: seq[tuple[relPath: string, content: string]]
         for areaRelPath in areasToProcess:
-          let areaContent = readFile(planPath / areaRelPath)
-          let areaId = areaIdFromAreaPath(areaRelPath)
-          let nextId = nextTicketId(planPath)
-          let capturedAreaId = areaId
-          discard runner(AgentRunRequest(
-            prompt: buildManagerTicketsPrompt(repoPath, planPath, areaRelPath, areaContent, nextId),
-            workingDir: planPath,
-            harness: cfg.agents.manager.harness,
-            model: cfg.agents.manager.model,
-            reasoningEffort: cfg.agents.manager.reasoningEffort,
-            ticketId: ManagerTicketIdPrefix & areaId,
-            attempt: DefaultAgentAttempt,
-            skipGitRepoCheck: true,
-            logRoot: planAgentLogRoot(ManagerLogDirName / areaId),
-            maxAttempts: DefaultAgentMaxAttempts,
-            onEvent: proc(event: AgentStreamEvent) =
-              if event.kind == agentEventTool:
-                logDebug(fmt"manager[{capturedAreaId}]: {event.text}"),
-          ))
-          enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir], ManagerWriteScopeName)
-          enforceGitPathUnchanged(repoPath, repoDirtyStateBefore, ManagerWriteScopeName)
+          areas.add((relPath: areaRelPath, content: readFile(planPath / areaRelPath)))
+        let nextId = nextTicketId(planPath)
+        discard runner(AgentRunRequest(
+          prompt: buildManagerTicketsBatchPrompt(repoPath, planPath, areas, nextId),
+          workingDir: planPath,
+          harness: cfg.agents.manager.harness,
+          model: cfg.agents.manager.model,
+          reasoningEffort: cfg.agents.manager.reasoningEffort,
+          ticketId: ManagerTicketIdPrefix & "batch",
+          attempt: DefaultAgentAttempt,
+          skipGitRepoCheck: true,
+          logRoot: planAgentLogRoot(ManagerLogDirName / "batch"),
+          maxAttempts: DefaultAgentMaxAttempts,
+          onEvent: proc(event: AgentStreamEvent) =
+            if event.kind == agentEventTool:
+              logDebug(fmt"manager[batch]: {event.text}"),
+        ))
+        enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir, PlanTicketsDoneDir], ManagerWriteScopeName)
+        enforceGitPathUnchanged(repoPath, repoDirtyStateBefore, ManagerWriteScopeName)
 
         gitRun(planPath, "add", PlanTicketsOpenDir)
+        gitRun(planPath, "add", PlanTicketsDoneDir)
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
           gitRun(planPath, "commit", "-m", TicketCommitMessage)
           true
