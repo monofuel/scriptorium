@@ -58,3 +58,19 @@ The `submit_pr` MCP tool was called successfully. The work is complete:
 ```text
 ll five `AgentStreamEventKind` values (`agentEventTool`, `agentEventStatus`, `agentEventHeartbeat`, `agentEventReasoning`, `agentEventMessage`) through the callback\n  3. Verifies the callback is non-nil\n  4. Verifies no event kind raises an error\n- `make test` passes with `[OK] executeAssignedTicket wires onEvent callback that accepts all event kinds`\n- The merge request has been enqueued via the `submit_pr` MCP tool","stop_reason":"end_turn","session_id":"5d642727-32b7-40ec-a36c-9b5bd1225e10","total_cost_usd":0.43854425,"usage":{"input_tokens":26,"cache_creation_input_tokens":17453,"cache_read_input_tokens":507616,"output_tokens":3021,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":17453,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":26,"outputTokens":3021,"cacheReadInputTokens":507616,"cacheCreationInputTokens":17453,"webSearchRequests":0,"costUSD":0.43854425,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"24af13dc-1990-41c6-8952-52a43fbc6ea8"}
 ```
+
+## Merge Queue Failure
+- Summary: Add dedicated test verifying onEvent callback wiring in executeAssignedTicket fires all five AgentStreamEventKind values without error\n- Failed gate: git merge --ff-only master\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	tests/test_scriptorium.nim
+Please commit your changes or stash them before you merge.
+Aborting
+Updating 8139084..07be64e
+```
