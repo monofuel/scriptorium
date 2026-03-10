@@ -13,18 +13,24 @@ RUN npm install --global @openai/codex @anthropic-ai/claude-code \
 
 COPY nim.cfg nimby.lock scriptorium.nimble Makefile ./
 COPY src ./src
+COPY scripts ./scripts
 
 
 
 RUN nimby sync -g nimby.lock
 RUN make build
 
-RUN useradd -m -s /bin/bash scriptorium
+RUN useradd -m -s /bin/bash scriptorium && \
+    cp -r /root/.nimble /home/scriptorium/.nimble && \
+    cp -r /root/.nimby /home/scriptorium/.nimby && \
+    chown -R scriptorium:scriptorium /home/scriptorium/.nimble /home/scriptorium/.nimby
+
+ENV PATH="/home/scriptorium/.nimble/bin:${PATH}"
 USER scriptorium
 
 RUN git config --global --add safe.directory /workspace && \
     git config --global user.email "scriptorium@localhost" && \
     git config --global user.name "Scriptorium"
 
-ENTRYPOINT ["/app/scriptorium"]
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["--help"]

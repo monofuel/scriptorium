@@ -16,3 +16,4 @@ nimcache
 !.github
 !.codex
 !.codex/*
+nim.cfg
