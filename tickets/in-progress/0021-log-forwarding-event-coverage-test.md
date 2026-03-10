@@ -74,3 +74,21 @@ Please commit your changes or stash them before you merge.
 Aborting
 Updating 8139084..07be64e
 ```
+
+## Agent Run
+- Model: claude-sonnet-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool returned "Merge request enqueued." successfully.
+
+The work is complete:
+- The test `executeAssignedTicket wires onEvent callback that accepts all event kinds` was already committed in `07be64e` by the previous agent run
+- It fires all five `AgentStreamEventKind` values (`agentEventTool`, `agentEventStatus`, `agentEventHeartbeat`, `agentEventReasoning`, `agentEventMessage`) through the captured callback
+- `make test` passes with `[OK] executeAssignedTicket wires onEvent callback that accepts all event kinds`
+- The merge request has been enqueued via the `submit_pr` MCP tool
+```
+
+### Agent Stdout Tail
+```text
+mitted in `07be64e` by the previous agent run\n- It fires all five `AgentStreamEventKind` values (`agentEventTool`, `agentEventStatus`, `agentEventHeartbeat`, `agentEventReasoning`, `agentEventMessage`) through the captured callback\n- `make test` passes with `[OK] executeAssignedTicket wires onEvent callback that accepts all event kinds`\n- The merge request has been enqueued via the `submit_pr` MCP tool","stop_reason":"end_turn","session_id":"2549ba2f-6467-4d65-a90c-33d6c85da1b4","total_cost_usd":0.7793835000000001,"usage":{"input_tokens":36,"cache_creation_input_tokens":23462,"cache_read_input_tokens":949432,"output_tokens":6314,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":23462,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":36,"outputTokens":6314,"cacheReadInputTokens":949432,"cacheCreationInputTokens":23462,"webSearchRequests":0,"costUSD":0.7793835000000001,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"081a1200-1313-4990-9a1c-c8739725ccf8"}
+```
