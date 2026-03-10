@@ -71,3 +71,39 @@ The work from the previous attempt was already committed (commit `8139084`), whi
 ```text
 w extraction logic.\"**\n\nThe work from the previous attempt was already committed (commit `8139084`), which includes:\n- `src/scriptorium/harness_claude_code.nim` — extracts file path/command from `input` fields in `tool_use` events\n- `src/scriptorium/harness_codex.nim` — same logic for Codex harness\n- `tests/test_harness_claude_code.nim` — new test coverage\n- `tests/test_harness_codex.nim` — new test coverage","stop_reason":"end_turn","session_id":"a9a5ba9b-ff97-4ce2-9277-46645657a420","total_cost_usd":1.007853,"usage":{"input_tokens":61,"cache_creation_input_tokens":23366,"cache_read_input_tokens":1359971,"output_tokens":7261,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":23366,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":61,"outputTokens":7261,"cacheReadInputTokens":1359971,"cacheCreationInputTokens":23366,"webSearchRequests":0,"costUSD":1.007853,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"37bd6ff2-c7ee-44ec-b558-306732261765"}
 ```
+
+## Merge Queue Success
+- Summary: Extract file path and command argument summaries from tool_use input fields and append to tool event text in both Claude Code and Codex harnesses. Adds tests for the new extraction logic.\n
+### Quality Check Output
+```text
+CC: httpclient.nim
+CC: scriptorium/logging.nim
+CC: scriptorium/prompt_catalog.nim
+CC: scriptorium/harness_claude_code.nim
+CC: scriptorium/harness_codex.nim
+CC: scriptorium/agent_runner.nim
+CC: scriptorium/orchestrator.nim
+CC: integration_orchestrator_queue.nim
+Hint:  [Link]
+Hint: mm: orc; threads: on; opt: none (DEBUG BUILD, `-d:release` generates faster code)
+110573 lines; 1.840s; 275.332MiB peakmem; proj: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0020-tool-event-argument-summary/tests/integration_orchestrator_queue.nim; out: /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_4494C977E8331297D38D9186AE390DC666027AB9 [SuccessX]
+Hint: /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_4494C977E8331297D38D9186AE390DC666027AB9 [Exec]
+
+[Suite] integration orchestrator merge queue
+  [OK] IT-02 queue success moves ticket to done and merges ticket commit to master
+  [OK] IT-03 queue failure reopens ticket and appends failure note
+  [OK] IT-03b queue failure when integration-test fails reopens ticket
+  [OK] IT-04 single-flight queue processing keeps second item pending
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-10T23:19:26Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-10T23:19:27Z] [WARN] master is unhealthy — skipping tick
+[2026-03-10T23:19:27Z] [INFO] architect: generating areas from spec
+[2026-03-10T23:19:28Z] [INFO] manager: generating tickets
+[2026-03-10T23:19:28Z] [INFO] merge queue: processing
+[2026-03-10T23:19:28Z] [INFO] merge queue: item processed
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-10T23:19:28Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
