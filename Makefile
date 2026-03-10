@@ -3,12 +3,15 @@
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
 
-build: scriptorium
+nim.cfg: nimby.lock
+	nimby sync -g nimby.lock
+
+build: nim.cfg scriptorium
 
 scriptorium: src/scriptorium.nim
 	nim c -o:scriptorium src/scriptorium.nim
 
-test:
+test: nim.cfg
 	@found=0; \
 	for f in tests/test_*.nim; do \
 		[ -e "$$f" ] || continue; \
@@ -20,7 +23,7 @@ test:
 		echo "No unit tests found in tests/test_*.nim"; \
 	fi
 
-integration-test:
+integration-test: nim.cfg
 	@found=0; \
 	for f in tests/integration_*.nim; do \
 		[ -e "$$f" ] || continue; \
@@ -37,7 +40,7 @@ integration-test-claude:
 	SCRIPTORIUM_TEST_HARNESS=claude-code \
 	$(MAKE) integration-test
 
-e2e-test:
+e2e-test: nim.cfg
 	@found=0; \
 	for f in tests/e2e_*.nim; do \
 		[ -e "$$f" ] || continue; \
