@@ -19,5 +19,7 @@ COPY src ./src
 RUN nimby sync -g nimby.lock
 RUN make build
 
+RUN git config --global --add safe.directory /workspace
+
 ENTRYPOINT ["/app/scriptorium"]
 CMD ["--help"]

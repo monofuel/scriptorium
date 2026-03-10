@@ -5,9 +5,9 @@ services:
       # Mount a target repo for scriptorium to work on
       - ${SCRIPTORIUM_REPO:-./workspace}:/workspace
       # Pass through CLI tool credentials
-      - ~/.codex:/root/.codex:ro
-      - ~/.claude:/root/.claude:ro
-      - ~/.claude.json:/root/.claude.json:ro
+      - ~/.codex:/root/.codex
+      - ~/.claude:/root/.claude
+      - ~/.claude.json:/root/.claude.json
     working_dir: /workspace
     environment:
       - OPENAI_API_KEY
