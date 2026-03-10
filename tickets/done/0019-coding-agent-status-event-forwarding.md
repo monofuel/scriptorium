@@ -102,3 +102,39 @@ The previous agent's orchestrator change (forwarding `agentEventStatus` events) 
 ```text
 ck` to auto-generate the package paths config. Made `test`, `integration-test`, `e2e-test`, and `build` depend on this target.\n\n3. **Verified**: Deleted `nim.cfg` and confirmed `make test` regenerates it automatically and all tests pass.\n\nThe previous agent's orchestrator change (forwarding `agentEventStatus` events) was already correct — it just needed the Makefile fix to pass the quality gate.","stop_reason":"end_turn","session_id":"e8a6b30b-90eb-4d72-915a-d65e35bee5b4","total_cost_usd":1.5214072500000004,"usage":{"input_tokens":54,"cache_creation_input_tokens":44575,"cache_read_input_tokens":1963137,"output_tokens":10439,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":44575,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":54,"outputTokens":10439,"cacheReadInputTokens":1963137,"cacheCreationInputTokens":44575,"webSearchRequests":0,"costUSD":1.5214072500000004,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"8d844c76-b94c-4b31-9b07-4489dab9062f"}
 ```
+
+## Merge Queue Success
+- Summary: fix make test by adding nim.cfg generation to Makefile; forward agentEventStatus events in coding agent onEvent callback\n
+### Quality Check Output
+```text
+lient.nim
+CC: scriptorium/logging.nim
+CC: scriptorium/prompt_catalog.nim
+CC: scriptorium/harness_claude_code.nim
+CC: scriptorium/harness_codex.nim
+CC: scriptorium/agent_runner.nim
+CC: scriptorium/orchestrator.nim
+CC: integration_orchestrator_queue.nim
+Hint:  [Link]
+Hint: mm: orc; threads: on; opt: none (DEBUG BUILD, `-d:release` generates faster code)
+110507 lines; 1.852s; 274.902MiB peakmem; proj: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0019-coding-agent-status-event-forwarding/tests/integration_orchestrator_queue.nim; out: /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_B3DDDA5E24C05D133AE7FBDF85DDA5273393779A [SuccessX]
+Hint: /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_B3DDDA5E24C05D133AE7FBDF85DDA5273393779A [Exec]
+
+[Suite] integration orchestrator merge queue
+  [OK] IT-02 queue success moves ticket to done and merges ticket commit to master
+  [OK] IT-03 queue failure reopens ticket and appends failure note
+  [OK] IT-03b queue failure when integration-test fails reopens ticket
+  [OK] IT-04 single-flight queue processing keeps second item pending
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-10T23:08:52Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-10T23:08:52Z] [WARN] master is unhealthy — skipping tick
+[2026-03-10T23:08:52Z] [INFO] architect: generating areas from spec
+[2026-03-10T23:08:53Z] [INFO] manager: generating tickets
+[2026-03-10T23:08:53Z] [INFO] merge queue: processing
+[2026-03-10T23:08:53Z] [INFO] merge queue: item processed
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-10T23:08:53Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
