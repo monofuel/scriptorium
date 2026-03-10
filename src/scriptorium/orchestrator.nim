@@ -25,6 +25,9 @@ const
   MergeQueueDoneCommitPrefix = "scriptorium: complete ticket"
   MergeQueueReopenCommitPrefix = "scriptorium: reopen ticket"
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
+  MergeQueueStuckCommitPrefix = "scriptorium: park stuck ticket"
+  PlanTicketsStuckDir = "tickets/stuck"
+  MaxMergeFailures = 3
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
   PlanSpecTicketId = "plan-spec"
   PlanSessionTicketId = "plan-session"
@@ -834,7 +837,7 @@ proc enforceGitPathUnchanged(gitPath: string, beforeState: Table[string, string]
 proc ensureUniqueTicketStateInPlanPath(planPath: string) =
   ## Ensure each ticket markdown filename exists in exactly one state directory.
   var seen = initHashSet[string]()
-  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir]:
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
     for ticketPath in listMarkdownFiles(planPath / stateDir):
       let fileName = extractFilename(ticketPath)
       if seen.contains(fileName):
@@ -1159,7 +1162,7 @@ proc listMarkdownFiles(basePath: string): seq[string] =
 proc collectActiveTicketAreas(planPath: string): HashSet[string] =
   ## Collect area identifiers that have open, in-progress, or done tickets.
   result = initHashSet[string]()
-  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir]:
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
     for ticketPath in listMarkdownFiles(planPath / stateDir):
       let areaId = parseAreaFromTicketContent(readFile(ticketPath))
       if areaId.len > 0:
@@ -1190,7 +1193,7 @@ proc areasMissingInPlanPath(planPath: string): bool =
 proc nextTicketId(planPath: string): int =
   ## Compute the next monotonic ticket ID by scanning all ticket states.
   result = 1
-  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir]:
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
     for ticketPath in listMarkdownFiles(planPath / stateDir):
       let ticketName = splitFile(ticketPath).name
       let dashPos = ticketName.find('-')
@@ -1761,6 +1764,12 @@ proc processMergeQueue*(repoPath: string): bool =
         return true
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {item.ticketPath}")
 
+    let dirtyCheck = runCommandCapture(item.worktree, "git", @["status", "--porcelain"])
+    if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
+      logInfo(fmt"processMergeQueue: auto-committing dirty worktree for {item.ticketId}")
+      gitRun(item.worktree, "add", "-A")
+      gitRun(item.worktree, "commit", "-m", "scriptorium: auto-commit before merge")
+
     let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", "master"])
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
@@ -1796,7 +1805,6 @@ proc processMergeQueue*(repoPath: string): bool =
         gitRun(planPath, "commit", "-m", MergeQueueDoneCommitPrefix & " " & item.ticketId)
       true
     else:
-      let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
       let failureNote = formatMergeFailureNote(
         item.summary,
         mergeMasterResult.output,
@@ -1804,15 +1812,29 @@ proc processMergeQueue*(repoPath: string): bool =
         failureStep,
       ).strip()
       let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n"
-      writeFile(ticketPath, updatedContent)
-      moveFile(ticketPath, planPath / openRelPath)
-      if fileExists(queuePath):
-        removeFile(queuePath)
-      writeFile(activePath, "")
-
-      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+      let failureCount = updatedContent.count("## Merge Queue Failure")
+      if failureCount >= MaxMergeFailures:
+        logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
+        let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
+        createDir(planPath / PlanTicketsStuckDir)
+        writeFile(ticketPath, updatedContent)
+        moveFile(ticketPath, planPath / stuckRelPath)
+        if fileExists(queuePath):
+          removeFile(queuePath)
+        writeFile(activePath, "")
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsStuckDir, PlanMergeQueueDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", MergeQueueStuckCommitPrefix & " " & item.ticketId)
+      else:
+        let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
+        writeFile(ticketPath, updatedContent)
+        moveFile(ticketPath, planPath / openRelPath)
+        if fileExists(queuePath):
+          removeFile(queuePath)
+        writeFile(activePath, "")
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
       true
   )
 
@@ -1895,6 +1917,11 @@ proc executeAssignedTicket*(
   let submitSummary = consumeSubmitPrSummary()
   if submitSummary.len > 0:
     logInfo(fmt"coding agent called submit_pr, summary={submitSummary}")
+    let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
+    if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
+      logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
+      gitRun(assignment.worktree, "add", "-A")
+      gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
   else:

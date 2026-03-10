@@ -1073,6 +1073,45 @@ suite "orchestrator coding agent execution":
     check "**Summary:** ship it" in queueEntry
     check "**Branch:** scriptorium/ticket-0001" in queueEntry
 
+  test "executeAssignedTicket wires onEvent callback that accepts all event kinds":
+    let tmp = getTempDir() / "scriptorium_test_execute_on_event"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    var capturedRequest = AgentRunRequest()
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Capture the request to inspect the onEvent callback.
+      capturedRequest = request
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+        lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    check capturedRequest.onEvent != nil
+
+    let allKinds = [
+      agentEventTool,
+      agentEventStatus,
+      agentEventHeartbeat,
+      agentEventReasoning,
+      agentEventMessage,
+    ]
+    for kind in allKinds:
+      capturedRequest.onEvent(AgentStreamEvent(kind: kind, text: "test", rawLine: ""))
+
 suite "orchestrator merge queue":
   test "ensureMergeQueueInitialized is idempotent":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_init"
@@ -1197,6 +1236,107 @@ suite "orchestrator merge queue":
     check "## Merge Queue Failure" in ticketContent
     check "make integration-test" in ticketContent
     check "FAIL integration-test" in ticketContent
+
+  test "executeAssignedTicket auto-commits dirty worktree before enqueue":
+    let tmp = getTempDir() / "scriptorium_test_autocommit_dirty_worktree"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Write a file but do not commit, then signal submit_pr.
+      discard request
+      writeFile(assignment.worktree / "uncommitted.txt", "dirty\n")
+      callSubmitPrTool("auto-commit test")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        logFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.jsonl",
+        lastMessageFile: assignment.worktree / ".scriptorium/logs/0001/attempt-01.last_message.txt",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    let (statusOutput, statusRc) = execCmdEx("git -C " & quoteShell(assignment.worktree) & " status --porcelain")
+    check statusRc == 0
+    check statusOutput.strip().len == 0
+
+    let queueFiles = pendingQueueFiles(tmp)
+    check queueFiles.len == 1
+
+  test "processMergeQueue auto-commits dirty worktree before merge":
+    let tmp = getTempDir() / "scriptorium_test_merge_queue_autocommit"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "uncommitted.txt", "dirty\n")
+    discard enqueueMergeRequest(tmp, assignment, "dirty merge")
+
+    let processed = processMergeQueue(tmp)
+    let files = planTreeFiles(tmp)
+    check processed
+    check "tickets/done/0001-first.md" in files
+
+    let (masterFile, masterRc) = execCmdEx("git -C " & quoteShell(tmp) & " show master:uncommitted.txt")
+    check masterRc == 0
+    check masterFile.strip() == "dirty"
+
+  test "processMergeQueue parks ticket after MaxMergeFailures":
+    let tmp = getTempDir() / "scriptorium_test_merge_queue_stuck"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addFailingMakefile(tmp)
+
+    let priorFailures = "## Merge Queue Failure\n\nfail 1\n\n## Merge Queue Failure\n\nfail 2\n"
+    let ticketContent = "# Ticket 1\n\n**Area:** a\n\n" & priorFailures
+    addTicketToPlan(tmp, "open", "0001-first.md", ticketContent)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "expected stuck")
+    let processed = processMergeQueue(tmp)
+    let files = planTreeFiles(tmp)
+
+    check processed
+    check "tickets/stuck/0001-first.md" in files
+    check "tickets/open/0001-first.md" notin files
+    check "tickets/in-progress/0001-first.md" notin files
+
+    let (ticketOut, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/stuck/0001-first.md"
+    )
+    check ticketRc == 0
+    check ticketOut.count("## Merge Queue Failure") == 3
+
+    let commits = latestPlanCommits(tmp, 1)
+    check commits.len > 0
+    check "scriptorium: park stuck ticket 0001" in commits[0]
+
+  test "stuck tickets excluded from areasNeedingTickets":
+    let tmp = getTempDir() / "scriptorium_test_stuck_areas_excluded"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
+    addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
+    addTicketToPlan(tmp, "stuck", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+
+    let needed = areasNeedingTickets(tmp)
+    check "areas/02-core.md" in needed
+    check "areas/01-cli.md" notin needed
 
 suite "orchestrator final v1 flow":
   test "blank spec tick skips orchestration and does not invoke agents":

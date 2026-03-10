@@ -15,6 +15,9 @@ Ticket path:
 Ticket content:
 {{TICKET_CONTENT}}
 
+IMPORTANT: Before calling submit_pr, you MUST commit all changes:
+  git add -A && git commit -m "your description"
+
 When your work is complete and all changes are committed, call the `submit_pr`
 MCP tool with a short summary of what you did. This signals the orchestrator
 to enqueue your changes for merge. Do not skip this step.

@@ -8,6 +8,7 @@ const
     "tickets/open",
     "tickets/in-progress",
     "tickets/done",
+    "tickets/stuck",
     "decisions",
   ]
 
