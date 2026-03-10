@@ -132,6 +132,7 @@ type
     head*: string
     healthy*: bool
     initialized*: bool
+    lastHealthLogged*: bool
 
 var
   shouldRun {.volatile.} = true
@@ -1508,6 +1509,9 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
         skipGitRepoCheck: true,
         logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
         maxAttempts: DefaultAgentMaxAttempts,
+        onEvent: proc(event: AgentStreamEvent) =
+          if event.kind == agentEventTool:
+            logDebug(fmt"architect: {event.text}"),
       ))
 
       gitRun(planPath, "add", PlanAreasDir)
@@ -1600,6 +1604,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           let areaContent = readFile(planPath / areaRelPath)
           let areaId = areaIdFromAreaPath(areaRelPath)
           let nextId = nextTicketId(planPath)
+          let capturedAreaId = areaId
           discard runner(AgentRunRequest(
             prompt: buildManagerTicketsPrompt(repoPath, planPath, areaRelPath, areaContent, nextId),
             workingDir: planPath,
@@ -1611,6 +1616,9 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
             skipGitRepoCheck: true,
             logRoot: planAgentLogRoot(ManagerLogDirName / areaId),
             maxAttempts: DefaultAgentMaxAttempts,
+            onEvent: proc(event: AgentStreamEvent) =
+              if event.kind == agentEventTool:
+                logDebug(fmt"manager[{capturedAreaId}]: {event.text}"),
           ))
           enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir], ManagerWriteScopeName)
           enforceGitPathUnchanged(repoPath, repoDirtyStateBefore, ManagerWriteScopeName)
@@ -1832,6 +1840,7 @@ proc executeAssignedTicket*(
   )
 
   logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
   let request = AgentRunRequest(
     prompt: buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent),
     workingDir: assignment.worktree,
@@ -1839,12 +1848,15 @@ proc executeAssignedTicket*(
     model: cfg.agents.coding.model,
     reasoningEffort: cfg.agents.coding.reasoningEffort,
     mcpEndpoint: cfg.endpoints.local,
-    ticketId: ticketIdFromTicketPath(ticketRelPath),
+    ticketId: ticketId,
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
     noOutputTimeoutMs: CodingAgentNoOutputTimeoutMs,
     hardTimeoutMs: CodingAgentHardTimeoutMs,
     maxAttempts: DefaultAgentMaxAttempts,
+    onEvent: proc(event: AgentStreamEvent) =
+      if event.kind == agentEventTool:
+        logDebug(fmt"coding[{ticketId}]: {event.text}"),
   )
   discard consumeSubmitPrSummary()
 
@@ -1891,8 +1903,10 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     logDebug("no open tickets to execute")
     result = AgentRunResult()
   else:
-    logDebug(fmt"executing ticket: {assignment.inProgressTicket}")
+    let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+    logInfo(fmt"coding agent: starting ticket {ticketId}")
     result = executeAssignedTicket(repoPath, assignment, runner)
+    logInfo(fmt"coding agent: completed ticket {ticketId} (exit {result.exitCode})")
 
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
@@ -1992,13 +2006,20 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         var t0 = epochTime()
         let healthy = isMasterHealthy(repoPath, masterHealthState)
         logDebug(fmt"tick {ticks}: master health check took {epochTime() - t0:.1f}s, healthy={healthy}")
-        if not healthy:
+        if not healthy and not masterHealthState.lastHealthLogged:
           logWarn("master is unhealthy — skipping tick")
+          masterHealthState.lastHealthLogged = true
+        elif healthy and masterHealthState.lastHealthLogged:
+          logInfo(fmt"master is healthy again (commit {masterHealthState.head})")
+          masterHealthState.lastHealthLogged = false
+
+        if not healthy:
+          discard
         elif not shouldRun:
           discard
         else:
           if hasRunnableSpec(repoPath):
-            logDebug(fmt"tick {ticks}: running architect")
+            logInfo("architect: generating areas from spec")
             t0 = epochTime()
             let architectChanged = runArchitectAreas(repoPath, runner)
             logDebug(fmt"tick {ticks}: architect took {epochTime() - t0:.1f}s, changed={architectChanged}")
@@ -2007,7 +2028,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
 
-            logDebug(fmt"tick {ticks}: running manager")
+            logInfo("manager: generating tickets")
             t0 = epochTime()
             let managerChanged = runManagerTickets(repoPath, runner)
             logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
@@ -2016,25 +2037,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
 
-            logDebug(fmt"tick {ticks}: running coding agent")
             t0 = epochTime()
             let agentResult = executeOldestOpenTicket(repoPath, runner)
             logDebug(fmt"tick {ticks}: coding agent took {epochTime() - t0:.1f}s, exit={agentResult.exitCode}")
-            if agentResult.exitCode != 0:
-              logError(fmt"coding agent exited {agentResult.exitCode}")
-            elif agentResult.command.len > 0:
-              logInfo(fmt"coding agent completed (exit 0)")
 
             if not shouldRun: break
 
-            logDebug(fmt"tick {ticks}: processing merge queue")
+            logInfo("merge queue: processing")
             t0 = epochTime()
             let mergeProcessed = processMergeQueue(repoPath)
             logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
             if mergeProcessed:
               logInfo("merge queue: item processed")
 
-            logDebug(fmt"tick {ticks}: tick complete")
+            if not architectChanged and not managerChanged and agentResult.command.len == 0 and not mergeProcessed:
+              logDebug(fmt"tick {ticks}: idle")
           else:
             logDebug(WaitingNoSpecMessage)
     except CatchableError as e:
@@ -2332,16 +2349,29 @@ proc runInteractiveAskSession*(
     0
   )
 
+proc parseLogLevel(value: string): LogLevel =
+  ## Parse a log level string into a LogLevel enum value.
+  case value.toLowerAscii()
+  of "debug": lvlDebug
+  of "info": lvlInfo
+  of "warn", "warning": lvlWarn
+  of "error": lvlError
+  else:
+    raise newException(ValueError, fmt"unknown log level: {value}")
+
 proc applyLogLevelFromConfig(repoPath: string) =
   ## Apply log level from config or environment variable.
   let cfg = loadConfig(repoPath)
   if cfg.logLevel.len > 0:
-    case cfg.logLevel.toLowerAscii()
-    of "debug": setLogLevel(lvlDebug)
-    of "info": setLogLevel(lvlInfo)
-    of "warn", "warning": setLogLevel(lvlWarn)
-    of "error": setLogLevel(lvlError)
-    else: logWarn(fmt"unknown log level '{cfg.logLevel}', using default")
+    try:
+      setLogLevel(parseLogLevel(cfg.logLevel))
+    except ValueError:
+      logWarn(fmt"unknown log level '{cfg.logLevel}', using default")
+  if cfg.fileLogLevel.len > 0:
+    try:
+      setFileLogLevel(parseLogLevel(cfg.fileLogLevel))
+    except ValueError:
+      logWarn(fmt"unknown file log level '{cfg.fileLogLevel}', using default")
 
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.

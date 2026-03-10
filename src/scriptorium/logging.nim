@@ -16,6 +16,7 @@ var
   logFilePath*: string
   logInitialized: bool
   minLogLevel*: LogLevel = lvlInfo
+  minFileLogLevel*: LogLevel = lvlDebug
 
 proc formatTimestamp(): string =
   ## Return a UTC timestamp suitable for log line prefixes.
@@ -45,12 +46,16 @@ proc setLogLevel*(level: LogLevel) =
   ## Set the minimum log level for stdout output.
   minLogLevel = level
 
+proc setFileLogLevel*(level: LogLevel) =
+  ## Set the minimum log level for log file output.
+  minFileLogLevel = level
+
 proc log*(level: LogLevel, msg: string) =
   ## Write a timestamped log line to stdout (filtered) and the log file (always).
   let line = fmt"[{formatTimestamp()}] [{LogLevelLabels[level]}] {msg}"
   if level >= minLogLevel:
     echo line
-  if logInitialized:
+  if logInitialized and level >= minFileLogLevel:
     writeLine(logFile, line)
     flushFile(logFile)
 

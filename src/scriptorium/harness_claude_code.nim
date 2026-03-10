@@ -1,6 +1,6 @@
 import
   std/[envvars, json, monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, times],
-  ./prompt_catalog
+  ./[logging, prompt_catalog]
 
 const
   DefaultClaudeCodeBinary = "claude"
@@ -452,7 +452,7 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
   result.lastMessage = ""
 
   let fullCmd = result.command.join(" ")
-  echo "DEBUG claude-code command: " & fullCmd
+  logDebug("claude-code command: " & fullCmd)
 
   let logFile = open(logFilePath, fmWrite)
   defer:

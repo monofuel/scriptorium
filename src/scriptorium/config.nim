@@ -32,6 +32,7 @@ type
     agents*: AgentConfigs
     endpoints*: Endpoints
     logLevel*: string
+    fileLogLevel*: string
 
 proc defaultAgentConfig(): AgentConfig =
   ## Return an AgentConfig populated with default values.
@@ -90,6 +91,11 @@ proc loadConfig*(repoPath: string): Config =
     result.endpoints.local = parsed.endpoints.local
   if parsed.logLevel.len > 0:
     result.logLevel = parsed.logLevel
+  if parsed.fileLogLevel.len > 0:
+    result.fileLogLevel = parsed.fileLogLevel
   let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
   if envLogLevel.len > 0:
     result.logLevel = envLogLevel
+  let envFileLogLevel = getEnv("SCRIPTORIUM_FILE_LOG_LEVEL")
+  if envFileLogLevel.len > 0:
+    result.fileLogLevel = envFileLogLevel

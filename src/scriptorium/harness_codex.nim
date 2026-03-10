@@ -1,7 +1,7 @@
 import
   std/[monotimes, os, osproc, posix, streams, strformat, strutils, times],
   jsony,
-  ./prompt_catalog
+  ./[logging, prompt_catalog]
 
 const
   DefaultCodexBinary = "codex"
@@ -547,7 +547,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
   result.lastMessage = ""
 
   let fullCmd = result.command.join(" ")
-  echo "DEBUG codex command: " & fullCmd
+  logDebug("codex command: " & fullCmd)
 
   let logFile = open(logFilePath, fmWrite)
   defer:
