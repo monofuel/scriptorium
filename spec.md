@@ -264,3 +264,58 @@ This spec describes behavior that is present in the code and covered by current 
   - `make test` remains green locally,
   - `make integration-test` remains green in authenticated live-harness environments,
   - existing CLI, orchestrator, harness, and merge-queue tests continue to pass.
+- V2 regression bar: all v1 acceptance criteria remain, plus stall detection and log forwarding tests pass.
+
+## V2 Features
+
+### 10. Coding Agent Log Forwarding
+
+- During coding agent execution, the orchestrator must forward meaningful stream events from the agent harness to orchestrator logs in real time.
+- For both claude-code (stream-json) and codex (--json) harnesses, the following event types must be surfaced:
+  - Tool calls: log the tool name and a summary of arguments (e.g., "agent: tool edit_file src/foo.nim").
+  - File activity: log file reads and writes detected from tool events.
+  - Status changes: log agent status transitions (e.g., "agent: thinking", "agent: executing tool").
+- The orchestrator must use the existing AgentEventHandler callback to receive parsed stream events during agent execution.
+- Log output must be prefixed with the ticket ID for correlation.
+- Acceptance criteria:
+  - When a coding agent runs, the orchestrator logs show tool calls and file activity as they happen.
+  - Log lines include ticket ID prefix.
+  - No new event types need to be invented — use existing heartbeat, reasoning, tool, status, and message event categories.
+
+### 11. Stall Detection And Automatic Continuation
+
+- A "stall" is defined as: a coding agent turn completes (process exits) without having called the submit_pr MCP tool.
+- When a stall is detected, the orchestrator must automatically retry the agent with a continuation prompt that includes:
+  - The full original ticket content.
+  - A reminder to continue working and call submit_pr when done.
+- Stall-driven retries must use the existing bounded retry mechanism (maxAttempts in AgentRunRequest).
+- The continuation prompt must be distinct from the initial prompt — it must indicate this is a retry after a stall.
+- Each stall retry must be logged with the attempt number.
+- Acceptance criteria:
+  - When a coding agent exits without calling submit_pr, the orchestrator retries with the continuation prompt.
+  - Retries stop after maxAttempts is reached.
+  - Each retry is logged with attempt number and ticket ID.
+  - The continuation prompt includes the original ticket content.
+
+### 12. Test-Aware Stall Detection
+
+- When a stall is detected (turn ended, no submit_pr called), before sending the continuation prompt the orchestrator must:
+  - Run make test in the agent's worktree.
+  - Capture the exit code and output.
+- If tests fail, the continuation prompt must include:
+  - The test failure output (truncated to a reasonable limit if very long).
+  - A directive to fix the failing tests before submitting.
+- If tests pass, the continuation prompt must still include:
+  - A note that tests are passing.
+  - A directive to continue working and submit the PR.
+- Acceptance criteria:
+  - On stall, make test runs in the agent worktree before retry.
+  - Test failure output is included in the continuation prompt when tests fail.
+  - Test pass status is included in the continuation prompt when tests pass.
+  - The existing stall detection behavior from section 11 is preserved — test-aware detection augments it, not replaces it.
+
+## V2 Known Limitations
+
+- Stall detection is per-turn only — it does not detect agents that are running but making no progress within a turn.
+- Test-aware stall detection runs make test only, not make integration-test.
+- Coding agent promotions and manager-driven retries are out of scope for v2.
