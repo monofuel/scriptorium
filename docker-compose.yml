@@ -1,0 +1,17 @@
+services:
+  scriptorium:
+    build: .
+    volumes:
+      # Mount a target repo for scriptorium to work on
+      - ${SCRIPTORIUM_REPO:-./workspace}:/workspace
+      # Pass through CLI tool credentials
+      - ~/.codex:/root/.codex:ro
+      - ~/.claude:/root/.claude:ro
+      - ~/.claude.json:/root/.claude.json:ro
+    working_dir: /workspace
+    environment:
+      - OPENAI_API_KEY
+      - CODEX_API_KEY
+      - ANTHROPIC_API_KEY
+    entrypoint: ["/app/scriptorium"]
+    command: ["run"]
