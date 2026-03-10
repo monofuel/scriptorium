@@ -36,3 +36,5 @@ Since `logDebug` writes to stdout/file and is hard to capture in unit tests, the
 - `make test` passes.
 
 **Area:** log-forwarding
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test
