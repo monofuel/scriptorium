@@ -126,11 +126,30 @@ suite "harness claude-code":
     check event.kind == claudeCodeEventReasoning
     check event.text == "planning the work"
 
-  test "buildClaudeCodeStreamEvent parses assistant tool_use":
+  test "buildClaudeCodeStreamEvent parses assistant tool_use with command summary":
     let line = """{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","id":"toolu_123","input":{"command":"ls"}}]}}"""
     let event = buildClaudeCodeStreamEvent(line)
     check event.kind == claudeCodeEventTool
-    check event.text == "Bash"
+    check event.text == "Bash ls"
+
+  test "buildClaudeCodeStreamEvent parses assistant tool_use with file_path summary":
+    let line = """{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","id":"toolu_456","input":{"file_path":"src/foo.nim","old_string":"x","new_string":"y"}}]}}"""
+    let event = buildClaudeCodeStreamEvent(line)
+    check event.kind == claudeCodeEventTool
+    check event.text == "Edit src/foo.nim"
+
+  test "buildClaudeCodeStreamEvent parses assistant tool_use without recognized args":
+    let line = """{"type":"assistant","message":{"content":[{"type":"tool_use","name":"SubmitResult","id":"toolu_789","input":{"result":"done"}}]}}"""
+    let event = buildClaudeCodeStreamEvent(line)
+    check event.kind == claudeCodeEventTool
+    check event.text == "SubmitResult"
+
+  test "buildClaudeCodeStreamEvent truncates long command summary":
+    let longCmd = "echo " & "x".repeat(100)
+    let line = """{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","id":"toolu_000","input":{"command":"$1"}}]}}""".replace("$1", longCmd)
+    let event = buildClaudeCodeStreamEvent(line)
+    check event.kind == claudeCodeEventTool
+    check event.text.len <= "Bash ".len + 80
 
   test "buildClaudeCodeStreamEvent parses assistant text":
     let line = """{"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}"""

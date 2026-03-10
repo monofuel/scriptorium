@@ -18,6 +18,7 @@ const
   DefaultHeartbeatIntervalMs = 0
   OutputChunkSize = 4096
   ContinuationTailChars = 1200
+  ToolArgSummaryMaxLen = 80
 
 type
   CodexStreamEventKind* = enum
@@ -79,6 +80,11 @@ type
     content: string
     summary: string
     delta: string
+    filePath: string
+    path: string
+    filename: string
+    file: string
+    command: string
 
   CodexJsonEnvelope = object
     `type`: string
@@ -92,6 +98,11 @@ type
     content: string
     summary: string
     delta: string
+    filePath: string
+    path: string
+    filename: string
+    file: string
+    command: string
     tool: CodexJsonEventFields
     data: CodexJsonEventFields
     event: CodexJsonEventFields
@@ -351,6 +362,42 @@ proc resolveCodexToolState(envelope: CodexJsonEnvelope): string =
     envelope.event.phase,
   )
 
+proc truncateSummary(s: string): string =
+  ## Truncate a summary string to ToolArgSummaryMaxLen characters.
+  s[0 ..< min(s.len, ToolArgSummaryMaxLen)]
+
+proc resolveCodexToolArgSummary(envelope: CodexJsonEnvelope): string =
+  ## Resolve a short argument summary from tool call argument fields in the envelope.
+  let pathArg = firstNonEmpty(
+    envelope.filePath,
+    envelope.path,
+    envelope.filename,
+    envelope.file,
+    envelope.tool.filePath,
+    envelope.tool.path,
+    envelope.tool.filename,
+    envelope.tool.file,
+    envelope.data.filePath,
+    envelope.data.path,
+    envelope.data.filename,
+    envelope.data.file,
+    envelope.event.filePath,
+    envelope.event.path,
+    envelope.event.filename,
+    envelope.event.file,
+  )
+  if pathArg.len > 0:
+    return truncateSummary(pathArg)
+  let cmdArg = firstNonEmpty(
+    envelope.command,
+    envelope.tool.command,
+    envelope.data.command,
+    envelope.event.command,
+  )
+  if cmdArg.len > 0:
+    return truncateSummary(cmdArg)
+  return ""
+
 proc resolveCodexReasoningText(envelope: CodexJsonEnvelope): string =
   ## Resolve the best available reasoning text from one parsed envelope.
   result = firstNonEmpty(
@@ -433,9 +480,11 @@ proc buildCodexStreamEventFromEnvelope(
   if eventType.contains("tool"):
     let toolName = resolveCodexToolName(envelope)
     let toolState = resolveCodexToolState(envelope)
+    let argSummary = resolveCodexToolArgSummary(envelope)
+    let toolNameWithArg = if argSummary.len > 0: toolName & " " & argSummary else: toolName
     result = CodexStreamEvent(
       kind: codexEventTool,
-      text: buildToolEventText(eventType, toolName, toolState),
+      text: buildToolEventText(eventType, toolNameWithArg, toolState),
       rawLine: line,
     )
   elif eventType.contains("reason") or eventType.contains("think") or eventType.contains("analysis"):

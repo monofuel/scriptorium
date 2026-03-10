@@ -14,6 +14,7 @@ const
   DefaultHeartbeatIntervalMs = 0
   OutputChunkSize = 4096
   ContinuationTailChars = 1200
+  ToolArgSummaryMaxLen = 80
 
 type
   ClaudeCodeStreamEventKind* = enum
@@ -211,6 +212,19 @@ proc buildClaudeCodeExecArgs*(request: ClaudeCodeRunRequest): seq[string] =
     result.add("--mcp-config")
     result.add(mcpConfig)
 
+proc extractToolArgSummary(input: JsonNode): string =
+  ## Extract a short argument summary from a tool_use input object.
+  if input.isNil or input.kind != JObject:
+    return ""
+  for key in ["file_path", "path", "filename", "file"]:
+    let val = input.getOrDefault(key).getStr("")
+    if val.len > 0:
+      return val[0 ..< min(val.len, ToolArgSummaryMaxLen)]
+  let cmd = input.getOrDefault("command").getStr("")
+  if cmd.len > 0:
+    return cmd[0 ..< min(cmd.len, ToolArgSummaryMaxLen)]
+  return ""
+
 proc buildClaudeCodeStreamEvent*(line: string): ClaudeCodeStreamEvent =
   ## Parse one Claude Code stream-json line into a normalized stream event.
   result = ClaudeCodeStreamEvent(kind: claudeCodeEventStatus, text: "", rawLine: line)
@@ -259,9 +273,12 @@ proc buildClaudeCodeStreamEvent*(line: string): ClaudeCodeStreamEvent =
 
     of "tool_use":
       let toolName = firstBlock.getOrDefault("name").getStr("")
+      let input = firstBlock.getOrDefault("input")
+      let argSummary = extractToolArgSummary(input)
+      let toolText = if argSummary.len > 0: toolName & " " & argSummary else: toolName
       result = ClaudeCodeStreamEvent(
         kind: claudeCodeEventTool,
-        text: toolName,
+        text: toolText,
         rawLine: line,
       )
 

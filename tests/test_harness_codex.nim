@@ -1,7 +1,7 @@
 ## Unit tests for the codex process harness.
 
 import
-  std/[os, strutils, tempfiles, unittest],
+  std/[os, sequtils, strutils, tempfiles, unittest],
   scriptorium/harness_codex
 
 proc withTempHarnessDir(action: proc(tmpDir: string)) =
@@ -415,4 +415,91 @@ done
       check result.timeoutKind == codexTimeoutHard
       check result.exitCode != 0
       check result.attemptCount == 1
+    )
+
+  test "runCodex includes file_path arg summary in tool events":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-tool-filepath.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"tool_call","name":"edit_file","file_path":"src/foo.nim","status":"started"}\n'
+printf '{"type":"message","text":"done"}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-tool-filepath")
+      var events: seq[string] = @[]
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Collect stream events for arg summary assertions.
+        events.add($event.kind & ":" & event.text)
+
+      let result = runCodex(request)
+
+      check result.exitCode == 0
+      check events.anyIt("tool" in it and "edit_file" in it and "src/foo.nim" in it)
+    )
+
+  test "runCodex includes command arg summary in tool events":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-tool-command.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"tool_call","name":"bash","command":"ls -la","status":"started"}\n'
+printf '{"type":"message","text":"done"}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-tool-command")
+      var events: seq[string] = @[]
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Collect stream events for command arg summary assertions.
+        events.add($event.kind & ":" & event.text)
+
+      let result = runCodex(request)
+
+      check result.exitCode == 0
+      check events.anyIt("tool" in it and "bash" in it and "ls -la" in it)
+    )
+
+  test "runCodex emits just tool name when no recognized arg keys present":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-tool-noargs.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"tool_call","name":"submit_result","status":"started"}\n'
+printf '{"type":"message","text":"done"}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-tool-noargs")
+      var events: seq[string] = @[]
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Collect stream events for no-args tool assertion.
+        events.add($event.kind & ":" & event.text)
+
+      let result = runCodex(request)
+
+      check result.exitCode == 0
+      check events.anyIt("tool" in it and "submit_result" in it)
     )
