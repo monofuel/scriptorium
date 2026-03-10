@@ -19,7 +19,12 @@ COPY src ./src
 RUN nimby sync -g nimby.lock
 RUN make build
 
-RUN git config --global --add safe.directory /workspace
+RUN useradd -m -s /bin/bash scriptorium
+USER scriptorium
+
+RUN git config --global --add safe.directory /workspace && \
+    git config --global user.email "scriptorium@localhost" && \
+    git config --global user.name "Scriptorium"
 
 ENTRYPOINT ["/app/scriptorium"]
 CMD ["--help"]
