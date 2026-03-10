@@ -343,6 +343,9 @@ proc addWorktreeWithRecovery(repoPath: string, worktreePath: string, branch: str
   if dirExists(worktreePath):
     removeDir(worktreePath)
 
+  # Prune stale worktree entries pointing to nonexistent paths.
+  discard gitCheck(repoPath, "worktree", "prune")
+
   var recoveredConflict = false
   while true:
     let addProcess = startProcess(
@@ -376,6 +379,7 @@ proc withPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T)
   addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
   defer:
     discard gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
+    discard gitCheck(repoPath, "worktree", "prune")
 
   result = operation(planWorktree)
 

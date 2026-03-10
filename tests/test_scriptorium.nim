@@ -525,6 +525,52 @@ suite "orchestrator plan spec update":
     check "already used by worktree" in errorMessage
     check manualPath in worktrees
 
+  test "stale worktree metadata is pruned before creating plan worktree":
+    let tmp = getTempDir() / "scriptorium_test_stale_prune"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    # First call captures the managed plan path.
+    var managedPlanPath = ""
+    proc bootstrapRunner(req: AgentRunRequest): AgentRunResult =
+      ## Capture the deterministic managed plan worktree path.
+      managedPlanPath = req.workingDir
+      writeFile(req.workingDir / "spec.md", "# Spec\n\n- bootstrap\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+    discard updateSpecFromArchitect(tmp, "bootstrap", bootstrapRunner)
+    check managedPlanPath.len > 0
+
+    # Simulate Docker scenario: worktree checkout dir is gone but .git/worktrees/plan metadata persists.
+    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree add " & quoteShell(managedPlanPath) & " scriptorium/plan")
+    removeDir(managedPlanPath)
+    # Metadata in .git/worktrees/plan now points to a nonexistent path.
+
+    proc recoveryRunner(req: AgentRunRequest): AgentRunResult =
+      ## Verify the worktree was created successfully after prune.
+      writeFile(req.workingDir / "spec.md", "# Spec\n\n- recovered after prune\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    let changed = updateSpecFromArchitect(tmp, "recover after prune", recoveryRunner)
+    check changed
+    # Worktree should be cleaned up after the operation.
+    let worktrees = gitWorktreePaths(tmp)
+    check managedPlanPath notin worktrees
+
   test "updateSpecFromArchitect fails fast when planner lock is held":
     let tmp = getTempDir() / "scriptorium_test_plan_lock_busy"
     makeTestRepo(tmp)
