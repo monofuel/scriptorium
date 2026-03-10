@@ -33,3 +33,5 @@ Do not forward heartbeat, reasoning, or message events — these are high-volume
 - `make test` passes.
 
 **Area:** log-forwarding
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0019-coding-agent-status-event-forwarding
