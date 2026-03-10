@@ -49,3 +49,5 @@ Apply the same logic in `buildCodexStreamEventFromEnvelope`. The codex envelope 
 - `make test` passes with new assertion coverage.
 
 **Area:** log-forwarding
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0020-tool-event-argument-summary
