@@ -43,3 +43,18 @@ Now pass the builder through in both harness branches in agent_runner.nim:
 ```text
 callback.\n        if not request.onEvent.isNil:\n          request.onEvent(mapClaudeCodeEvent(event))\n    ))\n    result = AgentRunResult(\n      backend: request.harness,\n      command: claudeResult.command,\n      exitCode: claudeResult.exitCode,\n      attempt: claudeResult.attempt,\n      attemptCount: claudeResult.attemptCount,\n      stdout: claudeResult.stdout,\n      logFile: claudeResult.logFile,\n      lastMessageFile: claudeResult.lastMessageFile,\n      lastMessage: claudeResult.lastMessage,\n      timeoutKind: $claudeResult.timeoutKind,\n    )\n  else:\n    raise newException(ValueError, &\"agent backend '{request.harness}' is not implemented\")\n","structuredPatch":[{"oldStart":112,"oldLines":6,"newStart":112,"newLines":7,"lines":["       heartbeatIntervalMs: request.heartbeatIntervalMs,","       maxAttempts: request.maxAttempts,","       continuationPrompt: request.continuationPrompt,","+      continuationPromptBuilder: request.continuationPromptBuilder,","       onEvent: proc(event: CodexStreamEvent) =","         ## Forward codex streaming events to the optional agent callback.","         if not request.onEvent.isNil:"]}],"userModified":false,"replaceAll":false}}
 ```
+
+## Agent Run
+- Model: claude-sonnet-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0032-stall-detection-test-aware-continuation/.scriptorium/logs/0032/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0032-stall-detection-test-aware-continuation/.scriptorium/logs/0032/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+All tests passed, including both new test-aware stall detection tests. The background task confirms:
+- `[OK] executeAssignedTicket includes passing test status in stall continuation prompt`
+- `[OK] executeAssignedTicket includes failing test output in stall continuation prompt`
+```
+
+### Agent Stdout Tail
+```text
+ebdcac"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":13108,"duration_api_ms":398821,"num_turns":2,"result":"All tests passed, including both new test-aware stall detection tests. The background task confirms:\n- `[OK] executeAssignedTicket includes passing test status in stall continuation prompt`\n- `[OK] executeAssignedTicket includes failing test output in stall continuation prompt`","stop_reason":"end_turn","session_id":"81db8cbd-4e7b-456d-adbc-c9301ca6d469","total_cost_usd":2.5553049999999997,"usage":{"input_tokens":4,"cache_creation_input_tokens":878,"cache_read_input_tokens":138635,"output_tokens":176,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":878,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":83,"outputTokens":14578,"cacheReadInputTokens":3619930,"cacheCreationInputTokens":60876,"webSearchRequests":0,"costUSD":2.5553049999999997,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"5e749ef9-e3d1-463b-8da3-71c352ba1b84"}
+```
