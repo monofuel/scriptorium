@@ -29,3 +29,5 @@ Depends on 0031 (basic stall retry) being implemented first.
 - Test pass status is included in the continuation prompt when tests pass.
 - The basic stall detection behavior from 0031 is preserved.
 - Unit tests cover both the test-pass and test-fail branches of the stall continuation.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0032-stall-detection-test-aware-continuation
