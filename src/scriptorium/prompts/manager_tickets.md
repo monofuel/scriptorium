@@ -15,6 +15,10 @@ Start IDs at {{NEXT_ID}} and increase monotonically for additional tickets.
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} {{AREA_ID}}`.
 Do not edit areas/, queue/, or spec.md in this task.
 
+Each ticket should be scoped so a coding agent can complete it in under one hour.
+Prefer smaller, focused tickets over large ones. If a task is too big, split it into
+multiple tickets that can be completed independently.
+
 Area file:
 {{AREA_PATH}}
 

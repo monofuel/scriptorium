@@ -63,8 +63,8 @@ const
   RequiredQualityTargets = ["test", "integration-test"]
   GitCommandTimeoutMs = 60_000
   QualityCheckTimeoutMs = 300_000
-  CodingAgentNoOutputTimeoutMs = 120_000
-  CodingAgentHardTimeoutMs = 300_000
+  CodingAgentNoOutputTimeoutMs = 300_000
+  CodingAgentHardTimeoutMs = 3_600_000
   IdleSleepMs = 200
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
@@ -72,6 +72,7 @@ const
   ManagerTicketIdPrefix = "manager-"
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
+  BuildCommitHash {.strdefine.} = "unknown"
   SubmitPrSummaryMaxBytes = 4096
 
 type
@@ -2433,6 +2434,7 @@ proc runOrchestrator*(repoPath: string) =
   let endpoint = loadOrchestratorEndpoint(repoPath)
   logInfo(fmt"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
   logInfo(fmt"repo: {repoPath}")
+  logInfo(fmt"build: {BuildCommitHash}")
   logInfo(fmt"log file: {logFilePath}")
   let httpServer = createOrchestratorServer()
   defer: closeLog()

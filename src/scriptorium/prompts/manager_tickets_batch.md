@@ -15,6 +15,10 @@ Start IDs at {{START_ID}} and increase monotonically for additional tickets.
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} <area-id>` matching its area.
 Do not edit areas/, queue/, or spec.md in this task.
 
+Each ticket should be scoped so a coding agent can complete it in under one hour.
+Prefer smaller, focused tickets over large ones. If a task is too big, split it into
+multiple tickets that can be completed independently.
+
 Before creating tickets for each area, check the project source at {{PROJECT_REPO_PATH}}
 to determine what is already implemented. Only create tickets for functionality that is
 missing, incomplete, or needs improvement. Use the available tools to read source files,
