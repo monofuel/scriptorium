@@ -74,6 +74,7 @@ const
   OrchestratorServerVersion = "0.1.0"
   BuildCommitHash {.strdefine.} = "unknown"
   SubmitPrSummaryMaxBytes = 4096
+  StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
 
 type
   OrchestratorEndpoint* = object
@@ -537,6 +538,14 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
   )
+
+proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int): string =
+  ## Build a continuation prompt for a coding agent that stalled without calling submit_pr.
+  result = initialPrompt.strip() & "\n\n" &
+    fmt"This is stall retry attempt {attempt} for ticket {ticketId}. " &
+    "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\n\n" &
+    "Ticket content:\n\n" & ticketContent.strip() & "\n\n" &
+    StallContinuationText
 
 proc buildArchitectAreasPrompt(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
@@ -1869,56 +1878,78 @@ proc executeAssignedTicket*(
 
   logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
   let ticketId = ticketIdFromTicketPath(ticketRelPath)
-  let request = AgentRunRequest(
-    prompt: buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent),
-    workingDir: assignment.worktree,
-    harness: cfg.agents.coding.harness,
-    model: cfg.agents.coding.model,
-    reasoningEffort: cfg.agents.coding.reasoningEffort,
-    mcpEndpoint: cfg.endpoints.local,
-    ticketId: ticketId,
-    attempt: DefaultAgentAttempt,
-    skipGitRepoCheck: true,
-    noOutputTimeoutMs: CodingAgentNoOutputTimeoutMs,
-    hardTimeoutMs: CodingAgentHardTimeoutMs,
-    maxAttempts: DefaultAgentMaxAttempts,
-    onEvent: proc(event: AgentStreamEvent) =
-      if event.kind == agentEventTool:
-        logDebug(fmt"coding[{ticketId}]: {event.text}")
-      elif event.kind == agentEventStatus:
-        logDebug(fmt"coding[{ticketId}]: status {event.text}"),
-  )
-  discard consumeSubmitPrSummary()
+  let initialPrompt = buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent)
 
-  logDebug(fmt"executeAssignedTicket: running coding agent")
-  let agentResult = runner(request)
-  result = agentResult
+  var currentPrompt = initialPrompt
+  var currentAttemptBase = DefaultAgentAttempt
+  var totalAttemptsUsed = 0
+  var submitSummary = ""
 
-  let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
-  let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
-  logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
-  if stdoutTail.len > 0:
-    logDebug(fmt"executeAssignedTicket: stdout tail: {stdoutTail}")
-  if messageTail.len > 0:
-    logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
+  while totalAttemptsUsed < DefaultAgentMaxAttempts:
+    let attemptsForThisCall = DefaultAgentMaxAttempts - totalAttemptsUsed
+    let request = AgentRunRequest(
+      prompt: currentPrompt,
+      workingDir: assignment.worktree,
+      harness: cfg.agents.coding.harness,
+      model: cfg.agents.coding.model,
+      reasoningEffort: cfg.agents.coding.reasoningEffort,
+      mcpEndpoint: cfg.endpoints.local,
+      ticketId: ticketId,
+      attempt: currentAttemptBase,
+      skipGitRepoCheck: true,
+      noOutputTimeoutMs: CodingAgentNoOutputTimeoutMs,
+      hardTimeoutMs: CodingAgentHardTimeoutMs,
+      maxAttempts: attemptsForThisCall,
+      onEvent: proc(event: AgentStreamEvent) =
+        if event.kind == agentEventTool:
+          logDebug(fmt"coding[{ticketId}]: {event.text}")
+        elif event.kind == agentEventStatus:
+          logDebug(fmt"coding[{ticketId}]: status {event.text}"),
+    )
+    discard consumeSubmitPrSummary()
 
-  logDebug(fmt"executeAssignedTicket: writing agent run notes to plan worktree")
-  discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
-    let ticketPath = planPath / ticketRelPath
-    if not fileExists(ticketPath):
-      raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+    logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
+    let agentResult = runner(request)
+    result = agentResult
+    totalAttemptsUsed += agentResult.attemptCount
 
-    let currentContent = readFile(ticketPath)
-    let updatedContent = appendAgentRunNote(currentContent, cfg.agents.coding.model, agentResult)
-    writeFile(ticketPath, updatedContent)
-    gitRun(planPath, "add", ticketRelPath)
-    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-      let ticketName = splitFile(ticketRelPath).name
-      gitRun(planPath, "commit", "-m", TicketAgentRunCommitPrefix & " " & ticketName)
-    0
-  )
+    let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
+    let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
+    logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
+    if stdoutTail.len > 0:
+      logDebug(fmt"executeAssignedTicket: stdout tail: {stdoutTail}")
+    if messageTail.len > 0:
+      logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
 
-  let submitSummary = consumeSubmitPrSummary()
+    logDebug(fmt"executeAssignedTicket: writing agent run notes to plan worktree")
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      if not fileExists(ticketPath):
+        raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+
+      let currentContent = readFile(ticketPath)
+      let updatedContent = appendAgentRunNote(currentContent, cfg.agents.coding.model, agentResult)
+      writeFile(ticketPath, updatedContent)
+      gitRun(planPath, "add", ticketRelPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        let ticketName = splitFile(ticketRelPath).name
+        gitRun(planPath, "commit", "-m", TicketAgentRunCommitPrefix & " " & ticketName)
+      0
+    )
+
+    submitSummary = consumeSubmitPrSummary()
+    if submitSummary.len > 0:
+      break
+
+    let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
+    if isStall and totalAttemptsUsed < DefaultAgentMaxAttempts:
+      logInfo(fmt"coding[{ticketId}]: stall detected on attempt {agentResult.attempt}, retrying ({totalAttemptsUsed + 1}/{DefaultAgentMaxAttempts})")
+      currentAttemptBase = agentResult.attempt + agentResult.attemptCount
+      currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase)
+      continue
+
+    break
+
   if submitSummary.len > 0:
     logInfo(fmt"coding agent called submit_pr, summary={submitSummary}")
     let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
@@ -1929,7 +1960,6 @@ proc executeAssignedTicket*(
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
   else:
-    let ticketId = ticketIdFromTicketPath(ticketRelPath)
     logInfo(fmt"reopening failed ticket {ticketId} (no submit_pr)")
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath

@@ -1005,7 +1005,7 @@ suite "orchestrator coding agent execution":
     let runResult = executeAssignedTicket(tmp, assignment, fakeRunner)
     let after = planCommitCount(tmp)
 
-    check callCount == 1
+    check callCount == 2
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
@@ -1017,7 +1017,7 @@ suite "orchestrator coding agent execution":
     check "Active working directory path (this is the ticket worktree and active repository checkout for this task):" in capturedRequest.prompt
     check "Treat this working directory as the repository checkout for code edits, builds, tests, and commits." in capturedRequest.prompt
     check runResult.exitCode == 0
-    check after == before + 2
+    check after == before + 3
 
     let (ticketContent, ticketRc) = execCmdEx(
       "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
@@ -2161,12 +2161,13 @@ suite "orchestrator agent enqueue with fakes":
       check "tickets/open/0002-second.md" in files
       check pendingQueueFiles(repoPath).len == 0
 
-      let commits = latestPlanCommits(repoPath, 4)
-      check commits.len == 4
+      let commits = latestPlanCommits(repoPath, 5)
+      check commits.len == 5
       check commits[0] == "scriptorium: complete ticket 0001"
       check commits[1] == "scriptorium: reopen failed ticket 0002"
       check commits[2] == "scriptorium: record agent run 0002-second"
-      check commits[3] == "scriptorium: assign ticket 0002-second"
+      check commits[3] == "scriptorium: record agent run 0002-second"
+      check commits[4] == "scriptorium: assign ticket 0002-second"
     )
 
   test "end-to-end happy path from spec to done":
@@ -2408,6 +2409,84 @@ suite "logging":
 
     let commits = latestPlanCommits(tmp, 1)
     check commits[0].startsWith("scriptorium: reopen failed ticket")
+
+  test "executeAssignedTicket retries stalled agent with continuation prompt":
+    let tmp = getTempDir() / "scriptorium_test_stall_retry"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0033-stall.md", "# Ticket 33\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 902)
+
+    let assignment = assignOldestOpenTicket(tmp)
+
+    var callCount = 0
+    var capturedRequests: seq[AgentRunRequest]
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Return stall on first call, then call submit_pr on second call.
+      inc callCount
+      capturedRequests.add(request)
+      if callCount == 2:
+        callSubmitPrTool("stall retry done")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    check callCount == 2
+    check capturedRequests.len == 2
+    let firstPrompt = capturedRequests[0].prompt
+    let retryPrompt = capturedRequests[1].prompt
+    check "Ticket 33" in firstPrompt
+    check "stall retry" in retryPrompt.toLower
+    check "Ticket 33" in retryPrompt
+    check "submit_pr" in retryPrompt
+
+  test "executeAssignedTicket stops stall retries after maxAttempts":
+    let tmp = getTempDir() / "scriptorium_test_stall_exhausted"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0034-stall.md", "# Ticket 34\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 903)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    let before = planCommitCount(tmp)
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Always stall: exit cleanly without calling submit_pr.
+      discard request
+      inc callCount
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    let after = planCommitCount(tmp)
+
+    check callCount == 2
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0034-stall.md" in files
+    check "tickets/in-progress/0034-stall.md" notin files
+    let commits = latestPlanCommits(tmp, 1)
+    check commits[0].startsWith("scriptorium: reopen failed ticket")
+    check after == before + 3
 
   test "reassigned ticket gets a fresh worktree branch without stale commits":
     let tmp = getTempDir() / "scriptorium_test_fresh_worktree"
