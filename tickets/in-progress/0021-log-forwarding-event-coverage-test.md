@@ -155,3 +155,17 @@ The test already exists in the codebase. Let me run the tests to confirm they pa
 user","content":[{"tool_use_id":"toolu_01F3Adp2i1AHdFJX7KZH5LLE","type":"tool_result","content":"grep: warning: stray \\ before d","is_error":false}]},"parent_tool_use_id":null,"session_id":"abcef71c-d655-4fd9-a64e-81013b084873","uuid":"3d2daf51-6c7b-47a2-bb3e-3acdec9bd429","tool_use_result":{"stdout":"grep: warning: stray \\ before d","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false}}
 {"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01PZPQWPBNKcZhYBSVzZyyjL","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01EvBFXc8YGTrr8oAcgTJUoP","name":"Bash","input":{"command":"make test 2>&1 | tail -5","description":"Check test output tail","timeout":300000},"caller":{"type":"direct"}}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":131,"cache_read_input_tokens":21072,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":131},"output_tokens":24,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"abcef71c-d655-4fd9-a64e-81013b084873","uuid":"f01a2758-969e-4f18-afce-b17ed4dca98a"}
 ```
+
+## Agent Run
+- Model: claude-sonnet-4-6\n- Backend: claude-code\n- Exit Code: 137\n- Attempt: 2\n- Attempt Count: 2\n- Timeout: hard\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+Tests pass including `[OK] executeAssignedTicket wires onEvent callback that accepts all event kinds`. The test is already in master and the branch is clean. Let me submit.
+```
+
+### Agent Stdout Tail
+```text
+d":"9e13f008-a919-41eb-9a31-3c057626387d"}
+{"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_011mN5eorJ8sP5omYn6mxFZ8","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_0111etpy139tDhg9cpYN2mAZ","name":"ToolSearch","input":{"query":"select:mcp__scriptorium__submit_pr","max_results":3},"caller":{"type":"direct"}}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":230,"cache_read_input_tokens":26726,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":230},"output_tokens":8,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"97444cfd-c024-4c91-9676-77b87b02d8f6","uuid":"6f76e8ec-9a78-4caf-bb15-982a69b74bed"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_0111etpy139tDhg9cpYN2mAZ","content":"No matching deferred tools found"}]},"parent_tool_use_id":null,"session_id":"97444cfd-c024-4c91-9676-77b87b02d8f6","uuid":"b9be7deb-c3a5-4175-a5df-a24d654bb139","tool_use_result":{"matches":[],"query":"select:mcp__scriptorium__submit_pr","total_deferred_tools":13}}
+```
