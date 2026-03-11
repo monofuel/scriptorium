@@ -64,3 +64,10 @@ ignment = assignOldestOpenTicket(tmp)\n\n<system-reminder>\nWhenever you read a 
 ```text
 cutes before merge queue\" test (now expects 5 plan commits)\n   - Added **\"executeAssignedTicket retries stalled agent with continuation prompt\"** — verifies retry happens, continuation prompt includes ticket content and stall indicator, and succeeds on second call\n   - Added **\"executeAssignedTicket stops stall retries after maxAttempts\"** — verifies retries stop at 2 and ticket is reopened","stop_reason":"end_turn","session_id":"9728569c-0433-4fce-b0a3-8b1817edcdf7","total_cost_usd":4.2666552499999995,"usage":{"input_tokens":90,"cache_creation_input_tokens":78559,"cache_read_input_tokens":5702423,"output_tokens":36960,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":78559,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":90,"outputTokens":36960,"cacheReadInputTokens":5702423,"cacheCreationInputTokens":78559,"webSearchRequests":0,"costUSD":4.2666552499999995,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"97a4ff9e-05b7-4690-baf5-7fc6575a314c"}
 ```
+
+## Merge Queue Failure
+- Summary: Add stall detection and retry in executeAssignedTicket: detects clean agent exits without submit_pr, retries with continuation prompt up to maxAttempts, with unit tests\n
+### Merge Output
+```text
+fatal: not a git repository: /workspace/.git/worktrees/0031-stall-detection-submit-pr-retry
+```
