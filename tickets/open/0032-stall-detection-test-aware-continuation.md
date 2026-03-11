@@ -58,3 +58,10 @@ All tests passed, including both new test-aware stall detection tests. The backg
 ebdcac"}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":13108,"duration_api_ms":398821,"num_turns":2,"result":"All tests passed, including both new test-aware stall detection tests. The background task confirms:\n- `[OK] executeAssignedTicket includes passing test status in stall continuation prompt`\n- `[OK] executeAssignedTicket includes failing test output in stall continuation prompt`","stop_reason":"end_turn","session_id":"81db8cbd-4e7b-456d-adbc-c9301ca6d469","total_cost_usd":2.5553049999999997,"usage":{"input_tokens":4,"cache_creation_input_tokens":878,"cache_read_input_tokens":138635,"output_tokens":176,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":878,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":83,"outputTokens":14578,"cacheReadInputTokens":3619930,"cacheCreationInputTokens":60876,"webSearchRequests":0,"costUSD":2.5553049999999997,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"5e749ef9-e3d1-463b-8da3-71c352ba1b84"}
 ```
+
+## Merge Queue Failure
+- Summary: add test-aware stall detection: run make test before retry prompt, include test pass/fail status in continuation message\n
+### Merge Output
+```text
+fatal: not a git repository: /workspace/.git/worktrees/0032-stall-detection-test-aware-continuation
+```
