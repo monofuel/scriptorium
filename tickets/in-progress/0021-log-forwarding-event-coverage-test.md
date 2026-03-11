@@ -184,3 +184,17 @@ The new clean worktree is at `c40834e` with no uncommitted changes. Let me run t
 :{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":142},"output_tokens":8,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"21d1cb5e-e123-4591-8099-6c3e3e99d680","uuid":"160d6e8b-c44d-4a97-a698-e98c43becf55"}
 {"type":"assistant","message":{"model":"claude-sonnet-4-6","id":"msg_01KLPm7etwaKWuPvf8rdWT8T","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01T2ZBrUwH5W6QcnLzySFyVT","name":"Bash","input":{"command":"cd /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test-new && make test 2>&1 | tail -20","description":"Run tests in the new worktree","timeout":300000},"caller":{"type":"direct"}}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":142,"cache_read_input_tokens":33640,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":142},"output_tokens":8,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"21d1cb5e-e123-4591-8099-6c3e3e99d680","uuid":"9947a4dc-1749-4050-bba9-cef2b72723b3"}
 ```
+
+## Agent Run
+- Model: claude-sonnet-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/.scriptorium/logs/0021/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` call succeeded. The merge request has been enqueued.
+
+**Summary:** The test `executeAssignedTicket wires onEvent callback that accepts all event kinds` was already committed and merged into master (at commit `405137d`). The ticket branch is at master's HEAD with a clean worktree. Previous merge queue failures were caused by uncommitted changes in old worktrees. The submit_pr signal has been sent successfully via the orchestrator's MCP HTTP endpoint at port 8097.
+```
+
+### Agent Stdout Tail
+```text
+mmary:** The test `executeAssignedTicket wires onEvent callback that accepts all event kinds` was already committed and merged into master (at commit `405137d`). The ticket branch is at master's HEAD with a clean worktree. Previous merge queue failures were caused by uncommitted changes in old worktrees. The submit_pr signal has been sent successfully via the orchestrator's MCP HTTP endpoint at port 8097.","stop_reason":"end_turn","session_id":"cd4aca9d-589a-4e80-b6b7-a7c75816aa2f","total_cost_usd":0.8010164999999999,"usage":{"input_tokens":35,"cache_creation_input_tokens":30240,"cache_read_input_tokens":934583,"output_tokens":5782,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":30240,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":35,"outputTokens":5782,"cacheReadInputTokens":934583,"cacheCreationInputTokens":30240,"webSearchRequests":0,"costUSD":0.8010164999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"7a97e9ea-0cdd-426d-941f-a16a151e15ca"}
+```
