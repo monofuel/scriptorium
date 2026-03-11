@@ -1017,21 +1017,19 @@ suite "orchestrator coding agent execution":
     check "Active working directory path (this is the ticket worktree and active repository checkout for this task):" in capturedRequest.prompt
     check "Treat this working directory as the repository checkout for code edits, builds, tests, and commits." in capturedRequest.prompt
     check runResult.exitCode == 0
-    check after == before + 1
+    check after == before + 2
 
     let (ticketContent, ticketRc) = execCmdEx(
-      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/in-progress/0001-first.md"
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
     )
     check ticketRc == 0
     check "## Agent Run" in ticketContent
     check "- Model: codex-fake-unit-test-model" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
-    let (commitOutput, commitRc) = execCmdEx(
-      "git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan"
-    )
-    check commitRc == 0
-    check "scriptorium: record agent run 0001-first" in commitOutput
+    let commits = latestPlanCommits(tmp, 2)
+    check commits[0].startsWith("scriptorium: reopen failed ticket")
+    check "scriptorium: record agent run 0001-first" in commits[1]
 
   test "executeAssignedTicket enqueues merge request from submit_pr MCP tool":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_enqueue"
@@ -2160,14 +2158,15 @@ suite "orchestrator agent enqueue with fakes":
 
       let files = planTreeFiles(repoPath)
       check "tickets/done/0001-first.md" in files
-      check "tickets/in-progress/0002-second.md" in files
+      check "tickets/open/0002-second.md" in files
       check pendingQueueFiles(repoPath).len == 0
 
-      let commits = latestPlanCommits(repoPath, 3)
-      check commits.len == 3
+      let commits = latestPlanCommits(repoPath, 4)
+      check commits.len == 4
       check commits[0] == "scriptorium: complete ticket 0001"
-      check commits[1] == "scriptorium: record agent run 0002-second"
-      check commits[2] == "scriptorium: assign ticket 0002-second"
+      check commits[1] == "scriptorium: reopen failed ticket 0002"
+      check commits[2] == "scriptorium: record agent run 0002-second"
+      check commits[3] == "scriptorium: assign ticket 0002-second"
     )
 
   test "end-to-end happy path from spec to done":
@@ -2371,3 +2370,81 @@ suite "logging":
   test "log without initLog does not crash":
     closeLog()
     logInfo("should just echo, not crash")
+
+  test "executeAssignedTicket reopens ticket when agent does not call submit_pr":
+    let tmp = getTempDir() / "scriptorium_test_reopen_failed"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0032-fail.md", "# Ticket 32\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 900)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    let before = planCommitCount(tmp)
+
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## Simulate an agent that exits 137 without calling submit_pr.
+      discard request
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 137,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "",
+        timeoutKind: "hard",
+      )
+
+    let runResult = executeAssignedTicket(tmp, assignment, fakeRunner)
+    check runResult.exitCode == 137
+
+    let after = planCommitCount(tmp)
+    check after == before + 2
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0032-fail.md" in files
+    check "tickets/in-progress/0032-fail.md" notin files
+
+    let commits = latestPlanCommits(tmp, 1)
+    check commits[0].startsWith("scriptorium: reopen failed ticket")
+
+  test "reassigned ticket gets a fresh worktree branch without stale commits":
+    let tmp = getTempDir() / "scriptorium_test_fresh_worktree"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0050-stale.md", "# Ticket 50\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 901)
+
+    let assignment1 = assignOldestOpenTicket(tmp)
+
+    proc fakeRunnerFirst(request: AgentRunRequest): AgentRunResult =
+      ## Write a stale file and commit it, then exit non-zero without submit_pr.
+      writeFile(request.workingDir / "stale.txt", "should not survive")
+      discard execCmdEx("git -C " & quoteShell(request.workingDir) & " add stale.txt")
+      discard execCmdEx("git -C " & quoteShell(request.workingDir) & " commit -m stale-commit")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 1,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment1, fakeRunnerFirst)
+
+    let assignment2 = assignOldestOpenTicket(tmp)
+    check assignment2.inProgressTicket.len > 0
+
+    let (logOutput, logRc) = execCmdEx(
+      "git -C " & quoteShell(assignment2.worktree) & " log --oneline"
+    )
+    check logRc == 0
+    check "stale-commit" notin logOutput
+    check not fileExists(assignment2.worktree / "stale.txt")
+
+    discard execCmdEx("git -C " & quoteShell(tmp) & " worktree remove --force " & quoteShell(assignment2.worktree))

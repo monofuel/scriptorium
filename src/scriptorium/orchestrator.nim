@@ -26,6 +26,7 @@ const
   MergeQueueReopenCommitPrefix = "scriptorium: reopen ticket"
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   MergeQueueStuckCommitPrefix = "scriptorium: park stuck ticket"
+  TicketAgentFailReopenCommitPrefix = "scriptorium: reopen failed ticket"
   PlanTicketsStuckDir = "tickets/stuck"
   MaxMergeFailures = 3
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
@@ -65,6 +66,7 @@ const
   CodingAgentNoOutputTimeoutMs = 120_000
   CodingAgentHardTimeoutMs = 300_000
   IdleSleepMs = 200
+  IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
   ArchitectAreasTicketId = "architect-areas"
   ManagerTicketIdPrefix = "manager-"
@@ -870,7 +872,9 @@ proc isOrchestratorTransitionSubject(subject: string): bool =
   result =
     subject.startsWith(TicketAssignCommitPrefix & " ") or
     subject.startsWith(MergeQueueDoneCommitPrefix & " ") or
-    subject.startsWith(MergeQueueReopenCommitPrefix & " ")
+    subject.startsWith(MergeQueueReopenCommitPrefix & " ") or
+    subject.startsWith(MergeQueueStuckCommitPrefix & " ") or
+    subject.startsWith(TicketAgentFailReopenCommitPrefix & " ")
 
 proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash: string): int =
   ## Count ticket state transitions represented by one commit diff.
@@ -1241,9 +1245,8 @@ proc ensureWorktreeCreated(repoPath: string, ticketRelPath: string): tuple[branc
     removeDir(path)
 
   if gitCheck(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/" & branch) == 0:
-    gitRun(repoPath, "worktree", "add", path, branch)
-  else:
-    gitRun(repoPath, "worktree", "add", "-b", branch, path)
+    gitRun(repoPath, "branch", "-D", branch)
+  gitRun(repoPath, "worktree", "add", "-b", branch, path)
 
   result = (branch: branch, path: path)
 
@@ -1925,7 +1928,18 @@ proc executeAssignedTicket*(
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
   else:
-    logDebug("coding agent did not call submit_pr")
+    let ticketId = ticketIdFromTicketPath(ticketRelPath)
+    logInfo(fmt"reopening failed ticket {ticketId} (no submit_pr)")
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
+      if fileExists(ticketPath):
+        moveFile(ticketPath, planPath / openRelPath)
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", TicketAgentFailReopenCommitPrefix & " " & ticketId)
+      0
+    )
 
 proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
   ## Assign the oldest open ticket and execute it with the coding agent.
@@ -2024,14 +2038,17 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
   var ticks = 0
+  var idle = false
   var masterHealthState = MasterHealthState()
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
     try:
+      idle = false
       logDebug(fmt"tick {ticks}")
       if not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
+        idle = true
       else:
         logDebug(fmt"tick {ticks}: checking master health")
         var t0 = epochTime()
@@ -2045,7 +2062,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           masterHealthState.lastHealthLogged = false
 
         if not healthy:
-          discard
+          idle = true
         elif not shouldRun:
           discard
         else:
@@ -2083,11 +2100,16 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not architectChanged and not managerChanged and agentResult.command.len == 0 and not mergeProcessed:
               logDebug(fmt"tick {ticks}: idle")
+              idle = true
           else:
             logDebug(WaitingNoSpecMessage)
+            idle = true
     except CatchableError as e:
       logError(fmt"tick {ticks} failed: {e.msg}")
-    sleep(IdleSleepMs)
+    if idle:
+      sleep(IdleBackoffSleepMs)
+    else:
+      sleep(IdleSleepMs)
     inc ticks
 
 proc runOrchestratorLoop(
