@@ -2488,6 +2488,83 @@ suite "logging":
     check commits[0].startsWith("scriptorium: reopen failed ticket")
     check after == before + 3
 
+  test "executeAssignedTicket includes passing test status in stall continuation prompt":
+    let tmp = getTempDir() / "scriptorium_test_stall_testpass"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0035-stall.md", "# Ticket 35\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 904)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo PASS\n")
+
+    var callCount = 0
+    var capturedRequests: seq[AgentRunRequest]
+    proc fakeRunnerPass(request: AgentRunRequest): AgentRunResult =
+      ## Stall on first call, then submit_pr on second.
+      inc callCount
+      capturedRequests.add(request)
+      if callCount == 2:
+        callSubmitPrTool("test pass retry done")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunnerPass)
+
+    check callCount == 2
+    check capturedRequests.len == 2
+    let retryPrompt = capturedRequests[1].prompt
+    check "tests are passing" in retryPrompt.toLower
+    check "submit_pr" in retryPrompt
+
+  test "executeAssignedTicket includes failing test output in stall continuation prompt":
+    let tmp = getTempDir() / "scriptorium_test_stall_testfail"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0036-stall.md", "# Ticket 36\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 905)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo FAILURE OUTPUT\n\t@false\n")
+
+    var callCount = 0
+    var capturedRequests: seq[AgentRunRequest]
+    proc fakeRunnerFail(request: AgentRunRequest): AgentRunResult =
+      ## Stall on first call, then submit_pr on second.
+      inc callCount
+      capturedRequests.add(request)
+      if callCount == 2:
+        callSubmitPrTool("test fail retry done")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunnerFail)
+
+    check callCount == 2
+    check capturedRequests.len == 2
+    let retryPrompt = capturedRequests[1].prompt
+    check "tests are failing" in retryPrompt.toLower
+    check "FAILURE OUTPUT" in retryPrompt
+    check "fix the failing tests" in retryPrompt.toLower
+
   test "reassigned ticket gets a fresh worktree branch without stale commits":
     let tmp = getTempDir() / "scriptorium_test_fresh_worktree"
     makeTestRepo(tmp)

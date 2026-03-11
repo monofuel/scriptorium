@@ -75,6 +75,8 @@ const
   BuildCommitHash {.strdefine.} = "unknown"
   SubmitPrSummaryMaxBytes = 4096
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
+  StallTestOutputMaxBytes = 8192
+  MakeTestTimeoutMs = 300_000
 
 type
   OrchestratorEndpoint* = object
@@ -539,13 +541,23 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
     ],
   )
 
-proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int): string =
+proc runWorktreeMakeTest(worktreePath: string): tuple[exitCode: int, output: string]
+
+proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int, testExitCode: int, testOutput: string): string =
   ## Build a continuation prompt for a coding agent that stalled without calling submit_pr.
+  ## Includes test results: pass/fail status and output from `make test`.
+  let testSection =
+    if testExitCode == 0:
+      "## Test Results\n\nTests are passing (`make test` exited 0). Continue working on the ticket and call `submit_pr` when done."
+    else:
+      let truncated = truncateTail(testOutput.strip(), StallTestOutputMaxBytes)
+      "## Test Results\n\nTests are FAILING (`make test` exited " & $testExitCode & "). Fix the failing tests before submitting.\n\n```\n" & truncated & "\n```"
   result = initialPrompt.strip() & "\n\n" &
     fmt"This is stall retry attempt {attempt} for ticket {ticketId}. " &
     "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\n\n" &
     "Ticket content:\n\n" & ticketContent.strip() & "\n\n" &
-    StallContinuationText
+    StallContinuationText & "\n\n" &
+    testSection
 
 proc buildArchitectAreasPrompt(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
@@ -964,6 +976,10 @@ proc runCommandCapture(workingDir: string, command: string, args: seq[string], t
     raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
   process.close()
   result = (exitCode: exitCode, output: output)
+
+proc runWorktreeMakeTest(worktreePath: string): tuple[exitCode: int, output: string] =
+  ## Run `make test` in the agent worktree and return exit code and combined output.
+  result = runCommandCapture(worktreePath, "make", @["test"], MakeTestTimeoutMs)
 
 proc runRequiredQualityChecks(workingDir: string): tuple[exitCode: int, output: string, failedTarget: string] =
   ## Run required make quality targets in order and stop on first failure.
@@ -1944,8 +1960,14 @@ proc executeAssignedTicket*(
     let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
     if isStall and totalAttemptsUsed < DefaultAgentMaxAttempts:
       logInfo(fmt"coding[{ticketId}]: stall detected on attempt {agentResult.attempt}, retrying ({totalAttemptsUsed + 1}/{DefaultAgentMaxAttempts})")
+      logDebug(fmt"coding[{ticketId}]: running make test before continuation prompt")
+      let testResult = runWorktreeMakeTest(assignment.worktree)
+      if testResult.exitCode == 0:
+        logInfo(fmt"coding[{ticketId}]: make test passed before stall retry")
+      else:
+        logInfo(fmt"coding[{ticketId}]: make test failed before stall retry (exit {testResult.exitCode})")
       currentAttemptBase = agentResult.attempt + agentResult.attemptCount
-      currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase)
+      currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase, testResult.exitCode, testResult.output)
       continue
 
     break
