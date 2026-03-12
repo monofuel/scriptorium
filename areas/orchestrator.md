@@ -13,12 +13,16 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
   - Runnable `spec.md` (not blank, not the init placeholder).
 - Non-runnable spec logs: `WAITING: no spec — run 'scriptorium plan'`.
 - Tick order:
-  1. Architect area generation when areas are missing.
-  2. Manager ticket generation for areas without open or in-progress tickets.
+  1. Architect area generation (content-hash driven, see agent-execution area).
+  2. Manager ticket generation for eligible areas (content-hash driven, see agent-execution area).
   3. Assign and execute the oldest open ticket.
   4. Process at most one merge-queue item.
 - `master` health cached by `master` HEAD commit, recomputed only when `master` changes.
+- Tick summary line: at the end of each tick, log a single INFO-level summary capturing full system state (see observability area).
+- Session summary: on shutdown (signal or idle exit), log aggregate session metrics (see observability area).
 
 ## Spec References
 
 - Section 3: Orchestrator Run Loop.
+- Section 13: Tick Summary Line (V3, detail in observability area).
+- Section 16: Session Summary On Shutdown (V3, detail in observability area).

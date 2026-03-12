@@ -13,7 +13,13 @@ Covers `scriptorium status`, `scriptorium worktrees`, and deterministic managed 
 - No in-progress worktrees prints: `scriptorium: no active ticket worktrees`.
 - Managed repository state lives in deterministic per-repo paths under `/tmp/scriptorium/`.
 - Managed state includes worktrees and repository lock state.
+- Status command enhancement (V3):
+  - Elapsed time for the current in-progress ticket (how long it has been running).
+  - Last N completed tickets (default 5) with outcome (`done`, `reopened`, `parked`) and wall time.
+  - Cumulative first-attempt success rate across all done tickets.
+  - Existing status output (ticket counts, active ticket info) preserved.
 
 ## Spec References
 
 - Section 8: Status, Worktree Visibility, And Managed Paths.
+- Section 17: Status Command Enhancement (V3).
