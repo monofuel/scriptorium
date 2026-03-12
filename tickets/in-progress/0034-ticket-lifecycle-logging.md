@@ -58,3 +58,29 @@ All lines must include ticket ID for correlation. Durations must be human-readab
 - Section 14: Ticket Lifecycle Logging (V3).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0034-ticket-lifecycle-logging
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0034-ticket-lifecycle-logging/.scriptorium/logs/0034/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0034-ticket-lifecycle-logging/.scriptorium/logs/0034/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+, worktree=<path>)`
+2. **Coding agent start**: `ticket <id>: coding agent started (model=<model>, attempt <n>/<max>)`
+3. **Coding agent finish**: `ticket <id>: coding agent finished (exit=<code>, wall=<duration>, stall=<bool>)`
+4. **Stall detection**: `ticket <id>: coding agent stalled (attempt <n>/<max>, no submit_pr)` *(updated format)*
+5. **Pre-retry test**: `ticket <id>: make test before retry: <PASS|FAIL> (exit=<code>, wall=<duration>)` *(updated format)*
+6. **Continuation**: `ticket <id>: continuation prompt sent (attempt <n>/<max>, test_status=<passing|failing>)` *(new)*
+7. **PR submission**: `ticket <id>: submit_pr called (summary="<summary>")` *(updated format)*
+8. **Merge queue entry**: `ticket <id>: merge queue entered (position=<n>)`
+9. **Merge start**: `ticket <id>: merge started (make test running)`
+10. **Merge success**: `ticket <id>: merge succeeded (test wall=<duration>)`
+11. **Merge failure**: `ticket <id>: merge failed (reason=<reason>)`
+12. **Completion**: `ticket <id>: in-progress -> done (total wall=<duration>, attempts=<n>)`
+13. **Reopen**: `ticket <id>: in-progress -> open (reopened, reason=<reason>, attempts=<n>, total wall=<duration>)`
+
+All 154 tests pass.
+```
+
+### Agent Stdout Tail
+```text
+ted (make test running)`\n10. **Merge success**: `ticket <id>: merge succeeded (test wall=<duration>)`\n11. **Merge failure**: `ticket <id>: merge failed (reason=<reason>)`\n12. **Completion**: `ticket <id>: in-progress -> done (total wall=<duration>, attempts=<n>)`\n13. **Reopen**: `ticket <id>: in-progress -> open (reopened, reason=<reason>, attempts=<n>, total wall=<duration>)`\n\nAll 154 tests pass.","stop_reason":"end_turn","session_id":"35cc05b3-ee2e-45cb-841f-336fddb3f9f0","total_cost_usd":2.3827562500000004,"usage":{"input_tokens":58,"cache_creation_input_tokens":68899,"cache_read_input_tokens":3094895,"output_tokens":16176,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":68899,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":58,"outputTokens":16176,"cacheReadInputTokens":3094895,"cacheCreationInputTokens":68899,"webSearchRequests":0,"costUSD":2.3827562500000004,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f2c0455e-28ca-4381-a9d9-dea09216656e"}
+```
