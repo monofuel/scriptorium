@@ -242,22 +242,22 @@ This split keeps PR CI safe while still running key-backed integration coverage 
 
 ## Future plans
 
-Near-term:
-- Finish deeper interactive planning integration coverage (multi-turn real codex session assertions).
-- Improve planning session ergonomics (session persistence/resume).
+V3 — Observability:
+- Ticket success tracking: first-attempt success rate, failure categorization (stall, test failure, merge conflict, parked).
+- Metrics collection: ticket duration, token/character usage.
+- Ticket predictions: estimate difficulty and duration before assignment.
+- Post-analysis: summarize what happened after a ticket completes.
 
-V2 direction:
-- Parallel coding agents with robust ticket locking.
-- Better observability: per-ticket timings, model usage, and failure analytics.
-- Cost/performance controls (model policies and budget-aware routing).
+V4 — Code review agent:
+- Review agent runs after `submit_pr`, before merge queue processing.
+- Approves or requests changes; rejected work gets a new coding session with feedback.
+- `submit_pr` gates on passing tests before entering review.
 
-V3 direction:
-- Add a dedicated merger/reviewer agent in the queue before final merge.
-- Enforce spec conformance and code quality checks as a first-class review gate.
-
-Longer horizon:
-- Expand backend support beyond codex-first operation (claude-code and typoi execution paths).
-- Richer interactive architect workflows with stronger MCP tool orchestration.
+V5 — Parallel coding agents:
+- Run multiple coding agents concurrently on independent tickets.
+- Conflict detection to serialize tickets touching overlapping files/areas.
+- Configurable concurrency limit with API rate limit awareness.
+- Depends on v3 observability and v4 review agent being in place first.
 
 ## License
 
