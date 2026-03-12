@@ -108,6 +108,7 @@ This spec describes behavior that is present in the code and covered by current 
 - Ticket state transitions must be represented by single orchestrator transition commits.
 - Ticket IDs in filenames must be monotonic and zero-padded.
 - Merge queue item IDs in filenames must also be monotonic and zero-padded.
+- Areas are persistent ownership zones that evolve with the spec, not one-shot artifacts; the architect updates or creates area files whenever `spec.md` changes, and the manager re-tickets areas whose content has changed.
 - Area IDs are derived from area markdown filenames.
 - Area-to-ticket linkage is carried in ticket markdown via `**Area:** <area-id>`.
 - Ticket assignment must:
