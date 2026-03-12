@@ -127,10 +127,20 @@ This spec describes behavior that is present in the code and covered by current 
 - Area generation and ticket generation are agent-driven:
   - Architect writes area files directly under `areas/`,
   - Manager writes ticket files directly under `tickets/open/`.
-- Architect area generation must only run when:
-  - `spec.md` is runnable,
-  - no area markdown files exist.
-- Manager ticket generation must only run for areas without open or in-progress tickets.
+- Architect area generation is continuous and content-hash driven:
+  - `spec.md` must be runnable,
+  - the orchestrator stores a SHA-1 hash of `spec.md` in `areas/.spec-hash`,
+  - on first run (no `.spec-hash` marker), the architect generates areas and writes the marker,
+  - on subsequent ticks, the architect re-runs only when the current `spec.md` hash differs from the stored hash,
+  - after area generation, the orchestrator updates `areas/.spec-hash` and commits the marker separately,
+  - if areas already exist but no `.spec-hash` marker is present (migration), the orchestrator writes the marker from the current spec without re-running the architect.
+- Manager ticket generation is continuous and content-hash driven:
+  - the orchestrator stores per-area SHA-1 hashes in `tickets/.area-hashes` (tab/colon-separated `area-id:hash`, one per line, sorted),
+  - areas with open or in-progress tickets are always suppressed (blocks concurrent work on the same area),
+  - when `tickets/.area-hashes` exists, areas whose content hash differs from the stored hash are eligible for re-ticketing, even if previous tickets for that area are done,
+  - when `tickets/.area-hashes` does not exist (legacy fallback), areas with any ticket in any state are suppressed,
+  - after ticket generation, the orchestrator computes and writes hashes for all current areas and commits the hash file separately.
+- Manager execution is batched: all eligible areas are included in a single agent prompt and session.
 - Manager writes are constrained by a write-prefix allowlist to `tickets/open/`.
 - Manager execution must preserve the dirty state of the main repository outside the plan worktree.
 - Manager-generated ticket filenames must be assigned by the orchestrator, not by the agent prompt output.
