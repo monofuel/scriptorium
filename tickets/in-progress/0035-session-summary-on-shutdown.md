@@ -42,3 +42,31 @@ The orchestrator logs `shutdown: signal <n> received` on signal but does not tra
 - Section 16: Session Summary On Shutdown (V3).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0035-session-summary-on-shutdown
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0035-session-summary-on-shutdown/.scriptorium/logs/0035/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0035-session-summary-on-shutdown/.scriptorium/logs/0035/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+as implemented:
+
+**Changes in `src/scriptorium/orchestrator.nim`:**
+- Added `SessionStats` object tracking: start time, total ticks, tickets completed/reopened/parked, merge queue processed, first-attempt success count, and per-ticket wall/coding/test time sequences
+- Added `sessionStats`, `ticketCodingWalls`, `ticketTestWalls` global variables
+- Added `resetSessionStats()` proc for test use
+- Added `logSessionSummary()` proc that logs exactly two INFO lines:
+  - Counts: `session summary: uptime=... ticks=... tickets_completed=... tickets_reopened=... tickets_parked=... merge_queue_processed=...`
+  - Averages: `session summary: avg_ticket_wall=... avg_coding_wall=... avg_test_wall=... first_attempt_success=...`
+- Extended `formatDuration` to handle hours (e.g. `1h23m`)
+- Incremented counters at all relevant state transitions (completion, reopen, park, merge)
+- Tracked per-ticket coding wall time accumulation
+- Called `logSessionSummary()` at end of `runOrchestratorMainLoop` (covers both signal and idle exit)
+
+**Changes in `tests/test_scriptorium.nim`:**
+- Updated `formatDuration` tests for hours support
+- Added `session summary` test suite with two tests verifying log output format
+```
+
+### Agent Stdout Tail
+```text
+exit)\n\n**Changes in `tests/test_scriptorium.nim`:**\n- Updated `formatDuration` tests for hours support\n- Added `session summary` test suite with two tests verifying log output format","stop_reason":"end_turn","session_id":"5d80db06-fad1-494e-b43b-cbee56006ad8","total_cost_usd":1.7651569,"usage":{"input_tokens":47,"cache_creation_input_tokens":48747,"cache_read_input_tokens":1970056,"output_tokens":12482,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":48747,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":47,"outputTokens":12482,"cacheReadInputTokens":1970056,"cacheCreationInputTokens":48747,"webSearchRequests":0,"costUSD":1.6019817500000002,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":38,"outputTokens":6192,"cacheReadInputTokens":581984,"cacheCreationInputTokens":59183,"webSearchRequests":0,"costUSD":0.16317515000000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"63bfe1d8-786d-4ebe-a6aa-09d4f43f9a56"}
+```
