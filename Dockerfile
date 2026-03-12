@@ -17,7 +17,8 @@ COPY scripts ./scripts
 
 RUN echo 'path = "src"' > nim.cfg
 RUN nimby sync -g nimby.lock
-RUN make build
+ARG BUILD_COMMIT=unknown
+RUN make build BUILD_COMMIT=${BUILD_COMMIT}
 
 RUN useradd -m -s /bin/bash scriptorium && \
     cp -r /root/.nimble /home/scriptorium/.nimble && \

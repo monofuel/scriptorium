@@ -1,9 +1,12 @@
 services:
   scriptorium:
-    build: .
+    build:
+      context: .
+      args:
+        BUILD_COMMIT: "${BUILD_COMMIT:-unknown}"
     volumes:
       # Mount a target repo for scriptorium to work on
-      - ${SCRIPTORIUM_REPO:-./workspace}:/workspace
+      - .:/workspace
       # Pass through CLI tool credentials
       - ~/.codex:/home/scriptorium/.codex
       - ~/.claude:/home/scriptorium/.claude

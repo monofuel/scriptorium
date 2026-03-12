@@ -1,6 +1,6 @@
 import
   std/strformat,
-  ./[config, harness_claude_code, harness_codex]
+  ./[common, config, harness_claude_code, harness_codex]
 
 type
   AgentStreamEventKind* = enum
@@ -34,6 +34,7 @@ type
     heartbeatIntervalMs*: int
     maxAttempts*: int
     continuationPrompt*: string
+    continuationPromptBuilder*: ContinuationPromptBuilder
     onEvent*: AgentEventHandler
 
   AgentRunResult* = object
@@ -111,6 +112,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       heartbeatIntervalMs: request.heartbeatIntervalMs,
       maxAttempts: request.maxAttempts,
       continuationPrompt: request.continuationPrompt,
+      continuationPromptBuilder: request.continuationPromptBuilder,
       onEvent: proc(event: CodexStreamEvent) =
         ## Forward codex streaming events to the optional agent callback.
         if not request.onEvent.isNil:

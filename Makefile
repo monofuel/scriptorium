@@ -8,20 +8,29 @@ nim.cfg: nimby.lock
 
 build: nim.cfg scriptorium
 
+BUILD_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
 scriptorium: src/scriptorium.nim
-	nim c -o:scriptorium src/scriptorium.nim
+	nim c -d:BuildCommitHash=$(BUILD_COMMIT) -o:scriptorium src/scriptorium.nim
+
+NIM_TEST_FLAGS ?= --hints:off --warnings:off
 
 test: nim.cfg
-	@found=0; \
-	for f in tests/test_*.nim; do \
-		[ -e "$$f" ] || continue; \
-		found=1; \
-		echo "--- $$f ---"; \
-		nim r "$$f" || exit 1; \
-	done; \
-	if [ $$found -eq 0 ]; then \
+	@files=$$(ls tests/test_*.nim 2>/dev/null); \
+	if [ -z "$$files" ]; then \
 		echo "No unit tests found in tests/test_*.nim"; \
-	fi
+		exit 0; \
+	fi; \
+	fail=0; \
+	pids=""; \
+	for f in $$files; do \
+		( nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
+		pids="$$pids $$!"; \
+	done; \
+	for pid in $$pids; do \
+		wait $$pid || fail=1; \
+	done; \
+	exit $$fail
 
 integration-test: nim.cfg
 	@found=0; \
@@ -29,7 +38,7 @@ integration-test: nim.cfg
 		[ -e "$$f" ] || continue; \
 		found=1; \
 		echo "--- $$f ---"; \
-		nim r "$$f" || exit 1; \
+		nim r $(NIM_TEST_FLAGS) "$$f" || exit 1; \
 	done; \
 	if [ $$found -eq 0 ]; then \
 		echo "No integration tests found in tests/integration_*.nim"; \
@@ -46,7 +55,7 @@ e2e-test: nim.cfg
 		[ -e "$$f" ] || continue; \
 		found=1; \
 		echo "--- $$f ---"; \
-		nim r "$$f" || exit 1; \
+		nim r $(NIM_TEST_FLAGS) "$$f" || exit 1; \
 	done; \
 	if [ $$found -eq 0 ]; then \
 		echo "No e2e tests found in tests/e2e_*.nim"; \

@@ -1,7 +1,7 @@
 import
   std/[monotimes, os, osproc, posix, streams, strformat, strutils, times],
   jsony,
-  ./[logging, prompt_catalog]
+  ./[common, logging, prompt_catalog]
 
 const
   DefaultCodexBinary = "codex"
@@ -57,6 +57,7 @@ type
     onEvent*: CodexEventHandler
     maxAttempts*: int
     continuationPrompt*: string
+    continuationPromptBuilder*: ContinuationPromptBuilder
 
   CodexRunResult* = object
     command*: seq[string]
@@ -291,11 +292,16 @@ proc buildContinuationPrompt(
   originalPrompt: string,
   previousResult: CodexRunResult,
   customContinuationPrompt: string,
+  builder: ContinuationPromptBuilder = nil,
+  workingDir: string = "",
 ): string =
   ## Build the prompt text for a retry attempt after a failed run.
   let summarySource = if previousResult.lastMessage.len > 0: previousResult.lastMessage else: previousResult.stdout
   let summaryTail = truncateTail(summarySource, ContinuationTailChars).strip()
-  let continuationText = if customContinuationPrompt.len > 0:
+  let builtText = if not builder.isNil and workingDir.len > 0: builder(workingDir) else: ""
+  let continuationText = if builtText.len > 0:
+      builtText.strip()
+    elif customContinuationPrompt.len > 0:
       customContinuationPrompt.strip()
     else:
       CodexRetryDefaultContinuationText.strip()
@@ -692,4 +698,4 @@ proc runCodex*(request: CodexRunRequest): CodexRunResult =
       break
 
     if attemptsUsed < maxAttempts:
-      prompt = buildContinuationPrompt(originalPrompt, result, request.continuationPrompt)
+      prompt = buildContinuationPrompt(originalPrompt, result, request.continuationPrompt, request.continuationPromptBuilder, request.workingDir)
