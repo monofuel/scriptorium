@@ -35,3 +35,5 @@ Add timing capture at key points in the ticket lifecycle so that per-ticket metr
 ## Spec References
 
 - Section 15: Per-Ticket Metrics In Agent Run Notes (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0036-timing-capture-infrastructure
