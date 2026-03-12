@@ -2836,3 +2836,14 @@ suite "logging":
     check not fileExists(assignment2.worktree / "stale.txt")
 
     discard execCmdEx("git -C " & quoteShell(tmp) & " worktree remove --force " & quoteShell(assignment2.worktree))
+
+suite "formatDuration":
+  test "seconds only":
+    check formatDuration(0.0) == "0s"
+    check formatDuration(5.0) == "5s"
+    check formatDuration(59.9) == "59s"
+
+  test "minutes and seconds":
+    check formatDuration(60.0) == "1m0s"
+    check formatDuration(192.0) == "3m12s"
+    check formatDuration(3600.0) == "60m0s"

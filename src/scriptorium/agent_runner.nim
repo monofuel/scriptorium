@@ -48,6 +48,8 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: string
+    ticketId*: string
+    submitted*: bool
 
   AgentRunner* = proc(request: AgentRunRequest): AgentRunResult
 

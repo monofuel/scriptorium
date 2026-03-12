@@ -2120,6 +2120,7 @@ proc executeAssignedTicket*(
     break
 
   if submitSummary.len > 0:
+    result.submitted = true
     logInfo(fmt"coding agent called submit_pr, summary={submitSummary}")
     let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
@@ -2151,6 +2152,7 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
     logInfo(fmt"coding agent: starting ticket {ticketId}")
     result = executeAssignedTicket(repoPath, assignment, runner)
+    result.ticketId = ticketId
     logInfo(fmt"coding agent: completed ticket {ticketId} (exit {result.exitCode})")
 
 proc createOrchestratorServer*(): HttpMcpServer =
@@ -2235,6 +2237,16 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
     state.initialized = true
   result = state.healthy
 
+proc formatDuration*(seconds: float): string =
+  ## Format a duration in seconds as a human-readable string like 3m12s.
+  let totalSecs = seconds.int
+  if totalSecs < 60:
+    result = $totalSecs & "s"
+  else:
+    let mins = totalSecs div 60
+    let secs = totalSecs mod 60
+    result = $mins & "m" & $secs & "s"
+
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
   var ticks = 0
@@ -2266,6 +2278,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         elif not shouldRun:
           discard
         else:
+          var architectStatus = "skipped"
+          var managerStatus = "skipped"
+          var codingStatus = "idle"
+          var mergeStatus = "idle"
+
           if hasRunnableSpec(repoPath):
             logInfo("architect: generating areas from spec")
             t0 = epochTime()
@@ -2273,6 +2290,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             logDebug(fmt"tick {ticks}: architect took {epochTime() - t0:.1f}s, changed={architectChanged}")
             if architectChanged:
               logInfo("architect: areas updated")
+              architectStatus = "updated"
+            else:
+              architectStatus = "no-op"
 
             if not shouldRun: break
 
@@ -2282,12 +2302,25 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
             if managerChanged:
               logInfo("manager: tickets created")
+              managerStatus = "updated"
+            else:
+              managerStatus = "no-op"
 
             if not shouldRun: break
 
             t0 = epochTime()
             let agentResult = executeOldestOpenTicket(repoPath, runner)
-            logDebug(fmt"tick {ticks}: coding agent took {epochTime() - t0:.1f}s, exit={agentResult.exitCode}")
+            let codingWallTime = epochTime() - t0
+            logDebug(fmt"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
+
+            if agentResult.command.len > 0:
+              let codingDuration = formatDuration(codingWallTime)
+              if agentResult.timeoutKind != "none":
+                codingStatus = fmt"{agentResult.ticketId}(stalled, {codingDuration})"
+              elif agentResult.submitted:
+                codingStatus = fmt"{agentResult.ticketId}(submitted, {codingDuration})"
+              else:
+                codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
 
             if not shouldRun: break
 
@@ -2297,6 +2330,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
             if mergeProcessed:
               logInfo("merge queue: item processed")
+              mergeStatus = "processing"
 
             if not architectChanged and not managerChanged and agentResult.command.len == 0 and not mergeProcessed:
               logDebug(fmt"tick {ticks}: idle")
@@ -2304,6 +2338,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           else:
             logDebug(WaitingNoSpecMessage)
             idle = true
+
+          let ticketCounts = readOrchestratorStatus(repoPath)
+          let summary = fmt"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets}"
+          logInfo(summary)
     except CatchableError as e:
       logError(fmt"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop
