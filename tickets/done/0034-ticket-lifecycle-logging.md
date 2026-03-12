@@ -84,3 +84,33 @@ All 154 tests pass.
 ```text
 ted (make test running)`\n10. **Merge success**: `ticket <id>: merge succeeded (test wall=<duration>)`\n11. **Merge failure**: `ticket <id>: merge failed (reason=<reason>)`\n12. **Completion**: `ticket <id>: in-progress -> done (total wall=<duration>, attempts=<n>)`\n13. **Reopen**: `ticket <id>: in-progress -> open (reopened, reason=<reason>, attempts=<n>, total wall=<duration>)`\n\nAll 154 tests pass.","stop_reason":"end_turn","session_id":"35cc05b3-ee2e-45cb-841f-336fddb3f9f0","total_cost_usd":2.3827562500000004,"usage":{"input_tokens":58,"cache_creation_input_tokens":68899,"cache_read_input_tokens":3094895,"output_tokens":16176,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":68899,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":58,"outputTokens":16176,"cacheReadInputTokens":3094895,"cacheCreationInputTokens":68899,"webSearchRequests":0,"costUSD":2.3827562500000004,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f2c0455e-28ca-4381-a9d9-dea09216656e"}
 ```
+
+## Merge Queue Success
+- Summary: Add INFO-level ticket lifecycle logging at all state transitions (assignment, coding agent start/finish, stall/retry, submit_pr, merge queue entry/start/success/failure, completion, reopen) with ticket ID correlation and human-readable wall time durations.\n
+### Quality Check Output
+```text
+ test running)
+[2026-03-12T22:33:20Z] [INFO] ticket 0001: merge failed (reason=git merge conflict)
+[2026-03-12T22:33:20Z] [INFO] ticket 0001: in-progress -> open (reopened, reason=git merge conflict, attempts=0, total wall=0s)
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+[2026-03-12T22:33:21Z] [INFO] ticket 0001: open -> in-progress (assigned, worktree=/tmp/scriptorium/scriptorium_integration_it08_oeapsymi-ed7d848db3872d16/worktrees/tickets/0001-first)
+[2026-03-12T22:33:21Z] [INFO] ticket 0001: merge queue entered (position=1)
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-12T22:33:21Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-12T22:33:51Z] [INFO] ticket 0001: open -> in-progress (assigned, worktree=/tmp/scriptorium/scriptorium_integration_it10_7gtijlnq-13ce5ee8d67d72f0/worktrees/tickets/0001-first)
+[2026-03-12T22:33:51Z] [INFO] ticket 0001: merge queue entered (position=1)
+[2026-03-12T22:33:51Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T22:34:21Z] [INFO] architect: generating areas from spec
+[2026-03-12T22:34:22Z] [INFO] architect: areas updated
+[2026-03-12T22:34:22Z] [INFO] manager: generating tickets
+[2026-03-12T22:34:22Z] [INFO] merge queue: processing
+[2026-03-12T22:34:22Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-12T22:34:22Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-12T22:34:22Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-12T22:34:22Z] [INFO] merge queue: item processed
+[2026-03-12T22:34:22Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-12T22:34:23Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
