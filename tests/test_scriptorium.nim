@@ -1,7 +1,7 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[algorithm, json, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, unittest],
+  std/[algorithm, json, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, times, unittest],
   jsony,
   scriptorium/[agent_runner, config, init, logging, orchestrator]
 
@@ -2979,3 +2979,101 @@ suite "session summary":
     check "avg_coding_wall=n/a" in content
     check "avg_test_wall=n/a" in content
     check "first_attempt_success=0" in content
+
+suite "per-ticket metrics":
+  setup:
+    ticketStartTimes.clear()
+    ticketAttemptCounts.clear()
+    ticketCodingWalls.clear()
+    ticketTestWalls.clear()
+    ticketModels.clear()
+    ticketStdoutBytes.clear()
+
+  test "formatMetricsNote includes all required fields for done outcome":
+    let ticketId = "0042"
+    ticketStartTimes[ticketId] = epochTime() - 120.0
+    ticketAttemptCounts[ticketId] = 2
+    ticketCodingWalls[ticketId] = 95.0
+    ticketTestWalls[ticketId] = 20.0
+    ticketModels[ticketId] = "claude-sonnet-4-20250514"
+    ticketStdoutBytes[ticketId] = 8192
+
+    let note = formatMetricsNote(ticketId, "done", "")
+    check "## Metrics" in note
+    check "- wall_time_seconds: 1" in note
+    check "- coding_wall_seconds: 95" in note
+    check "- test_wall_seconds: 20" in note
+    check "- attempt_count: 2" in note
+    check "- outcome: done" in note
+    check "- failure_reason: " in note
+    check "- model: claude-sonnet-4-20250514" in note
+    check "- stdout_bytes: 8192" in note
+
+  test "formatMetricsNote includes failure_reason for reopened outcome":
+    let ticketId = "0043"
+    ticketStartTimes[ticketId] = epochTime() - 60.0
+    ticketAttemptCounts[ticketId] = 1
+    ticketCodingWalls[ticketId] = 50.0
+    ticketTestWalls[ticketId] = 5.0
+    ticketModels[ticketId] = "test-model"
+    ticketStdoutBytes[ticketId] = 1024
+
+    let note = formatMetricsNote(ticketId, "reopened", "stall")
+    check "- outcome: reopened" in note
+    check "- failure_reason: stall" in note
+
+  test "formatMetricsNote includes failure_reason for parked outcome":
+    let ticketId = "0044"
+    ticketStartTimes[ticketId] = epochTime() - 300.0
+    ticketAttemptCounts[ticketId] = 3
+    ticketCodingWalls[ticketId] = 200.0
+    ticketTestWalls[ticketId] = 80.0
+    ticketModels[ticketId] = "test-model"
+    ticketStdoutBytes[ticketId] = 4096
+
+    let note = formatMetricsNote(ticketId, "parked", "parked")
+    check "- outcome: parked" in note
+    check "- failure_reason: parked" in note
+
+  test "appendMetricsNote appends metrics section to ticket content":
+    let ticketId = "0045"
+    ticketStartTimes[ticketId] = epochTime() - 30.0
+    ticketAttemptCounts[ticketId] = 1
+    ticketCodingWalls[ticketId] = 25.0
+    ticketTestWalls[ticketId] = 3.0
+    ticketModels[ticketId] = "test-model"
+    ticketStdoutBytes[ticketId] = 512
+
+    let content = "# Test Ticket\n\nSome description."
+    let updated = appendMetricsNote(content, ticketId, "done", "")
+    check updated.startsWith("# Test Ticket")
+    check "## Metrics" in updated
+    check "- outcome: done" in updated
+
+  test "cleanupTicketTimings removes all state for a ticket":
+    let ticketId = "0046"
+    ticketStartTimes[ticketId] = epochTime()
+    ticketAttemptCounts[ticketId] = 1
+    ticketCodingWalls[ticketId] = 10.0
+    ticketTestWalls[ticketId] = 5.0
+    ticketModels[ticketId] = "test-model"
+    ticketStdoutBytes[ticketId] = 100
+
+    cleanupTicketTimings(ticketId)
+    check ticketId notin ticketStartTimes
+    check ticketId notin ticketAttemptCounts
+    check ticketId notin ticketCodingWalls
+    check ticketId notin ticketTestWalls
+    check ticketId notin ticketModels
+    check ticketId notin ticketStdoutBytes
+
+  test "formatMetricsNote uses defaults for missing ticket state":
+    let ticketId = "0047"
+    let note = formatMetricsNote(ticketId, "reopened", "timeout_hard")
+    check "- wall_time_seconds: 0" in note
+    check "- coding_wall_seconds: 0" in note
+    check "- test_wall_seconds: 0" in note
+    check "- attempt_count: 0" in note
+    check "- model: unknown" in note
+    check "- stdout_bytes: 0" in note
+    check "- failure_reason: timeout_hard" in note

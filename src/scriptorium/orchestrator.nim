@@ -170,6 +170,8 @@ var
   ticketAttemptCounts*: Table[string, int]
   ticketCodingWalls*: Table[string, float]
   ticketTestWalls*: Table[string, float]
+  ticketModels*: Table[string, string]
+  ticketStdoutBytes*: Table[string, int]
   sessionStats*: SessionStats
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
@@ -645,6 +647,42 @@ proc appendAgentRunNote(ticketContent: string, model: string, runResult: AgentRu
   let base = ticketContent.strip()
   let note = formatAgentRunNote(model, runResult).strip()
   result = base & "\n\n" & note & "\n"
+
+proc formatMetricsNote*(ticketId: string, outcome: string, failureReason: string): string =
+  ## Format a structured metrics section for a completed ticket.
+  let wallTimeSeconds = block:
+    let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)
+    if startTime > 0.0: int(epochTime() - startTime) else: 0
+  let codingWallSeconds = int(ticketCodingWalls.getOrDefault(ticketId, 0.0))
+  let testWallSeconds = int(ticketTestWalls.getOrDefault(ticketId, 0.0))
+  let attemptCount = ticketAttemptCounts.getOrDefault(ticketId, 0)
+  let model = ticketModels.getOrDefault(ticketId, "unknown")
+  let stdoutBytes = ticketStdoutBytes.getOrDefault(ticketId, 0)
+  result =
+    "## Metrics\n" &
+    &"- wall_time_seconds: {wallTimeSeconds}\n" &
+    &"- coding_wall_seconds: {codingWallSeconds}\n" &
+    &"- test_wall_seconds: {testWallSeconds}\n" &
+    &"- attempt_count: {attemptCount}\n" &
+    &"- outcome: {outcome}\n" &
+    &"- failure_reason: {failureReason}\n" &
+    &"- model: {model}\n" &
+    &"- stdout_bytes: {stdoutBytes}\n"
+
+proc appendMetricsNote*(ticketContent: string, ticketId: string, outcome: string, failureReason: string): string =
+  ## Append a structured metrics section to a ticket markdown document.
+  let base = ticketContent.strip()
+  let note = formatMetricsNote(ticketId, outcome, failureReason).strip()
+  result = base & "\n\n" & note & "\n"
+
+proc cleanupTicketTimings*(ticketId: string) =
+  ## Remove all per-ticket timing and metrics state for a completed ticket.
+  ticketStartTimes.del(ticketId)
+  ticketAttemptCounts.del(ticketId)
+  ticketCodingWalls.del(ticketId)
+  ticketTestWalls.del(ticketId)
+  ticketModels.del(ticketId)
+  ticketStdoutBytes.del(ticketId)
 
 proc branchNameForTicket(ticketRelPath: string): string
 
@@ -1834,6 +1872,8 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
     ticketAttemptCounts[ticketId] = 0
     ticketCodingWalls[ticketId] = 0.0
     ticketTestWalls[ticketId] = 0.0
+    ticketModels[ticketId] = ""
+    ticketStdoutBytes[ticketId] = 0
 
     result = TicketAssignment(
       openTicket: openTicket,
@@ -1956,14 +1996,12 @@ proc processMergeQueue*(repoPath: string): bool =
         let missingAttempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=worktree and branch missing, attempts={missingAttempts}, total wall={missingTotalWall})")
         sessionStats.ticketsReopened += 1
-        ticketStartTimes.del(item.ticketId)
-        ticketAttemptCounts.del(item.ticketId)
-        ticketCodingWalls.del(item.ticketId)
-        ticketTestWalls.del(item.ticketId)
         let failureNote = "## Merge Queue Failure\n" &
           fmt"- Summary: {item.summary}" & "\n" &
           "- Failed gate: worktree and branch missing (container restart?)\n"
-        let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n"
+        let metricsNote = formatMetricsNote(item.ticketId, "reopened", "stall").strip()
+        cleanupTicketTimings(item.ticketId)
+        let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n\n" & metricsNote & "\n"
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         writeFile(ticketPath, updatedContent)
         moveFile(ticketPath, planPath / openRelPath)
@@ -2023,14 +2061,12 @@ proc processMergeQueue*(repoPath: string): bool =
       sessionStats.completedTestWalls.add(priorTestWall + mergeWallTime)
       if attempts <= 1:
         sessionStats.firstAttemptSuccessCount += 1
-      ticketStartTimes.del(item.ticketId)
-      ticketAttemptCounts.del(item.ticketId)
-      ticketCodingWalls.del(item.ticketId)
-      ticketTestWalls.del(item.ticketId)
 
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       let successNote = formatMergeSuccessNote(item.summary, qualityCheckResult.output).strip()
-      let updatedContent = readFile(ticketPath).strip() & "\n\n" & successNote & "\n"
+      let metricsNote = formatMetricsNote(item.ticketId, "done", "").strip()
+      cleanupTicketTimings(item.ticketId)
+      let updatedContent = readFile(ticketPath).strip() & "\n\n" & successNote & "\n\n" & metricsNote & "\n"
       writeFile(ticketPath, updatedContent)
       moveFile(ticketPath, planPath / doneRelPath)
       if fileExists(queuePath):
@@ -2061,13 +2097,12 @@ proc processMergeQueue*(repoPath: string): bool =
       if failureCount >= MaxMergeFailures:
         logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
         sessionStats.ticketsParked += 1
-        ticketStartTimes.del(item.ticketId)
-        ticketAttemptCounts.del(item.ticketId)
-        ticketCodingWalls.del(item.ticketId)
-        ticketTestWalls.del(item.ticketId)
+        let metricsNote = formatMetricsNote(item.ticketId, "parked", "parked").strip()
+        cleanupTicketTimings(item.ticketId)
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
         createDir(planPath / PlanTicketsStuckDir)
-        writeFile(ticketPath, updatedContent)
+        let contentWithMetrics = updatedContent.strip() & "\n\n" & metricsNote & "\n"
+        writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / stuckRelPath)
         if fileExists(queuePath):
           removeFile(queuePath)
@@ -2078,12 +2113,14 @@ proc processMergeQueue*(repoPath: string): bool =
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         sessionStats.ticketsReopened += 1
-        ticketStartTimes.del(item.ticketId)
-        ticketAttemptCounts.del(item.ticketId)
-        ticketCodingWalls.del(item.ticketId)
-        ticketTestWalls.del(item.ticketId)
+        let metricFailure = if mergeMasterResult.exitCode != 0: "merge_conflict"
+          elif failureStep.contains("test"): "test_failure"
+          else: "test_failure"
+        let metricsNote = formatMetricsNote(item.ticketId, "reopened", metricFailure).strip()
+        cleanupTicketTimings(item.ticketId)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
-        writeFile(ticketPath, updatedContent)
+        let contentWithMetrics = updatedContent.strip() & "\n\n" & metricsNote & "\n"
+        writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / openRelPath)
         if fileExists(queuePath):
           removeFile(queuePath)
@@ -2174,6 +2211,12 @@ proc executeAssignedTicket*(
     else:
       ticketAttemptCounts[ticketId] = agentResult.attemptCount
 
+    ticketModels[ticketId] = model
+    if ticketStdoutBytes.hasKey(ticketId):
+      ticketStdoutBytes[ticketId] = ticketStdoutBytes[ticketId] + agentResult.stdout.len
+    else:
+      ticketStdoutBytes[ticketId] = agentResult.stdout.len
+
     let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
     let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
     logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
@@ -2240,14 +2283,19 @@ proc executeAssignedTicket*(
     let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
     logInfo(fmt"ticket {ticketId}: in-progress -> open (reopened, reason=no submit_pr, attempts={attempts}, total wall={totalWall})")
     sessionStats.ticketsReopened += 1
-    ticketStartTimes.del(ticketId)
-    ticketAttemptCounts.del(ticketId)
-    ticketCodingWalls.del(ticketId)
-    ticketTestWalls.del(ticketId)
+    let failureReason = case result.timeoutKind
+      of "hard": "timeout_hard"
+      of "no-output": "timeout_no_output"
+      else: "stall"
+    let metricsNote = formatMetricsNote(ticketId, "reopened", failureReason).strip()
+    cleanupTicketTimings(ticketId)
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
       if fileExists(ticketPath):
+        let currentContent = readFile(ticketPath)
+        let contentWithMetrics = currentContent.strip() & "\n\n" & metricsNote & "\n"
+        writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / openRelPath)
         gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
