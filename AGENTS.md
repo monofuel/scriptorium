@@ -1,7 +1,6 @@
-# {PROJECT_NAME}
+# scriptorium
 
-- {PROJECT_DESCRIPTION}
-- {PROJECT_FOCUS}
+- agentic coding orchestrator
 
 ## Running
 
@@ -71,6 +70,11 @@ Rules:
 - we should rely on proper reliable mcp tools whenever agents need to interact.
 - integration tests should properly test the full integration, do not mock things out, do not skip, do not use fakes.
 - when testing, do not rely on env flags to toggle categories or skipping tests or any shenanigans. test the thing properly. if it fails, fail fast and fail loudly so it can be fixed.
+
+- be patient
+- make sure to fully solve problems and fix the root cause.
+  - if you don't fully solve an issue, it will come back over and over again until it is fixed.
+- avoid playing "whack a mole" with surface level issues. think through the problem and fix the root cause if possible. if fixing the root cause is not possible, leave comments documenting the issue.
 
 ## Agent completion protocol
 
