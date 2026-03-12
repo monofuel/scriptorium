@@ -147,6 +147,18 @@ type
     initialized*: bool
     lastHealthLogged*: bool
 
+  SessionStats* = object
+    startTime*: float
+    totalTicks*: int
+    ticketsCompleted*: int
+    ticketsReopened*: int
+    ticketsParked*: int
+    mergeQueueProcessed*: int
+    firstAttemptSuccessCount*: int
+    completedTicketWalls*: seq[float]
+    completedCodingWalls*: seq[float]
+    completedTestWalls*: seq[float]
+
 var
   shouldRun {.volatile.} = true
   interactivePlanInterrupted {.volatile.} = false
@@ -156,6 +168,9 @@ var
   submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
   ticketStartTimes: Table[string, float]
   ticketAttemptCounts: Table[string, int]
+  ticketCodingWalls: Table[string, float]
+  ticketTestWalls: Table[string, float]
+  sessionStats*: SessionStats
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -1938,6 +1953,7 @@ proc processMergeQueue*(repoPath: string): bool =
         let missingTotalWall = if missingStartTime > 0.0: formatDuration(epochTime() - missingStartTime) else: "unknown"
         let missingAttempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=worktree and branch missing, attempts={missingAttempts}, total wall={missingTotalWall})")
+        sessionStats.ticketsReopened += 1
         let failureNote = "## Merge Queue Failure\n" &
           fmt"- Summary: {item.summary}" & "\n" &
           "- Failed gate: worktree and branch missing (container restart?)\n"
@@ -1990,8 +2006,19 @@ proc processMergeQueue*(repoPath: string): bool =
       let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
       let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
       logInfo(fmt"ticket {item.ticketId}: in-progress -> done (total wall={totalWall}, attempts={attempts})")
+      sessionStats.ticketsCompleted += 1
+      sessionStats.mergeQueueProcessed += 1
+      if startTime > 0.0:
+        sessionStats.completedTicketWalls.add(epochTime() - startTime)
+      let codingWall = ticketCodingWalls.getOrDefault(item.ticketId, 0.0)
+      sessionStats.completedCodingWalls.add(codingWall)
+      sessionStats.completedTestWalls.add(mergeWallTime)
+      if attempts <= 1:
+        sessionStats.firstAttemptSuccessCount += 1
       ticketStartTimes.del(item.ticketId)
       ticketAttemptCounts.del(item.ticketId)
+      ticketCodingWalls.del(item.ticketId)
+      ticketTestWalls.del(item.ticketId)
 
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       let successNote = formatMergeSuccessNote(item.summary, qualityCheckResult.output).strip()
@@ -2025,6 +2052,7 @@ proc processMergeQueue*(repoPath: string): bool =
       let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
       if failureCount >= MaxMergeFailures:
         logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
+        sessionStats.ticketsParked += 1
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
         createDir(planPath / PlanTicketsStuckDir)
         writeFile(ticketPath, updatedContent)
@@ -2037,6 +2065,7 @@ proc processMergeQueue*(repoPath: string): bool =
           gitRun(planPath, "commit", "-m", MergeQueueStuckCommitPrefix & " " & item.ticketId)
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
+        sessionStats.ticketsReopened += 1
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         writeFile(ticketPath, updatedContent)
         moveFile(ticketPath, planPath / openRelPath)
@@ -2119,6 +2148,11 @@ proc executeAssignedTicket*(
     let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
     logInfo(fmt"ticket {ticketId}: coding agent finished (exit={agentResult.exitCode}, wall={agentWallDuration}, stall={isStall})")
 
+    if ticketCodingWalls.hasKey(ticketId):
+      ticketCodingWalls[ticketId] = ticketCodingWalls[ticketId] + agentWallTime
+    else:
+      ticketCodingWalls[ticketId] = agentWallTime
+
     if ticketAttemptCounts.hasKey(ticketId):
       ticketAttemptCounts[ticketId] = ticketAttemptCounts[ticketId] + agentResult.attemptCount
     else:
@@ -2183,6 +2217,7 @@ proc executeAssignedTicket*(
     let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)
     let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
     logInfo(fmt"ticket {ticketId}: in-progress -> open (reopened, reason=no submit_pr, attempts={attempts}, total wall={totalWall})")
+    sessionStats.ticketsReopened += 1
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
@@ -2288,17 +2323,59 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   result = state.healthy
 
 proc formatDuration*(seconds: float): string =
-  ## Format a duration in seconds as a human-readable string like 3m12s.
+  ## Format a duration in seconds as a human-readable string like 1h23m or 3m12s.
   let totalSecs = seconds.int
   if totalSecs < 60:
     result = $totalSecs & "s"
-  else:
+  elif totalSecs < 3600:
     let mins = totalSecs div 60
     let secs = totalSecs mod 60
     result = $mins & "m" & $secs & "s"
+  else:
+    let hours = totalSecs div 3600
+    let mins = (totalSecs mod 3600) div 60
+    result = $hours & "h" & $mins & "m"
+
+proc resetSessionStats*() =
+  ## Reset session statistics to default values.
+  sessionStats = SessionStats(startTime: epochTime())
+
+proc logSessionSummary*() =
+  ## Log two INFO lines summarizing session-wide statistics on shutdown.
+  let uptime = formatDuration(epochTime() - sessionStats.startTime)
+  let countsLine = &"session summary: uptime={uptime} ticks={sessionStats.totalTicks} tickets_completed={sessionStats.ticketsCompleted} tickets_reopened={sessionStats.ticketsReopened} tickets_parked={sessionStats.ticketsParked} merge_queue_processed={sessionStats.mergeQueueProcessed}"
+  logInfo(countsLine)
+
+  var avgTicketWall = "n/a"
+  var avgCodingWall = "n/a"
+  var avgTestWall = "n/a"
+  var firstAttemptSuccess = "0"
+
+  if sessionStats.ticketsCompleted > 0:
+    var totalTicketWall = 0.0
+    for w in sessionStats.completedTicketWalls:
+      totalTicketWall += w
+    avgTicketWall = formatDuration(totalTicketWall / sessionStats.ticketsCompleted.float)
+
+    var totalCodingWall = 0.0
+    for w in sessionStats.completedCodingWalls:
+      totalCodingWall += w
+    avgCodingWall = formatDuration(totalCodingWall / sessionStats.ticketsCompleted.float)
+
+    var totalTestWall = 0.0
+    for w in sessionStats.completedTestWalls:
+      totalTestWall += w
+    avgTestWall = formatDuration(totalTestWall / sessionStats.ticketsCompleted.float)
+
+    let pct = (sessionStats.firstAttemptSuccessCount * 100) div sessionStats.ticketsCompleted
+    firstAttemptSuccess = $pct & "%"
+
+  let averagesLine = &"session summary: avg_ticket_wall={avgTicketWall} avg_coding_wall={avgCodingWall} avg_test_wall={avgTestWall} first_attempt_success={firstAttemptSuccess}"
+  logInfo(averagesLine)
 
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
+  sessionStats.startTime = epochTime()
   var ticks = 0
   var idle = false
   var masterHealthState = MasterHealthState()
@@ -2400,6 +2477,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
     else:
       sleep(IdleSleepMs)
     inc ticks
+  sessionStats.totalTicks = ticks
+  logSessionSummary()
 
 proc runOrchestratorLoop(
   repoPath: string,

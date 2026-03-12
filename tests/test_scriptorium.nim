@@ -2846,4 +2846,62 @@ suite "formatDuration":
   test "minutes and seconds":
     check formatDuration(60.0) == "1m0s"
     check formatDuration(192.0) == "3m12s"
-    check formatDuration(3600.0) == "60m0s"
+    check formatDuration(3599.0) == "59m59s"
+
+  test "hours and minutes":
+    check formatDuration(3600.0) == "1h0m"
+    check formatDuration(4980.0) == "1h23m"
+    check formatDuration(7200.0) == "2h0m"
+
+suite "session summary":
+  test "logSessionSummary writes two INFO lines with session stats":
+    let tmpDir = createTempDir("scriptorium_session_summary_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "summarytest"
+    createDir(fakeRepo)
+    initLog(fakeRepo)
+
+    resetSessionStats()
+    sessionStats.totalTicks = 47
+    sessionStats.ticketsCompleted = 3
+    sessionStats.ticketsReopened = 1
+    sessionStats.ticketsParked = 0
+    sessionStats.mergeQueueProcessed = 3
+    sessionStats.firstAttemptSuccessCount = 2
+    sessionStats.completedTicketWalls = @[312.0, 280.0, 345.0]
+    sessionStats.completedCodingWalls = @[242.0, 220.0, 265.0]
+    sessionStats.completedTestWalls = @[38.0, 42.0, 34.0]
+    logSessionSummary()
+    closeLog()
+
+    let content = readFile(logFilePath)
+    check "session summary: uptime=" in content
+    check "ticks=47" in content
+    check "tickets_completed=3" in content
+    check "tickets_reopened=1" in content
+    check "tickets_parked=0" in content
+    check "merge_queue_processed=3" in content
+    check "session summary: avg_ticket_wall=" in content
+    check "avg_coding_wall=" in content
+    check "avg_test_wall=" in content
+    check "first_attempt_success=66%" in content
+
+  test "logSessionSummary shows n/a when no tickets completed":
+    let tmpDir = createTempDir("scriptorium_session_summary_empty_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "emptytest"
+    createDir(fakeRepo)
+    initLog(fakeRepo)
+
+    resetSessionStats()
+    sessionStats.totalTicks = 5
+    logSessionSummary()
+    closeLog()
+
+    let content = readFile(logFilePath)
+    check "ticks=5" in content
+    check "tickets_completed=0" in content
+    check "avg_ticket_wall=n/a" in content
+    check "avg_coding_wall=n/a" in content
+    check "avg_test_wall=n/a" in content
+    check "first_attempt_success=0" in content
