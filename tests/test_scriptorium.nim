@@ -2797,6 +2797,80 @@ suite "logging":
     check "FAILURE OUTPUT" in retryPrompt
     check "fix the failing tests" in retryPrompt.toLower
 
+  test "executeAssignedTicket accumulates test wall time on stall":
+    let tmp = getTempDir() / "scriptorium_test_stall_testwall"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0037-testwall.md", "# Ticket 37\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 906)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+
+    let ticketId = "0037"
+
+    var callCount = 0
+    proc fakeRunnerStall(request: AgentRunRequest): AgentRunResult =
+      ## Stall on first call, then submit_pr on second.
+      inc callCount
+      if callCount == 2:
+        callSubmitPrTool("testwall done")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunnerStall)
+
+    check callCount == 2
+    check ticketTestWalls.hasKey(ticketId)
+    check ticketTestWalls[ticketId] > 0.0
+    check ticketCodingWalls.hasKey(ticketId)
+    check ticketCodingWalls[ticketId] >= 0.0
+    check ticketStartTimes.hasKey(ticketId)
+
+  test "executeAssignedTicket cleans up timing state on reopen":
+    let tmp = getTempDir() / "scriptorium_test_timing_cleanup"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0038-cleanup.md", "# Ticket 38\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 907)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    let ticketId = "0038"
+
+    check ticketStartTimes.hasKey(ticketId)
+    check ticketCodingWalls.hasKey(ticketId)
+    check ticketTestWalls.hasKey(ticketId)
+
+    proc fakeRunnerFail(request: AgentRunRequest): AgentRunResult =
+      ## Exit non-zero without submit_pr to trigger reopen.
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 1,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunnerFail)
+
+    check not ticketStartTimes.hasKey(ticketId)
+    check not ticketAttemptCounts.hasKey(ticketId)
+    check not ticketCodingWalls.hasKey(ticketId)
+    check not ticketTestWalls.hasKey(ticketId)
+
   test "reassigned ticket gets a fresh worktree branch without stale commits":
     let tmp = getTempDir() / "scriptorium_test_fresh_worktree"
     makeTestRepo(tmp)

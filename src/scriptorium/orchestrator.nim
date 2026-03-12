@@ -166,10 +166,10 @@ var
   submitPrLockInitialized = false
   submitPrSummaryLen = 0
   submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
-  ticketStartTimes: Table[string, float]
-  ticketAttemptCounts: Table[string, int]
-  ticketCodingWalls: Table[string, float]
-  ticketTestWalls: Table[string, float]
+  ticketStartTimes*: Table[string, float]
+  ticketAttemptCounts*: Table[string, int]
+  ticketCodingWalls*: Table[string, float]
+  ticketTestWalls*: Table[string, float]
   sessionStats*: SessionStats
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
@@ -1832,6 +1832,8 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
     logInfo(fmt"ticket {ticketId}: open -> in-progress (assigned, worktree={worktreeInfo.path})")
     ticketStartTimes[ticketId] = epochTime()
     ticketAttemptCounts[ticketId] = 0
+    ticketCodingWalls[ticketId] = 0.0
+    ticketTestWalls[ticketId] = 0.0
 
     result = TicketAssignment(
       openTicket: openTicket,
@@ -1954,6 +1956,10 @@ proc processMergeQueue*(repoPath: string): bool =
         let missingAttempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=worktree and branch missing, attempts={missingAttempts}, total wall={missingTotalWall})")
         sessionStats.ticketsReopened += 1
+        ticketStartTimes.del(item.ticketId)
+        ticketAttemptCounts.del(item.ticketId)
+        ticketCodingWalls.del(item.ticketId)
+        ticketTestWalls.del(item.ticketId)
         let failureNote = "## Merge Queue Failure\n" &
           fmt"- Summary: {item.summary}" & "\n" &
           "- Failed gate: worktree and branch missing (container restart?)\n"
@@ -2012,7 +2018,9 @@ proc processMergeQueue*(repoPath: string): bool =
         sessionStats.completedTicketWalls.add(epochTime() - startTime)
       let codingWall = ticketCodingWalls.getOrDefault(item.ticketId, 0.0)
       sessionStats.completedCodingWalls.add(codingWall)
-      sessionStats.completedTestWalls.add(mergeWallTime)
+      let priorTestWall = ticketTestWalls.getOrDefault(item.ticketId, 0.0)
+      ticketTestWalls[item.ticketId] = priorTestWall + mergeWallTime
+      sessionStats.completedTestWalls.add(priorTestWall + mergeWallTime)
       if attempts <= 1:
         sessionStats.firstAttemptSuccessCount += 1
       ticketStartTimes.del(item.ticketId)
@@ -2053,6 +2061,10 @@ proc processMergeQueue*(repoPath: string): bool =
       if failureCount >= MaxMergeFailures:
         logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
         sessionStats.ticketsParked += 1
+        ticketStartTimes.del(item.ticketId)
+        ticketAttemptCounts.del(item.ticketId)
+        ticketCodingWalls.del(item.ticketId)
+        ticketTestWalls.del(item.ticketId)
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
         createDir(planPath / PlanTicketsStuckDir)
         writeFile(ticketPath, updatedContent)
@@ -2066,6 +2078,10 @@ proc processMergeQueue*(repoPath: string): bool =
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         sessionStats.ticketsReopened += 1
+        ticketStartTimes.del(item.ticketId)
+        ticketAttemptCounts.del(item.ticketId)
+        ticketCodingWalls.del(item.ticketId)
+        ticketTestWalls.del(item.ticketId)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         writeFile(ticketPath, updatedContent)
         moveFile(ticketPath, planPath / openRelPath)
@@ -2194,6 +2210,12 @@ proc executeAssignedTicket*(
       let testWallDuration = formatDuration(testWallTime)
       let testStatus = if testResult.exitCode == 0: "PASS" else: "FAIL"
       logInfo(fmt"ticket {ticketId}: make test before retry: {testStatus} (exit={testResult.exitCode}, wall={testWallDuration})")
+
+      if ticketTestWalls.hasKey(ticketId):
+        ticketTestWalls[ticketId] = ticketTestWalls[ticketId] + testWallTime
+      else:
+        ticketTestWalls[ticketId] = testWallTime
+
       currentAttemptBase = agentResult.attempt + agentResult.attemptCount
       let testStatusLabel = if testResult.exitCode == 0: "passing" else: "failing"
       logInfo(fmt"ticket {ticketId}: continuation prompt sent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts}, test_status={testStatusLabel})")
@@ -2218,6 +2240,10 @@ proc executeAssignedTicket*(
     let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
     logInfo(fmt"ticket {ticketId}: in-progress -> open (reopened, reason=no submit_pr, attempts={attempts}, total wall={totalWall})")
     sessionStats.ticketsReopened += 1
+    ticketStartTimes.del(ticketId)
+    ticketAttemptCounts.del(ticketId)
+    ticketCodingWalls.del(ticketId)
+    ticketTestWalls.del(ticketId)
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
