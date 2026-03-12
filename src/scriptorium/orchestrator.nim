@@ -1,5 +1,5 @@
 import
-  std/[algorithm, json, locks, os, osproc, posix, sets, streams, strformat, strutils, tables, times, uri],
+  std/[algorithm, json, locks, os, osproc, posix, sets, sha1, streams, strformat, strutils, tables, times, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -73,6 +73,10 @@ const
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
   BuildCommitHash {.strdefine.} = "unknown"
+  SpecHashMarkerPath = "areas/.spec-hash"
+  AreaHashesPath = "tickets/.area-hashes"
+  SpecHashCommitMessage = "scriptorium: update spec hash marker"
+  AreaHashesCommitMessage = "scriptorium: update area hashes"
   SubmitPrSummaryMaxBytes = 4096
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes = 8192
@@ -1189,6 +1193,57 @@ proc listMarkdownFiles(basePath: string): seq[string] =
         result.add(filePath)
     result.sort()
 
+proc computeContentHash(content: string): string =
+  ## SHA-1 hex digest of content for change detection.
+  result = $secureHash(content)
+
+proc readSpecHashMarker(planPath: string): string =
+  ## Read stored spec hash, or "" if missing.
+  let path = planPath / SpecHashMarkerPath
+  if fileExists(path):
+    result = readFile(path).strip()
+  else:
+    result = ""
+
+proc writeSpecHashMarker(planPath: string) =
+  ## Write SHA-1 of current spec.md to areas/.spec-hash.
+  let spec = loadSpecFromPlanPath(planPath)
+  let hash = computeContentHash(spec)
+  createDir(parentDir(planPath / SpecHashMarkerPath))
+  writeFile(planPath / SpecHashMarkerPath, hash & "\n")
+
+proc readAreaHashes(planPath: string): Table[string, string] =
+  ## Read area-id:hash pairs from tickets/.area-hashes.
+  result = initTable[string, string]()
+  let path = planPath / AreaHashesPath
+  if fileExists(path):
+    for line in readFile(path).splitLines():
+      let stripped = line.strip()
+      if stripped.len == 0:
+        continue
+      let colonPos = stripped.find(':')
+      if colonPos > 0:
+        let areaId = stripped[0..<colonPos]
+        let hash = stripped[colonPos + 1..^1]
+        result[areaId] = hash
+
+proc writeAreaHashes(planPath: string, hashes: Table[string, string]) =
+  ## Write area-id:hash pairs to tickets/.area-hashes.
+  var lines: seq[string] = @[]
+  for areaId, hash in hashes:
+    lines.add(areaId & ":" & hash)
+  lines.sort()
+  createDir(parentDir(planPath / AreaHashesPath))
+  writeFile(planPath / AreaHashesPath, lines.join("\n") & "\n")
+
+proc computeAllAreaHashes(planPath: string): Table[string, string] =
+  ## Compute content hashes for all area markdown files.
+  result = initTable[string, string]()
+  for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+    let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+    let areaId = areaIdFromAreaPath(relativeAreaPath)
+    result[areaId] = computeContentHash(readFile(areaPath))
+
 proc collectActiveTicketAreas(planPath: string): HashSet[string] =
   ## Collect area identifiers that have open, in-progress, or done tickets.
   result = initHashSet[string]()
@@ -1198,14 +1253,43 @@ proc collectActiveTicketAreas(planPath: string): HashSet[string] =
       if areaId.len > 0:
         result.incl(areaId)
 
+proc collectOpenAndInProgressAreas(planPath: string): HashSet[string] =
+  ## Collect area identifiers that have open or in-progress tickets (blocks concurrent work).
+  result = initHashSet[string]()
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
+    for ticketPath in listMarkdownFiles(planPath / stateDir):
+      let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+      if areaId.len > 0:
+        result.incl(areaId)
+
 proc areasNeedingTicketsInPlanPath(planPath: string): seq[string] =
-  ## Return area files that currently have no open or in-progress tickets.
-  let activeAreas = collectActiveTicketAreas(planPath)
-  for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
-    let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
-    let areaId = areaIdFromAreaPath(relativeAreaPath)
-    if not activeAreas.contains(areaId):
-      result.add(relativeAreaPath)
+  ## Return area files eligible for ticket generation.
+  ## Uses hash-based comparison when area hashes file exists; falls back to
+  ## legacy behavior (suppress areas with any ticket) when no hashes file.
+  let hasAreaHashes = fileExists(planPath / AreaHashesPath)
+
+  if not hasAreaHashes:
+    # Legacy fallback: suppress areas with any ticket (open, in-progress, done, stuck)
+    let activeAreas = collectActiveTicketAreas(planPath)
+    for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+      let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+      let areaId = areaIdFromAreaPath(relativeAreaPath)
+      if not activeAreas.contains(areaId):
+        result.add(relativeAreaPath)
+  else:
+    # Hash-based: skip areas with open/in-progress work, include changed content
+    let storedHashes = readAreaHashes(planPath)
+    let openOrInProgress = collectOpenAndInProgressAreas(planPath)
+    for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+      let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+      let areaId = areaIdFromAreaPath(relativeAreaPath)
+      if openOrInProgress.contains(areaId):
+        continue
+      let currentHash = computeContentHash(readFile(areaPath))
+      let storedHash = storedHashes.getOrDefault(areaId, "")
+      if currentHash != storedHash:
+        result.add(relativeAreaPath)
+
   result.sort()
 
 proc areasMissingInPlanPath(planPath: string): bool =
@@ -1514,10 +1598,24 @@ proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator)
       let spec = loadSpecFromPlanPath(planPath)
       let docs = generateAreas(cfg.agents.architect.model, spec)
       discard writeAreasAndCommit(planPath, docs)
+      writeSpecHashMarker(planPath)
+      gitRun(planPath, "add", SpecHashMarkerPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", SpecHashCommitMessage)
       true
     else:
       false
   )
+
+proc architectShouldRun(planPath: string): bool =
+  ## Determine whether the architect needs to run based on spec content hash.
+  if areasMissingInPlanPath(planPath):
+    return true  # No areas at all — first run
+  let storedHash = readSpecHashMarker(planPath)
+  if storedHash == "":
+    return false  # Legacy: areas exist but no hash — migration writes hash, skip this tick
+  let currentHash = computeContentHash(loadSpecFromPlanPath(planPath))
+  return storedHash != currentHash
 
 proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
   ## Run one architect pass that writes area files directly in the plan worktree.
@@ -1527,33 +1625,45 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
   let cfg = loadConfig(repoPath)
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     if not hasRunnableSpecInPlanPath(planPath):
-      false
-    elif not areasMissingInPlanPath(planPath):
-      false
-    else:
-      let spec = loadSpecFromPlanPath(planPath)
-      discard runner(AgentRunRequest(
-        prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
-        workingDir: planPath,
-        harness: cfg.agents.architect.harness,
-        model: cfg.agents.architect.model,
-        reasoningEffort: cfg.agents.architect.reasoningEffort,
-        ticketId: ArchitectAreasTicketId,
-        attempt: DefaultAgentAttempt,
-        skipGitRepoCheck: true,
-        logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
-        maxAttempts: DefaultAgentMaxAttempts,
-        onEvent: proc(event: AgentStreamEvent) =
-          if event.kind == agentEventTool:
-            logDebug(fmt"architect: {event.text}"),
-      ))
+      return false
 
-      gitRun(planPath, "add", PlanAreasDir)
+    # Migration: write spec hash marker for existing areas without one
+    if not areasMissingInPlanPath(planPath) and not fileExists(planPath / SpecHashMarkerPath):
+      writeSpecHashMarker(planPath)
+      gitRun(planPath, "add", SpecHashMarkerPath)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", AreaCommitMessage)
-        true
-      else:
-        false
+        gitRun(planPath, "commit", "-m", "scriptorium: initialize spec hash marker")
+
+    if not architectShouldRun(planPath):
+      return false
+
+    let spec = loadSpecFromPlanPath(planPath)
+    discard runner(AgentRunRequest(
+      prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
+      workingDir: planPath,
+      harness: cfg.agents.architect.harness,
+      model: cfg.agents.architect.model,
+      reasoningEffort: cfg.agents.architect.reasoningEffort,
+      ticketId: ArchitectAreasTicketId,
+      attempt: DefaultAgentAttempt,
+      skipGitRepoCheck: true,
+      logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
+      maxAttempts: DefaultAgentMaxAttempts,
+      onEvent: proc(event: AgentStreamEvent) =
+        if event.kind == agentEventTool:
+          logDebug(fmt"architect: {event.text}"),
+    ))
+
+    gitRun(planPath, "add", PlanAreasDir)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", AreaCommitMessage)
+
+    # Write updated spec hash marker after architect commits
+    writeSpecHashMarker(planPath)
+    gitRun(planPath, "add", SpecHashMarkerPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", SpecHashCommitMessage)
+    true
   )
 
 proc updateSpecFromArchitect*(
@@ -1616,6 +1726,14 @@ proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGener
         gitRun(planPath, "add", PlanTicketsOpenDir)
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
           gitRun(planPath, "commit", "-m", TicketCommitMessage)
+
+      # Update area hashes after ticket generation
+      let currentHashes = computeAllAreaHashes(planPath)
+      writeAreaHashes(planPath, currentHashes)
+      gitRun(planPath, "add", AreaHashesPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
+
       hasChanges
   )
 
@@ -1660,9 +1778,15 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
         gitRun(planPath, "add", PlanTicketsDoneDir)
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
           gitRun(planPath, "commit", "-m", TicketCommitMessage)
-          true
-        else:
-          false
+
+        # Update area hashes after ticket generation
+        let currentHashes = computeAllAreaHashes(planPath)
+        writeAreaHashes(planPath, currentHashes)
+        gitRun(planPath, "add", AreaHashesPath)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
+
+        true
   )
 
 proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =

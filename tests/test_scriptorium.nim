@@ -1,7 +1,7 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[algorithm, json, os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest],
+  std/[algorithm, json, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, unittest],
   jsony,
   scriptorium/[agent_runner, config, init, logging, orchestrator]
 
@@ -97,6 +97,28 @@ proc moveTicketStateInPlan(repoPath: string, fromState: string, toState: string,
     moveFile(planPath / fromPath, planPath / toPath)
     runCmdOrDie("git -C " & quoteShell(planPath) & " add -A " & quoteShell("tickets"))
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-move-ticket")
+  )
+
+proc writeSpecHashInPlan(repoPath: string, hash: string) =
+  ## Write areas/.spec-hash on scriptorium/plan and commit.
+  withPlanWorktree(repoPath, "write_spec_hash", proc(planPath: string) =
+    createDir(planPath / "areas")
+    writeFile(planPath / "areas/.spec-hash", hash & "\n")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add areas/.spec-hash")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-write-spec-hash")
+  )
+
+proc writeAreaHashesInPlan(repoPath: string, hashes: Table[string, string]) =
+  ## Write tickets/.area-hashes on scriptorium/plan and commit.
+  withPlanWorktree(repoPath, "write_area_hashes", proc(planPath: string) =
+    createDir(planPath / "tickets")
+    var lines: seq[string] = @[]
+    for areaId, hash in hashes:
+      lines.add(areaId & ":" & hash)
+    lines.sort()
+    writeFile(planPath / "tickets/.area-hashes", lines.join("\n") & "\n")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add tickets/.area-hashes")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-write-area-hashes")
   )
 
 proc planCommitCount(repoPath: string): int =
@@ -772,7 +794,7 @@ suite "orchestrator planning bootstrap":
     check firstSync
     check not secondSync
     check callCount == 1
-    check afterFirst == before + 1
+    check afterFirst == before + 2  # areas commit + spec hash marker commit
     check afterSecond == afterFirst
 
 suite "orchestrator manager ticket bootstrap":
@@ -823,13 +845,13 @@ suite "orchestrator manager ticket bootstrap":
     check capturedModel == "gpt-5.1-codex-mini"
     check capturedAreaPath == "areas/01-cli.md"
     check "## Scope" in capturedAreaContent
-    check after == before + 1
+    check after == before + 2  # tickets commit + area hashes commit
 
     let files = planTreeFiles(tmp)
     check "tickets/open/0001-cli-bootstrap.md" in files
 
     let (logOutput, rc) = execCmdEx(
-      "git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan"
+      "git -C " & quoteShell(tmp) & " log --oneline -2 scriptorium/plan"
     )
     check rc == 0
     check "scriptorium: create tickets from areas" in logOutput
@@ -885,7 +907,7 @@ suite "orchestrator manager ticket bootstrap":
     check firstSync
     check not secondSync
     check callCount == 1
-    check afterFirst == before + 1
+    check afterFirst == before + 2  # tickets commit + area hashes commit
     check afterSecond == afterFirst
 
 suite "orchestrator ticket assignment":
@@ -1481,7 +1503,7 @@ suite "orchestrator final v1 flow":
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
     check "Read `spec.md` in this working directory and write/update area markdown files directly under `areas/` in this working directory." in capturedRequest.prompt
     check "areas/01-arch.md" in files
-    check after == before + 1
+    check after == before + 2  # areas commit + spec hash marker commit
 
   test "runManagerTickets commits ticket files written by mocked manager runner":
     let tmp = getTempDir() / "scriptorium_test_v1_38_run_manager_tickets"
@@ -1539,7 +1561,7 @@ suite "orchestrator final v1 flow":
     check "Read `areas/`, `tickets/`, and `spec.md` from this working directory." in capturedRequest.prompt
     check "Only edit files under tickets/open/ and tickets/done/ in this working directory." in capturedRequest.prompt
     check "tickets/open/0001-core-task.md" in files
-    check after == before + 1
+    check after == before + 2  # tickets commit + area hashes commit
 
   test "runManagerTickets rejects writes outside tickets/open":
     let tmp = getTempDir() / "scriptorium_test_manager_write_guard"
@@ -1665,6 +1687,158 @@ suite "orchestrator final v1 flow":
     let needed = areasNeedingTickets(tmp)
     check "areas/02-pending-area.md" in needed
     check "areas/01-done-area.md" notin needed
+
+  test "done ticket with unchanged area hash suppresses area":
+    let tmp = getTempDir() / "scriptorium_test_done_unchanged_hash"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
+    addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
+    addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
+    # Write area hashes matching current content
+    var hashes = initTable[string, string]()
+    hashes["01-done-area"] = $secureHash("# Area 01\n")
+    hashes["02-pending-area"] = $secureHash("# Area 02\n")
+    writeAreaHashesInPlan(tmp, hashes)
+
+    let needed = areasNeedingTickets(tmp)
+    check needed.len == 0  # both areas have matching hashes, done area not re-triggered
+
+  test "done ticket with changed area content triggers new tickets":
+    let tmp = getTempDir() / "scriptorium_test_done_changed_hash"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-done-area.md", "# Area 01 v2\n")  # content differs from stored hash
+    addAreaToPlan(tmp, "02-unchanged.md", "# Area 02\n")
+    addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
+    # Write area hashes with old content hash for 01-done-area
+    var hashes = initTable[string, string]()
+    hashes["01-done-area"] = $secureHash("# Area 01 v1\n")  # old hash
+    hashes["02-unchanged"] = $secureHash("# Area 02\n")  # matching hash
+    writeAreaHashesInPlan(tmp, hashes)
+
+    let needed = areasNeedingTickets(tmp)
+    check "areas/01-done-area.md" in needed  # changed content triggers new tickets
+    check "areas/02-unchanged.md" notin needed  # unchanged is suppressed
+
+  test "open ticket blocks area even when content changed":
+    let tmp = getTempDir() / "scriptorium_test_open_blocks_changed"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-active.md", "# Area 01 v2\n")
+    addTicketToPlan(tmp, "open", "0001-active-ticket.md", "# Ticket\n\n**Area:** 01-active\n")
+    var hashes = initTable[string, string]()
+    hashes["01-active"] = $secureHash("# Area 01 v1\n")  # old hash, content changed
+    writeAreaHashesInPlan(tmp, hashes)
+
+    let needed = areasNeedingTickets(tmp)
+    check "areas/01-active.md" notin needed  # open ticket blocks regardless of content change
+
+  test "architect creates spec hash marker on first run":
+    let tmp = getTempDir() / "scriptorium_test_arch_spec_hash_first_run"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    writeSpecInPlan(tmp, "# Spec\n\nBuild a CLI tool.\n")
+
+    proc generator(model: string, spec: string): seq[AreaDocument] =
+      result = @[AreaDocument(path: "01-cli.md", content: "# CLI Area\n")]
+
+    let synced = syncAreasFromSpec(tmp, generator)
+    check synced
+
+    let files = planTreeFiles(tmp)
+    check "areas/.spec-hash" in files
+    let hashContent = readPlanFile(tmp, "areas/.spec-hash").strip()
+    check hashContent == $secureHash("# Spec\n\nBuild a CLI tool.\n")
+
+  test "architect skips when spec unchanged":
+    let tmp = getTempDir() / "scriptorium_test_arch_skip_unchanged"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    let specContent = "# Spec\n\nBuild a CLI tool.\n"
+    writeSpecInPlan(tmp, specContent)
+    addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
+    writeSpecHashInPlan(tmp, $secureHash(specContent))
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      inc callCount
+      result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
+
+    let changed = runArchitectAreas(tmp, fakeRunner)
+    check not changed
+    check callCount == 0  # architect was not invoked
+
+  test "architect re-runs when spec changes":
+    let tmp = getTempDir() / "scriptorium_test_arch_rerun_spec_changed"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    let oldSpec = "# Spec\n\nBuild a CLI tool.\n"
+    writeSpecInPlan(tmp, "# Spec\n\nBuild a CLI tool with logging.\n")  # new content
+    addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
+    writeSpecHashInPlan(tmp, $secureHash(oldSpec))  # hash of old spec
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      inc callCount
+      # Simulate architect writing an updated area
+      writeFile(request.workingDir / "areas/02-logging.md", "# Logging Area\n")
+      result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
+
+    let changed = runArchitectAreas(tmp, fakeRunner)
+    check changed
+    check callCount == 1
+
+    let files = planTreeFiles(tmp)
+    check "areas/02-logging.md" in files
+    check "areas/.spec-hash" in files
+
+  test "migration writes spec hash marker for existing areas without re-running":
+    let tmp = getTempDir() / "scriptorium_test_arch_migration"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    let specContent = "# Spec\n\nExisting project.\n"
+    writeSpecInPlan(tmp, specContent)
+    addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
+    # No .spec-hash file — simulates pre-upgrade state
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      inc callCount
+      result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
+
+    let changed = runArchitectAreas(tmp, fakeRunner)
+    check not changed  # migration only, no architect run
+    check callCount == 0
+
+    let files = planTreeFiles(tmp)
+    check "areas/.spec-hash" in files  # marker was written
+    let hashContent = readPlanFile(tmp, "areas/.spec-hash").strip()
+    check hashContent == $secureHash(specContent)
+
+  test "manager writes area hashes after ticket generation":
+    let tmp = getTempDir() / "scriptorium_test_manager_writes_area_hashes"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
+
+    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
+      result = @[TicketDocument(slug: "cli-task", content: "# Task\n")]
+
+    discard syncTicketsFromAreas(tmp, generator)
+
+    let files = planTreeFiles(tmp)
+    check "tickets/.area-hashes" in files
+    let hashContent = readPlanFile(tmp, "tickets/.area-hashes").strip()
+    check "01-cli:" & $secureHash("# CLI Area\n") in hashContent
 
   test "runManagerTickets write guard accepts tickets/done writes":
     let tmp = getTempDir() / "scriptorium_test_manager_done_write_guard"
