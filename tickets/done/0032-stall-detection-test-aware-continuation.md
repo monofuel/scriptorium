@@ -87,3 +87,40 @@ To summarize what was implemented:
 ```text
 luding a \"Test Results\" section in the prompt:\n  - If tests pass: note that tests are passing and directive to call `submit_pr`\n  - If tests fail: includes truncated test output and directive to fix failing tests\n- Updated the stall detection loop to call `runWorktreeMakeTest` before building the continuation prompt\n- Added two new unit tests covering both the test-pass and test-fail branches","stop_reason":"end_turn","session_id":"b5fb9269-8381-43e9-b457-6be7cd802018","total_cost_usd":3.2017329999999986,"usage":{"input_tokens":84,"cache_creation_input_tokens":111922,"cache_read_input_tokens":4081001,"output_tokens":18452,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":111922,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":84,"outputTokens":18452,"cacheReadInputTokens":4081001,"cacheCreationInputTokens":111922,"webSearchRequests":0,"costUSD":3.2017329999999986,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"cc395f42-78c3-4986-bebc-e074f751fdce"}
 ```
+
+## Merge Queue Success
+- Summary: add test-aware stall detection: run make test before retry, include pass/fail status and output in continuation prompt\n
+### Quality Check Output
+```text
+gent: completed ticket 0001 (exit 1)
+Traceback (most recent call last)
+/tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0032-stall-detection-test-aware-continuation/src/scriptorium/orchestrator.nim(2078) runHttpServer
+/home/scriptorium/.nimby/pkgs/MCPort/src/mcport/mcp_server_http.nim(241) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1445) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1247) loopForever
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1125) destroy
+/usr/lib/nim/lib/system/alloc.nim(1140) dealloc
+/usr/lib/nim/lib/system/alloc.nim(1027) rawDealloc
+/usr/lib/nim/lib/system/alloc.nim(790) addToSharedFreeList
+SIGSEGV: Illegal storage access. (Attempt to read from nil?)
+  [OK] IT-LIVE-04 live daemon does not enqueue when submit_pr is missing
+--- tests/integration_orchestrator_queue.nim ---
+
+[Suite] integration orchestrator merge queue
+  [OK] IT-02 queue success moves ticket to done and merges ticket commit to master
+  [OK] IT-03 queue failure reopens ticket and appends failure note
+  [OK] IT-03b queue failure when integration-test fails reopens ticket
+  [OK] IT-04 single-flight queue processing keeps second item pending
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-12T20:12:36Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-12T20:13:07Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T20:13:37Z] [INFO] architect: generating areas from spec
+[2026-03-12T20:13:38Z] [INFO] manager: generating tickets
+[2026-03-12T20:13:38Z] [INFO] merge queue: processing
+[2026-03-12T20:13:38Z] [INFO] merge queue: item processed
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-12T20:13:38Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
