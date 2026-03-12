@@ -33,3 +33,5 @@ Individual component timings are logged at DEBUG level during the tick loop (arc
 ## Spec References
 
 - Section 13: Tick Summary Line (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0033-tick-summary-line
