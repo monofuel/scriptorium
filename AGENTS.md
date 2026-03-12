@@ -3,6 +3,35 @@
 - {PROJECT_DESCRIPTION}
 - {PROJECT_FOCUS}
 
+## Running
+
+### Development (Nim)
+
+Run any scriptorium command directly with Nim:
+```
+nim r src/scriptorium.nim <command>
+```
+
+Examples:
+```
+nim r src/scriptorium.nim plan        # interactive planning session
+nim r src/scriptorium.nim run         # start the orchestrator
+nim r src/scriptorium.nim status      # check orchestrator status
+```
+
+### Docker Compose
+
+```
+docker-compose up --build
+```
+
+This mounts the current directory as `/workspace`, passes through `~/.codex` and `~/.claude` credentials, and runs the orchestrator. Set `OPENAI_API_KEY` or `CODEX_API_KEY` environment variables as needed.
+
+To build the Docker image separately:
+```
+make docker-build
+```
+
 ## Dependencies
 
 - Nim >= 2.0.0
