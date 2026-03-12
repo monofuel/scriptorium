@@ -40,3 +40,5 @@ The orchestrator logs `shutdown: signal <n> received` on signal but does not tra
 ## Spec References
 
 - Section 16: Session Summary On Shutdown (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0035-session-summary-on-shutdown
