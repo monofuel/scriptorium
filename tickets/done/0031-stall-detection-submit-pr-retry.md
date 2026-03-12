@@ -92,3 +92,40 @@ The implementation includes:
 ```text
 hanges for merge.\n\nThe implementation includes:\n- Stall detection in `executeAssignedTicket` (clean exit with exit code 0, no `submit_pr` call)\n- Retry with continuation prompt that includes original ticket content and stall indicator\n- Uses existing `maxAttempts` mechanism (no new retry infrastructure)\n- Logs each retry with attempt number and ticket ID\n- Unit tests covering stall retry path and max attempts cutoff","stop_reason":"end_turn","session_id":"c9939320-0a9c-4c59-97be-bfaaec9511fd","total_cost_usd":0.6988325,"usage":{"input_tokens":39,"cache_creation_input_tokens":20716,"cache_read_input_tokens":879325,"output_tokens":5180,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":20716,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":39,"outputTokens":5180,"cacheReadInputTokens":879325,"cacheCreationInputTokens":20716,"webSearchRequests":0,"costUSD":0.6988325,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a3059e90-af5d-40a6-a1f1-9c06ebf066f0"}
 ```
+
+## Merge Queue Success
+- Summary: Add stall detection and retry in executeAssignedTicket: detects clean agent exits without submit_pr, retries with continuation prompt up to maxAttempts, with unit tests\n
+### Quality Check Output
+```text
+coding agent: completed ticket 0001 (exit 1)
+Traceback (most recent call last)
+/tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0031-stall-detection-submit-pr-retry/src/scriptorium/orchestrator.nim(2056) runHttpServer
+/home/scriptorium/.nimby/pkgs/MCPort/src/mcport/mcp_server_http.nim(241) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1445) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1247) loopForever
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1125) destroy
+/usr/lib/nim/lib/system/alloc.nim(1140) dealloc
+/usr/lib/nim/lib/system/alloc.nim(1027) rawDealloc
+/usr/lib/nim/lib/system/alloc.nim(790) addToSharedFreeList
+SIGSEGV: Illegal storage access. (Attempt to read from nil?)
+  [OK] IT-LIVE-04 live daemon does not enqueue when submit_pr is missing
+--- tests/integration_orchestrator_queue.nim ---
+
+[Suite] integration orchestrator merge queue
+  [OK] IT-02 queue success moves ticket to done and merges ticket commit to master
+  [OK] IT-03 queue failure reopens ticket and appends failure note
+  [OK] IT-03b queue failure when integration-test fails reopens ticket
+  [OK] IT-04 single-flight queue processing keeps second item pending
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-12T20:08:45Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-12T20:09:15Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T20:09:45Z] [INFO] architect: generating areas from spec
+[2026-03-12T20:09:46Z] [INFO] manager: generating tickets
+[2026-03-12T20:09:46Z] [INFO] merge queue: processing
+[2026-03-12T20:09:46Z] [INFO] merge queue: item processed
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-12T20:09:47Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
