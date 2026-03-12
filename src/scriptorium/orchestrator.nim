@@ -154,6 +154,8 @@ var
   submitPrLockInitialized = false
   submitPrSummaryLen = 0
   submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
+  ticketStartTimes: Table[string, float]
+  ticketAttemptCounts: Table[string, int]
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -546,6 +548,7 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
   )
 
 proc runWorktreeMakeTest(worktreePath: string): tuple[exitCode: int, output: string]
+proc formatDuration*(seconds: float): string
 
 proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int, testExitCode: int, testOutput: string): string =
   ## Build a continuation prompt for a coding agent that stalled without calling submit_pr.
@@ -1810,6 +1813,11 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       let ticketName = splitFile(inProgressTicket).name
       gitRun(planPath, "commit", "-m", TicketAssignCommitPrefix & " " & ticketName)
 
+    let ticketId = ticketIdFromTicketPath(inProgressTicket)
+    logInfo(fmt"ticket {ticketId}: open -> in-progress (assigned, worktree={worktreeInfo.path})")
+    ticketStartTimes[ticketId] = epochTime()
+    ticketAttemptCounts[ticketId] = 0
+
     result = TicketAssignment(
       openTicket: openTicket,
       inProgressTicket: inProgressTicket,
@@ -1885,6 +1893,7 @@ proc enqueueMergeRequest*(
     gitRun(planPath, "add", PlanMergeQueueDir)
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
       gitRun(planPath, "commit", "-m", MergeQueueEnqueueCommitPrefix & " " & ticketId)
+    logInfo(fmt"ticket {ticketId}: merge queue entered (position={queueId})")
     pendingRelPath
   )
 
@@ -1925,6 +1934,10 @@ proc processMergeQueue*(repoPath: string): bool =
         addWorktreeWithRecovery(repoPath, item.worktree, item.branch)
       else:
         logWarn(fmt"processMergeQueue: worktree and branch both missing for {item.ticketId}, reopening ticket")
+        let missingStartTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)
+        let missingTotalWall = if missingStartTime > 0.0: formatDuration(epochTime() - missingStartTime) else: "unknown"
+        let missingAttempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
+        logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=worktree and branch missing, attempts={missingAttempts}, total wall={missingTotalWall})")
         let failureNote = "## Merge Queue Failure\n" &
           fmt"- Summary: {item.summary}" & "\n" &
           "- Failed gate: worktree and branch missing (container restart?)\n"
@@ -1946,6 +1959,8 @@ proc processMergeQueue*(repoPath: string): bool =
       gitRun(item.worktree, "add", "-A")
       gitRun(item.worktree, "commit", "-m", "scriptorium: auto-commit before merge")
 
+    logInfo(fmt"ticket {item.ticketId}: merge started (make test running)")
+    let mergeStartTime = epochTime()
     let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", "master"])
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
@@ -1967,6 +1982,17 @@ proc processMergeQueue*(repoPath: string): bool =
         failureStep = "git merge --ff-only master"
 
     if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0 and mergedToMaster:
+      let mergeWallTime = epochTime() - mergeStartTime
+      let mergeWallDuration = formatDuration(mergeWallTime)
+      logInfo(fmt"ticket {item.ticketId}: merge succeeded (test wall={mergeWallDuration})")
+
+      let startTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)
+      let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
+      let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
+      logInfo(fmt"ticket {item.ticketId}: in-progress -> done (total wall={totalWall}, attempts={attempts})")
+      ticketStartTimes.del(item.ticketId)
+      ticketAttemptCounts.del(item.ticketId)
+
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       let successNote = formatMergeSuccessNote(item.summary, qualityCheckResult.output).strip()
       let updatedContent = readFile(ticketPath).strip() & "\n\n" & successNote & "\n"
@@ -1981,6 +2007,11 @@ proc processMergeQueue*(repoPath: string): bool =
         gitRun(planPath, "commit", "-m", MergeQueueDoneCommitPrefix & " " & item.ticketId)
       true
     else:
+      let failureReason = if mergeMasterResult.exitCode != 0: "git merge conflict"
+        elif failureStep.len > 0: failureStep
+        else: "quality check failed"
+      logInfo(fmt"ticket {item.ticketId}: merge failed (reason={failureReason})")
+
       let failureNote = formatMergeFailureNote(
         item.summary,
         mergeMasterResult.output,
@@ -1989,6 +2020,9 @@ proc processMergeQueue*(repoPath: string): bool =
       ).strip()
       let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n"
       let failureCount = updatedContent.count("## Merge Queue Failure")
+      let startTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)
+      let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
+      let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
       if failureCount >= MaxMergeFailures:
         logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
@@ -2002,6 +2036,7 @@ proc processMergeQueue*(repoPath: string): bool =
         if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
           gitRun(planPath, "commit", "-m", MergeQueueStuckCommitPrefix & " " & item.ticketId)
       else:
+        logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         writeFile(ticketPath, updatedContent)
         moveFile(ticketPath, planPath / openRelPath)
@@ -2047,9 +2082,12 @@ proc executeAssignedTicket*(
   var currentAttemptBase = DefaultAgentAttempt
   var totalAttemptsUsed = 0
   var submitSummary = ""
+  let model = cfg.agents.coding.model
 
   while totalAttemptsUsed < DefaultAgentMaxAttempts:
     let attemptsForThisCall = DefaultAgentMaxAttempts - totalAttemptsUsed
+    logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
+    let agentStartTime = epochTime()
     let request = AgentRunRequest(
       prompt: currentPrompt,
       workingDir: assignment.worktree,
@@ -2075,6 +2113,16 @@ proc executeAssignedTicket*(
     let agentResult = runner(request)
     result = agentResult
     totalAttemptsUsed += agentResult.attemptCount
+
+    let agentWallTime = epochTime() - agentStartTime
+    let agentWallDuration = formatDuration(agentWallTime)
+    let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
+    logInfo(fmt"ticket {ticketId}: coding agent finished (exit={agentResult.exitCode}, wall={agentWallDuration}, stall={isStall})")
+
+    if ticketAttemptCounts.hasKey(ticketId):
+      ticketAttemptCounts[ticketId] = ticketAttemptCounts[ticketId] + agentResult.attemptCount
+    else:
+      ticketAttemptCounts[ticketId] = agentResult.attemptCount
 
     let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
     let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
@@ -2104,16 +2152,17 @@ proc executeAssignedTicket*(
     if submitSummary.len > 0:
       break
 
-    let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
     if isStall and totalAttemptsUsed < DefaultAgentMaxAttempts:
-      logInfo(fmt"coding[{ticketId}]: stall detected on attempt {agentResult.attempt}, retrying ({totalAttemptsUsed + 1}/{DefaultAgentMaxAttempts})")
-      logDebug(fmt"coding[{ticketId}]: running make test before continuation prompt")
+      logInfo(fmt"ticket {ticketId}: coding agent stalled (attempt {agentResult.attempt}/{DefaultAgentMaxAttempts}, no submit_pr)")
+      let testStartTime = epochTime()
       let testResult = runWorktreeMakeTest(assignment.worktree)
-      if testResult.exitCode == 0:
-        logInfo(fmt"coding[{ticketId}]: make test passed before stall retry")
-      else:
-        logInfo(fmt"coding[{ticketId}]: make test failed before stall retry (exit {testResult.exitCode})")
+      let testWallTime = epochTime() - testStartTime
+      let testWallDuration = formatDuration(testWallTime)
+      let testStatus = if testResult.exitCode == 0: "PASS" else: "FAIL"
+      logInfo(fmt"ticket {ticketId}: make test before retry: {testStatus} (exit={testResult.exitCode}, wall={testWallDuration})")
       currentAttemptBase = agentResult.attempt + agentResult.attemptCount
+      let testStatusLabel = if testResult.exitCode == 0: "passing" else: "failing"
+      logInfo(fmt"ticket {ticketId}: continuation prompt sent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts}, test_status={testStatusLabel})")
       currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase, testResult.exitCode, testResult.output)
       continue
 
@@ -2121,7 +2170,7 @@ proc executeAssignedTicket*(
 
   if submitSummary.len > 0:
     result.submitted = true
-    logInfo(fmt"coding agent called submit_pr, summary={submitSummary}")
+    logInfo(fmt"ticket {ticketId}: submit_pr called (summary=""{submitSummary}"")")
     let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
       logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
@@ -2130,7 +2179,10 @@ proc executeAssignedTicket*(
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
   else:
-    logInfo(fmt"reopening failed ticket {ticketId} (no submit_pr)")
+    let attempts = ticketAttemptCounts.getOrDefault(ticketId, totalAttemptsUsed)
+    let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)
+    let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
+    logInfo(fmt"ticket {ticketId}: in-progress -> open (reopened, reason=no submit_pr, attempts={attempts}, total wall={totalWall})")
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
@@ -2150,10 +2202,8 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     result = AgentRunResult()
   else:
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
-    logInfo(fmt"coding agent: starting ticket {ticketId}")
     result = executeAssignedTicket(repoPath, assignment, runner)
     result.ticketId = ticketId
-    logInfo(fmt"coding agent: completed ticket {ticketId} (exit {result.exitCode})")
 
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
