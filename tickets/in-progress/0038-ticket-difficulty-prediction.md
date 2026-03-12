@@ -33,3 +33,5 @@ No prediction infrastructure exists. Tickets are assigned directly to coding age
 ## Spec References
 
 - Section 18: Ticket Difficulty Prediction (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0038-ticket-difficulty-prediction
