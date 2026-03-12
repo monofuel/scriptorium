@@ -68,3 +68,30 @@ Done. Here's a summary of what was implemented:
 ```text
 ut_hard`, `timeout_no_output`, or `parked`\n\n**Changes to `tests/test_scriptorium.nim`:**\n- Added \"per-ticket metrics\" test suite with 6 tests covering formatting, appending, cleanup, and defaults","stop_reason":"end_turn","session_id":"334cb4cb-8083-4836-9428-509e913ce80c","total_cost_usd":2.0287514,"usage":{"input_tokens":50,"cache_creation_input_tokens":51727,"cache_read_input_tokens":2163775,"output_tokens":14969,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":51727,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":50,"outputTokens":14969,"cacheReadInputTokens":2163775,"cacheCreationInputTokens":51727,"webSearchRequests":0,"costUSD":1.77965625,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":1360,"outputTokens":9612,"cacheReadInputTokens":1317489,"cacheCreationInputTokens":54341,"webSearchRequests":0,"costUSD":0.24909515,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"fcbc68a5-c6b4-4e78-9651-158b0e3febd6"}
 ```
+
+## Merge Queue Success
+- Summary: Add per-ticket metrics persistence: compute structured metrics (wall_time, coding_wall, test_wall, attempt_count, outcome, failure_reason, model, stdout_bytes) and append as ## Metrics section to ticket markdown at all terminal state transitions (done, reopened, parked).\n
+### Quality Check Output
+```text
+ in-progress (assigned, worktree=/tmp/scriptorium/scriptorium_integration_it10_8vdkizp5-311c1d51788f5845/worktrees/tickets/0001-first)
+[2026-03-12T23:29:51Z] [INFO] ticket 0001: merge queue entered (position=1)
+[2026-03-12T23:29:51Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T23:30:21Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-12T23:30:21Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-12T23:30:22Z] [INFO] architect: generating areas from spec
+[2026-03-12T23:30:23Z] [INFO] architect: areas updated
+[2026-03-12T23:30:23Z] [INFO] manager: generating tickets
+[2026-03-12T23:30:23Z] [INFO] merge queue: processing
+[2026-03-12T23:30:23Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-12T23:30:23Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-12T23:30:23Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-12T23:30:23Z] [INFO] merge queue: item processed
+[2026-03-12T23:30:23Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-12T23:30:23Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-12T23:30:23Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-12T23:30:23Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T23:30:53Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-12T23:30:53Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
