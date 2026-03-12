@@ -1777,6 +1777,29 @@ proc processMergeQueue*(repoPath: string): bool =
         return true
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {item.ticketPath}")
 
+    # Recover missing worktrees (e.g. after container restart wiped /tmp).
+    if not dirExists(item.worktree):
+      let branchExists = gitCheck(repoPath, "rev-parse", "--verify", item.branch) == 0
+      if branchExists:
+        logInfo(fmt"processMergeQueue: recovering missing worktree for {item.ticketId} from branch {item.branch}")
+        addWorktreeWithRecovery(repoPath, item.worktree, item.branch)
+      else:
+        logWarn(fmt"processMergeQueue: worktree and branch both missing for {item.ticketId}, reopening ticket")
+        let failureNote = "## Merge Queue Failure\n" &
+          fmt"- Summary: {item.summary}" & "\n" &
+          "- Failed gate: worktree and branch missing (container restart?)\n"
+        let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n"
+        let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
+        writeFile(ticketPath, updatedContent)
+        moveFile(ticketPath, planPath / openRelPath)
+        if fileExists(queuePath):
+          removeFile(queuePath)
+        writeFile(activePath, "")
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+        return true
+
     let dirtyCheck = runCommandCapture(item.worktree, "git", @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
       logInfo(fmt"processMergeQueue: auto-committing dirty worktree for {item.ticketId}")
@@ -2137,6 +2160,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             idle = true
     except CatchableError as e:
       logError(fmt"tick {ticks} failed: {e.msg}")
+      idle = true  # backoff on persistent errors to prevent spin-loop
     if idle:
       sleep(IdleBackoffSleepMs)
     else:

@@ -1336,6 +1336,64 @@ suite "orchestrator merge queue":
     check "areas/02-core.md" in needed
     check "areas/01-cli.md" notin needed
 
+  test "processMergeQueue recovers missing worktree from branch":
+    let tmp = getTempDir() / "scriptorium_test_merge_queue_recover_worktree"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "recovered\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "recover me")
+
+    # Simulate container restart: remove the worktree directory but keep the branch
+    removeDir(assignment.worktree)
+    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
+
+    let processed = processMergeQueue(tmp)
+    let files = planTreeFiles(tmp)
+    check processed
+    check "tickets/done/0001-first.md" in files
+    check "queue/merge/pending/0001-0001.md" notin files
+
+    let (masterFile, masterRc) = execCmdEx("git -C " & quoteShell(tmp) & " show master:ticket-output.txt")
+    check masterRc == 0
+    check masterFile.strip() == "recovered"
+
+  test "processMergeQueue reopens ticket when worktree and branch are both missing":
+    let tmp = getTempDir() / "scriptorium_test_merge_queue_no_branch"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "lost branch")
+
+    # Simulate container restart: remove both worktree and branch
+    removeDir(assignment.worktree)
+    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
+    runCmdOrDie("git -C " & quoteShell(tmp) & " branch -D " & quoteShell(assignment.branch))
+
+    let processed = processMergeQueue(tmp)
+    let files = planTreeFiles(tmp)
+    check processed
+    check "tickets/open/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
+    check "queue/merge/pending/0001-0001.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
+    )
+    check ticketRc == 0
+    check "## Merge Queue Failure" in ticketContent
+    check "worktree and branch missing" in ticketContent
+
 suite "orchestrator final v1 flow":
   test "blank spec tick skips orchestration and does not invoke agents":
     let tmp = getTempDir() / "scriptorium_test_v1_36_blank_spec_guard"
