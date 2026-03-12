@@ -56,3 +56,5 @@ All lines must include ticket ID for correlation. Durations must be human-readab
 ## Spec References
 
 - Section 14: Ticket Lifecycle Logging (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0034-ticket-lifecycle-logging
