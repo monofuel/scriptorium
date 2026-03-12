@@ -41,3 +41,5 @@ Compute structured per-ticket metrics and append them to ticket markdown alongsi
 ## Spec References
 
 - Section 15: Per-Ticket Metrics In Agent Run Notes (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0037-per-ticket-metrics-persistence
