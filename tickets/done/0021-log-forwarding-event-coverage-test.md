@@ -198,3 +198,40 @@ The `submit_pr` call succeeded. The merge request has been enqueued.
 ```text
 mmary:** The test `executeAssignedTicket wires onEvent callback that accepts all event kinds` was already committed and merged into master (at commit `405137d`). The ticket branch is at master's HEAD with a clean worktree. Previous merge queue failures were caused by uncommitted changes in old worktrees. The submit_pr signal has been sent successfully via the orchestrator's MCP HTTP endpoint at port 8097.","stop_reason":"end_turn","session_id":"cd4aca9d-589a-4e80-b6b7-a7c75816aa2f","total_cost_usd":0.8010164999999999,"usage":{"input_tokens":35,"cache_creation_input_tokens":30240,"cache_read_input_tokens":934583,"output_tokens":5782,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":30240,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-sonnet-4-6":{"inputTokens":35,"outputTokens":5782,"cacheReadInputTokens":934583,"cacheCreationInputTokens":30240,"webSearchRequests":0,"costUSD":0.8010164999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"7a97e9ea-0cdd-426d-941f-a16a151e15ca"}
 ```
+
+## Merge Queue Success
+- Summary: Test already exists: executeAssignedTicket wires onEvent callback that accepts all event kinds - verifies callback is non-nil and all five AgentStreamEventKind values can be fired without error\n
+### Quality Check Output
+```text
+ing agent: completed ticket 0001 (exit 1)
+Traceback (most recent call last)
+/tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0021-log-forwarding-event-coverage-test/src/scriptorium/orchestrator.nim(2056) runHttpServer
+/home/scriptorium/.nimby/pkgs/MCPort/src/mcport/mcp_server_http.nim(241) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1445) serve
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1247) loopForever
+/home/scriptorium/.nimby/pkgs/mummy/src/mummy.nim(1125) destroy
+/usr/lib/nim/lib/system/alloc.nim(1140) dealloc
+/usr/lib/nim/lib/system/alloc.nim(1027) rawDealloc
+/usr/lib/nim/lib/system/alloc.nim(790) addToSharedFreeList
+SIGSEGV: Illegal storage access. (Attempt to read from nil?)
+  [OK] IT-LIVE-04 live daemon does not enqueue when submit_pr is missing
+--- tests/integration_orchestrator_queue.nim ---
+
+[Suite] integration orchestrator merge queue
+  [OK] IT-02 queue success moves ticket to done and merges ticket commit to master
+  [OK] IT-03 queue failure reopens ticket and appends failure note
+  [OK] IT-03b queue failure when integration-test fails reopens ticket
+  [OK] IT-04 single-flight queue processing keeps second item pending
+  [OK] IT-05 merge conflict during merge master into ticket reopens ticket
+  [OK] IT-08 recovery after partial queue transition converges without duplicate moves
+[2026-03-12T20:04:38Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-09 red master blocks assignment of open tickets
+[2026-03-12T20:05:08Z] [WARN] master is unhealthy — skipping tick
+[2026-03-12T20:05:38Z] [INFO] architect: generating areas from spec
+[2026-03-12T20:05:39Z] [INFO] manager: generating tickets
+[2026-03-12T20:05:39Z] [INFO] merge queue: processing
+[2026-03-12T20:05:39Z] [INFO] merge queue: item processed
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-12T20:05:39Z] [WARN] master is unhealthy — skipping tick
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
