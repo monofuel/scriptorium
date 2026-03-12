@@ -330,3 +330,147 @@ This spec describes behavior that is present in the code and covered by current 
 - Stall detection is per-turn only — it does not detect agents that are running but making no progress within a turn.
 - Test-aware stall detection runs make test only, not make integration-test.
 - Coding agent promotions and manager-driven retries are out of scope for v2.
+
+## V3 Features — Observability And Metrics
+
+### 13. Tick Summary Line
+
+- At the end of each orchestrator tick, the orchestrator must log a single INFO-level summary line capturing the full system state snapshot.
+- The summary line must include:
+  - `architect`: `no-op`, `updated`, or `skipped`
+  - `manager`: `no-op`, `updated`, or `skipped`
+  - `coding`: ticket ID + status (`running`, `stalled`, `submitted`, `failed`) + wall time, or `idle`
+  - `merge`: `idle`, `processing`, or ticket ID being merged
+  - `open` / `in-progress` / `done`: current ticket counts
+- Example format:
+  - `tick 42 summary: architect=no-op manager=no-op coding=0031(running, 3m12s) merge=idle open=2 in-progress=1 done=14`
+- Acceptance criteria:
+  - Every tick produces exactly one summary line at INFO level.
+  - The line contains all specified fields.
+  - Wall times are human-readable (e.g., `3m12s`).
+
+### 14. Ticket Lifecycle Logging
+
+- The orchestrator must log an INFO-level line for every ticket state transition, with timing.
+- Required log points:
+  - Assignment: `ticket <id>: open -> in-progress (assigned, worktree=<path>)`
+  - Coding agent start: `ticket <id>: coding agent started (model=<model>, attempt <n>/<max>)`
+  - Coding agent finish: `ticket <id>: coding agent finished (exit=<code>, wall=<duration>, stall=<bool>)`
+  - PR submission: `ticket <id>: submit_pr called (summary="<summary>")`
+  - Merge queue entry: `ticket <id>: merge queue entered (position=<n>)`
+  - Merge start: `ticket <id>: merge started (make test running)`
+  - Merge success: `ticket <id>: merge succeeded (test wall=<duration>)`
+  - Merge failure: `ticket <id>: merge failed (reason=<reason>)`
+  - Completion: `ticket <id>: in-progress -> done (total wall=<duration>, attempts=<n>)`
+  - Reopen: `ticket <id>: in-progress -> open (reopened, reason=<reason>, attempts=<n>, total wall=<duration>)`
+- For stall-related events:
+  - Stall detection: `ticket <id>: coding agent stalled (attempt <n>/<max>, no submit_pr)`
+  - Pre-retry test: `ticket <id>: make test before retry: <PASS|FAIL> (exit=<code>, wall=<duration>)`
+  - Continuation: `ticket <id>: continuation prompt sent (attempt <n>/<max>, test_status=<passing|failing>)`
+- Acceptance criteria:
+  - All listed transitions produce the specified log lines at INFO level.
+  - Log lines include ticket ID for correlation.
+  - Durations are human-readable.
+
+### 15. Per-Ticket Metrics In Agent Run Notes
+
+- The orchestrator must capture structured metrics per ticket and persist them in the agent run notes on the plan branch.
+- Required metrics fields:
+  - `wall_time_seconds`: total elapsed time from assignment to done/reopen.
+  - `coding_wall_seconds`: time spent in the coding agent (per attempt and total).
+  - `test_wall_seconds`: time spent running make test (merge queue + stall checks).
+  - `attempt_count`: number of coding agent attempts.
+  - `outcome`: `done`, `reopened`, or `parked`.
+  - `failure_reason`: `stall`, `test_failure`, `merge_conflict`, `timeout_hard`, `timeout_no_output`, or `parked` (only set when outcome is not `done`).
+  - `model`: which model was used for the coding agent.
+  - `stdout_bytes`: size of agent stdout in bytes (proxy for token usage).
+- Metrics must be appended to the ticket markdown alongside existing agent run notes.
+- Acceptance criteria:
+  - Every completed or reopened ticket has structured metrics in its run notes.
+  - All listed fields are present.
+  - Timing values are in seconds for machine readability.
+
+### 16. Session Summary On Shutdown
+
+- When the orchestrator shuts down (signal or idle exit), it must log a session summary at INFO level.
+- The summary must include:
+  - Aggregate counts: `uptime`, `ticks`, `tickets_completed`, `tickets_reopened`, `tickets_parked`, `merge_queue_processed`.
+  - Averages: `avg_ticket_wall`, `avg_coding_wall`, `avg_test_wall`.
+  - `first_attempt_success`: percentage of done tickets that succeeded on their first coding agent attempt.
+- Example format:
+  - `session summary: uptime=1h23m ticks=47 tickets_completed=3 tickets_reopened=1 tickets_parked=0 merge_queue_processed=3`
+  - `session summary: avg_ticket_wall=5m12s avg_coding_wall=4m02s avg_test_wall=38s first_attempt_success=75%`
+- Acceptance criteria:
+  - On shutdown, the orchestrator logs exactly two summary lines (counts and averages).
+  - All listed fields are present.
+  - If no tickets were completed, averages must show `n/a` or `0`.
+
+### 17. Status Command Enhancement
+
+- `scriptorium status` must be extended to show:
+  - Elapsed time for the current in-progress ticket (how long it has been running).
+  - The last N completed tickets (default 5) with outcome (`done`, `reopened`, `parked`) and wall time.
+  - Cumulative first-attempt success rate across all done tickets.
+- Acceptance criteria:
+  - `scriptorium status` output includes in-progress ticket elapsed time.
+  - `scriptorium status` output includes recent completed tickets with outcomes and timing.
+  - `scriptorium status` output includes first-attempt success rate.
+  - Existing status output (ticket counts, active ticket info) is preserved.
+
+### 18. Ticket Difficulty Prediction
+
+- Before a ticket is assigned to a coding agent, the orchestrator must run a prediction prompt to estimate difficulty and expected duration.
+- The prediction must be generated by a lightweight agent call (using the configured coding agent model via codex harness).
+- The prediction prompt must include:
+  - The ticket content.
+  - The relevant area content.
+  - Current spec summary context.
+- The prediction output must include:
+  - `predicted_difficulty`: `trivial`, `easy`, `medium`, `hard`, or `complex`.
+  - `predicted_duration_minutes`: estimated wall time in minutes.
+  - `reasoning`: brief explanation of the prediction.
+- The prediction must be:
+  - Logged at INFO level: `ticket <id>: predicted difficulty=<level> duration=<n>min`.
+  - Appended to the ticket markdown as a prediction section before coding begins.
+- Acceptance criteria:
+  - Every ticket gets a prediction before coding agent assignment.
+  - The prediction is logged and persisted in the ticket markdown.
+  - Prediction does not block or significantly delay ticket assignment (should be fast).
+
+### 19. Ticket Post-Analysis
+
+- After a ticket reaches `done` or is reopened/parked, the orchestrator must run a brief post-analysis.
+- The post-analysis must compare predicted vs actual metrics:
+  - Predicted difficulty vs actual attempt count and outcome.
+  - Predicted duration vs actual wall time.
+- The post-analysis output must include:
+  - `actual_difficulty`: assessment based on actual metrics (`trivial`, `easy`, `medium`, `hard`, `complex`).
+  - `prediction_accuracy`: whether the prediction was `accurate`, `underestimated`, or `overestimated`.
+  - `brief_summary`: one-sentence summary of what happened.
+- The post-analysis must be:
+  - Logged at INFO level: `ticket <id>: post-analysis: predicted=<level> actual=<level> accuracy=<accuracy> wall=<duration>`.
+  - Appended to the ticket markdown as a post-analysis section.
+- Acceptance criteria:
+  - Every completed, reopened, or parked ticket gets a post-analysis.
+  - The post-analysis is logged and persisted in the ticket markdown.
+  - Post-analysis compares prediction to actuals.
+
+## V3 Known Limitations
+
+- Ticket predictions use heuristic difficulty levels, not calibrated estimates — accuracy will improve over time as data accumulates.
+- Post-analysis is a simple predicted-vs-actual comparison, not a detailed root-cause analysis.
+- Dynamic routing based on predicted difficulty is out of scope — v3 collects the data, future versions may act on it.
+- All metrics are stored in logs and plan-branch markdown only — no external dashboards or time-series storage.
+- `stdout_bytes` is a rough proxy for token usage; real token counts require harness-level API integration.
+- Session summary averages are per-session only, not cumulative across sessions.
+
+## V3 Acceptance Criteria
+
+- All v1 and v2 acceptance criteria remain.
+- Tick summary lines appear in `scriptorium run` output at INFO level.
+- Ticket lifecycle transitions are logged with timing at INFO level.
+- Per-ticket metrics are persisted in agent run notes on the plan branch.
+- Session shutdown produces aggregate summary lines.
+- `scriptorium status` shows enhanced output with timing and success rates.
+- Ticket predictions are generated and logged before coding begins.
+- Ticket post-analysis is generated and logged after ticket completion.
