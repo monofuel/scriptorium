@@ -675,3 +675,114 @@ This spec describes behavior that is present in the code and covered by current 
 - Failed merges do not affect other in-flight agents.
 - Token budget and rate limit backpressure prevent resource exhaustion.
 - Orchestrator logs show agent slot utilization.
+
+## V7 Features — Code Quality And Correctness
+
+### 27. Orchestrator Module Split
+
+- `orchestrator.nim` must be decomposed into focused modules, each covering a single responsibility.
+- Target modules and their responsibilities:
+  - `git_ops.nim`: gitRun, gitCheck, worktree add/remove/recover.
+  - `lock_management.nim`: repo lock, stale PID detection, plan worktree lock.
+  - `ticket_metadata.nim`: parse area/depends/worktree fields, ticket/area ID helpers, open/done listing.
+  - `prompt_builders.nim`: all buildXxxPrompt procs, plan scope, prediction prompt.
+  - `output_formatting.nim`: formatAgentRunNote, formatMetricsNote, formatDuration, truncation.
+  - `ticket_analysis.nim`: prediction, post-analysis, difficulty classification.
+  - `merge_queue.nim`: ensureMergeQueueInitialized, enqueueMergeRequest, processMergeQueue.
+  - `coding_agent.nim`: executeAssignedTicket, agent thread pool, slot management.
+  - `architect_agent.nim`: spec sync, area generation, architect should-run check.
+  - `manager_agent.nim`: ticket generation from areas, batch prompt.
+  - `ticket_assignment.nim`: assignOldestOpenTicket, dependency check, worktree cleanup.
+  - `health_checks.nim`: master health, health cache, state invariant validation.
+  - `mcp_server.nim`: createOrchestratorServer, submit_pr/submit_review handlers, shared buffers.
+  - `shared_state.nim`: locks init, token budget, rate limiting, session stats.
+  - `interactive_sessions.nim`: interactive plan/ask sessions, input helpers.
+  - `orchestrator.nim` (remaining): main loop, signal handlers, runOrchestrator entry points.
+- Extraction order must be bottom-up: start with modules that have no internal dependencies (`git_ops`, `lock_management`, `ticket_metadata`), then work upward through modules that depend on already-extracted code.
+- Each extraction must be a single commit that moves procs and updates imports.
+- All existing tests (`make test`, `make integration-test`) must pass after each extraction — no behavior changes are permitted during extraction.
+- Focused unit tests should be added for newly isolated modules where coverage is thin.
+- Acceptance criteria:
+  - Each target module exists as a separate `.nim` file under `src/`.
+  - `orchestrator.nim` retains only the main loop, signal handlers, and top-level entry points.
+  - Every intermediate commit (one per module extraction) passes `make test`.
+  - No behavioral changes — only code movement and import updates.
+
+### 28. SIGSEGV Shutdown Fix
+
+- The orchestrator must shut down cleanly without triggering SIGSEGV in mummy's allocator.
+- Root cause: calling `httpServer.close()` from the main thread while mummy's `serve()` is still running on the server thread causes a use-after-free in `addToSharedFreeList` during `destroy`.
+- Fix approach: coordinate shutdown so the server thread closes itself rather than receiving a cross-thread close.
+  - The main thread must set a shutdown flag (atomic or shared-memory signal).
+  - The server thread must check the shutdown flag and call `close()` on itself.
+  - The main thread must `joinThread()` only after the server thread has exited.
+- The fix must not introduce a sleep-based workaround — shutdown must be event-driven.
+- If mummy does not support flag-based shutdown, investigate:
+  - Whether a newer mummy version fixes cross-thread `close()`.
+  - Whether an alternative HTTP server library is needed.
+- Acceptance criteria:
+  - `scriptorium run` exits cleanly after signal or idle shutdown with exit code 0.
+  - No SIGSEGV or illegal storage access on shutdown.
+  - The MCP HTTP server thread terminates before the main thread exits.
+  - Existing MCP tool functionality (submit_pr, submit_review) is unaffected.
+
+### 29. Ticket Dependency Cycle Detection
+
+- The orchestrator must detect and surface circular dependencies among tickets.
+- At ticket creation time (manager agent):
+  - After the manager writes new tickets, the orchestrator must validate that the dependency graph remains acyclic.
+  - Build a directed graph from all open and in-progress tickets using `**Depends:** <id-list>` fields.
+  - Check for strongly connected components (cycles) using a standard algorithm (Tarjan's or DFS-based).
+  - If a cycle is detected, log an error: `ticket <id>: dependency cycle detected (<id> -> <id> -> ... -> <id>)`.
+- Periodic scan during the orchestrator main loop:
+  - On each tick (or at a configurable interval), scan all open tickets for dependency cycles.
+  - Tickets that can never be assigned due to circular dependencies must be logged as warnings: `ticket <id>: permanently blocked by dependency cycle`.
+- `scriptorium status` enhancement:
+  - When blocked tickets exist, `status` must report them with the reason: `Blocked: <id> (circular dependency with <id-list>)`.
+  - When tickets are blocked by unsatisfied (but non-circular) dependencies, `status` must report: `Waiting: <id> (depends on <id-list>)`.
+- Acceptance criteria:
+  - Circular dependencies are detected at ticket creation time and logged as errors.
+  - Periodic scans identify tickets permanently blocked by cycles.
+  - `scriptorium status` surfaces blocked and waiting tickets with explanations.
+  - Non-circular dependency checking (`dependenciesSatisfied`) continues to work as before.
+  - Unit tests cover: simple cycle (A->B->A), multi-node cycle (A->B->C->A), no cycle, self-dependency.
+
+### 30. Review Agent Test Coverage
+
+- The review agent must have comprehensive unit and integration test coverage beyond the existing noop-runner integration tests.
+- Required unit tests for `buildReviewAgentPrompt`:
+  - Verify the rendered prompt contains the expected sections: diff, ticket content, area context, and submit summary.
+  - Verify each section is labeled and delimited so the review agent can parse them.
+  - Verify the prompt includes the review instructions and available MCP tool description.
+- Edge case tests for diff generation:
+  - Empty diff: when `git diff master...ticket-branch` produces no output, the prompt must include a note that no changes were found and the review agent should flag this.
+  - Failed diff: when the diff command fails (e.g., branch does not exist, force-pushed), the review flow must handle the error gracefully — log a warning and default to approval rather than crashing.
+- Feedback truncation test:
+  - When review feedback exceeds `ReviewFeedbackMaxBytes` (4096 bytes), it must be truncated to fit.
+  - The truncated feedback must end with a truncation marker (e.g., `... [truncated]`).
+  - A unit test must exercise the truncation boundary: feedback of exactly 4096 bytes, 4097 bytes, and well under 4096 bytes.
+- Live integration test:
+  - An integration test must run the review agent with a real model (similar to existing `integration_mcp_submit_pr_live.nim`).
+  - The test must verify the review agent calls `submit_review` with either `approve` or `request_changes`.
+  - The test must use a real diff against a real branch, not synthetic input.
+- Acceptance criteria:
+  - `buildReviewAgentPrompt` output structure is verified by unit tests.
+  - Empty and failed diff edge cases are covered by unit tests.
+  - Feedback truncation at `ReviewFeedbackMaxBytes` boundary is covered by a unit test.
+  - A live integration test exercises the full review agent flow with a real model.
+  - All new tests pass in `make test` (unit) and `make integration-test` (live).
+
+## V7 Known Limitations
+
+- The orchestrator module split is a refactoring-only change — no new functionality is added, and the public API surface of `orchestrator.nim` is preserved through re-exports.
+- The SIGSEGV fix depends on mummy's threading model — if mummy fundamentally cannot support coordinated shutdown, a server library change may be required.
+- Cycle detection uses a simple graph algorithm and does not handle dynamic dependency changes during a tick — dependencies are snapshot at scan time.
+- Review agent live integration tests require API credentials and a running model, so they only run in `make integration-test`, not `make test`.
+
+## V7 Acceptance Criteria
+
+- All v1, v2, v3, v4, and v5 acceptance criteria remain.
+- `orchestrator.nim` is decomposed into the specified modules with one commit per extraction, all tests passing after each.
+- The orchestrator shuts down cleanly without SIGSEGV.
+- Circular ticket dependencies are detected at creation time and surfaced in `scriptorium status`.
+- Review agent has unit tests for prompt structure, diff edge cases, and feedback truncation, plus a live integration test.
