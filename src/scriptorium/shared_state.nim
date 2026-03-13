@@ -3,6 +3,18 @@ import
   ./[agent_runner, logging]
 
 const
+  PlanAreasDir* = "areas"
+  PlanTicketsOpenDir* = "tickets/open"
+  PlanTicketsInProgressDir* = "tickets/in-progress"
+  PlanTicketsDoneDir* = "tickets/done"
+  PlanTicketsStuckDir* = "tickets/stuck"
+  PlanMergeQueueDir* = "queue/merge"
+  PlanMergeQueuePendingDir* = "queue/merge/pending"
+  PlanMergeQueueActivePath* = "queue/merge/active.md"
+  PlanSpecPath* = "spec.md"
+  DefaultAgentAttempt* = 1
+  DefaultAgentMaxAttempts* = 2
+  DefaultLocalEndpoint* = "http://127.0.0.1:8097"
   SubmitPrSummaryMaxBytes* = 4096
   ActiveWorktreePathMaxBytes* = 1024
   ActiveTicketIdMaxBytes* = 256

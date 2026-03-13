@@ -1,0 +1,376 @@
+import
+  std/[locks, os, strformat, strutils, tables, times],
+  ./[agent_runner, config, git_ops, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+
+const
+  PredictionNoOutputTimeoutMs = 30_000
+  PredictionHardTimeoutMs = 60_000
+  PredictionCommitPrefix = "scriptorium: predict ticket"
+  TicketAgentRunCommitPrefix = "scriptorium: record agent run"
+  TicketAgentFailReopenCommitPrefix = "scriptorium: reopen failed ticket"
+  SubmitPrTestOutputMaxChars = 2000
+
+type
+  AgentThreadArgs* = tuple[
+    repoPath: string,
+    assignment: TicketAssignment,
+    ticketId: string,
+  ]
+
+  AgentCompletionResult* = tuple[
+    ticketId: string,
+    result: AgentRunResult,
+  ]
+
+var
+  agentResultChan: Channel[AgentCompletionResult]
+  agentResultChanOpen = false
+  runningAgentSlots: seq[AgentSlot]
+  runningAgentThreadPtrs: seq[ptr Thread[AgentThreadArgs]]
+
+proc ensureAgentResultChanOpen() =
+  ## Open the agent result channel once.
+  if not agentResultChanOpen:
+    agentResultChan.open()
+    agentResultChanOpen = true
+
+proc predictTicketDifficulty*(
+  repoPath: string,
+  ticketRelPath: string,
+  ticketContent: string,
+  runner: AgentRunner = runAgent,
+): TicketPrediction =
+  ## Run a lightweight prediction prompt to estimate ticket difficulty before assignment.
+  ## Returns a TicketPrediction on success. Raises on failure so callers can handle best-effort.
+  let cfg = loadConfig(repoPath)
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
+
+  # Gather area content for the ticket.
+  let areaId = parseAreaFromTicketContent(ticketContent)
+  var areaContent = ""
+  if areaId.len > 0:
+    areaContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+      let areaPath = planPath / PlanAreasDir / areaId & ".md"
+      if fileExists(areaPath):
+        result = readFile(areaPath)
+    )
+
+  # Gather spec summary.
+  let specSummary = withPlanWorktree(repoPath, proc(planPath: string): string =
+    let specPath = planPath / PlanSpecPath
+    if fileExists(specPath):
+      let content = readFile(specPath)
+      # Use first 2000 chars as summary to keep the prompt short.
+      if content.len > 2000:
+        result = content[0..<2000] & "\n...(truncated)"
+      else:
+        result = content
+  )
+
+  let prompt = buildPredictionPrompt(ticketContent, areaContent, specSummary)
+
+  let request = AgentRunRequest(
+    prompt: prompt,
+    workingDir: repoPath,
+    harness: cfg.agents.coding.harness,
+    model: cfg.agents.coding.model,
+    reasoningEffort: cfg.agents.coding.reasoningEffort,
+    ticketId: ticketId & "-prediction",
+    attempt: 1,
+    skipGitRepoCheck: true,
+    noOutputTimeoutMs: PredictionNoOutputTimeoutMs,
+    hardTimeoutMs: PredictionHardTimeoutMs,
+    maxAttempts: 1,
+  )
+
+  let agentResult = runner(request)
+  if agentResult.exitCode != 0:
+    raise newException(ValueError, "prediction agent exited with code " & $agentResult.exitCode)
+
+  let responseText = agentResult.lastMessage.strip()
+  if responseText.len == 0:
+    raise newException(ValueError, "prediction agent returned empty response")
+
+  result = parsePredictionResponse(responseText)
+  logInfo(&"ticket {ticketId}: predicted difficulty={result.difficulty} duration={result.durationMinutes}min")
+
+proc runTicketPrediction*(repoPath: string, ticketRelPath: string, runner: AgentRunner = runAgent) =
+  ## Run a best-effort prediction for a ticket and persist results to the plan branch.
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
+  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+    readFile(planPath / ticketRelPath)
+  )
+  try:
+    let prediction = predictTicketDifficulty(repoPath, ticketRelPath, ticketContent, runner)
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      if not fileExists(ticketPath):
+        return 0
+      let currentContent = readFile(ticketPath)
+      let updatedContent = appendPredictionNote(currentContent, prediction)
+      writeFile(ticketPath, updatedContent)
+      gitRun(planPath, "add", ticketRelPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", PredictionCommitPrefix & " " & ticketId)
+      0
+    )
+  except CatchableError as e:
+    logWarn(&"ticket {ticketId}: prediction failed: {e.msg}")
+
+proc executeAssignedTicket*(
+  repoPath: string,
+  assignment: TicketAssignment,
+  runner: AgentRunner = runAgent,
+): AgentRunResult =
+  ## Run the coding agent for an assigned in-progress ticket and persist run notes.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  if assignment.inProgressTicket.len == 0:
+    raise newException(ValueError, "in-progress ticket path is required")
+  if assignment.worktree.len == 0:
+    raise newException(ValueError, "assignment worktree path is required")
+
+  logDebug(fmt"executeAssignedTicket: loadConfig")
+  let cfg = loadConfig(repoPath)
+  let ticketRelPath = assignment.inProgressTicket
+
+  logDebug(fmt"executeAssignedTicket: reading ticket from plan worktree")
+  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+    let ticketPath = planPath / ticketRelPath
+    if not fileExists(ticketPath):
+      raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+    readFile(ticketPath)
+  )
+
+  logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
+  let initialPrompt = buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent)
+
+  var currentPrompt = initialPrompt
+  var currentAttemptBase = DefaultAgentAttempt
+  var totalAttemptsUsed = 0
+  var submitSummary = ""
+  let model = cfg.agents.coding.model
+  let maxAttempts = cfg.timeouts.codingAgentMaxAttempts
+
+  setActiveTicketWorktree(assignment.worktree, ticketId)
+  defer: clearActiveTicketWorktree(ticketId)
+
+  while totalAttemptsUsed < maxAttempts:
+    let attemptsForThisCall = maxAttempts - totalAttemptsUsed
+    logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
+    let agentStartTime = epochTime()
+    let request = AgentRunRequest(
+      prompt: currentPrompt,
+      workingDir: assignment.worktree,
+      harness: cfg.agents.coding.harness,
+      model: cfg.agents.coding.model,
+      reasoningEffort: cfg.agents.coding.reasoningEffort,
+      mcpEndpoint: cfg.endpoints.local,
+      ticketId: ticketId,
+      attempt: currentAttemptBase,
+      skipGitRepoCheck: true,
+      noOutputTimeoutMs: cfg.timeouts.codingAgentNoOutputTimeoutMs,
+      hardTimeoutMs: cfg.timeouts.codingAgentHardTimeoutMs,
+      maxAttempts: attemptsForThisCall,
+      onEvent: proc(event: AgentStreamEvent) =
+        if event.kind == agentEventTool:
+          logDebug(fmt"coding[{ticketId}]: {event.text}")
+        elif event.kind == agentEventStatus:
+          logDebug(fmt"coding[{ticketId}]: status {event.text}"),
+    )
+    discard consumeSubmitPrSummary(ticketId)
+
+    logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{maxAttempts})")
+    let agentResult = runner(request)
+    result = agentResult
+    totalAttemptsUsed += agentResult.attemptCount
+
+    let agentWallTime = epochTime() - agentStartTime
+    let agentWallDuration = formatDuration(agentWallTime)
+    let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
+    logInfo(fmt"ticket {ticketId}: coding agent finished (exit={agentResult.exitCode}, wall={agentWallDuration}, stall={isStall})")
+
+    ensureTimingsLockInitialized()
+    acquire(timingsLock)
+    if ticketCodingWalls.hasKey(ticketId):
+      ticketCodingWalls[ticketId] = ticketCodingWalls[ticketId] + agentWallTime
+    else:
+      ticketCodingWalls[ticketId] = agentWallTime
+
+    if ticketAttemptCounts.hasKey(ticketId):
+      ticketAttemptCounts[ticketId] = ticketAttemptCounts[ticketId] + agentResult.attemptCount
+    else:
+      ticketAttemptCounts[ticketId] = agentResult.attemptCount
+
+    ticketModels[ticketId] = model
+    if ticketStdoutBytes.hasKey(ticketId):
+      ticketStdoutBytes[ticketId] = ticketStdoutBytes[ticketId] + agentResult.stdout.len
+    else:
+      ticketStdoutBytes[ticketId] = agentResult.stdout.len
+    release(timingsLock)
+
+    let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
+    let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
+    logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
+    if stdoutTail.len > 0:
+      logDebug(fmt"executeAssignedTicket: stdout tail: {stdoutTail}")
+    if messageTail.len > 0:
+      logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
+
+    logDebug(fmt"executeAssignedTicket: writing agent run notes to plan worktree")
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      if not fileExists(ticketPath):
+        raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
+
+      let currentContent = readFile(ticketPath)
+      let updatedContent = appendAgentRunNote(currentContent, cfg.agents.coding.model, agentResult)
+      writeFile(ticketPath, updatedContent)
+      gitRun(planPath, "add", ticketRelPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        let ticketName = splitFile(ticketRelPath).name
+        gitRun(planPath, "commit", "-m", TicketAgentRunCommitPrefix & " " & ticketName)
+      0
+    )
+
+    submitSummary = consumeSubmitPrSummary(ticketId)
+    if submitSummary.len > 0:
+      break
+
+    if isStall and totalAttemptsUsed < maxAttempts:
+      logInfo(fmt"ticket {ticketId}: coding agent stalled (attempt {agentResult.attempt}/{maxAttempts}, no submit_pr)")
+      let testStartTime = epochTime()
+      let testResult = runWorktreeMakeTest(assignment.worktree)
+      let testWallTime = epochTime() - testStartTime
+      let testWallDuration = formatDuration(testWallTime)
+      let testStatus = if testResult.exitCode == 0: "PASS" else: "FAIL"
+      logInfo(fmt"ticket {ticketId}: make test before retry: {testStatus} (exit={testResult.exitCode}, wall={testWallDuration})")
+
+      acquire(timingsLock)
+      if ticketTestWalls.hasKey(ticketId):
+        ticketTestWalls[ticketId] = ticketTestWalls[ticketId] + testWallTime
+      else:
+        ticketTestWalls[ticketId] = testWallTime
+      release(timingsLock)
+
+      currentAttemptBase = agentResult.attempt + agentResult.attemptCount
+      let testStatusLabel = if testResult.exitCode == 0: "passing" else: "failing"
+      logInfo(fmt"ticket {ticketId}: continuation prompt sent (attempt {currentAttemptBase}/{maxAttempts}, test_status={testStatusLabel})")
+      currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase, testResult.exitCode, testResult.output)
+      continue
+
+    break
+
+  if submitSummary.len > 0:
+    result.submitted = true
+    logInfo(fmt"ticket {ticketId}: submit_pr called (summary=""{submitSummary}"")")
+    let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
+    if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
+      logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
+      gitRun(assignment.worktree, "add", "-A")
+      gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
+    logDebug(fmt"executeAssignedTicket: enqueueing merge request")
+    discard enqueueMergeRequest(repoPath, assignment, submitSummary)
+  else:
+    let attempts = ticketAttemptCounts.getOrDefault(ticketId, totalAttemptsUsed)
+    let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)
+    let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
+    logInfo(fmt"ticket {ticketId}: in-progress -> open (reopened, reason=no submit_pr, attempts={attempts}, total wall={totalWall})")
+    sessionStats.ticketsReopened += 1
+    let failureReason = case result.timeoutKind
+      of "hard": "timeout_hard"
+      of "no-output": "timeout_no_output"
+      else: "stall"
+    let metricsNote = formatMetricsNote(ticketId, "reopened", failureReason).strip()
+    let stallWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
+    cleanupTicketTimings(ticketId)
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
+      if fileExists(ticketPath):
+        let currentContent = readFile(ticketPath)
+        let contentWithMetrics = runPostAnalysis(currentContent.strip() & "\n\n" & metricsNote & "\n", ticketId, "reopened", attempts, stallWallSeconds)
+        writeFile(ticketPath, contentWithMetrics)
+        moveFile(ticketPath, planPath / openRelPath)
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", TicketAgentFailReopenCommitPrefix & " " & ticketId)
+      0
+    )
+
+proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
+  ## Assign the oldest open ticket and execute it with the coding agent.
+  let assignment = assignOldestOpenTicket(repoPath)
+  if assignment.inProgressTicket.len == 0:
+    logDebug("no open tickets to execute")
+    result = AgentRunResult()
+  else:
+    let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+    runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
+    result = executeAssignedTicket(repoPath, assignment, runner)
+    result.ticketId = ticketId
+
+proc agentWorkerThread(args: AgentThreadArgs) {.thread.} =
+  ## Run executeAssignedTicket in a background thread and send the result to the channel.
+  {.cast(gcsafe).}:
+    let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
+    let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runner)
+    agentResultChan.send((ticketId: args.ticketId, result: agentResult))
+
+proc runningAgentCount*(): int =
+  ## Return the number of currently running agent slots.
+  result = runningAgentSlots.len
+
+proc emptySlotCount*(maxAgents: int): int =
+  ## Return the number of available agent slots.
+  result = maxAgents - runningAgentSlots.len
+
+proc startAgentAsync*(repoPath: string, assignment: TicketAssignment, maxAgents: int) =
+  ## Start a coding agent in a background thread for the given assignment.
+  ensureAgentResultChanOpen()
+  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+  let slot = AgentSlot(
+    ticketId: ticketId,
+    branch: assignment.branch,
+    worktree: assignment.worktree,
+    startTime: epochTime(),
+  )
+  runningAgentSlots.add(slot)
+  let threadPtr = create(Thread[AgentThreadArgs])
+  let args: AgentThreadArgs = (
+    repoPath: repoPath,
+    assignment: assignment,
+    ticketId: ticketId,
+  )
+  createThread(threadPtr[], agentWorkerThread, args)
+  runningAgentThreadPtrs.add(threadPtr)
+  let running = runningAgentSlots.len
+  logInfo(&"agent slots: {running}/{maxAgents} (ticket {ticketId} started)")
+
+proc checkCompletedAgents*(): seq[AgentCompletionResult] =
+  ## Poll the result channel for completed agents and clean up their slots and threads.
+  ensureAgentResultChanOpen()
+  while true:
+    let (hasData, completion) = agentResultChan.tryRecv()
+    if not hasData:
+      break
+    result.add(completion)
+    var slotIdx = -1
+    for i, slot in runningAgentSlots:
+      if slot.ticketId == completion.ticketId:
+        slotIdx = i
+        break
+    if slotIdx >= 0:
+      runningAgentSlots.delete(slotIdx)
+      joinThread(runningAgentThreadPtrs[slotIdx][])
+      dealloc(runningAgentThreadPtrs[slotIdx])
+      runningAgentThreadPtrs.delete(slotIdx)
+
+proc joinAllAgentThreads*() =
+  ## Block until all running agent threads complete and clean up.
+  for i in 0..<runningAgentThreadPtrs.len:
+    joinThread(runningAgentThreadPtrs[i][])
+    dealloc(runningAgentThreadPtrs[i])
+  runningAgentSlots.setLen(0)
+  runningAgentThreadPtrs.setLen(0)

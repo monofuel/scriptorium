@@ -191,6 +191,24 @@ proc listGitWorktreePaths*(repoPath: string): seq[string] =
     if line.startsWith("worktree "):
       result.add(line["worktree ".len..^1].strip())
 
+proc runCommandCapture*(workingDir: string, command: string, args: seq[string], timeoutMs: int = 300_000): tuple[exitCode: int, output: string] =
+  ## Run a process and return combined stdout/stderr with its exit code.
+  let process = startProcess(
+    command,
+    workingDir = workingDir,
+    args = args,
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  let output = process.outputStream.readAll()
+  let exitCode = process.waitForExit(timeoutMs)
+  if exitCode == -1 and running(process):
+    process.kill()
+    process.close()
+    let cmdStr = command & " " & args.join(" ")
+    raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
+  process.close()
+  result = (exitCode: exitCode, output: output)
+
 proc cleanupLegacyManagedTicketWorktrees*(repoPath: string): seq[string] =
   ## Remove legacy repo-local managed ticket worktrees from older versions.
   let legacyRoot = normalizeAbsolutePath(repoPath / LegacyManagedWorktreeRoot)

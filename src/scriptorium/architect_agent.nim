@@ -1,0 +1,521 @@
+import
+  std/[algorithm, os, osproc, sets, sha1, streams, strformat, strutils, tables],
+  ./[agent_runner, config, git_ops, lock_management, logging, prompt_builders, shared_state, ticket_metadata]
+
+const
+  PlanSpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect."
+  AreaCommitMessage* = "scriptorium: update areas from spec"
+  PlanSpecCommitMessage* = "scriptorium: update spec from architect"
+  PlanSpecTicketId = "plan-spec"
+  PlanLogRoot* = "scriptorium-plan-logs"
+  PlanWriteScopeName* = "scriptorium plan"
+  ArchitectAreasLogDirName = "architect-areas"
+  ArchitectAreasTicketId = "architect-areas"
+  PlanDefaultMaxAttempts = 1
+  PlanNoOutputTimeoutMs* = 120_000
+  PlanHardTimeoutMs* = 300_000
+  PlanHeartbeatIntervalMs* = 3000
+  SpecHashMarkerPath* = "areas/.spec-hash"
+  SpecHashCommitMessage = "scriptorium: update spec hash marker"
+  AreaHashesPath* = "tickets/.area-hashes"
+  AreaHashesCommitMessage* = "scriptorium: update area hashes"
+
+proc loadSpecFromPlanPath*(planPath: string): string =
+  ## Load spec.md from an existing plan branch worktree path.
+  let specPath = planPath / PlanSpecPath
+  if not fileExists(specPath):
+    raise newException(ValueError, "spec.md does not exist in scriptorium/plan")
+  result = readFile(specPath)
+
+proc runPlanArchitectRequest*(
+  runner: AgentRunner,
+  planPath: string,
+  agentCfg: AgentConfig,
+  prompt: string,
+  ticketId: string,
+  onEvent: AgentEventHandler = nil,
+  heartbeatIntervalMs: int = 0,
+): AgentRunResult =
+  ## Run one architect planning pass with shared harness settings.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  result = runner(AgentRunRequest(
+    prompt: prompt,
+    workingDir: planPath,
+    harness: agentCfg.harness,
+    model: agentCfg.model,
+    reasoningEffort: agentCfg.reasoningEffort,
+    ticketId: ticketId,
+    attempt: DefaultAgentAttempt,
+    skipGitRepoCheck: true,
+    logRoot: getTempDir() / PlanLogRoot,
+    noOutputTimeoutMs: PlanNoOutputTimeoutMs,
+    hardTimeoutMs: PlanHardTimeoutMs,
+    heartbeatIntervalMs: heartbeatIntervalMs,
+    maxAttempts: PlanDefaultMaxAttempts,
+    onEvent: onEvent,
+  ))
+
+proc planAgentLogRoot*(ticketId: string): string =
+  ## Return a temp log root for one plan-branch agent run.
+  let cleanTicketId = ticketId.strip()
+  if cleanTicketId.len > 0:
+    result = getTempDir() / PlanLogRoot / cleanTicketId
+  else:
+    result = getTempDir() / PlanLogRoot
+
+proc normalizeRelativeWritePath*(rawPath: string): string =
+  ## Validate and normalize one relative path for write guard checks.
+  let clean = rawPath.strip().replace('\\', '/')
+  if clean.len == 0:
+    raise newException(ValueError, "write guard path cannot be empty")
+  if clean.startsWith("/") or (clean.len >= 2 and clean[1] == ':'):
+    raise newException(ValueError, fmt"write guard path must be relative: {clean}")
+
+  var parts: seq[string] = @[]
+  for part in clean.split('/'):
+    if part.len == 0 or part == ".":
+      continue
+    if part == "..":
+      raise newException(ValueError, fmt"write guard path cannot escape worktree: {clean}")
+    parts.add(part)
+
+  if parts.len == 0:
+    raise newException(ValueError, fmt"write guard path is invalid: {clean}")
+  result = parts.join("/")
+
+proc collectGitPathOutput(gitPath: string, args: seq[string]): seq[string] =
+  ## Run one git command that emits relative paths and return non-empty lines.
+  let commandResult = runCommandCapture(gitPath, "git", args)
+  if commandResult.exitCode != 0:
+    let argsText = args.join(" ")
+    raise newException(IOError, fmt"git {argsText} failed while checking write guards: {commandResult.output.strip()}")
+  for line in commandResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len > 0:
+      result.add(trimmed)
+
+proc listModifiedPathsInGitPath*(gitPath: string): seq[string] =
+  ## Return modified and untracked relative paths in one git worktree path.
+  var seen = initHashSet[string]()
+  let commands = @[
+    @["diff", "--name-only", "--relative"],
+    @["diff", "--cached", "--name-only", "--relative"],
+    @["ls-files", "--others", "--exclude-standard"],
+  ]
+
+  for args in commands:
+    for rawPath in collectGitPathOutput(gitPath, args):
+      let normalized = normalizeRelativeWritePath(rawPath)
+      if not seen.contains(normalized):
+        seen.incl(normalized)
+        result.add(normalized)
+  result.sort()
+
+proc listModifiedPathsInPlanPath*(planPath: string): seq[string] =
+  ## Return modified and untracked relative paths in the plan worktree.
+  result = listModifiedPathsInGitPath(planPath)
+
+proc enforceWriteAllowlist*(planPath: string, allowedPaths: openArray[string], scopeName: string) =
+  ## Fail when modified paths are outside the provided relative-path allowlist.
+  if allowedPaths.len == 0:
+    raise newException(ValueError, "write allowlist cannot be empty")
+
+  var allowedSet = initHashSet[string]()
+  var allowedList: seq[string] = @[]
+  for path in allowedPaths:
+    let normalized = normalizeRelativeWritePath(path)
+    if not allowedSet.contains(normalized):
+      allowedSet.incl(normalized)
+      allowedList.add(normalized)
+  allowedList.sort()
+
+  var disallowed: seq[string] = @[]
+  for path in listModifiedPathsInPlanPath(planPath):
+    if not allowedSet.contains(path):
+      disallowed.add(path)
+
+  if disallowed.len > 0:
+    let disallowedText = disallowed.join(", ")
+    let allowedText = allowedList.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed files: {allowedText}.",
+    )
+
+proc enforceNoWrites*(planPath: string, scopeName: string) =
+  ## Fail when any files were modified in the plan worktree.
+  let modified = listModifiedPathsInPlanPath(planPath)
+  if modified.len > 0:
+    let modifiedText = modified.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified files in read-only mode: {modifiedText}.",
+    )
+
+proc isPathInAllowedPrefix*(path: string, prefix: string): bool =
+  ## Return true when one relative path is under one normalized allowlist prefix.
+  result = path == prefix or path.startsWith(prefix & "/")
+
+proc enforceWritePrefixAllowlist*(planPath: string, allowedPrefixes: openArray[string], scopeName: string) =
+  ## Fail when modified paths are outside the provided relative-path prefix allowlist.
+  if allowedPrefixes.len == 0:
+    raise newException(ValueError, "write prefix allowlist cannot be empty")
+
+  var prefixSet = initHashSet[string]()
+  var prefixList: seq[string] = @[]
+  for prefix in allowedPrefixes:
+    let normalized = normalizeRelativeWritePath(prefix)
+    if not prefixSet.contains(normalized):
+      prefixSet.incl(normalized)
+      prefixList.add(normalized)
+  prefixList.sort()
+
+  var disallowed: seq[string] = @[]
+  for path in listModifiedPathsInPlanPath(planPath):
+    var allowed = false
+    for prefix in prefixList:
+      if isPathInAllowedPrefix(path, prefix):
+        allowed = true
+        break
+    if not allowed:
+      disallowed.add(path)
+
+  if disallowed.len > 0:
+    let disallowedText = disallowed.join(", ")
+    let allowedText = prefixList.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed prefixes: {allowedText}.",
+    )
+
+proc pathFingerprintInGitPath*(gitPath: string, relPath: string): string =
+  ## Return a stable fingerprint for one relative path in one git worktree path.
+  let absPath = gitPath / relPath
+  if fileExists(absPath):
+    let hashResult = runCommandCapture(gitPath, "git", @["hash-object", "--", relPath])
+    if hashResult.exitCode != 0:
+      raise newException(IOError, fmt"git hash-object failed for {relPath}: {hashResult.output.strip()}")
+    result = hashResult.output.strip()
+  elif dirExists(absPath):
+    result = "<dir>"
+  else:
+    result = "<missing>"
+
+proc snapshotDirtyStateInGitPath*(gitPath: string): Table[string, string] =
+  ## Snapshot dirty tracked and untracked paths with content fingerprints.
+  result = initTable[string, string]()
+  for path in listModifiedPathsInGitPath(gitPath):
+    result[path] = pathFingerprintInGitPath(gitPath, path)
+
+proc diffDirtyStatePaths*(beforeState: Table[string, string], afterState: Table[string, string]): seq[string] =
+  ## Return dirty paths whose fingerprint changed between two snapshots.
+  var changedSet = initHashSet[string]()
+
+  for path, beforeFingerprint in beforeState.pairs():
+    if not afterState.hasKey(path) or afterState[path] != beforeFingerprint:
+      changedSet.incl(path)
+
+  for path in afterState.keys():
+    if not beforeState.hasKey(path):
+      changedSet.incl(path)
+
+  for path in changedSet:
+    result.add(path)
+  result.sort()
+
+proc enforceGitPathUnchanged*(gitPath: string, beforeState: Table[string, string], scopeName: string) =
+  ## Fail when one git worktree path dirty-state snapshot changed.
+  let afterState = snapshotDirtyStateInGitPath(gitPath)
+  let changedPaths = diffDirtyStatePaths(beforeState, afterState)
+  if changedPaths.len > 0:
+    let changedText = changedPaths.join(", ")
+    raise newException(
+      ValueError,
+      fmt"{scopeName} modified repository files outside the plan worktree: {changedText}.",
+    )
+
+proc computeContentHash*(content: string): string =
+  ## SHA-1 hex digest of content for change detection.
+  result = $secureHash(content)
+
+proc readSpecHashMarker*(planPath: string): string =
+  ## Read stored spec hash, or "" if missing.
+  let path = planPath / SpecHashMarkerPath
+  if fileExists(path):
+    result = readFile(path).strip()
+  else:
+    result = ""
+
+proc writeSpecHashMarker*(planPath: string) =
+  ## Write SHA-1 of current spec.md to areas/.spec-hash.
+  let spec = loadSpecFromPlanPath(planPath)
+  let hash = computeContentHash(spec)
+  createDir(parentDir(planPath / SpecHashMarkerPath))
+  writeFile(planPath / SpecHashMarkerPath, hash & "\n")
+
+proc readAreaHashes*(planPath: string): Table[string, string] =
+  ## Read area-id:hash pairs from tickets/.area-hashes.
+  result = initTable[string, string]()
+  let path = planPath / AreaHashesPath
+  if fileExists(path):
+    for line in readFile(path).splitLines():
+      let stripped = line.strip()
+      if stripped.len == 0:
+        continue
+      let colonPos = stripped.find(':')
+      if colonPos > 0:
+        let areaId = stripped[0..<colonPos]
+        let hash = stripped[colonPos + 1..^1]
+        result[areaId] = hash
+
+proc writeAreaHashes*(planPath: string, hashes: Table[string, string]) =
+  ## Write area-id:hash pairs to tickets/.area-hashes.
+  var lines: seq[string] = @[]
+  for areaId, hash in hashes:
+    lines.add(areaId & ":" & hash)
+  lines.sort()
+  createDir(parentDir(planPath / AreaHashesPath))
+  writeFile(planPath / AreaHashesPath, lines.join("\n") & "\n")
+
+proc computeAllAreaHashes*(planPath: string): Table[string, string] =
+  ## Compute content hashes for all area markdown files.
+  result = initTable[string, string]()
+  for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+    let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+    let areaId = areaIdFromAreaPath(relativeAreaPath)
+    result[areaId] = computeContentHash(readFile(areaPath))
+
+proc collectActiveTicketAreas*(planPath: string): HashSet[string] =
+  ## Collect area identifiers that have open, in-progress, or done tickets.
+  result = initHashSet[string]()
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
+    for ticketPath in listMarkdownFiles(planPath / stateDir):
+      let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+      if areaId.len > 0:
+        result.incl(areaId)
+
+proc collectOpenAndInProgressAreas*(planPath: string): HashSet[string] =
+  ## Collect area identifiers that have open or in-progress tickets (blocks concurrent work).
+  result = initHashSet[string]()
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
+    for ticketPath in listMarkdownFiles(planPath / stateDir):
+      let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+      if areaId.len > 0:
+        result.incl(areaId)
+
+proc areasNeedingTicketsInPlanPath*(planPath: string): seq[string] =
+  ## Return area files eligible for ticket generation.
+  ## Uses hash-based comparison when area hashes file exists; falls back to
+  ## legacy behavior (suppress areas with any ticket) when no hashes file.
+  let hasAreaHashes = fileExists(planPath / AreaHashesPath)
+
+  if not hasAreaHashes:
+    # Legacy fallback: suppress areas with any ticket (open, in-progress, done, stuck)
+    let activeAreas = collectActiveTicketAreas(planPath)
+    for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+      let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+      let areaId = areaIdFromAreaPath(relativeAreaPath)
+      if not activeAreas.contains(areaId):
+        result.add(relativeAreaPath)
+  else:
+    # Hash-based: skip areas with open/in-progress work, include changed content
+    let storedHashes = readAreaHashes(planPath)
+    let openOrInProgress = collectOpenAndInProgressAreas(planPath)
+    for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
+      let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
+      let areaId = areaIdFromAreaPath(relativeAreaPath)
+      if openOrInProgress.contains(areaId):
+        continue
+      let currentHash = computeContentHash(readFile(areaPath))
+      let storedHash = storedHashes.getOrDefault(areaId, "")
+      if currentHash != storedHash:
+        result.add(relativeAreaPath)
+
+  result.sort()
+
+proc areasMissingInPlanPath*(planPath: string): bool =
+  ## Return true when no area markdown files exist under areas/.
+  let areasPath = planPath / PlanAreasDir
+  if not dirExists(areasPath):
+    result = true
+  else:
+    var hasAreaFiles = false
+    for filePath in walkDirRec(areasPath):
+      if filePath.toLowerAscii().endsWith(".md"):
+        hasAreaFiles = true
+    result = not hasAreaFiles
+
+proc hasRunnableSpecInPlanPath*(planPath: string): bool =
+  ## Return true when spec.md exists and is not blank or the init placeholder.
+  let specPath = planPath / PlanSpecPath
+  if not fileExists(specPath):
+    return false
+
+  let specBody = readFile(specPath).strip()
+  if specBody.len == 0:
+    return false
+  result = specBody != PlanSpecPlaceholder.strip()
+
+proc writeAreasAndCommit*(planPath: string, docs: seq[AreaDocument]): bool =
+  ## Write generated area files and commit only when contents changed.
+  var hasChanges = false
+  for doc in docs:
+    let relPath = normalizeAreaPath(doc.path)
+    let target = planPath / PlanAreasDir / relPath
+    createDir(parentDir(target))
+    if fileExists(target):
+      if readFile(target) != doc.content:
+        writeFile(target, doc.content)
+        hasChanges = true
+    else:
+      writeFile(target, doc.content)
+      hasChanges = true
+
+  if hasChanges:
+    gitRun(planPath, "add", PlanAreasDir)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", AreaCommitMessage)
+
+  result = hasChanges
+
+proc hasRunnableSpec*(repoPath: string): bool =
+  ## Return true when spec.md is present and contains actionable content.
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
+    hasRunnableSpecInPlanPath(planPath)
+  )
+
+proc areasMissing*(repoPath: string): bool =
+  ## Return true when the plan branch has no area markdown files.
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
+    areasMissingInPlanPath(planPath)
+  )
+
+proc areasNeedingTickets*(repoPath: string): seq[string] =
+  ## Return area files that are eligible for manager ticket generation.
+  result = withPlanWorktree(repoPath, proc(planPath: string): seq[string] =
+    areasNeedingTicketsInPlanPath(planPath)
+  )
+
+proc loadSpecFromPlan*(repoPath: string): string =
+  ## Load spec.md by opening the scriptorium/plan branch in a temporary worktree.
+  result = withPlanWorktree(repoPath, proc(planPath: string): string =
+    loadSpecFromPlanPath(planPath)
+  )
+
+proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator): bool =
+  ## Generate and persist areas when plan/areas has no markdown files.
+  if generateAreas.isNil:
+    raise newException(ValueError, "architect area generator is required")
+
+  let cfg = loadConfig(repoPath)
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    let missing = areasMissingInPlanPath(planPath)
+    if missing:
+      let spec = loadSpecFromPlanPath(planPath)
+      let docs = generateAreas(cfg.agents.architect.model, spec)
+      discard writeAreasAndCommit(planPath, docs)
+      writeSpecHashMarker(planPath)
+      gitRun(planPath, "add", SpecHashMarkerPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", SpecHashCommitMessage)
+      true
+    else:
+      false
+  )
+
+proc architectShouldRun*(planPath: string): bool =
+  ## Determine whether the architect needs to run based on spec content hash.
+  if areasMissingInPlanPath(planPath):
+    return true  # No areas at all — first run
+  let storedHash = readSpecHashMarker(planPath)
+  if storedHash == "":
+    return false  # Legacy: areas exist but no hash — migration writes hash, skip this tick
+  let currentHash = computeContentHash(loadSpecFromPlanPath(planPath))
+  return storedHash != currentHash
+
+proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
+  ## Run one architect pass that writes area files directly in the plan worktree.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+
+  let cfg = loadConfig(repoPath)
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    if not hasRunnableSpecInPlanPath(planPath):
+      return false
+
+    # Migration: write spec hash marker for existing areas without one
+    if not areasMissingInPlanPath(planPath) and not fileExists(planPath / SpecHashMarkerPath):
+      writeSpecHashMarker(planPath)
+      gitRun(planPath, "add", SpecHashMarkerPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: initialize spec hash marker")
+
+    if not architectShouldRun(planPath):
+      return false
+
+    let spec = loadSpecFromPlanPath(planPath)
+    discard runner(AgentRunRequest(
+      prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
+      workingDir: planPath,
+      harness: cfg.agents.architect.harness,
+      model: cfg.agents.architect.model,
+      reasoningEffort: cfg.agents.architect.reasoningEffort,
+      ticketId: ArchitectAreasTicketId,
+      attempt: DefaultAgentAttempt,
+      skipGitRepoCheck: true,
+      logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
+      maxAttempts: DefaultAgentMaxAttempts,
+      onEvent: proc(event: AgentStreamEvent) =
+        if event.kind == agentEventTool:
+          logDebug(fmt"architect: {event.text}"),
+    ))
+
+    gitRun(planPath, "add", PlanAreasDir)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", AreaCommitMessage)
+
+    # Write updated spec hash marker after architect commits
+    writeSpecHashMarker(planPath)
+    gitRun(planPath, "add", SpecHashMarkerPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", SpecHashCommitMessage)
+    true
+  )
+
+proc updateSpecFromArchitect*(
+  repoPath: string,
+  prompt: string,
+  runner: AgentRunner,
+): bool =
+  ## Update spec.md from one architect run and commit when content changes.
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  if prompt.strip().len == 0:
+    raise newException(ValueError, "plan prompt is required")
+
+  let cfg = loadConfig(repoPath)
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    let existingSpec = loadSpecFromPlanPath(planPath)
+    discard runPlanArchitectRequest(
+      runner,
+      planPath,
+      cfg.agents.architect,
+      buildArchitectPlanPrompt(repoPath, planPath, prompt, existingSpec),
+      PlanSpecTicketId,
+    )
+    enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
+
+    let updatedSpec = loadSpecFromPlanPath(planPath)
+    if updatedSpec == existingSpec:
+      false
+    else:
+      gitRun(planPath, "add", PlanSpecPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", PlanSpecCommitMessage)
+      true
+  )
+
+proc updateSpecFromArchitect*(repoPath: string, prompt: string): bool =
+  ## Update spec.md using the default architect model backend.
+  result = updateSpecFromArchitect(repoPath, prompt, runAgent)
