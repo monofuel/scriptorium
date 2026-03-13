@@ -53,3 +53,8 @@ No tests are run. The merge queue later runs `make test` and `make integration-t
 - Section 20: Pre-Submit Test Gate (V4).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 35
+- reasoning: Requires adding shared state variables, modifying an existing handler with test execution and error handling logic, and updating unit tests, but the pattern is well-established in the codebase and the requirements are clearly specified.
