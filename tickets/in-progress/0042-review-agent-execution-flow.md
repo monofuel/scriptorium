@@ -61,3 +61,5 @@ After the `submit_review` MCP tool and reviewer config are in place (ticket 0041
 ## Spec References
 
 - Section 21: Review Agent (V4).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0042-review-agent-execution-flow
