@@ -348,6 +348,40 @@ suite "config":
     check inferHarness("grok-code-fast-1") == harnessTypoi
     check inferHarness("local/qwen3.5-35b-a3b") == harnessTypoi
 
+  test "concurrency defaults when key is absent":
+    let tmp = getTempDir() / "scriptorium_test_config_concurrency_absent"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    let cfg = loadConfig(tmp)
+    check cfg.concurrency.maxAgents == 1
+    check cfg.concurrency.tokenBudgetMB == 0
+
+  test "concurrency parses both keys":
+    let tmp = getTempDir() / "scriptorium_test_config_concurrency_both"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.concurrency.maxAgents = 4
+    writtenCfg.concurrency.tokenBudgetMB = 512
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.concurrency.maxAgents == 4
+    check cfg.concurrency.tokenBudgetMB == 512
+
+  test "concurrency parses only maxAgents":
+    let tmp = getTempDir() / "scriptorium_test_config_concurrency_maxonly"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.concurrency.maxAgents = 8
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.concurrency.maxAgents == 8
+    check cfg.concurrency.tokenBudgetMB == 0
+
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
     let endpoint = parseEndpoint("")

@@ -29,9 +29,14 @@ type
   Endpoints* = object
     local*: string
 
+  ConcurrencyConfig* = object
+    maxAgents*: int
+    tokenBudgetMB*: int
+
   Config* = object
     agents*: AgentConfigs
     endpoints*: Endpoints
+    concurrency*: ConcurrencyConfig
     logLevel*: string
     fileLogLevel*: string
 
@@ -54,6 +59,10 @@ proc defaultConfig*(): Config =
     ),
     endpoints: Endpoints(
       local: "",
+    ),
+    concurrency: ConcurrencyConfig(
+      maxAgents: 1,
+      tokenBudgetMB: 0,
     ),
   )
 
@@ -92,6 +101,10 @@ proc loadConfig*(repoPath: string): Config =
   mergeAgentConfig(result.agents.reviewer, parsed.agents.reviewer)
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
+  if parsed.concurrency.maxAgents > 0:
+    result.concurrency.maxAgents = parsed.concurrency.maxAgents
+  if parsed.concurrency.tokenBudgetMB > 0:
+    result.concurrency.tokenBudgetMB = parsed.concurrency.tokenBudgetMB
   if parsed.logLevel.len > 0:
     result.logLevel = parsed.logLevel
   if parsed.fileLogLevel.len > 0:
