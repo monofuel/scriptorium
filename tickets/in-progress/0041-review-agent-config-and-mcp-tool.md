@@ -42,3 +42,5 @@ The review agent role is not yet implemented. The first step is adding `agents.r
 ## Spec References
 
 - Section 21: Review Agent (V4).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0041-review-agent-config-and-mcp-tool
