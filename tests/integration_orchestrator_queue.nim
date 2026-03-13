@@ -3,10 +3,15 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[config, init, orchestrator]
+  scriptorium/[agent_runner, config, init, orchestrator]
 
 const
   OrchestratorBasePort = 18000
+
+proc noopRunner(request: AgentRunRequest): AgentRunResult =
+  ## Fake agent runner that returns immediately. Review agent stalls and defaults to approve.
+  discard request
+  AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
 proc runCmdOrDie(cmd: string) =
   ## Run a shell command and fail immediately when it exits non-zero.
@@ -153,7 +158,7 @@ suite "integration orchestrator merge queue":
 
       discard enqueueMergeRequest(repoPath, assignment, "merge me")
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -180,7 +185,7 @@ suite "integration orchestrator merge queue":
       let assignment = assignOldestOpenTicket(repoPath)
       discard enqueueMergeRequest(repoPath, assignment, "expected failure")
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -203,7 +208,7 @@ suite "integration orchestrator merge queue":
       let assignment = assignOldestOpenTicket(repoPath)
       discard enqueueMergeRequest(repoPath, assignment, "integration failure")
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -230,7 +235,7 @@ suite "integration orchestrator merge queue":
       discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
       discard enqueueMergeRequest(repoPath, secondAssignment, "second summary")
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
 
       let files = planTreeFiles(repoPath)
@@ -264,7 +269,7 @@ suite "integration orchestrator merge queue":
 
       discard enqueueMergeRequest(repoPath, assignment, "conflict expected")
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -298,8 +303,8 @@ suite "integration orchestrator merge queue":
         "integration-partial-active-state",
       )
 
-      let firstProcessed = processMergeQueue(repoPath)
-      let secondProcessed = processMergeQueue(repoPath)
+      let firstProcessed = processMergeQueue(repoPath, noopRunner)
+      let secondProcessed = processMergeQueue(repoPath, noopRunner)
       check firstProcessed
       check not secondProcessed
 

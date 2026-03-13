@@ -90,6 +90,9 @@ const
   PredictionHardTimeoutMs = 60_000
   PredictionCommitPrefix = "scriptorium: predict ticket"
   PostAnalysisCommitPrefix = "scriptorium: post-analysis ticket"
+  ReviewAgentNoOutputTimeoutMs = 120_000
+  ReviewAgentHardTimeoutMs = 300_000
+  ReviewAgentCommitPrefix = "scriptorium: review ticket"
 
 type
   OrchestratorEndpoint* = object
@@ -656,6 +659,18 @@ proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, 
     "Ticket content:\n\n" & ticketContent.strip() & "\n\n" &
     StallContinuationText & "\n\n" &
     testSection
+
+proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string): string =
+  ## Build the review agent prompt from ticket, diff, area, and summary context.
+  result = renderPromptTemplate(
+    ReviewAgentTemplate,
+    [
+      (name: "TICKET_CONTENT", value: ticketContent.strip()),
+      (name: "DIFF_CONTENT", value: diffContent.strip()),
+      (name: "AREA_CONTENT", value: areaContent.strip()),
+      (name: "SUBMIT_SUMMARY", value: submitSummary.strip()),
+    ],
+  )
 
 proc buildArchitectAreasPrompt(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
@@ -2224,7 +2239,93 @@ proc enqueueMergeRequest*(
     pendingRelPath
   )
 
-proc processMergeQueue*(repoPath: string): bool =
+proc runReviewAgent*(
+  repoPath: string,
+  planPath: string,
+  item: MergeQueueItem,
+  ticketContent: string,
+  submitSummary: string,
+  runner: AgentRunner = runAgent,
+): tuple[action: string, feedback: string] =
+  ## Run the review agent for a merge queue item and return the review decision.
+  ## Caller must hold the plan worktree lock and pass planPath.
+  let cfg = loadConfig(repoPath)
+  let model = cfg.agents.reviewer.model
+
+  let diffResult = runCommandCapture(item.worktree, "git", @["diff", "master..." & item.branch])
+  let diffContent = if diffResult.exitCode == 0: diffResult.output else: "(diff unavailable)"
+
+  let areaId = parseAreaFromTicketContent(ticketContent)
+  let areaContent = if areaId.len > 0:
+    let areaPath = planPath / PlanAreasDir / areaId & ".md"
+    if fileExists(areaPath): readFile(areaPath) else: "(area not found)"
+  else:
+    "(no area specified)"
+
+  let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary)
+
+  discard consumeReviewDecision()
+
+  logInfo(fmt"ticket {item.ticketId}: review started (model={model})")
+  let reviewStartTime = epochTime()
+  let request = AgentRunRequest(
+    prompt: prompt,
+    workingDir: item.worktree,
+    harness: cfg.agents.reviewer.harness,
+    model: cfg.agents.reviewer.model,
+    reasoningEffort: cfg.agents.reviewer.reasoningEffort,
+    mcpEndpoint: cfg.endpoints.local,
+    ticketId: item.ticketId,
+    attempt: 1,
+    skipGitRepoCheck: true,
+    noOutputTimeoutMs: ReviewAgentNoOutputTimeoutMs,
+    hardTimeoutMs: ReviewAgentHardTimeoutMs,
+    maxAttempts: 1,
+    onEvent: proc(event: AgentStreamEvent) =
+      if event.kind == agentEventTool:
+        logDebug(fmt"review[{item.ticketId}]: {event.text}"),
+  )
+  let agentResult = runner(request)
+  let reviewWallTime = epochTime() - reviewStartTime
+  let reviewWallDuration = formatDuration(reviewWallTime)
+
+  result = consumeReviewDecision()
+
+  if result.action == "approve":
+    logInfo(fmt"ticket {item.ticketId}: review approved")
+  elif result.action == "request_changes":
+    let feedbackSummary = truncateTail(result.feedback.strip(), 200)
+    logInfo(&"ticket {item.ticketId}: review requested changes (feedback=\"{feedbackSummary}\")")
+  else:
+    logWarn(fmt"ticket {item.ticketId}: review agent stalled, defaulting to approve")
+    result.action = "approve"
+    result.feedback = ""
+
+  let ticketPath = planPath / item.ticketPath
+  if fileExists(ticketPath):
+    let currentContent = readFile(ticketPath)
+    let reviewNote = if result.action == "approve":
+      "## Review\n" &
+        "**Review:** approved\n" &
+        fmt"- Model: {model}" & "\n" &
+        fmt"- Backend: {agentResult.backend}" & "\n" &
+        fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
+        fmt"- Wall Time: {reviewWallDuration}" & "\n"
+    else:
+      "## Review\n" &
+        "**Review:** changes requested\n" &
+        fmt"- Model: {model}" & "\n" &
+        fmt"- Backend: {agentResult.backend}" & "\n" &
+        fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
+        fmt"- Wall Time: {reviewWallDuration}" & "\n" &
+        "\n**Review Feedback:** " & result.feedback.strip() & "\n"
+    let updatedContent = currentContent.strip() & "\n\n" & reviewNote
+    writeFile(ticketPath, updatedContent)
+    gitRun(planPath, "add", item.ticketPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", ReviewAgentCommitPrefix & " " & item.ticketId)
+
+proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool =
   ## Process at most one merge queue item and apply success/failure transitions.
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     discard ensureMergeQueueInitializedInPlanPath(planPath)
@@ -2290,6 +2391,28 @@ proc processMergeQueue*(repoPath: string): bool =
       logInfo(fmt"processMergeQueue: auto-committing dirty worktree for {item.ticketId}")
       gitRun(item.worktree, "add", "-A")
       gitRun(item.worktree, "commit", "-m", "scriptorium: auto-commit before merge")
+
+    # Run review agent before quality gates.
+    let ticketContent = readFile(ticketPath)
+    let reviewDecision = runReviewAgent(repoPath, planPath, item, ticketContent, item.summary, runner)
+    if reviewDecision.action == "request_changes":
+      let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
+      ticketAttemptCounts[item.ticketId] = attempts + 1
+      let startTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)
+      let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
+      logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=review changes requested, attempts={attempts + 1}, total wall={totalWall})")
+      sessionStats.ticketsReopened += 1
+      let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
+      let currentContent = readFile(ticketPath)
+      writeFile(ticketPath, currentContent)
+      moveFile(ticketPath, planPath / openRelPath)
+      if fileExists(queuePath):
+        removeFile(queuePath)
+      writeFile(activePath, "")
+      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+      return true
 
     logInfo(fmt"ticket {item.ticketId}: merge started (make test running)")
     let mergeStartTime = epochTime()

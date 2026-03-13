@@ -206,6 +206,12 @@ proc callSubmitPrTool(summary: string) =
   let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
   discard submitPrHandler(%*{"summary": summary})
 
+proc noopRunner(request: AgentRunRequest): AgentRunResult =
+  ## Fake agent runner that returns immediately with no review decision.
+  ## When used with processMergeQueue the review agent stalls and defaults to approve.
+  discard request
+  AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
 suite "scriptorium --init":
   test "creates scriptorium/plan branch":
     let tmp = getTempDir() / "scriptorium_test_init_branch"
@@ -1253,7 +1259,7 @@ suite "orchestrator merge queue":
     discard enqueueMergeRequest(tmp, firstAssignment, "first summary")
     discard enqueueMergeRequest(tmp, secondAssignment, "second summary")
 
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     let queueFiles = files.filterIt(it.startsWith("queue/merge/pending/") and it.endsWith(".md"))
 
@@ -1277,7 +1283,7 @@ suite "orchestrator merge queue":
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
     discard enqueueMergeRequest(tmp, assignment, "merge me")
 
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -1303,7 +1309,7 @@ suite "orchestrator merge queue":
 
     let assignment = assignOldestOpenTicket(tmp)
     discard enqueueMergeRequest(tmp, assignment, "expected failure")
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -1327,7 +1333,7 @@ suite "orchestrator merge queue":
 
     let assignment = assignOldestOpenTicket(tmp)
     discard enqueueMergeRequest(tmp, assignment, "integration failure")
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -1342,6 +1348,104 @@ suite "orchestrator merge queue":
     check "## Merge Queue Failure" in ticketContent
     check "make integration-test" in ticketContent
     check "FAIL integration-test" in ticketContent
+
+  test "processMergeQueue review approve proceeds to merge":
+    let tmp = getTempDir() / "scriptorium_test_review_approve"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "approve me")
+
+    proc approveRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that records an approve decision.
+      discard request
+      recordReviewDecision("approve", "")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, approveRunner)
+    check processed
+
+    let files = planTreeFiles(tmp)
+    check "tickets/done/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/done/0001-first.md"
+    )
+    check ticketRc == 0
+    check "**Review:** approved" in ticketContent
+
+  test "processMergeQueue review request_changes reopens ticket":
+    let tmp = getTempDir() / "scriptorium_test_review_changes"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "needs changes")
+
+    proc changesRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that records a request_changes decision.
+      discard request
+      recordReviewDecision("request_changes", "fix the formatting")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, changesRunner)
+    check processed
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
+    check "tickets/done/0001-first.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
+    )
+    check ticketRc == 0
+    check "**Review:** changes requested" in ticketContent
+    check "**Review Feedback:** fix the formatting" in ticketContent
+
+  test "processMergeQueue review stall defaults to approve":
+    let tmp = getTempDir() / "scriptorium_test_review_stall"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "stall test")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, noopRunner)
+    check processed
+
+    let files = planTreeFiles(tmp)
+    check "tickets/done/0001-first.md" in files
+    check "tickets/in-progress/0001-first.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/done/0001-first.md"
+    )
+    check ticketRc == 0
+    check "**Review:** approved" in ticketContent
 
   test "executeAssignedTicket auto-commits dirty worktree before enqueue":
     let tmp = getTempDir() / "scriptorium_test_autocommit_dirty_worktree"
@@ -1391,7 +1495,7 @@ suite "orchestrator merge queue":
     writeFile(assignment.worktree / "uncommitted.txt", "dirty\n")
     discard enqueueMergeRequest(tmp, assignment, "dirty merge")
 
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -1413,7 +1517,7 @@ suite "orchestrator merge queue":
 
     let assignment = assignOldestOpenTicket(tmp)
     discard enqueueMergeRequest(tmp, assignment, "expected stuck")
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -1462,7 +1566,7 @@ suite "orchestrator merge queue":
     removeDir(assignment.worktree)
     runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
 
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -1488,7 +1592,7 @@ suite "orchestrator merge queue":
     runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
     runCmdOrDie("git -C " & quoteShell(tmp) & " branch -D " & quoteShell(assignment.branch))
 
-    let processed = processMergeQueue(tmp)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/open/0001-first.md" in files
@@ -2488,13 +2592,14 @@ suite "orchestrator agent enqueue with fakes":
       check "tickets/open/0002-second.md" in files
       check pendingQueueFiles(repoPath).len == 0
 
-      let commits = latestPlanCommits(repoPath, 5)
-      check commits.len == 5
+      let commits = latestPlanCommits(repoPath, 6)
+      check commits.len == 6
       check commits[0] == "scriptorium: complete ticket 0001"
-      check commits[1] == "scriptorium: reopen failed ticket 0002"
-      check commits[2] == "scriptorium: record agent run 0002-second"
+      check commits[1] == "scriptorium: review ticket 0001"
+      check commits[2] == "scriptorium: reopen failed ticket 0002"
       check commits[3] == "scriptorium: record agent run 0002-second"
-      check commits[4] == "scriptorium: assign ticket 0002-second"
+      check commits[4] == "scriptorium: record agent run 0002-second"
+      check commits[5] == "scriptorium: assign ticket 0002-second"
     )
 
   test "end-to-end happy path from spec to done":
@@ -2571,7 +2676,7 @@ suite "orchestrator agent enqueue with fakes":
       check pending.len == 1
       check pending[0] == "queue/merge/pending/0001-0001.md"
 
-      let processed = processMergeQueue(repoPath)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
