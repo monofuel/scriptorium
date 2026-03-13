@@ -32,3 +32,5 @@ The orchestrator tick currently blocks on `executeAssignedTicket` until the sing
 - `make test` passes.
 - Tick does not block on agent execution when `maxAgents > 1`.
 - Serial behavior preserved when `maxAgents = 1`.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0049-nonblocking-tick-agent-tracking
