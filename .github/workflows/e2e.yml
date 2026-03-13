@@ -13,6 +13,7 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,8 +31,8 @@ jobs:
             exit 1
           fi
 
-      - name: Install codex CLI
-        run: npm install -g @openai/codex
+      - name: Install codex and claude CLIs
+        run: npm install -g @openai/codex @anthropic-ai/claude-code
 
       - name: Verify codex binary and features
         run: |
@@ -39,6 +40,11 @@ jobs:
           codex --version
           codex exec --help | sed -n '1,140p'
           codex exec --help | grep -q -- '--json'
+
+      - name: Verify claude binary
+        run: |
+          which claude
+          claude --version
 
       - name: Sync Nim dependencies
         run: nimby sync -g nimby.lock
