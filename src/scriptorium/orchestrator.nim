@@ -81,6 +81,9 @@ const
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes = 8192
   MakeTestTimeoutMs = 300_000
+  PredictionNoOutputTimeoutMs = 30_000
+  PredictionHardTimeoutMs = 60_000
+  PredictionCommitPrefix = "scriptorium: predict ticket"
 
 type
   OrchestratorEndpoint* = object
@@ -674,6 +677,121 @@ proc appendMetricsNote*(ticketContent: string, ticketId: string, outcome: string
   let base = ticketContent.strip()
   let note = formatMetricsNote(ticketId, outcome, failureReason).strip()
   result = base & "\n\n" & note & "\n"
+
+type
+  TicketPrediction* = object
+    difficulty*: string
+    durationMinutes*: int
+    reasoning*: string
+
+const
+  ValidDifficulties = ["trivial", "easy", "medium", "hard", "complex"]
+
+proc parsePredictionResponse*(response: string): TicketPrediction =
+  ## Parse a JSON prediction response from the model into a TicketPrediction.
+  let trimmed = response.strip()
+  # Find JSON object in response (skip any surrounding text or markdown fences).
+  var jsonStart = trimmed.find('{')
+  var jsonEnd = trimmed.rfind('}')
+  if jsonStart < 0 or jsonEnd < 0 or jsonEnd <= jsonStart:
+    raise newException(ValueError, "no JSON object found in prediction response")
+  let jsonStr = trimmed[jsonStart..jsonEnd]
+  let node = parseJson(jsonStr)
+  let difficulty = node.getOrDefault("predicted_difficulty").getStr("")
+  if difficulty notin ValidDifficulties:
+    raise newException(ValueError, "invalid predicted_difficulty: " & difficulty)
+  let durationMinutes = node.getOrDefault("predicted_duration_minutes").getInt(0)
+  let reasoning = node.getOrDefault("reasoning").getStr("")
+  result = TicketPrediction(
+    difficulty: difficulty,
+    durationMinutes: durationMinutes,
+    reasoning: reasoning,
+  )
+
+proc formatPredictionNote*(prediction: TicketPrediction): string =
+  ## Format a prediction section for appending to ticket markdown.
+  result =
+    "## Prediction\n" &
+    &"- predicted_difficulty: {prediction.difficulty}\n" &
+    &"- predicted_duration_minutes: {prediction.durationMinutes}\n" &
+    &"- reasoning: {prediction.reasoning}\n"
+
+proc appendPredictionNote*(ticketContent: string, prediction: TicketPrediction): string =
+  ## Append a prediction section to a ticket markdown document.
+  let base = ticketContent.strip()
+  let note = formatPredictionNote(prediction).strip()
+  result = base & "\n\n" & note & "\n"
+
+proc buildPredictionPrompt*(ticketContent: string, areaContent: string, specSummary: string): string =
+  ## Build the prediction prompt from ticket, area, and spec context.
+  result = renderPromptTemplate(
+    TicketPredictionTemplate,
+    [
+      (name: "TICKET_CONTENT", value: ticketContent.strip()),
+      (name: "AREA_CONTENT", value: areaContent.strip()),
+      (name: "SPEC_SUMMARY", value: specSummary.strip()),
+    ],
+  )
+
+proc predictTicketDifficulty*(
+  repoPath: string,
+  ticketRelPath: string,
+  ticketContent: string,
+  runner: AgentRunner = runAgent,
+): TicketPrediction =
+  ## Run a lightweight prediction prompt to estimate ticket difficulty before assignment.
+  ## Returns a TicketPrediction on success. Raises on failure so callers can handle best-effort.
+  let cfg = loadConfig(repoPath)
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
+
+  # Gather area content for the ticket.
+  let areaId = parseAreaFromTicketContent(ticketContent)
+  var areaContent = ""
+  if areaId.len > 0:
+    areaContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+      let areaPath = planPath / PlanAreasDir / areaId & ".md"
+      if fileExists(areaPath):
+        result = readFile(areaPath)
+    )
+
+  # Gather spec summary.
+  let specSummary = withPlanWorktree(repoPath, proc(planPath: string): string =
+    let specPath = planPath / PlanSpecPath
+    if fileExists(specPath):
+      let content = readFile(specPath)
+      # Use first 2000 chars as summary to keep the prompt short.
+      if content.len > 2000:
+        result = content[0..<2000] & "\n...(truncated)"
+      else:
+        result = content
+  )
+
+  let prompt = buildPredictionPrompt(ticketContent, areaContent, specSummary)
+
+  let request = AgentRunRequest(
+    prompt: prompt,
+    workingDir: repoPath,
+    harness: cfg.agents.coding.harness,
+    model: cfg.agents.coding.model,
+    reasoningEffort: cfg.agents.coding.reasoningEffort,
+    ticketId: ticketId & "-prediction",
+    attempt: 1,
+    skipGitRepoCheck: true,
+    noOutputTimeoutMs: PredictionNoOutputTimeoutMs,
+    hardTimeoutMs: PredictionHardTimeoutMs,
+    maxAttempts: 1,
+  )
+
+  let agentResult = runner(request)
+  if agentResult.exitCode != 0:
+    raise newException(ValueError, "prediction agent exited with code " & $agentResult.exitCode)
+
+  let responseText = agentResult.lastMessage.strip()
+  if responseText.len == 0:
+    raise newException(ValueError, "prediction agent returned empty response")
+
+  result = parsePredictionResponse(responseText)
+  logInfo(&"ticket {ticketId}: predicted difficulty={result.difficulty} duration={result.durationMinutes}min")
 
 proc cleanupTicketTimings*(ticketId: string) =
   ## Remove all per-ticket timing and metrics state for a completed ticket.
@@ -2303,6 +2421,29 @@ proc executeAssignedTicket*(
       0
     )
 
+proc runTicketPrediction*(repoPath: string, ticketRelPath: string, runner: AgentRunner = runAgent) =
+  ## Run a best-effort prediction for a ticket and persist results to the plan branch.
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
+  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+    readFile(planPath / ticketRelPath)
+  )
+  try:
+    let prediction = predictTicketDifficulty(repoPath, ticketRelPath, ticketContent, runner)
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+      let ticketPath = planPath / ticketRelPath
+      if not fileExists(ticketPath):
+        return 0
+      let currentContent = readFile(ticketPath)
+      let updatedContent = appendPredictionNote(currentContent, prediction)
+      writeFile(ticketPath, updatedContent)
+      gitRun(planPath, "add", ticketRelPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", PredictionCommitPrefix & " " & ticketId)
+      0
+    )
+  except CatchableError as e:
+    logWarn(&"ticket {ticketId}: prediction failed: {e.msg}")
+
 proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
   ## Assign the oldest open ticket and execute it with the coding agent.
   let assignment = assignOldestOpenTicket(repoPath)
@@ -2311,6 +2452,7 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     result = AgentRunResult()
   else:
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+    runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
     result = executeAssignedTicket(repoPath, assignment, runner)
     result.ticketId = ticketId
 

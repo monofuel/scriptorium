@@ -13,6 +13,7 @@ const
   CodexRetryContinuationTemplate* = staticRead(PromptDirectory & "codex_retry_continuation.md")
   CodexRetryDefaultContinuationText* = staticRead(PromptDirectory & "codex_retry_default_continuation.md")
   ArchitectAskInteractiveTemplate* = staticRead(PromptDirectory & "architect_ask_interactive.md")
+  TicketPredictionTemplate* = staticRead(PromptDirectory & "ticket_prediction.md")
 
 type
   PromptBinding* = tuple[name: string, value: string]

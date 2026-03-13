@@ -1909,6 +1909,15 @@ suite "orchestrator final v1 flow":
           lastMessage: "tickets done",
           timeoutKind: "none",
         )
+      of "0001-prediction":
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: """{"predicted_difficulty": "easy", "predicted_duration_minutes": 10, "reasoning": "Simple ticket."}""",
+          timeoutKind: "none",
+        )
       of "0001":
         writeFile(request.workingDir / "flow-output.txt", "done\n")
         runCmdOrDie("git -C " & quoteShell(request.workingDir) & " add flow-output.txt")
@@ -1928,7 +1937,7 @@ suite "orchestrator final v1 flow":
     runOrchestratorForTicks(tmp, 1, fakeRunner)
 
     let files = planTreeFiles(tmp)
-    check callOrder == @["architect-areas", "manager-batch", "0001"]
+    check callOrder == @["architect-areas", "manager-batch", "0001-prediction", "0001"]
     check "areas/01-full-flow.md" in files
     check "tickets/done/0001-full-flow.md" in files
     check "tickets/open/0001-full-flow.md" notin files
@@ -3077,3 +3086,110 @@ suite "per-ticket metrics":
     check "- model: unknown" in note
     check "- stdout_bytes: 0" in note
     check "- failure_reason: timeout_hard" in note
+
+suite "ticket difficulty prediction":
+  test "parsePredictionResponse parses valid JSON":
+    let response = """{"predicted_difficulty": "medium", "predicted_duration_minutes": 30, "reasoning": "Moderate complexity."}"""
+    let prediction = parsePredictionResponse(response)
+    check prediction.difficulty == "medium"
+    check prediction.durationMinutes == 30
+    check prediction.reasoning == "Moderate complexity."
+
+  test "parsePredictionResponse handles JSON with surrounding text":
+    let response = "Here is my assessment:\n{\"predicted_difficulty\": \"easy\", \"predicted_duration_minutes\": 10, \"reasoning\": \"Simple change.\"}\nDone."
+    let prediction = parsePredictionResponse(response)
+    check prediction.difficulty == "easy"
+    check prediction.durationMinutes == 10
+
+  test "parsePredictionResponse rejects invalid difficulty":
+    expect(ValueError):
+      discard parsePredictionResponse("""{"predicted_difficulty": "impossible", "predicted_duration_minutes": 5, "reasoning": "test"}""")
+
+  test "parsePredictionResponse rejects missing JSON":
+    expect(ValueError):
+      discard parsePredictionResponse("no json here")
+
+  test "formatPredictionNote produces expected markdown":
+    let prediction = TicketPrediction(
+      difficulty: "hard",
+      durationMinutes: 45,
+      reasoning: "Multiple modules need changes.",
+    )
+    let note = formatPredictionNote(prediction)
+    check "## Prediction" in note
+    check "- predicted_difficulty: hard" in note
+    check "- predicted_duration_minutes: 45" in note
+    check "- reasoning: Multiple modules need changes." in note
+
+  test "appendPredictionNote appends prediction section to ticket content":
+    let content = "# Test Ticket\n\nSome description."
+    let prediction = TicketPrediction(
+      difficulty: "trivial",
+      durationMinutes: 5,
+      reasoning: "Simple fix.",
+    )
+    let updated = appendPredictionNote(content, prediction)
+    check updated.startsWith("# Test Ticket")
+    check "## Prediction" in updated
+    check "- predicted_difficulty: trivial" in updated
+
+  test "buildPredictionPrompt renders template with all placeholders":
+    let prompt = buildPredictionPrompt("ticket body", "area body", "spec summary")
+    check "ticket body" in prompt
+    check "area body" in prompt
+    check "spec summary" in prompt
+
+  test "runTicketPrediction appends prediction to ticket markdown":
+    withTempRepo("scriptorium_test_prediction_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addTicketToPlan(repoPath, "in-progress", "0099-pred.md",
+        "# Predict Me\n\n**Area:** test-area\n\n**Worktree:** /tmp/fake\n")
+
+      proc predictionRunner(request: AgentRunRequest): AgentRunResult =
+        ## Return a fake prediction response.
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 0,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: """{"predicted_difficulty": "easy", "predicted_duration_minutes": 15, "reasoning": "Small isolated change."}""",
+          timeoutKind: "none",
+        )
+
+      runTicketPrediction(repoPath, "tickets/in-progress/0099-pred.md", predictionRunner)
+
+      let (ticketContent, rc) = execCmdEx(
+        "git -C " & quoteShell(repoPath) & " show scriptorium/plan:tickets/in-progress/0099-pred.md"
+      )
+      check rc == 0
+      check "## Prediction" in ticketContent
+      check "- predicted_difficulty: easy" in ticketContent
+      check "- predicted_duration_minutes: 15" in ticketContent
+    )
+
+  test "runTicketPrediction logs warning and continues on failure":
+    withTempRepo("scriptorium_test_prediction_fail_", proc(repoPath: string) =
+      runInit(repoPath, quiet = true)
+      addTicketToPlan(repoPath, "in-progress", "0098-predfail.md",
+        "# Predict Fail\n\n**Area:** test-area\n\n**Worktree:** /tmp/fake\n")
+
+      proc failRunner(request: AgentRunRequest): AgentRunResult =
+        ## Return a failing result to test best-effort behavior.
+        result = AgentRunResult(
+          backend: harnessCodex,
+          exitCode: 1,
+          attempt: 1,
+          attemptCount: 1,
+          lastMessage: "",
+          timeoutKind: "none",
+        )
+
+      # Should not raise - prediction is best-effort.
+      runTicketPrediction(repoPath, "tickets/in-progress/0098-predfail.md", failRunner)
+
+      let (ticketContent, rc) = execCmdEx(
+        "git -C " & quoteShell(repoPath) & " show scriptorium/plan:tickets/in-progress/0098-predfail.md"
+      )
+      check rc == 0
+      check "## Prediction" notin ticketContent
+    )
