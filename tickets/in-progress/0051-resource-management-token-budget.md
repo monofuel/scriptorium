@@ -84,3 +84,8 @@ The `submit_pr` MCP tool returned "Merge request enqueued." successfully. The ti
 ```text
 hecks against `concurrency.tokenBudgetMB` before assigning new tickets\n- **Budget enforcement** logs `resource limit: token budget exhausted (<used>MB/<budget>MB), pausing new assignments` when exceeded\n- **No impact** when `tokenBudgetMB` is 0 or unset (unlimited)\n- **Unit tests** added covering: no enforcement at 0, assignment paused when exceeded, running agents not interrupted, session byte summation","stop_reason":"end_turn","session_id":"6f2da8d5-849e-4b6a-b5da-4bd11eead358","total_cost_usd":0.5777132500000001,"usage":{"input_tokens":31,"cache_creation_input_tokens":24527,"cache_read_input_tokens":655329,"output_tokens":3864,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":24527,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":31,"outputTokens":3864,"cacheReadInputTokens":655329,"cacheCreationInputTokens":24527,"webSearchRequests":0,"costUSD":0.5777132500000001,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"67247068-acdd-48f8-b634-9f999a4641e2"}
 ```
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 20
+- reasoning: Straightforward aggregation of an existing per-ticket counter with a simple threshold check before assignment, plus basic unit tests — no new data structures or complex concurrency logic required.
