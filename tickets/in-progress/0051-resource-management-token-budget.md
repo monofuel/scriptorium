@@ -29,3 +29,5 @@ The V5 spec (§26) requires monitoring cumulative `stdout_bytes` across all runn
 - `make test` passes with new tests.
 - Budget enforcement is logged clearly.
 - No impact when `tokenBudgetMB` is 0 or unset.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget
