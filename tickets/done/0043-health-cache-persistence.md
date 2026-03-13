@@ -100,3 +100,46 @@ Work is complete. Here's a summary of what was implemented:
 ```text
 st suite with 4 tests covering empty cache read, round-trip write/read, JSON parsing, and cache overwrite\n- Updated blank-spec-tick test to accommodate the health cache commit","stop_reason":"end_turn","session_id":"10f56aed-2b79-4e07-adc8-d00dc76a0826","total_cost_usd":1.6065865000000001,"usage":{"input_tokens":44,"cache_creation_input_tokens":45144,"cache_read_input_tokens":1673405,"output_tokens":11758,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":45144,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":44,"outputTokens":11758,"cacheReadInputTokens":1673405,"cacheCreationInputTokens":45144,"webSearchRequests":0,"costUSD":1.4130225000000003,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":107,"outputTokens":7387,"cacheReadInputTokens":831595,"cacheCreationInputTokens":58690,"webSearchRequests":0,"costUSD":0.19356399999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b612d90c-30d4-447a-b25d-6424e6a653ee"}
 ```
+
+## Merge Queue Success
+- Summary: Add persistent health cache (health/cache.json) on the plan branch. isMasterHealthy checks file cache before running quality checks, persists results after cache misses with per-target exit codes and wall times. Includes unit tests for cache read/write.\n
+### Quality Check Output
+```text
+ping tick
+[2026-03-13T02:49:28Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T02:49:28Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T02:49:28Z] [INFO] architect: generating areas from spec
+[2026-03-13T02:49:29Z] [INFO] architect: areas updated
+[2026-03-13T02:49:29Z] [INFO] manager: generating tickets
+[2026-03-13T02:49:29Z] [INFO] merge queue: processing
+[2026-03-13T02:49:29Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-13T02:49:29Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-13T02:49:29Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T02:49:29Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T02:49:29Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T02:49:29Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T02:49:29Z] [INFO] merge queue: item processed
+[2026-03-13T02:49:29Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T02:49:29Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T02:49:29Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T02:49:29Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T02:49:59Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T02:49:59Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1007
+- coding_wall_seconds: 762
+- test_wall_seconds: 232
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1352328
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 16m47s.
