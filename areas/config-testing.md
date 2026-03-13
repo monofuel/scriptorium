@@ -9,6 +9,7 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `agents.architect.{harness, model, reasoningEffort}`
   - `agents.coding.{harness, model, reasoningEffort}`
   - `agents.manager.{harness, model, reasoningEffort}`
+  - `agents.reviewer.{harness, model, reasoningEffort}`
   - `endpoints.local`
   - `logLevel`
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.

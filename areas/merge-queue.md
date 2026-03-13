@@ -17,7 +17,25 @@ Covers the single-flight merge queue, quality gates, and ticket state transition
 - Merge success and failure notes include submit summary and relevant output tails.
 - Stale managed worktrees for non-active tickets removable by cleanup.
 - Legacy repo-local worktrees under `.scriptorium/worktrees` removable by cleanup and assignment flows.
+- Pre-submit test gate (V4, §20):
+  - The `submit_pr` MCP tool must run `make test` in the agent's worktree before accepting a submission.
+  - If tests fail: return error response to the agent with test failure output (truncated if long), directing the agent to fix failing tests and call `submit_pr` again. Merge request NOT enqueued.
+  - If tests pass: record submit summary and return success response. Merge request enqueued as before.
+  - Test run logged: `ticket <id>: submit_pr pre-check: <PASS|FAIL> (exit=<code>, wall=<duration>)`.
+  - Agent remains running during test execution — `submit_pr` blocks until tests complete.
+  - Replaces previous behavior where `submit_pr` unconditionally accepted submissions.
+- Review agent integration (V4, §21):
+  - Every pending merge queue item goes through review agent before merging (see review-agent area).
+  - Approved reviews proceed to existing quality gate flow.
+  - Change requests remove the queue item and restart the coding agent with review feedback.
+
+## V4 Known Limitations
+
+- Pre-submit test gate runs `make test` only, not `make integration-test` — integration tests remain a merge queue concern.
+- The `submit_pr` MCP handler blocks the coding agent process while tests run, which counts against the agent's hard timeout.
 
 ## Spec References
 
 - Section 7: Merge Queue Safety Contract.
+- Section 20: Pre-Submit Test Gate (V4).
+- Section 21: Review Agent (V4, detail in review-agent area).

@@ -29,6 +29,14 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
     - Backend, exit code, attempt, attempt count, timeout, log file, last-message file, last message tail, stdout tail.
   - Enqueues merge request metadata only when the coding agent calls the MCP `submit_pr` tool.
   - Merge-queue enqueueing uses MCP tool state, not stdout scanning.
+  - Pre-submit test gate (V4, §20): `submit_pr` runs `make test` before enqueuing; on failure returns error to agent with test output; on success enqueues normally (detail in merge-queue area).
+- Review agent execution (V4, §21):
+  - New agent role under `agents.reviewer` in `scriptorium.json`.
+  - Runs in the ticket's worktree when a pending merge queue item is processed.
+  - Prompt includes ticket content, diff against `master`, area content, and submit summary.
+  - Has access to `submit_review` MCP tool with `approve` and `request_changes` actions.
+  - Approved: merge proceeds. Changes requested: coding agent restarted with review feedback.
+  - Stall defaults to approval. Detail in review-agent area.
 - Per-ticket metrics in agent run notes (V3):
   - Structured metrics persisted in ticket markdown alongside existing agent run notes.
   - Required fields: `wall_time_seconds`, `coding_wall_seconds`, `test_wall_seconds`, `attempt_count`, `outcome`, `failure_reason`, `model`, `stdout_bytes`.
@@ -39,3 +47,5 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
 
 - Section 5: Architect, Manager, And Coding Agent Execution.
 - Section 15: Per-Ticket Metrics In Agent Run Notes (V3, detail in ticket-metrics area).
+- Section 20: Pre-Submit Test Gate (V4, detail in merge-queue area).
+- Section 21: Review Agent (V4, detail in review-agent area).

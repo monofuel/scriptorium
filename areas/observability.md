@@ -33,6 +33,16 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
     - Stall detection: `ticket <id>: coding agent stalled (attempt <n>/<max>, no submit_pr)`
     - Pre-retry test: `ticket <id>: make test before retry: <PASS|FAIL> (exit=<code>, wall=<duration>)`
     - Continuation: `ticket <id>: continuation prompt sent (attempt <n>/<max>, test_status=<passing|failing>)`
+  - Review-related log points (V4, §21):
+    - Review start: `ticket <id>: review started (model=<model>)`
+    - Review approved: `ticket <id>: review approved`
+    - Review changes requested: `ticket <id>: review requested changes (feedback="<summary>")`
+    - Review stall: `ticket <id>: review agent stalled, defaulting to approve`
+  - Pre-submit test gate log point (V4, §20):
+    - `ticket <id>: submit_pr pre-check: <PASS|FAIL> (exit=<code>, wall=<duration>)`
+  - Health cache log points (V4, §22):
+    - `master health: cached healthy for <commit-hash>`
+    - `master health: cached unhealthy for <commit-hash>`
   - All lines include ticket ID for correlation.
   - Durations are human-readable.
 
@@ -55,3 +65,6 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
 - Section 13: Tick Summary Line (V3).
 - Section 14: Ticket Lifecycle Logging (V3).
 - Section 16: Session Summary On Shutdown (V3).
+- Section 20: Pre-Submit Test Gate (V4).
+- Section 21: Review Agent (V4, detail in review-agent area).
+- Section 22: Commit Health Cache (V4).

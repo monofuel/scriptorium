@@ -4,7 +4,7 @@ Covers role-based agent configuration, model-prefix harness inference, and backe
 
 ## Scope
 
-- Role-based config in `scriptorium.json` under `agents.architect`, `agents.coding`, `agents.manager`.
+- Role-based config in `scriptorium.json` under `agents.architect`, `agents.coding`, `agents.manager`, `agents.reviewer`.
 - Each role supports: `harness`, `model`, `reasoningEffort`.
 - Model-prefix harness inference:
   - `claude-*` -> `claude-code`
@@ -32,3 +32,4 @@ Covers role-based agent configuration, model-prefix harness inference, and backe
 ## Spec References
 
 - Section 6: Harness Routing And Agent Backends.
+- Section 21: Review Agent (V4, reviewer role config).
