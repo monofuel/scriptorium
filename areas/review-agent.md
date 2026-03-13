@@ -46,7 +46,24 @@ Scope:
   - `**Review Feedback:** <feedback text>` (when changes requested).
   - Backend, exit code, and wall time, consistent with existing agent run notes.
 
-**V4 Known Limitations:**
+**Test coverage (V7, §30):**
+- Required unit tests for `buildReviewAgentPrompt`:
+  - Verify the rendered prompt contains expected sections: diff, ticket content, area context, submit summary.
+  - Verify each section is labeled and delimited so the review agent can parse them.
+  - Verify the prompt includes review instructions and available MCP tool description.
+- Edge case tests for diff generation:
+  - Empty diff: prompt must include a note that no changes were found and the review agent should flag this.
+  - Failed diff: review flow must handle gracefully — log warning and default to approval rather than crashing.
+- Feedback truncation:
+  - When review feedback exceeds `ReviewFeedbackMaxBytes` (4096 bytes), it must be truncated with a `... [truncated]` marker.
+  - Unit tests must exercise the truncation boundary: exactly 4096 bytes, 4097 bytes, and well under 4096 bytes.
+- Live integration test:
+  - Run the review agent with a real model (similar to `integration_mcp_submit_pr_live.nim`).
+  - Verify the review agent calls `submit_review` with either `approve` or `request_changes`.
+  - Use a real diff against a real branch, not synthetic input.
+
+**Known Limitations:**
 - Single-pass reviewer — no back-and-forth dialogue with the coding agent.
 - Change requests restart the coding agent from scratch rather than resuming the previous session.
 - Stall-default-to-approve policy prioritizes throughput over review quality — future versions may retry the reviewer instead.
+- Review agent live integration tests require API credentials and a running model, so they only run in `make integration-test`, not `make test`.

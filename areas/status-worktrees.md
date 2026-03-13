@@ -18,8 +18,12 @@ Covers `scriptorium status`, `scriptorium worktrees`, and deterministic managed 
   - Last N completed tickets (default 5) with outcome (`done`, `reopened`, `parked`) and wall time.
   - Cumulative first-attempt success rate across all done tickets.
   - Existing status output (ticket counts, active ticket info) preserved.
+- Dependency visibility in status (V7, §29):
+  - When tickets are blocked by circular dependencies, status must report: `Blocked: <id> (circular dependency with <id-list>)`.
+  - When tickets are blocked by unsatisfied (but non-circular) dependencies, status must report: `Waiting: <id> (depends on <id-list>)`.
 
 ## Spec References
 
 - Section 8: Status, Worktree Visibility, And Managed Paths.
 - Section 17: Status Command Enhancement (V3).
+- Section 29: Ticket Dependency Cycle Detection — status enhancements (V7).
