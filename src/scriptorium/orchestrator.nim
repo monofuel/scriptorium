@@ -704,7 +704,6 @@ proc formatPlanStreamEvent(event: AgentStreamEvent): string =
 
 proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string): string =
   ## Build the coding-agent prompt from ticket context.
-  let ticketId = ticketIdFromTicketPath(ticketRelPath)
   result = renderPromptTemplate(
     CodingAgentTemplate,
     [
@@ -712,7 +711,6 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
       (name: "WORKTREE_PATH", value: worktreePath),
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
-      (name: "TICKET_ID", value: ticketId),
     ],
   )
 
