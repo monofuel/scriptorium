@@ -202,3 +202,21 @@ All tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as i
 ```text
 and parallel tick paths — skips new assignments when exceeded but allows running agents to complete.\n\n2. **`tests/test_scriptorium.nim`** — Added 7 tests: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, under budget allowed, running agents not interrupted.\n\nAll tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in this environment.","stop_reason":"end_turn","session_id":"d28ea7a5-4327-4f1f-97a7-399debdfa3f0","total_cost_usd":0.71495375,"usage":{"input_tokens":26,"cache_creation_input_tokens":29681,"cache_read_input_tokens":740235,"output_tokens":6368,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":29681,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":26,"outputTokens":6368,"cacheReadInputTokens":740235,"cacheCreationInputTokens":29681,"webSearchRequests":0,"costUSD":0.71495375,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a7f30ce5-e3cd-4bbf-809e-b0c0d9d1edcf"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool is not available in this environment. The branch `scriptorium/ticket-0051` is clean with all changes committed, tests pass, and it's one commit ahead of master. The work is complete:
+
+- **`src/scriptorium/orchestrator.nim`**: Added `getSessionStdoutBytes()` and `isTokenBudgetExceeded()` procs with budget checks before ticket assignment in both serial and parallel modes
+- **`tests/test_scriptorium.nim`**: 7 unit tests covering budget enforcement
+- `make test` passes
+
+I'm unable to call `submit_pr` as the MCP tool is not configured in this environment. The commit `e8a5abd` on branch `scriptorium/ticket-0051` is ready for merge.
+```
+
+### Agent Stdout Tail
+```text
+ed `getSessionStdoutBytes()` and `isTokenBudgetExceeded()` procs with budget checks before ticket assignment in both serial and parallel modes\n- **`tests/test_scriptorium.nim`**: 7 unit tests covering budget enforcement\n- `make test` passes\n\nI'm unable to call `submit_pr` as the MCP tool is not configured in this environment. The commit `e8a5abd` on branch `scriptorium/ticket-0051` is ready for merge.","stop_reason":"end_turn","session_id":"61087f0e-16a2-40d5-a4f2-89a79952c110","total_cost_usd":0.37024199999999996,"usage":{"input_tokens":20,"cache_creation_input_tokens":22476,"cache_read_input_tokens":358484,"output_tokens":2017,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22476,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":2017,"cacheReadInputTokens":358484,"cacheCreationInputTokens":22476,"webSearchRequests":0,"costUSD":0.37024199999999996,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"e6ed2f59-e721-4246-ab3d-2cc398ab9fb3"}
+```
