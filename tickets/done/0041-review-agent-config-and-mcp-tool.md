@@ -78,3 +78,46 @@ Changes committed and submitted. Here's what was done:
 ```text
 stered `submit_review` MCP tool with `action` (enum: approve/request_changes) and optional `feedback` schema\n- Handler validates action enum, requires feedback for `request_changes`, stores decision via shared state\n\n**Tests (3 new):**\n- Reviewer config parsed from `scriptorium.json`\n- `inferHarness` works for reviewer-style model names\n- `submit_review` tool registered, handler stores/validates decisions correctly","stop_reason":"end_turn","session_id":"b154d7b6-0b6d-4816-8b77-a77de795e30f","total_cost_usd":1.02233675,"usage":{"input_tokens":34,"cache_creation_input_tokens":40585,"cache_read_input_tokens":1090821,"output_tokens":8924,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":40585,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":34,"outputTokens":8924,"cacheReadInputTokens":1090821,"cacheCreationInputTokens":40585,"webSearchRequests":0,"costUSD":1.02233675,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"d7117c0e-6b9b-4764-99fb-a3b05fa7928d"}
 ```
+
+## Merge Queue Success
+- Summary: Add reviewer agent config support (agents.reviewer field in AgentConfigs with defaults and merge) and submit_review MCP tool (approve/request_changes with thread-safe shared state). Includes unit tests for config parsing, inferHarness routing, and tool handler behavior.\n
+### Quality Check Output
+```text
+221542e49bbee95/worktrees/tickets/0001-first)
+[2026-03-13T01:56:12Z] [INFO] ticket 0001: merge queue entered (position=1)
+[2026-03-13T01:56:12Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:56:42Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T01:56:42Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T01:56:42Z] [INFO] architect: generating areas from spec
+[2026-03-13T01:56:43Z] [INFO] architect: areas updated
+[2026-03-13T01:56:43Z] [INFO] manager: generating tickets
+[2026-03-13T01:56:43Z] [INFO] merge queue: processing
+[2026-03-13T01:56:43Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T01:56:43Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T01:56:43Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T01:56:43Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T01:56:43Z] [INFO] merge queue: item processed
+[2026-03-13T01:56:43Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T01:56:43Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:56:43Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T01:56:43Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:57:13Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:57:13Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 637
+- coding_wall_seconds: 393
+- test_wall_seconds: 232
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1208095
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 10m37s.
