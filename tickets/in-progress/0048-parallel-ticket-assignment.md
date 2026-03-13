@@ -28,3 +28,5 @@ The orchestrator currently assigns exactly one open ticket per tick via `execute
 - `make test` passes with new tests.
 - Existing single-ticket behavior preserved when `maxAgents = 1`.
 - No changes to agent execution yet — this ticket only covers assignment logic.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0048-parallel-ticket-assignment
