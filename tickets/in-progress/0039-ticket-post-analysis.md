@@ -37,3 +37,5 @@ No post-analysis infrastructure exists. Tickets move to terminal states without 
 ## Spec References
 
 - Section 19: Ticket Post-Analysis (V3).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0039-ticket-post-analysis
