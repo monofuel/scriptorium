@@ -1038,6 +1038,89 @@ suite "orchestrator ticket assignment":
     check assignment.worktree in removed
     check assignment.worktree notin gitWorktreePaths(tmp)
 
+suite "parallel ticket assignment":
+  test "two tickets with different areas are both assigned when maxAgents >= 2":
+    let tmp = getTempDir() / "scriptorium_test_parallel_diff_areas"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
+
+    let assignments = assignOpenTickets(tmp, 2)
+    check assignments.len == 2
+    check assignments[0].openTicket == "tickets/open/0001-first.md"
+    check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
+    check assignments[1].openTicket == "tickets/open/0002-second.md"
+    check assignments[1].inProgressTicket == "tickets/in-progress/0002-second.md"
+    check assignments[0].branch == "scriptorium/ticket-0001"
+    check assignments[1].branch == "scriptorium/ticket-0002"
+    check assignments[0].worktree.len > 0
+    check assignments[1].worktree.len > 0
+
+  test "two tickets with same area: only the oldest is assigned":
+    let tmp = getTempDir() / "scriptorium_test_parallel_same_area"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** shared\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** shared\n")
+
+    let assignments = assignOpenTickets(tmp, 2)
+    check assignments.len == 1
+    check assignments[0].openTicket == "tickets/open/0001-first.md"
+    check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
+
+  test "assignment respects maxAgents cap":
+    let tmp = getTempDir() / "scriptorium_test_parallel_cap"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
+    addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-c\n")
+
+    let assignments = assignOpenTickets(tmp, 2)
+    check assignments.len == 2
+    check assignments[0].openTicket == "tickets/open/0001-first.md"
+    check assignments[1].openTicket == "tickets/open/0002-second.md"
+
+  test "maxAgents = 1 assigns only one ticket":
+    let tmp = getTempDir() / "scriptorium_test_parallel_single"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
+
+    let assignments = assignOpenTickets(tmp, 1)
+    check assignments.len == 1
+    check assignments[0].openTicket == "tickets/open/0001-first.md"
+    check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
+    check assignments[0].branch == "scriptorium/ticket-0001"
+
+  test "assignOpenTickets skips area already in-progress":
+    let tmp = getTempDir() / "scriptorium_test_parallel_skip_inprogress"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "in-progress", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-b\n")
+
+    let assignments = assignOpenTickets(tmp, 3)
+    check assignments.len == 1
+    check assignments[0].openTicket == "tickets/open/0003-third.md"
+
+  test "assignOpenTickets returns empty when no open tickets":
+    let tmp = getTempDir() / "scriptorium_test_parallel_empty"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let assignments = assignOpenTickets(tmp, 3)
+    check assignments.len == 0
+
 suite "orchestrator mcp tools":
   test "createOrchestratorServer registers submit_pr and consumeSubmitPrSummary clears state":
     discard consumeSubmitPrSummary()

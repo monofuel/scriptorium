@@ -1,5 +1,5 @@
 import
-  std/[algorithm, json, locks, os, osproc, posix, sets, sha1, streams, strformat, strutils, tables, times, uri],
+  std/[algorithm, json, locks, os, osproc, posix, sequtils, sets, sha1, streams, strformat, strutils, tables, times, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -2178,6 +2178,85 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       branch: worktreeInfo.branch,
       worktree: worktreeInfo.path,
     )
+  )
+
+proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]] =
+  ## Return all open tickets sorted by numeric ID (ascending).
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
+    let rel = relativePath(ticketPath, planPath).replace('\\', '/')
+    let parsedId = parseInt(ticketIdFromTicketPath(rel))
+    result.add((id: parsedId, rel: rel))
+  result.sort(proc(a, b: tuple[id: int, rel: string]): int =
+    if a.id != b.id: a.id - b.id
+    else: cmp(a.rel, b.rel)
+  )
+
+proc inProgressAreasInPlanPath(planPath: string): HashSet[string] =
+  ## Collect area identifiers from in-progress tickets.
+  result = initHashSet[string]()
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):
+    let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+    if areaId.len > 0:
+      result.incl(areaId)
+
+proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment] =
+  ## Assign multiple open tickets concurrently when they touch independent areas.
+  ## Scans open tickets in ID order (oldest first), skipping tickets whose area
+  ## already has an in-progress ticket or was claimed earlier in this batch.
+  ## Returns a sequence of assignment records for the caller to execute.
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): seq[TicketAssignment] =
+    let openTickets = openTicketsByIdInPlanPath(planPath)
+    if openTickets.len == 0:
+      return @[]
+
+    var occupiedAreas = inProgressAreasInPlanPath(planPath)
+    var assignments: seq[TicketAssignment]
+
+    for ticket in openTickets:
+      if assignments.len >= maxAgents:
+        break
+
+      let content = readFile(planPath / ticket.rel)
+      let areaId = parseAreaFromTicketContent(content)
+
+      if areaId.len > 0 and areaId in occupiedAreas:
+        continue
+
+      let inProgressTicket = PlanTicketsInProgressDir / splitFile(ticket.rel).name & ".md"
+      let openAbs = planPath / ticket.rel
+      let inProgressAbs = planPath / inProgressTicket
+      moveFile(openAbs, inProgressAbs)
+
+      let worktreeInfo = ensureWorktreeCreated(repoPath, inProgressTicket)
+      let updatedContent = readFile(inProgressAbs)
+      writeFile(inProgressAbs, setTicketWorktree(updatedContent, worktreeInfo.path))
+
+      if areaId.len > 0:
+        occupiedAreas.incl(areaId)
+
+      let ticketId = ticketIdFromTicketPath(inProgressTicket)
+      logInfo(fmt"ticket {ticketId}: open -> in-progress (assigned, worktree={worktreeInfo.path})")
+      ticketStartTimes[ticketId] = epochTime()
+      ticketAttemptCounts[ticketId] = 0
+      ticketCodingWalls[ticketId] = 0.0
+      ticketTestWalls[ticketId] = 0.0
+      ticketModels[ticketId] = ""
+      ticketStdoutBytes[ticketId] = 0
+
+      assignments.add(TicketAssignment(
+        openTicket: ticket.rel,
+        inProgressTicket: inProgressTicket,
+        branch: worktreeInfo.branch,
+        worktree: worktreeInfo.path,
+      ))
+
+    if assignments.len > 0:
+      gitRun(planPath, "add", "-A", PlanTicketsOpenDir, PlanTicketsInProgressDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        let ticketNames = assignments.mapIt(splitFile(it.inProgressTicket).name).join(", ")
+        gitRun(planPath, "commit", "-m", TicketAssignCommitPrefix & " " & ticketNames)
+
+    result = assignments
   )
 
 proc cleanupStaleTicketWorktrees*(repoPath: string): seq[string] =
