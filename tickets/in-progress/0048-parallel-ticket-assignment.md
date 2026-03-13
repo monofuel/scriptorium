@@ -80,3 +80,10 @@ rogress\n   - Returns empty when no open tickets\n\nAll tests pass (`make test` 
 ```text
 enBudgetMB` added to `Config`\n3. **Unit tests** covering: different-area parallel assignment, same-area serialization, `maxAgents` cap enforcement, and `maxAgents=1` backward compatibility","stop_reason":"end_turn","session_id":"239d7c68-248a-4c5e-8644-7b2e245eba28","total_cost_usd":0.5149375500000001,"usage":{"input_tokens":21,"cache_creation_input_tokens":17328,"cache_read_input_tokens":401224,"output_tokens":2958,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":17328,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":21,"outputTokens":2958,"cacheReadInputTokens":401224,"cacheCreationInputTokens":17328,"webSearchRequests":0,"costUSD":0.38296700000000006,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":53,"outputTokens":3465,"cacheReadInputTokens":488613,"cacheCreationInputTokens":52585,"webSearchRequests":0,"costUSD":0.13197055,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"440dc3ba-4976-4ff4-b493-59a7efe8b079"}
 ```
+
+## Review
+**Review:** approved
+- Model: codex-fake-unit-test-model
+- Backend: claude-code
+- Exit Code: 1
+- Wall Time: 7s
