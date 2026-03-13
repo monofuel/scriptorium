@@ -182,3 +182,23 @@ Updating 523c6a3..10f3089
 - predicted_difficulty: medium
 - predicted_duration_minutes: 35
 - reasoning: While the logic is simple (summing existing counters and adding a threshold check), the prior run failed due to merge conflicts in orchestrator.nim and test files, requiring a second attempt and careful conflict resolution — suggesting moderate integration complexity.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool is not available in this environment. All changes are committed on branch `scriptorium/ticket-0051`. Here's what was implemented:
+
+**Changes:**
+
+1. **`src/scriptorium/orchestrator.nim`** — Added `getSessionStdoutBytes()` (sums all `ticketStdoutBytes` values) and `isTokenBudgetExceeded(tokenBudgetMB)` (checks against budget, returns false when 0/negative). Added budget check before ticket assignment in both serial and parallel tick paths — skips new assignments when exceeded but allows running agents to complete.
+
+2. **`tests/test_scriptorium.nim`** — Added 7 tests: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, under budget allowed, running agents not interrupted.
+
+All tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in this environment.
+```
+
+### Agent Stdout Tail
+```text
+and parallel tick paths — skips new assignments when exceeded but allows running agents to complete.\n\n2. **`tests/test_scriptorium.nim`** — Added 7 tests: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, under budget allowed, running agents not interrupted.\n\nAll tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in this environment.","stop_reason":"end_turn","session_id":"d28ea7a5-4327-4f1f-97a7-399debdfa3f0","total_cost_usd":0.71495375,"usage":{"input_tokens":26,"cache_creation_input_tokens":29681,"cache_read_input_tokens":740235,"output_tokens":6368,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":29681,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":26,"outputTokens":6368,"cacheReadInputTokens":740235,"cacheCreationInputTokens":29681,"webSearchRequests":0,"costUSD":0.71495375,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a7f30ce5-e3cd-4bbf-809e-b0c0d9d1edcf"}
+```
