@@ -34,3 +34,5 @@
 - `orchestrator.nim` imports these modules instead of defining the moved procs.
 - `make test` passes after each extraction commit.
 - No functional changes — identical behavior.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0054-extract-leaf-modules
