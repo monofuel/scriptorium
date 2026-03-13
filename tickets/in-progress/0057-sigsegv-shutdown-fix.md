@@ -36,3 +36,8 @@ The orchestrator calls `httpServer.close()` from the main thread while mummy's `
 - Manual verification: `scriptorium run` followed by SIGINT/SIGTERM exits cleanly.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0057-sigsegv-shutdown-fix
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Cross-thread shutdown coordination requires understanding mummy's internals, atomic flag implementation in Nim, and careful sequencing across orchestrator and mcp_server modules — high integration risk with likely 2+ attempts due to concurrency subtleties and SIGSEGV debugging.
