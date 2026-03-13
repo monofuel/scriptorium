@@ -41,3 +41,8 @@ Final V7 §27 module split batch. Extract top-level modules that depend on the l
 - No functional changes.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0056-extract-top-modules
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Extracting 7 top-level modules with cross-module dependencies is high volume; pattern is established from prior batches but dependency ordering and import wiring across this many interconnected modules creates integration risk, likely 2 attempts.
