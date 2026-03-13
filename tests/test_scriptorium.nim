@@ -990,6 +990,37 @@ suite "orchestrator mcp tools":
     check consumeSubmitPrSummary() == "ship tool"
     check consumeSubmitPrSummary() == ""
 
+  test "submit_pr runs make test and enqueues on pass":
+    discard consumeSubmitPrSummary()
+    let tmp = getTempDir() / "scriptorium_test_submit_pr_pass"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\n")
+    setActiveTicketWorktree(tmp, "0099")
+    defer: clearActiveTicketWorktree()
+
+    let httpServer = createOrchestratorServer()
+    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+    let toolResponse = submitPrHandler(%*{"summary": "tests pass"})
+    check toolResponse.getStr() == "Merge request enqueued."
+    check consumeSubmitPrSummary() == "tests pass"
+
+  test "submit_pr runs make test and rejects on failure":
+    discard consumeSubmitPrSummary()
+    let tmp = getTempDir() / "scriptorium_test_submit_pr_fail"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "Makefile", "test:\n\t@echo FAIL test\n\t@false\n")
+    setActiveTicketWorktree(tmp, "0099")
+    defer: clearActiveTicketWorktree()
+
+    let httpServer = createOrchestratorServer()
+    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+    let toolResponse = submitPrHandler(%*{"summary": "tests fail"})
+    check "Pre-submit test gate failed" in toolResponse.getStr()
+    check "Fix the failing tests" in toolResponse.getStr()
+    check consumeSubmitPrSummary() == ""
+
 suite "orchestrator coding agent execution":
   test "executeAssignedTicket runs agent and appends run summary":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"

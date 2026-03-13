@@ -78,6 +78,9 @@ const
   SpecHashCommitMessage = "scriptorium: update spec hash marker"
   AreaHashesCommitMessage = "scriptorium: update area hashes"
   SubmitPrSummaryMaxBytes = 4096
+  SubmitPrTestOutputMaxChars = 2000
+  ActiveWorktreePathMaxBytes = 1024
+  ActiveTicketIdMaxBytes = 256
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes = 8192
   MakeTestTimeoutMs = 300_000
@@ -170,6 +173,10 @@ var
   submitPrLockInitialized = false
   submitPrSummaryLen = 0
   submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
+  activeWorktreePathLen = 0
+  activeWorktreePathBuffer: array[ActiveWorktreePathMaxBytes, char]
+  activeTicketIdLen = 0
+  activeTicketIdBuffer: array[ActiveTicketIdMaxBytes, char]
   ticketStartTimes*: Table[string, float]
   ticketAttemptCounts*: Table[string, int]
   ticketCodingWalls*: Table[string, float]
@@ -201,6 +208,37 @@ proc consumeSubmitPrSummary*(): string {.gcsafe.} =
       result = newString(submitPrSummaryLen)
       copyMem(addr result[0], addr submitPrSummaryBuffer[0], submitPrSummaryLen)
     submitPrSummaryLen = 0
+
+proc setActiveTicketWorktree*(worktreePath: string, ticketId: string) {.gcsafe.} =
+  ## Store the active ticket worktree path and ticket ID for the submit_pr handler.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    let pathLen = min(worktreePath.len, ActiveWorktreePathMaxBytes)
+    activeWorktreePathLen = pathLen
+    if pathLen > 0:
+      copyMem(addr activeWorktreePathBuffer[0], unsafeAddr worktreePath[0], pathLen)
+    let idLen = min(ticketId.len, ActiveTicketIdMaxBytes)
+    activeTicketIdLen = idLen
+    if idLen > 0:
+      copyMem(addr activeTicketIdBuffer[0], unsafeAddr ticketId[0], idLen)
+
+proc clearActiveTicketWorktree*() {.gcsafe.} =
+  ## Clear the active ticket worktree path and ticket ID.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    activeWorktreePathLen = 0
+    activeTicketIdLen = 0
+
+proc getActiveTicketWorktree(): tuple[worktreePath: string, ticketId: string] {.gcsafe.} =
+  ## Return the active ticket worktree path and ticket ID.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    if activeWorktreePathLen > 0:
+      result.worktreePath = newString(activeWorktreePathLen)
+      copyMem(addr result.worktreePath[0], addr activeWorktreePathBuffer[0], activeWorktreePathLen)
+    if activeTicketIdLen > 0:
+      result.ticketId = newString(activeTicketIdLen)
+      copyMem(addr result.ticketId[0], addr activeTicketIdBuffer[0], activeTicketIdLen)
 
 proc gitRun(dir: string, args: varargs[string]) =
   ## Run a git subcommand in dir and raise an IOError on non-zero exit.
@@ -2372,6 +2410,9 @@ proc executeAssignedTicket*(
   var submitSummary = ""
   let model = cfg.agents.coding.model
 
+  setActiveTicketWorktree(assignment.worktree, ticketId)
+  defer: clearActiveTicketWorktree()
+
   while totalAttemptsUsed < DefaultAgentMaxAttempts:
     let attemptsForThisCall = DefaultAgentMaxAttempts - totalAttemptsUsed
     logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
@@ -2565,6 +2606,28 @@ proc createOrchestratorServer*(): HttpMcpServer =
   )
   let submitPrHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
     let summary = arguments["summary"].getStr()
+    let active = getActiveTicketWorktree()
+    let ticketLabel = if active.ticketId.len > 0: active.ticketId else: "unknown"
+
+    if active.worktreePath.len == 0:
+      {.cast(gcsafe).}:
+        logInfo(&"ticket {ticketLabel}: submit_pr pre-check: SKIP (no active worktree)")
+      recordSubmitPrSummary(summary)
+      return %*"Merge request enqueued."
+
+    let testStartTime = epochTime()
+    let testResult = runWorktreeMakeTest(active.worktreePath)
+    let testWallTime = epochTime() - testStartTime
+    let testExitCode = testResult.exitCode
+    {.cast(gcsafe).}:
+      let testWallDuration = formatDuration(testWallTime)
+      let testStatus = if testExitCode == 0: "PASS" else: "FAIL"
+      logInfo(&"ticket {ticketLabel}: submit_pr pre-check: {testStatus} (exit={testExitCode}, wall={testWallDuration})")
+
+    if testExitCode != 0:
+      let outputTail = truncateTail(testResult.output.strip(), SubmitPrTestOutputMaxChars)
+      return %*(&"Pre-submit test gate failed (exit={testExitCode}). Fix the failing tests and call submit_pr again.\n\n{outputTail}")
+
     recordSubmitPrSummary(summary)
     %*"Merge request enqueued."
   server.registerTool(submitPrTool, submitPrHandler)
