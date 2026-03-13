@@ -89,3 +89,27 @@ hecks against `concurrency.tokenBudgetMB` before assigning new tickets\n- **Budg
 - predicted_difficulty: easy
 - predicted_duration_minutes: 20
 - reasoning: Straightforward aggregation of an existing per-ticket counter with a simple threshold check before assignment, plus basic unit tests — no new data structures or complex concurrency logic required.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool is not available in my tool set. All changes are committed on branch `scriptorium/ticket-0051`. Here's what was implemented:
+
+**Changes:**
+
+1. **`src/scriptorium/orchestrator.nim`** — Added two procs:
+   - `getSessionStdoutBytes*()` — sums all `ticketStdoutBytes` values for the session total
+   - `isTokenBudgetExceeded*(tokenBudgetMB: int)` — returns true and logs when cumulative stdout bytes exceed budget; returns false when budget is 0 (unlimited)
+   
+   Added budget check before ticket assignment in both serial and parallel modes — skips new assignments when exceeded, but allows running agents to complete normally.
+
+2. **`tests/test_scriptorium.nim`** — Added 7 tests covering: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, allowed when under budget, running agents not interrupted.
+
+All tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in my current environment.
+```
+
+### Agent Stdout Tail
+```text
+skips new assignments when exceeded, but allows running agents to complete normally.\n\n2. **`tests/test_scriptorium.nim`** — Added 7 tests covering: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, allowed when under budget, running agents not interrupted.\n\nAll tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in my current environment.","stop_reason":"end_turn","session_id":"eec46c92-7fb4-4998-a497-8ce4df99bed4","total_cost_usd":0.6622295,"usage":{"input_tokens":25,"cache_creation_input_tokens":27584,"cache_read_input_tokens":656559,"output_tokens":6457,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":27584,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":25,"outputTokens":6457,"cacheReadInputTokens":656559,"cacheCreationInputTokens":27584,"webSearchRequests":0,"costUSD":0.6622295,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"41601284-307b-4588-8092-4b3466dfefbb"}
+```
