@@ -33,10 +33,15 @@ type
     maxAgents*: int
     tokenBudgetMB*: int
 
+  TimeoutConfig* = object
+    codingAgentHardTimeoutMs*: int
+    codingAgentNoOutputTimeoutMs*: int
+
   Config* = object
     agents*: AgentConfigs
     endpoints*: Endpoints
     concurrency*: ConcurrencyConfig
+    timeouts*: TimeoutConfig
     logLevel*: string
     fileLogLevel*: string
 
@@ -63,6 +68,10 @@ proc defaultConfig*(): Config =
     concurrency: ConcurrencyConfig(
       maxAgents: 1,
       tokenBudgetMB: 0,
+    ),
+    timeouts: TimeoutConfig(
+      codingAgentHardTimeoutMs: 14_400_000,
+      codingAgentNoOutputTimeoutMs: 300_000,
     ),
   )
 
@@ -105,6 +114,10 @@ proc loadConfig*(repoPath: string): Config =
     result.concurrency.maxAgents = parsed.concurrency.maxAgents
   if parsed.concurrency.tokenBudgetMB > 0:
     result.concurrency.tokenBudgetMB = parsed.concurrency.tokenBudgetMB
+  if parsed.timeouts.codingAgentHardTimeoutMs > 0:
+    result.timeouts.codingAgentHardTimeoutMs = parsed.timeouts.codingAgentHardTimeoutMs
+  if parsed.timeouts.codingAgentNoOutputTimeoutMs > 0:
+    result.timeouts.codingAgentNoOutputTimeoutMs = parsed.timeouts.codingAgentNoOutputTimeoutMs
   if parsed.logLevel.len > 0:
     result.logLevel = parsed.logLevel
   if parsed.fileLogLevel.len > 0:

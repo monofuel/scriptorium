@@ -382,6 +382,28 @@ suite "config":
     check cfg.concurrency.maxAgents == 8
     check cfg.concurrency.tokenBudgetMB == 0
 
+  test "timeout defaults when key is absent":
+    let tmp = getTempDir() / "scriptorium_test_config_timeout_absent"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    let cfg = loadConfig(tmp)
+    check cfg.timeouts.codingAgentHardTimeoutMs == 14_400_000
+    check cfg.timeouts.codingAgentNoOutputTimeoutMs == 300_000
+
+  test "timeout parses custom values":
+    let tmp = getTempDir() / "scriptorium_test_config_timeout_custom"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.timeouts.codingAgentHardTimeoutMs = 7_200_000
+    writtenCfg.timeouts.codingAgentNoOutputTimeoutMs = 600_000
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.timeouts.codingAgentHardTimeoutMs == 7_200_000
+    check cfg.timeouts.codingAgentNoOutputTimeoutMs == 600_000
+
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
     let endpoint = parseEndpoint("")

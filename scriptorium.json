@@ -12,5 +12,9 @@
     "reviewer": {
       "model": "claude-opus-4-6"
     }
+  },
+  "timeouts": {
+    "codingAgentHardTimeoutMs": 14400000,
+    "codingAgentNoOutputTimeoutMs": 300000
   }
 }

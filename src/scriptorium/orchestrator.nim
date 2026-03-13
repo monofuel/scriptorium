@@ -67,8 +67,6 @@ const
   RequiredQualityTargets = ["test", "integration-test"]
   GitCommandTimeoutMs = 60_000
   QualityCheckTimeoutMs = 300_000
-  CodingAgentNoOutputTimeoutMs = 300_000
-  CodingAgentHardTimeoutMs = 3_600_000
   IdleSleepMs = 200
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
@@ -2734,8 +2732,8 @@ proc executeAssignedTicket*(
       ticketId: ticketId,
       attempt: currentAttemptBase,
       skipGitRepoCheck: true,
-      noOutputTimeoutMs: CodingAgentNoOutputTimeoutMs,
-      hardTimeoutMs: CodingAgentHardTimeoutMs,
+      noOutputTimeoutMs: cfg.timeouts.codingAgentNoOutputTimeoutMs,
+      hardTimeoutMs: cfg.timeouts.codingAgentHardTimeoutMs,
       maxAttempts: attemptsForThisCall,
       onEvent: proc(event: AgentStreamEvent) =
         if event.kind == agentEventTool:
