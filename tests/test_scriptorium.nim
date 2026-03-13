@@ -3139,6 +3139,86 @@ suite "ticket difficulty prediction":
     check "area body" in prompt
     check "spec summary" in prompt
 
+  test "parsePredictionFromContent extracts prediction fields":
+    let content = "# Ticket\n\n## Prediction\n- predicted_difficulty: medium\n- predicted_duration_minutes: 30\n- reasoning: Moderate.\n"
+    let prediction = parsePredictionFromContent(content)
+    check prediction.found == true
+    check prediction.difficulty == "medium"
+    check prediction.durationMinutes == 30
+
+  test "parsePredictionFromContent returns not found when no prediction section":
+    let content = "# Ticket\n\nSome description.\n"
+    let prediction = parsePredictionFromContent(content)
+    check prediction.found == false
+
+  test "parsePredictionFromContent stops at next section":
+    let content = "# Ticket\n\n## Prediction\n- predicted_difficulty: easy\n- predicted_duration_minutes: 10\n\n## Metrics\n- wall_time_seconds: 100\n"
+    let prediction = parsePredictionFromContent(content)
+    check prediction.found == true
+    check prediction.difficulty == "easy"
+    check prediction.durationMinutes == 10
+
+  test "classifyActualDifficulty returns trivial for quick single attempt done":
+    check classifyActualDifficulty(1, "done", 120) == "trivial"
+
+  test "classifyActualDifficulty returns easy for moderate single attempt done":
+    check classifyActualDifficulty(1, "done", 600) == "easy"
+
+  test "classifyActualDifficulty returns medium for long single attempt done":
+    check classifyActualDifficulty(1, "done", 1200) == "medium"
+
+  test "classifyActualDifficulty returns hard for two attempt done":
+    check classifyActualDifficulty(2, "done", 600) == "hard"
+
+  test "classifyActualDifficulty returns complex for many attempts done":
+    check classifyActualDifficulty(3, "done", 600) == "complex"
+
+  test "classifyActualDifficulty returns hard for reopened with few attempts":
+    check classifyActualDifficulty(1, "reopened", 300) == "hard"
+
+  test "classifyActualDifficulty returns complex for reopened with many attempts":
+    check classifyActualDifficulty(3, "reopened", 300) == "complex"
+
+  test "classifyActualDifficulty returns complex for parked":
+    check classifyActualDifficulty(1, "parked", 100) == "complex"
+
+  test "compareDifficulty returns accurate for matching levels":
+    check compareDifficulty("medium", "medium") == "accurate"
+
+  test "compareDifficulty returns underestimated when predicted easier":
+    check compareDifficulty("easy", "hard") == "underestimated"
+
+  test "compareDifficulty returns overestimated when predicted harder":
+    check compareDifficulty("complex", "easy") == "overestimated"
+
+  test "formatPostAnalysisNote produces expected markdown":
+    let note = formatPostAnalysisNote("medium", "accurate", "Predicted medium, actual was medium.")
+    check "## Post-Analysis" in note
+    check "- actual_difficulty: medium" in note
+    check "- prediction_accuracy: accurate" in note
+    check "- brief_summary: Predicted medium, actual was medium." in note
+
+  test "appendPostAnalysisNote appends post-analysis section":
+    let content = "# Ticket\n\nDescription."
+    let updated = appendPostAnalysisNote(content, "hard", "underestimated", "Was harder than expected.")
+    check updated.startsWith("# Ticket")
+    check "## Post-Analysis" in updated
+    check "- actual_difficulty: hard" in updated
+
+  test "runPostAnalysis generates full analysis for ticket with prediction":
+    let content = "# Ticket\n\n## Prediction\n- predicted_difficulty: easy\n- predicted_duration_minutes: 10\n- reasoning: Simple.\n\n## Metrics\n- wall_time_seconds: 1200\n- attempt_count: 2\n- outcome: done\n"
+    let updated = runPostAnalysis(content, "0050", "done", 2, 1200)
+    check "## Post-Analysis" in updated
+    check "- actual_difficulty: hard" in updated
+    check "- prediction_accuracy: underestimated" in updated
+    check "- brief_summary:" in updated
+
+  test "runPostAnalysis skips when no prediction section":
+    let content = "# Ticket\n\nNo prediction here.\n"
+    let updated = runPostAnalysis(content, "0051", "done", 1, 100)
+    check "## Post-Analysis" notin updated
+    check updated == content
+
   test "runTicketPrediction appends prediction to ticket markdown":
     withTempRepo("scriptorium_test_prediction_", proc(repoPath: string) =
       runInit(repoPath, quiet = true)

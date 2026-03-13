@@ -84,6 +84,7 @@ const
   PredictionNoOutputTimeoutMs = 30_000
   PredictionHardTimeoutMs = 60_000
   PredictionCommitPrefix = "scriptorium: predict ticket"
+  PostAnalysisCommitPrefix = "scriptorium: post-analysis ticket"
 
 type
   OrchestratorEndpoint* = object
@@ -801,6 +802,87 @@ proc cleanupTicketTimings*(ticketId: string) =
   ticketTestWalls.del(ticketId)
   ticketModels.del(ticketId)
   ticketStdoutBytes.del(ticketId)
+
+proc parsePredictionFromContent*(content: string): tuple[found: bool, difficulty: string, durationMinutes: int] =
+  ## Extract predicted difficulty and duration from a ticket's Prediction section.
+  let marker = "## Prediction"
+  let idx = content.find(marker)
+  if idx < 0:
+    return (found: false, difficulty: "", durationMinutes: 0)
+  let section = content[idx .. ^1]
+  var difficulty = ""
+  var durationMinutes = 0
+  for line in section.splitLines():
+    if line.startsWith("## ") and line != marker:
+      break
+    if line.startsWith("- predicted_difficulty: "):
+      difficulty = line["- predicted_difficulty: ".len .. ^1].strip()
+    elif line.startsWith("- predicted_duration_minutes: "):
+      let valStr = line["- predicted_duration_minutes: ".len .. ^1].strip()
+      durationMinutes = parseInt(valStr)
+  if difficulty.len == 0:
+    return (found: false, difficulty: "", durationMinutes: 0)
+  result = (found: true, difficulty: difficulty, durationMinutes: durationMinutes)
+
+proc classifyActualDifficulty*(attemptCount: int, outcome: string, wallTimeSeconds: int): string =
+  ## Classify actual difficulty based on attempt count, outcome, and wall time.
+  if outcome == "parked":
+    return "complex"
+  if outcome == "reopened":
+    if attemptCount >= 3:
+      return "complex"
+    return "hard"
+  # outcome == "done"
+  if attemptCount == 1 and wallTimeSeconds < 300:
+    return "trivial"
+  if attemptCount == 1 and wallTimeSeconds < 900:
+    return "easy"
+  if attemptCount == 1:
+    return "medium"
+  if attemptCount == 2:
+    return "hard"
+  return "complex"
+
+proc compareDifficulty*(predicted: string, actual: string): string =
+  ## Compare predicted vs actual difficulty and return accuracy label.
+  let levels = @["trivial", "easy", "medium", "hard", "complex"]
+  let predIdx = levels.find(predicted)
+  let actIdx = levels.find(actual)
+  if predIdx < 0 or actIdx < 0:
+    return "accurate"
+  if predIdx == actIdx:
+    return "accurate"
+  if predIdx < actIdx:
+    return "underestimated"
+  return "overestimated"
+
+proc formatPostAnalysisNote*(actualDifficulty: string, predictionAccuracy: string, briefSummary: string): string =
+  ## Format a post-analysis section for appending to ticket markdown.
+  result =
+    "## Post-Analysis\n" &
+    &"- actual_difficulty: {actualDifficulty}\n" &
+    &"- prediction_accuracy: {predictionAccuracy}\n" &
+    &"- brief_summary: {briefSummary}\n"
+
+proc appendPostAnalysisNote*(ticketContent: string, actualDifficulty: string, predictionAccuracy: string, briefSummary: string): string =
+  ## Append a post-analysis section to a ticket markdown document.
+  let base = ticketContent.strip()
+  let note = formatPostAnalysisNote(actualDifficulty, predictionAccuracy, briefSummary).strip()
+  result = base & "\n\n" & note & "\n"
+
+proc runPostAnalysis*(ticketContent: string, ticketId: string, outcome: string, attemptCount: int, wallTimeSeconds: int): string =
+  ## Run post-analysis comparing predicted vs actual metrics. Returns updated content.
+  ## If no prediction section exists, returns the original content unchanged.
+  let prediction = parsePredictionFromContent(ticketContent)
+  if not prediction.found:
+    logInfo(&"ticket {ticketId}: post-analysis skipped (no prediction section)")
+    return ticketContent
+  let actualDifficulty = classifyActualDifficulty(attemptCount, outcome, wallTimeSeconds)
+  let predictionAccuracy = compareDifficulty(prediction.difficulty, actualDifficulty)
+  let wallDuration = formatDuration(float(wallTimeSeconds))
+  let briefSummary = &"Predicted {prediction.difficulty}, actual was {actualDifficulty} with {attemptCount} attempt(s) in {wallDuration}."
+  logInfo(&"ticket {ticketId}: post-analysis: predicted={prediction.difficulty} actual={actualDifficulty} accuracy={predictionAccuracy} wall={wallDuration}")
+  result = appendPostAnalysisNote(ticketContent, actualDifficulty, predictionAccuracy, briefSummary)
 
 proc branchNameForTicket(ticketRelPath: string): string
 
@@ -2118,8 +2200,10 @@ proc processMergeQueue*(repoPath: string): bool =
           fmt"- Summary: {item.summary}" & "\n" &
           "- Failed gate: worktree and branch missing (container restart?)\n"
         let metricsNote = formatMetricsNote(item.ticketId, "reopened", "stall").strip()
+        let missingWallSeconds = if missingStartTime > 0.0: int(epochTime() - missingStartTime) else: 0
         cleanupTicketTimings(item.ticketId)
-        let updatedContent = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n\n" & metricsNote & "\n"
+        let contentWithNotes = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n\n" & metricsNote & "\n"
+        let updatedContent = runPostAnalysis(contentWithNotes, item.ticketId, "reopened", missingAttempts, missingWallSeconds)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         writeFile(ticketPath, updatedContent)
         moveFile(ticketPath, planPath / openRelPath)
@@ -2183,8 +2267,10 @@ proc processMergeQueue*(repoPath: string): bool =
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       let successNote = formatMergeSuccessNote(item.summary, qualityCheckResult.output).strip()
       let metricsNote = formatMetricsNote(item.ticketId, "done", "").strip()
+      let doneWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
       cleanupTicketTimings(item.ticketId)
-      let updatedContent = readFile(ticketPath).strip() & "\n\n" & successNote & "\n\n" & metricsNote & "\n"
+      let contentWithNotes = readFile(ticketPath).strip() & "\n\n" & successNote & "\n\n" & metricsNote & "\n"
+      let updatedContent = runPostAnalysis(contentWithNotes, item.ticketId, "done", attempts, doneWallSeconds)
       writeFile(ticketPath, updatedContent)
       moveFile(ticketPath, planPath / doneRelPath)
       if fileExists(queuePath):
@@ -2216,10 +2302,11 @@ proc processMergeQueue*(repoPath: string): bool =
         logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {failureCount} failures")
         sessionStats.ticketsParked += 1
         let metricsNote = formatMetricsNote(item.ticketId, "parked", "parked").strip()
+        let parkedWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
         cleanupTicketTimings(item.ticketId)
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
         createDir(planPath / PlanTicketsStuckDir)
-        let contentWithMetrics = updatedContent.strip() & "\n\n" & metricsNote & "\n"
+        let contentWithMetrics = runPostAnalysis(updatedContent.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "parked", attempts, parkedWallSeconds)
         writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / stuckRelPath)
         if fileExists(queuePath):
@@ -2235,9 +2322,10 @@ proc processMergeQueue*(repoPath: string): bool =
           elif failureStep.contains("test"): "test_failure"
           else: "test_failure"
         let metricsNote = formatMetricsNote(item.ticketId, "reopened", metricFailure).strip()
+        let reopenWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
         cleanupTicketTimings(item.ticketId)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
-        let contentWithMetrics = updatedContent.strip() & "\n\n" & metricsNote & "\n"
+        let contentWithMetrics = runPostAnalysis(updatedContent.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "reopened", attempts, reopenWallSeconds)
         writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / openRelPath)
         if fileExists(queuePath):
@@ -2406,13 +2494,14 @@ proc executeAssignedTicket*(
       of "no-output": "timeout_no_output"
       else: "stall"
     let metricsNote = formatMetricsNote(ticketId, "reopened", failureReason).strip()
+    let stallWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
     cleanupTicketTimings(ticketId)
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
       if fileExists(ticketPath):
         let currentContent = readFile(ticketPath)
-        let contentWithMetrics = currentContent.strip() & "\n\n" & metricsNote & "\n"
+        let contentWithMetrics = runPostAnalysis(currentContent.strip() & "\n\n" & metricsNote & "\n", ticketId, "reopened", attempts, stallWallSeconds)
         writeFile(ticketPath, contentWithMetrics)
         moveFile(ticketPath, planPath / openRelPath)
         gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
