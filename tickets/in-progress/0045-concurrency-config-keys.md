@@ -30,3 +30,8 @@ These keys are listed in the config-testing area scope but are not yet implement
 - Config struct is available for use by parallel-execution implementation.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0045-concurrency-config-keys
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 15
+- reasoning: Straightforward addition of a new config object type and field to an existing config struct, with default initialization, JSON parsing, and simple unit tests following established patterns.
