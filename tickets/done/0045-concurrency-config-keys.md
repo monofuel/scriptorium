@@ -85,3 +85,46 @@ To summarize what was done (already implemented in a prior attempt):
 - Backend: claude-code
 - Exit Code: 1
 - Wall Time: 7s
+
+## Merge Queue Success
+- Summary: Add ConcurrencyConfig with maxAgents and tokenBudgetMB fields to Config type, with defaults initialization in defaultConfig(), JSON parsing in loadConfig(), and unit tests for default values, both keys present, and maxAgents-only parsing.\n
+### Quality Check Output
+```text
+ping tick
+[2026-03-13T03:17:29Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T03:17:29Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T03:17:29Z] [INFO] architect: generating areas from spec
+[2026-03-13T03:17:30Z] [INFO] architect: areas updated
+[2026-03-13T03:17:30Z] [INFO] manager: generating tickets
+[2026-03-13T03:17:30Z] [INFO] merge queue: processing
+[2026-03-13T03:17:30Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-13T03:17:30Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-13T03:17:30Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T03:17:30Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T03:17:30Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T03:17:30Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T03:17:30Z] [INFO] merge queue: item processed
+[2026-03-13T03:17:30Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T03:17:31Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T03:17:31Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T03:17:31Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T03:18:01Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T03:18:01Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 780
+- coding_wall_seconds: 449
+- test_wall_seconds: 313
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 381554
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 2 attempt(s) in 13m0s.
