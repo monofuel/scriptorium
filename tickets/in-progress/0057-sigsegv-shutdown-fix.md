@@ -34,3 +34,5 @@ The orchestrator calls `httpServer.close()` from the main thread while mummy's `
 - `joinThread` only called after server thread exits.
 - `make test` passes.
 - Manual verification: `scriptorium run` followed by SIGINT/SIGTERM exits cleanly.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0057-sigsegv-shutdown-fix
