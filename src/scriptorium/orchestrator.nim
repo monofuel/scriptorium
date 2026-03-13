@@ -1,5 +1,5 @@
 import
-  std/[algorithm, json, locks, os, osproc, posix, sequtils, sets, sha1, streams, strformat, strutils, tables, times, uri],
+  std/[algorithm, json, locks, math, os, osproc, posix, sequtils, sets, sha1, streams, strformat, strutils, tables, times, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -87,6 +87,9 @@ const
   ReviewFeedbackMaxBytes = 4096
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes = 8192
+  RateLimitBaseBackoffSeconds = 2.0
+  RateLimitMaxBackoffSeconds = 120.0
+  RateLimitBackoffMultiplier = 2.0
   MakeTestTimeoutMs = 300_000
   PredictionNoOutputTimeoutMs = 30_000
   PredictionHardTimeoutMs = 60_000
@@ -225,6 +228,9 @@ var
   agentRunnerOverride*: AgentRunner
   planWorktreeLock: Lock
   planWorktreeLockInitialized = false
+  rateLimitBackoffUntil*: float = 0.0
+  rateLimitConsecutiveCount*: int = 0
+  rateLimitConcurrencyReduction*: int = 0
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -845,6 +851,55 @@ proc isTokenBudgetExceeded*(tokenBudgetMB: int): bool =
     logInfo(&"resource limit: token budget exhausted ({usedMB}MB/{tokenBudgetMB}MB), pausing new assignments")
     return true
   return false
+
+proc isRateLimited*(output: string): bool =
+  ## Check if agent output contains rate limit indicators (HTTP 429 or equivalent).
+  let lower = output.toLowerAscii()
+  if "429" in lower and ("rate" in lower or "too many" in lower or "limit" in lower):
+    return true
+  if "rate limit" in lower or "rate_limit" in lower or "ratelimit" in lower:
+    return true
+  if "too many requests" in lower:
+    return true
+  return false
+
+proc rateLimitBackoffSeconds*(): float =
+  ## Calculate the current exponential backoff duration based on consecutive rate limit count.
+  if rateLimitConsecutiveCount <= 0:
+    return 0.0
+  let exponent = rateLimitConsecutiveCount - 1
+  let backoff = RateLimitBaseBackoffSeconds * pow(RateLimitBackoffMultiplier, exponent.float)
+  result = min(backoff, RateLimitMaxBackoffSeconds)
+
+proc recordRateLimit*(ticketId: string) =
+  ## Record a rate limit event: increment counter, set backoff expiry, reduce concurrency by 1.
+  rateLimitConsecutiveCount += 1
+  let backoffSecs = rateLimitBackoffSeconds()
+  rateLimitBackoffUntil = epochTime() + backoffSecs
+  rateLimitConcurrencyReduction = rateLimitConsecutiveCount
+  let backoffInt = int(backoffSecs)
+  logInfo(&"resource limit: rate limited (ticket {ticketId}, backing off {backoffInt}s)")
+
+proc isRateLimitBackoffActive*(): bool =
+  ## Check if rate limit backoff is currently active. Restores concurrency when backoff expires.
+  if rateLimitBackoffUntil <= 0.0:
+    return false
+  if epochTime() >= rateLimitBackoffUntil:
+    rateLimitBackoffUntil = 0.0
+    rateLimitConsecutiveCount = 0
+    rateLimitConcurrencyReduction = 0
+    return false
+  return true
+
+proc effectiveMaxAgents*(maxAgents: int): int =
+  ## Return the effective max agents after applying rate limit concurrency reduction.
+  result = max(1, maxAgents - rateLimitConcurrencyReduction)
+
+proc resetRateLimitState*() =
+  ## Reset all rate limit backpressure state.
+  rateLimitBackoffUntil = 0.0
+  rateLimitConsecutiveCount = 0
+  rateLimitConcurrencyReduction = 0
 
 proc appendMetricsNote*(ticketContent: string, ticketId: string, outcome: string, failureReason: string): string =
   ## Append a structured metrics section to a ticket markdown document.
@@ -3291,6 +3346,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         for completion in completions:
           let running = runningAgentCount()
           logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
+          if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
+            recordRateLimit(completion.ticketId)
+
+      # Restore concurrency when backoff expires.
+      discard isRateLimitBackoffActive()
 
       if not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
@@ -3346,6 +3406,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
             if isTokenBudgetExceeded(tokenBudgetMB):
               codingStatus = "budget-exceeded"
+            elif isRateLimitBackoffActive():
+              codingStatus = "rate-limited"
             elif maxAgents <= 1:
               # Serial mode: blocking execution of one ticket per tick.
               t0 = epochTime()
@@ -3364,7 +3426,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                   codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
             else:
               # Parallel mode: assign tickets to empty slots and start non-blocking.
-              let slotsAvailable = emptySlotCount(maxAgents)
+              let effectiveMax = effectiveMaxAgents(maxAgents)
+              let slotsAvailable = emptySlotCount(effectiveMax)
               if slotsAvailable > 0:
                 let assignments = assignOpenTickets(repoPath, slotsAvailable)
                 for assignment in assignments:
