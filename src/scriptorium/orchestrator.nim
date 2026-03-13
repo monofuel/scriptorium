@@ -1,5 +1,5 @@
 import
-  std/[algorithm, json, locks, math, os, osproc, posix, sequtils, sets, sha1, streams, strformat, strutils, tables, times, uri],
+  std/[algorithm, httpclient, json, locks, math, os, osproc, posix, sequtils, sets, sha1, streams, strformat, strutils, tables, times, uri],
   mcport,
   ./[agent_runner, config, logging, prompt_catalog]
 
@@ -99,6 +99,8 @@ const
   ReviewAgentNoOutputTimeoutMs = 120_000
   ReviewAgentHardTimeoutMs = 300_000
   ReviewAgentCommitPrefix = "scriptorium: review ticket"
+  ServerReadyTimeoutMs = 5000
+  ServerReadyPollIntervalMs = 50
 
 type
   OrchestratorEndpoint* = object
@@ -2700,12 +2702,30 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
 
     if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0:
       let mergeToMasterResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
-        runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
+        let ffResult = runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
+        if ffResult.exitCode == 0:
+          return ffResult
+
+        # ff-only failed (master diverged). Try --no-ff with re-verification.
+        logInfo(fmt"ticket {item.ticketId}: ff-only failed, attempting --no-ff merge with re-verification")
+        let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
+        if noFfResult.exitCode != 0:
+          discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+          return noFfResult
+
+        # Re-run quality checks on the merged master state
+        let recheck = runRequiredQualityChecks(masterPath)
+        if recheck.exitCode != 0:
+          discard runCommandCapture(masterPath, "git", @["reset", "--hard", "HEAD~1"])
+          return (exitCode: recheck.exitCode, output: recheck.output)
+
+        logInfo(fmt"ticket {item.ticketId}: --no-ff merge succeeded with passing quality checks")
+        return (exitCode: 0, output: noFfResult.output)
       )
       mergedToMaster = mergeToMasterResult.exitCode == 0
       if not mergedToMaster:
         failureOutput = mergeToMasterResult.output
-        failureStep = "git merge --ff-only master"
+        failureStep = "git merge master (ff-only and no-ff both failed)"
 
     if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0 and mergedToMaster:
       let mergeWallTime = epochTime() - mergeStartTime
@@ -3513,6 +3533,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   sessionStats.totalTicks = ticks
   logSessionSummary()
 
+proc waitForServerReady(address: string, port: int, timeoutMs: int = ServerReadyTimeoutMs) =
+  ## Poll the MCP endpoint until it responds or timeout is reached.
+  let url = fmt"http://{address}:{port}/mcp"
+  let deadline = epochTime() + float(timeoutMs) / 1000.0
+  while epochTime() < deadline:
+    try:
+      let client = newHttpClient(timeout = 500)
+      defer: client.close()
+      discard client.request(url, httpMethod = HttpGet)
+      logInfo(fmt"MCP server ready on {address}:{port}")
+      return
+    except:
+      sleep(ServerReadyPollIntervalMs)
+  logWarn(fmt"MCP server not ready after {timeoutMs}ms, proceeding anyway")
+
 proc runOrchestratorLoop(
   repoPath: string,
   httpServer: HttpMcpServer,
@@ -3526,6 +3561,7 @@ proc runOrchestratorLoop(
 
   var serverThread: Thread[ServerThreadArgs]
   createThread(serverThread, runHttpServer, (httpServer, endpoint.address, endpoint.port))
+  waitForServerReady(endpoint.address, endpoint.port)
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
 
   shouldRun = false
