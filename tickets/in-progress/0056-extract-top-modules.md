@@ -39,3 +39,5 @@ Final V7 §27 module split batch. Extract top-level modules that depend on the l
 - `orchestrator.nim` contains only main loop and entry points.
 - `make test` passes after each extraction commit.
 - No functional changes.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0056-extract-top-modules
