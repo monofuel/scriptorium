@@ -2,7 +2,7 @@
 
 Git-native agent orchestration for software projects.
 
-Scriptorium keeps planning and execution state in Git, runs a strict Architect -> Manager -> Coding workflow, and merges work only when `master` stays green.
+Scriptorium keeps planning and execution state in Git, runs a strict Architect → Manager → Coding → Review workflow, and merges work only when `master` stays green.
 
 Path and workflow terminology is defined in `docs/terms.md`.
 
@@ -11,13 +11,17 @@ there is no warrenty, it is highly experimental, letting agents run loose is a b
 
 ## Status
 
-What V1 ships:
-- CLI commands: `--init`, `run`, `status`, `plan`, `worktrees`, `--version`, `--help`
-- Dedicated planning branch: `scriptorium/plan`
-- Automated flow: `spec.md` -> `areas/` -> `tickets/` -> code worktrees -> merge queue
-- Merge safety: merge `master` into ticket branch, run `make test` and `make integration-test`, then merge or reopen
-- Master-health gate: if `master` is red, orchestration halts
-- Codex harness with retries, timeout handling, JSONL logging, and integration tests
+Current features:
+- CLI commands: `--init`, `run`, `status`, `plan`, `ask`, `worktrees`, `--version`, `--help`
+- Architect → Manager → Coding → Review agent workflow
+- Parallel coding agents with area-based conflict avoidance
+- Ticket dependencies (`**Depends:**` field — tickets with unsatisfied deps are skipped)
+- Rate limit detection with exponential backoff and concurrency reduction
+- Token budget tracking to pause new assignments when stdout bytes exceed limit
+- Stuck ticket parking after repeated failures
+- Configurable timeouts, retry limits, and concurrency
+- Merge safety with test gates and merge queue
+- Codex and Claude Code agent harnesses
 
 ## Core workflow
 
@@ -26,13 +30,16 @@ At a high level:
 1. Engineer creates or revises `spec.md` with `scriptorium plan`.
 2. Orchestrator reads `spec.md` and generates `areas/*.md` (Architect).
 3. Orchestrator generates `tickets/open/*.md` from areas (Manager).
-4. Oldest open ticket is assigned to a deterministic `/tmp/scriptorium/<repo-key>/worktrees/tickets/<ticket>/` worktree and moved to `tickets/in-progress/`.
+4. Open tickets are assigned to deterministic `/tmp/scriptorium/<repo-key>/worktrees/tickets/<ticket>/` worktrees and moved to `tickets/in-progress/`. Multiple tickets are assigned concurrently when they touch independent areas.
+   - Tickets with unsatisfied `**Depends:**` references are skipped until their dependencies reach `done/`.
 5. Coding agent implements the ticket and calls the `submit_pr` MCP tool with a summary.
-6. Merge queue processes one item at a time:
+6. Review agent evaluates the changes — approves or requests changes. Rejected work gets a new coding session with feedback.
+7. Merge queue processes one item at a time:
    - merge `master` into ticket branch
    - run `make test` and `make integration-test` in ticket worktree
    - on pass: fast-forward merge to `master`, move ticket to `tickets/done/`
    - on fail: move ticket back to `tickets/open/` and append failure notes
+   - on repeated failures: park ticket in `tickets/stuck/`
 
 If `spec.md` is missing or still the placeholder, the loop idles and logs:
 `WAITING: no spec — run 'scriptorium plan'`
@@ -44,7 +51,7 @@ If `spec.md` is missing or still the placeholder, the loop idles and logs:
 - Nim >= 2.0.0
 - Git
 - `make`
-- Codex CLI for integration/e2e codex runs (`npm i -g @openai/codex`)
+- Codex CLI and Claude Code CLI for integration/e2e runs (`npm i -g @openai/codex @anthropic-ai/claude-code`)
 
 ### 2) Build
 
@@ -63,35 +70,43 @@ scriptorium --init
 
 This creates the orphan branch `scriptorium/plan` with base planning structure.
 
-### 4) Configure models (optional but recommended)
+### 4) Configure agents (optional but recommended)
 
 Create `scriptorium.json` in repo root:
 
 ```json
 {
-  "models": {
-    "architect": "gpt-5.1-codex-mini",
-    "coding": "gpt-5.1-codex-mini",
-    "manager": "gpt-5.1-codex-mini"
-  },
-  "reasoning_effort": {
-    "architect": "medium",
-    "coding": "high",
-    "manager": "high"
+  "agents": {
+    "architect": { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "medium" },
+    "coding":    { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "high" },
+    "manager":   { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "high" },
+    "reviewer":  { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "medium" }
   },
   "endpoints": {
     "local": "http://127.0.0.1:8097"
-  }
+  },
+  "concurrency": {
+    "maxAgents": 4,
+    "tokenBudgetMB": 100
+  },
+  "timeouts": {
+    "codingAgentHardTimeoutMs": 14400000,
+    "codingAgentNoOutputTimeoutMs": 300000,
+    "codingAgentMaxAttempts": 5
+  },
+  "logLevel": "INFO",
+  "fileLogLevel": "DEBUG"
 }
 ```
 
 Notes:
+- Each agent has `harness`, `model`, and `reasoningEffort` fields.
+- Harness routing is prefix-based: `claude-*` → claude-code harness, `gpt-*` / `codex-*` → codex harness.
+- `concurrency.maxAgents` controls parallel coding agents (default 1).
+- `concurrency.tokenBudgetMB` caps cumulative stdout bytes before pausing new assignments (default 0 = unlimited).
+- Timeout defaults: 4h hard timeout, 5min no-output timeout, 5 max attempts.
 - `endpoints.local` defaults to `http://127.0.0.1:8097` when omitted.
-- Model routing is prefix-based:
-  - `gpt-*` / `codex-*` -> codex harness
-  - `claude-*` -> claude-code harness (routing exists)
-  - anything else -> typoi harness (routing exists)
-- V1 implementation is codex-first; non-codex backends are reserved for future implementation.
+- `logLevel` / `fileLogLevel` can be overridden via `SCRIPTORIUM_LOG_LEVEL` / `SCRIPTORIUM_FILE_LOG_LEVEL` environment variables.
 
 ### 5) Build the spec
 
@@ -162,6 +177,7 @@ scriptorium run              Start orchestrator daemon
 scriptorium status           Show ticket counts and active agent info
 scriptorium plan             Interactive Architect planning session
 scriptorium plan <prompt>    One-shot spec update
+scriptorium ask              Interactive read-only Q&A with the Architect
 scriptorium worktrees        List active ticket worktrees
 scriptorium --version        Print version
 scriptorium --help           Show help
@@ -178,6 +194,7 @@ tickets/
   open/
   in-progress/
   done/
+  stuck/
 decisions/
 queue/
   merge/
@@ -208,12 +225,12 @@ make integration-test
 ```
 
 - Runs `tests/integration_*.nim`
-- Uses real codex execution for codex harness coverage
+- Uses real codex and claude-code execution for harness coverage
 - Requires:
-  - `codex` binary on `PATH`
-  - Auth via either:
-    - `OPENAI_API_KEY` or `CODEX_API_KEY`, or
-    - OAuth file at `~/.codex/auth.json` (or `CODEX_AUTH_FILE` override)
+  - `codex` and `claude` binaries on `PATH`
+  - Codex auth: `OPENAI_API_KEY` / `CODEX_API_KEY`, or Codex OAuth (no API key needed)
+  - Claude auth: `ANTHROPIC_API_KEY`, or Claude CLI OAuth (no API key needed)
+  - CI uses API key secrets; local development can use either approach
 
 Live end-to-end tests:
 
@@ -222,8 +239,8 @@ make e2e-test
 ```
 
 - Runs `tests/e2e_*.nim`
-- Uses real codex execution and full orchestrator flows
-- Requires the same codex/auth prerequisites as integration tests
+- Uses real codex and claude-code execution and full orchestrator flows
+- Requires the same auth prerequisites as integration tests
 
 ## CI
 
@@ -233,31 +250,26 @@ make e2e-test
 
 - `.github/workflows/integration.yml`
   - Trigger: `push` to `master`, `workflow_dispatch`
-  - Installs `@openai/codex`
-  - Verifies `codex exec --help` includes `--json`
+  - Installs `@openai/codex` and `@anthropic-ai/claude-code`
   - Runs: `make integration-test`
-  - Uses repo secret `OPENAI_API_KEY` (also mapped to `CODEX_API_KEY`)
+  - Uses repo secrets `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
 
-This split keeps PR CI safe while still running key-backed integration coverage on trusted `master` pushes.
+- `.github/workflows/e2e.yml`
+  - Trigger: `push` to `master`, `workflow_dispatch`
+  - Installs `@openai/codex` and `@anthropic-ai/claude-code`
+  - Runs: `make e2e-test`
+  - Uses repo secrets `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
+  - Uploads debug artifacts on failure (`/tmp/scriptorium`, `/tmp/scriptorium-plan-logs`)
+
+This split keeps PR CI safe while still running key-backed integration and e2e coverage on trusted `master` pushes.
 
 ## Future plans
 
-V3 — Observability:
-- Ticket success tracking: first-attempt success rate, failure categorization (stall, test failure, merge conflict, parked).
-- Metrics collection: ticket duration, token/character usage.
-- Ticket predictions: estimate difficulty and duration before assignment.
-- Post-analysis: summarize what happened after a ticket completes.
-
-V4 — Code review agent:
-- Review agent runs after `submit_pr`, before merge queue processing.
-- Approves or requests changes; rejected work gets a new coding session with feedback.
-- `submit_pr` gates on passing tests before entering review.
-
-V5 — Parallel coding agents:
-- Run multiple coding agents concurrently on independent tickets.
-- Conflict detection to serialize tickets touching overlapping files/areas.
-- Configurable concurrency limit with API rate limit awareness.
-- Depends on v3 observability and v4 review agent being in place first.
+V6 focus areas (see `docs/v6.md` for details):
+- Prediction prompt calibration — duration estimates are consistently ~2x too high, need historical timing data as calibration context.
+- MCP tool timing reliability — `submit_pr` sometimes unavailable on first attempt due to race conditions in MCP server startup.
+- Merge queue conflict handling — handle master divergence gracefully (rebase or retry) instead of failing on ff-only merge.
+- Review agent prompt improvements — review agent tends to stall and default-approve; needs investigation into prompt and MCP tool discovery issues.
 
 ## License
 
