@@ -36,3 +36,34 @@ The V5 spec (§26) requires monitoring cumulative `stdout_bytes` across all runn
 - predicted_difficulty: easy
 - predicted_duration_minutes: 20
 - reasoning: Straightforward aggregation of an existing per-ticket counter with a simple threshold check before assignment, plus basic unit tests — no new data structures or complex concurrency logic required.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool is not available in the current environment. All changes are committed on branch `scriptorium/ticket-0051`. Here's a summary of what was done:
+
+**Changes made:**
+
+1. **`src/scriptorium/orchestrator.nim`** — Added two new procs:
+   - `getSessionStdoutBytes*()` — sums all `ticketStdoutBytes` values for the session total
+   - `isTokenBudgetExceeded*(tokenBudgetMB: int)` — returns true and logs a message when cumulative stdout bytes exceed the budget; returns false when budget is 0 (unlimited)
+   
+   Added budget checks before ticket assignment in both:
+   - Serial mode (line ~3325): skips `executeOldestOpenTicket` when budget exceeded
+   - Parallel mode (line ~3342): skips `assignOpenTickets` when budget exceeded
+
+2. **`tests/test_scriptorium.nim`** — Added "token budget tracking" test suite with 7 tests:
+   - Session stdout bytes summing
+   - No enforcement when `tokenBudgetMB = 0` or negative
+   - Assignment paused when budget exceeded
+   - Assignment allowed when under budget
+   - Running agents not interrupted when budget exceeded
+
+All tests pass via `make test`.
+```
+
+### Agent Stdout Tail
+```text
+ignOpenTickets` when budget exceeded\n\n2. **`tests/test_scriptorium.nim`** — Added \"token budget tracking\" test suite with 7 tests:\n   - Session stdout bytes summing\n   - No enforcement when `tokenBudgetMB = 0` or negative\n   - Assignment paused when budget exceeded\n   - Assignment allowed when under budget\n   - Running agents not interrupted when budget exceeded\n\nAll tests pass via `make test`.","stop_reason":"end_turn","session_id":"fbe59c1b-dd82-4ff7-b6d8-f5e37407e6da","total_cost_usd":0.8913859999999999,"usage":{"input_tokens":32,"cache_creation_input_tokens":32890,"cache_read_input_tokens":971127,"output_tokens":8004,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":32890,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":32,"outputTokens":8004,"cacheReadInputTokens":971127,"cacheCreationInputTokens":32890,"webSearchRequests":0,"costUSD":0.8913859999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"81b75748-5f56-4b9c-8754-e37eff995e00"}
+```
