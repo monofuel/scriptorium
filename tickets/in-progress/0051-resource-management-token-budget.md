@@ -220,3 +220,21 @@ I'm unable to call `submit_pr` as the MCP tool is not configured in this environ
 ```text
 ed `getSessionStdoutBytes()` and `isTokenBudgetExceeded()` procs with budget checks before ticket assignment in both serial and parallel modes\n- **`tests/test_scriptorium.nim`**: 7 unit tests covering budget enforcement\n- `make test` passes\n\nI'm unable to call `submit_pr` as the MCP tool is not configured in this environment. The commit `e8a5abd` on branch `scriptorium/ticket-0051` is ready for merge.","stop_reason":"end_turn","session_id":"61087f0e-16a2-40d5-a4f2-89a79952c110","total_cost_usd":0.37024199999999996,"usage":{"input_tokens":20,"cache_creation_input_tokens":22476,"cache_read_input_tokens":358484,"output_tokens":2017,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22476,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":2017,"cacheReadInputTokens":358484,"cacheCreationInputTokens":22476,"webSearchRequests":0,"costUSD":0.37024199999999996,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"e6ed2f59-e721-4246-ab3d-2cc398ab9fb3"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 3\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-03.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-03.last_message.txt\n
+### Agent Last Message
+```text
+`submit_pr` returned "Merge request enqueued." successfully. The ticket is complete:
+
+- Token budget tracking with `getSessionStdoutBytes` and `isTokenBudgetExceeded` procs in `orchestrator.nim`
+- Budget checks before ticket assignment in both serial and parallel tick paths
+- No enforcement when `tokenBudgetMB` is 0 or unset
+- 7 unit tests covering all acceptance criteria
+- All tests pass via `make test`
+```
+
+### Agent Stdout Tail
+```text
+result":"`submit_pr` returned \"Merge request enqueued.\" successfully. The ticket is complete:\n\n- Token budget tracking with `getSessionStdoutBytes` and `isTokenBudgetExceeded` procs in `orchestrator.nim`\n- Budget checks before ticket assignment in both serial and parallel tick paths\n- No enforcement when `tokenBudgetMB` is 0 or unset\n- 7 unit tests covering all acceptance criteria\n- All tests pass via `make test`","stop_reason":"end_turn","session_id":"ead5432b-1303-4ea2-a023-29887214e7be","total_cost_usd":0.82626925,"usage":{"input_tokens":36,"cache_creation_input_tokens":26251,"cache_read_input_tokens":1093541,"output_tokens":4610,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":26251,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":36,"outputTokens":4610,"cacheReadInputTokens":1093541,"cacheCreationInputTokens":26251,"webSearchRequests":0,"costUSD":0.82626925,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"ac868711-44c7-493a-8432-6b9068406224"}
+```
