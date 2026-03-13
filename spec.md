@@ -10,7 +10,7 @@ This spec describes behavior that is present in the code and covered by current 
 `scriptorium` is a git-native agent orchestration tool for software projects.
 
 - Planning state lives on a dedicated `scriptorium/plan` branch.
-- Runtime workflow is Architect -> Manager -> Coding agent -> merge queue.
+- Runtime workflow is Architect -> Manager -> Coding agent -> Review agent -> merge queue.
 - Orchestration is local-first and uses deterministic managed git worktrees plus an MCP HTTP server for completion signaling.
 
 ## Current-State Requirements
@@ -264,7 +264,7 @@ This spec describes behavior that is present in the code and covered by current 
 - `typoi` is routed but not implemented.
 - Ticket execution is single-agent and single-ticket at a time.
 - Interactive planning and ask history are in-memory only.
-- No dedicated reviewer or merger agent stage exists yet.
+- No dedicated reviewer or merger agent stage exists yet (addressed in v4, section 21).
 - The queue merges directly from ticket worktrees and decides success or failure from local git plus required quality-gate results.
 
 ## Adoption Acceptance Criteria
@@ -474,3 +474,130 @@ This spec describes behavior that is present in the code and covered by current 
 - `scriptorium status` shows enhanced output with timing and success rates.
 - Ticket predictions are generated and logged before coding begins.
 - Ticket post-analysis is generated and logged after ticket completion.
+
+## V4 Features — Merge Reviewing And Health Cache
+
+### 20. Pre-Submit Test Gate
+
+- The `submit_pr` MCP tool must run quality checks before accepting a submission.
+- When a coding agent calls `submit_pr`, the MCP handler must:
+  - Resolve the agent's worktree path from the active ticket assignment.
+  - Run `make test` in the agent's worktree.
+  - If tests fail: return an error response to the agent with the test failure output (truncated to a reasonable limit), directing the agent to fix the failing tests and call `submit_pr` again. The merge request must NOT be enqueued.
+  - If tests pass: record the submit summary and return a success response. The merge request is enqueued as before.
+- The test run must be logged: `ticket <id>: submit_pr pre-check: <PASS|FAIL> (exit=<code>, wall=<duration>)`.
+- The agent remains running during the test execution — `submit_pr` blocks until tests complete, then returns the result to the agent.
+- This replaces the previous behavior where `submit_pr` unconditionally accepted submissions.
+- Acceptance criteria:
+  - `submit_pr` runs `make test` before enqueuing.
+  - If tests fail, the agent receives an error response with failure output and can retry.
+  - If tests pass, the merge request is enqueued normally.
+  - Test execution is logged with ticket ID, exit code, and wall time.
+
+### 21. Review Agent
+
+- After a coding agent successfully submits via `submit_pr` (tests passed, merge request enqueued), the orchestrator must run a review agent before merge queue processing.
+- The review agent is a new agent role with its own configuration under `agents.reviewer` in `scriptorium.json`.
+- Review agent configuration supports the same fields as other roles: `harness`, `model`, `reasoningEffort`.
+
+#### Review Flow
+
+- When the orchestrator processes a pending merge queue item, before running quality gates and merging, it must:
+  1. Start a review agent session in the ticket's worktree.
+  2. The review agent prompt must include:
+     - The full ticket content (intent and requirements).
+     - The diff of changes against `master` (via `git diff master...ticket-branch`).
+     - The relevant area content.
+     - The submit summary from the coding agent.
+  3. The review agent has access to a `submit_review` MCP tool with two actions:
+     - `approve`: accepts the changes, merge proceeds.
+     - `request_changes`: rejects the changes with a `feedback` string explaining what needs to change.
+  4. The review agent must call `submit_review` to signal its decision.
+
+#### Review Outcomes
+
+- **Approved:** The merge queue proceeds with its existing quality gate flow (merge master, run tests, fast-forward merge).
+- **Changes requested:**
+  - The pending merge queue item is removed.
+  - The ticket remains in `tickets/in-progress/`.
+  - A review feedback section is appended to the ticket markdown with the reviewer's feedback.
+  - A new coding agent session is started with the original ticket content plus the review feedback, using the same worktree and branch.
+  - The coding agent must call `submit_pr` again when done, which triggers the full flow again (pre-submit tests, then review).
+  - Review-driven retries count toward the ticket's total attempt count.
+- **Stall (review agent exits without calling `submit_review`):**
+  - Treat as approval — the merge proceeds. This avoids blocking the pipeline on a reviewer stall.
+  - Log a warning: `ticket <id>: review agent stalled, defaulting to approve`.
+
+#### Review Lifecycle Logging
+
+- Review start: `ticket <id>: review started (model=<model>)`.
+- Review approved: `ticket <id>: review approved`.
+- Review changes requested: `ticket <id>: review requested changes (feedback="<summary>")`.
+- Review stall: `ticket <id>: review agent stalled, defaulting to approve`.
+
+#### Review Agent Notes
+
+- Review outcomes must be appended to the ticket markdown as structured review notes:
+  - `**Review:** approved` or `**Review:** changes requested`.
+  - `**Review Feedback:** <feedback text>` (when changes requested).
+  - Backend, exit code, and wall time, consistent with existing agent run notes.
+
+- Acceptance criteria:
+  - Every merge queue item goes through review before merging.
+  - The review agent receives the diff, ticket content, area context, and submit summary.
+  - Approved reviews proceed to the existing merge queue quality gates.
+  - Change requests restart the coding agent with review feedback.
+  - Review outcomes are logged and persisted in ticket markdown.
+  - Review stalls default to approval with a warning log.
+
+### 22. Commit Health Cache
+
+- The orchestrator must cache `master` health check results on the plan branch so they survive container restarts and session boundaries.
+- Cache location: `health/cache.json` on the `scriptorium/plan` branch.
+- Cache structure: a JSON object mapping commit hashes to result records:
+  ```json
+  {
+    "<commit-hash>": {
+      "healthy": true,
+      "timestamp": "2026-03-12T14:30:00Z",
+      "test_exit_code": 0,
+      "integration_test_exit_code": 0,
+      "test_wall_seconds": 42,
+      "integration_test_wall_seconds": 18
+    }
+  }
+  ```
+- On startup or after a merge changes `master` HEAD, the orchestrator must:
+  1. Look up the current `master` HEAD commit in `health/cache.json`.
+  2. If found and healthy: skip the health check entirely, log `master health: cached healthy for <commit-hash>`.
+  3. If found and unhealthy: skip the health check, mark master as unhealthy, log `master health: cached unhealthy for <commit-hash>`.
+  4. If not found: run `make test` and `make integration-test` as before, then write the result to the cache and commit.
+- Cache writes must be committed to the plan branch: `scriptorium: update health cache`.
+- The existing in-memory `MasterHealthState` cache continues to work within a session — the plan-branch cache augments it for cross-session persistence.
+- Cache entries are keyed by commit hash and naturally immutable — no invalidation is needed.
+- Pruning: optional. The orchestrator may prune entries older than 30 days or keep the most recent N entries to prevent unbounded growth, but this is not required for v4.
+- Acceptance criteria:
+  - Health check results are persisted to `health/cache.json` on the plan branch.
+  - On startup, cached healthy commits skip the full test suite.
+  - On startup, cached unhealthy commits skip re-running tests and correctly report unhealthy.
+  - Cache misses trigger the normal health check and write results to the cache.
+  - Cache entries include commit hash, timestamp, exit codes, and wall times.
+
+## V4 Known Limitations
+
+- The review agent is a single-pass reviewer — it does not engage in back-and-forth dialogue with the coding agent.
+- Review-driven change requests restart the coding agent from scratch rather than resuming the previous session.
+- The review agent's stall-default-to-approve policy prioritizes throughput over review quality — future versions may retry the reviewer instead.
+- Pre-submit test gate runs `make test` only, not `make integration-test` — integration tests remain a merge queue concern.
+- Health cache pruning is optional and not enforced — cache files may grow over time in long-running projects.
+- The `submit_pr` MCP handler blocks the coding agent process while tests run, which counts against the agent's hard timeout.
+
+## V4 Acceptance Criteria
+
+- All v1, v2, and v3 acceptance criteria remain.
+- `submit_pr` runs `make test` before enqueuing and returns failure to the agent if tests fail.
+- Every merge queue item is reviewed by a review agent before merging.
+- Review approvals proceed to merge; change requests restart the coding agent with feedback.
+- Review outcomes are logged and persisted in ticket markdown.
+- `master` health check results are cached on the plan branch and survive restarts.
+- Cached healthy commits skip redundant health checks on startup.
