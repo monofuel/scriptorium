@@ -29,13 +29,25 @@ Covers the single-flight merge queue, quality gates, and ticket state transition
   - Approved reviews proceed to existing quality gate flow.
   - Change requests remove the queue item and restart the coding agent with review feedback.
 
+- Merge queue ordering with parallel agents (V5, §25):
+  - Multiple agents may call `submit_pr` independently, creating multiple pending merge queue entries.
+  - Pending items processed in submission order (FIFO by queue item ID).
+  - Failed merges do not affect other in-flight agents or pending queue items.
+  - After successful merge changes `master`, existing merge queue logic handles merging `master` into ticket branches before quality gates.
+  - Detail in parallel-execution area.
+
 ## V4 Known Limitations
 
 - Pre-submit test gate runs `make test` only, not `make integration-test` — integration tests remain a merge queue concern.
 - The `submit_pr` MCP handler blocks the coding agent process while tests run, which counts against the agent's hard timeout.
+
+## V5 Known Limitations
+
+- Merge queue remains single-flight even with parallel agents — serialization point may bottleneck at high concurrency.
 
 ## Spec References
 
 - Section 7: Merge Queue Safety Contract.
 - Section 20: Pre-Submit Test Gate (V4).
 - Section 21: Review Agent (V4, detail in review-agent area).
+- Section 25: Merge Queue Ordering With Parallel Agents (V5, detail in parallel-execution area).

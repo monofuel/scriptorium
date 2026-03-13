@@ -43,9 +43,15 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
   - Every completed or reopened ticket must have all listed fields.
   - Detail in ticket-metrics area.
 
+- Concurrent agent execution (V5, §24):
+  - Multiple coding agents run in parallel, each in its own worktree, fully isolated.
+  - Agent lifecycle (start, stall detection, continuation, submit_pr) applies independently per agent.
+  - Detail in parallel-execution area.
+
 ## Spec References
 
 - Section 5: Architect, Manager, And Coding Agent Execution.
 - Section 15: Per-Ticket Metrics In Agent Run Notes (V3, detail in ticket-metrics area).
 - Section 20: Pre-Submit Test Gate (V4, detail in merge-queue area).
 - Section 21: Review Agent (V4, detail in review-agent area).
+- Section 24: Concurrent Agent Execution (V5, detail in parallel-execution area).
