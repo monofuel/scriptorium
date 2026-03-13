@@ -44,3 +44,8 @@ The review agent role is not yet implemented. The first step is adding `agents.r
 - Section 21: Review Agent (V4).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0041-review-agent-config-and-mcp-tool
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 35
+- reasoning: Requires parallel changes in config parsing and MCP tool registration following well-established patterns from existing agent roles (architect, coding, manager), plus thread-safe shared state procs and three unit tests.
