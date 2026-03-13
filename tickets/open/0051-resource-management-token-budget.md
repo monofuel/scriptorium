@@ -138,3 +138,42 @@ ned \"Merge request enqueued.\" successfully. The ticket is complete:\n\n- **Tok
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 50s
+
+## Merge Queue Failure
+- Summary: Add token budget tracking to pause new assignments when stdout bytes exceed limit. Added getSessionStdoutBytes and isTokenBudgetExceeded procs, budget checks in serial and parallel tick paths, and 7 unit tests.\n- Failed gate: git merge --ff-only master\n
+### Merge Output
+```text
+Auto-merging src/scriptorium/orchestrator.nim
+Auto-merging tests/test_scriptorium.nim
+Merge made by the 'ort' strategy.
+ scriptorium.json                 |  4 ++++
+ src/scriptorium/config.nim       | 13 +++++++++++++
+ src/scriptorium/orchestrator.nim |  6 ++----
+ tests/test_scriptorium.nim       | 22 ++++++++++++++++++++++
+ 4 files changed, 41 insertions(+), 4 deletions(-)
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	src/scriptorium/orchestrator.nim
+	tests/test_scriptorium.nim
+Please commit your changes or stash them before you merge.
+Aborting
+Updating 523c6a3..10f3089
+```
+
+## Metrics
+- wall_time_seconds: 848
+- coding_wall_seconds: 461
+- test_wall_seconds: 76
+- attempt_count: 2
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 708084
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 2 attempt(s) in 14m8s.
