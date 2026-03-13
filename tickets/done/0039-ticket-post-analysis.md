@@ -63,3 +63,31 @@ Work is complete. Here's a summary of what was implemented:
 ```text
 lysis functions: parsing predictions from markdown, classifying actual difficulty, comparing difficulties, formatting output, and the full runPostAnalysis flow (including skip behavior)","stop_reason":"end_turn","session_id":"a4ba4476-105d-4b92-9757-fb600193c574","total_cost_usd":4.907472900000002,"usage":{"input_tokens":115,"cache_creation_input_tokens":84263,"cache_read_input_tokens":7085111,"output_tokens":26144,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":84263,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":115,"outputTokens":26144,"cacheReadInputTokens":7085111,"cacheCreationInputTokens":84263,"webSearchRequests":0,"costUSD":4.7233742500000035,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":40,"outputTokens":5706,"cacheReadInputTokens":821849,"cacheCreationInputTokens":58675,"webSearchRequests":0,"costUSD":0.18409865,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"943df347-2b9f-4551-9163-0ba9fa14f929"}
 ```
+
+## Merge Queue Success
+- Summary: Add ticket post-analysis after completion. After a ticket reaches done, reopened, or parked state, compares predicted vs actual difficulty and duration. Appends a Post-Analysis section to ticket markdown with actual_difficulty, prediction_accuracy, and brief_summary. Logs analysis at INFO level. Skips gracefully when no prediction section exists.\n
+### Quality Check Output
+```text
+3656778b7c81a0c/worktrees/tickets/0001-first)
+[2026-03-13T01:04:53Z] [INFO] ticket 0001: merge queue entered (position=1)
+[2026-03-13T01:04:53Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:05:23Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T01:05:23Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T01:05:23Z] [INFO] architect: generating areas from spec
+[2026-03-13T01:05:24Z] [INFO] architect: areas updated
+[2026-03-13T01:05:24Z] [INFO] manager: generating tickets
+[2026-03-13T01:05:24Z] [INFO] merge queue: processing
+[2026-03-13T01:05:24Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T01:05:24Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T01:05:24Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T01:05:24Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T01:05:24Z] [INFO] merge queue: item processed
+[2026-03-13T01:05:24Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T01:05:24Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:05:24Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T01:05:24Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:05:54Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:05:54Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
