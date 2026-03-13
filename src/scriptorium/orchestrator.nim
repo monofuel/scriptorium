@@ -2714,13 +2714,14 @@ proc executeAssignedTicket*(
   var totalAttemptsUsed = 0
   var submitSummary = ""
   let model = cfg.agents.coding.model
+  let maxAttempts = cfg.timeouts.codingAgentMaxAttempts
 
   setActiveTicketWorktree(assignment.worktree, ticketId)
   defer: clearActiveTicketWorktree(ticketId)
 
-  while totalAttemptsUsed < DefaultAgentMaxAttempts:
-    let attemptsForThisCall = DefaultAgentMaxAttempts - totalAttemptsUsed
-    logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
+  while totalAttemptsUsed < maxAttempts:
+    let attemptsForThisCall = maxAttempts - totalAttemptsUsed
+    logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
     let agentStartTime = epochTime()
     let request = AgentRunRequest(
       prompt: currentPrompt,
@@ -2743,7 +2744,7 @@ proc executeAssignedTicket*(
     )
     discard consumeSubmitPrSummary(ticketId)
 
-    logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
+    logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{maxAttempts})")
     let agentResult = runner(request)
     result = agentResult
     totalAttemptsUsed += agentResult.attemptCount
@@ -2800,8 +2801,8 @@ proc executeAssignedTicket*(
     if submitSummary.len > 0:
       break
 
-    if isStall and totalAttemptsUsed < DefaultAgentMaxAttempts:
-      logInfo(fmt"ticket {ticketId}: coding agent stalled (attempt {agentResult.attempt}/{DefaultAgentMaxAttempts}, no submit_pr)")
+    if isStall and totalAttemptsUsed < maxAttempts:
+      logInfo(fmt"ticket {ticketId}: coding agent stalled (attempt {agentResult.attempt}/{maxAttempts}, no submit_pr)")
       let testStartTime = epochTime()
       let testResult = runWorktreeMakeTest(assignment.worktree)
       let testWallTime = epochTime() - testStartTime
@@ -2818,7 +2819,7 @@ proc executeAssignedTicket*(
 
       currentAttemptBase = agentResult.attempt + agentResult.attemptCount
       let testStatusLabel = if testResult.exitCode == 0: "passing" else: "failing"
-      logInfo(fmt"ticket {ticketId}: continuation prompt sent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts}, test_status={testStatusLabel})")
+      logInfo(fmt"ticket {ticketId}: continuation prompt sent (attempt {currentAttemptBase}/{maxAttempts}, test_status={testStatusLabel})")
       currentPrompt = buildStallContinuationPrompt(initialPrompt, ticketContent, ticketId, currentAttemptBase, testResult.exitCode, testResult.output)
       continue
 

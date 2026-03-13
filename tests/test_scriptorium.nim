@@ -36,12 +36,13 @@ proc writeScriptoriumConfig(repoPath: string, cfg: Config) =
   ## Write one typed scriptorium.json payload for test configuration.
   writeFile(repoPath / "scriptorium.json", cfg.toJson())
 
-proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
+proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int, maxAttempts: int = 2) =
   ## Write a unique local orchestrator endpoint configuration for one test.
   let basePort = OrchestratorTestBasePort + (getCurrentProcessId().int mod 1000)
   let orchestratorPort = basePort + portOffset
   var cfg = defaultConfig()
   cfg.endpoints.local = &"http://127.0.0.1:{orchestratorPort}"
+  cfg.timeouts.codingAgentMaxAttempts = maxAttempts
   writeScriptoriumConfig(repoPath, cfg)
 
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
@@ -390,6 +391,7 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.timeouts.codingAgentHardTimeoutMs == 14_400_000
     check cfg.timeouts.codingAgentNoOutputTimeoutMs == 300_000
+    check cfg.timeouts.codingAgentMaxAttempts == 5
 
   test "timeout parses custom values":
     let tmp = getTempDir() / "scriptorium_test_config_timeout_custom"
@@ -398,11 +400,13 @@ suite "config":
     var writtenCfg = defaultConfig()
     writtenCfg.timeouts.codingAgentHardTimeoutMs = 7_200_000
     writtenCfg.timeouts.codingAgentNoOutputTimeoutMs = 600_000
+    writtenCfg.timeouts.codingAgentMaxAttempts = 3
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
     check cfg.timeouts.codingAgentHardTimeoutMs == 7_200_000
     check cfg.timeouts.codingAgentNoOutputTimeoutMs == 600_000
+    check cfg.timeouts.codingAgentMaxAttempts == 3
 
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
@@ -1231,6 +1235,7 @@ suite "orchestrator coding agent execution":
     var writtenCfg = defaultConfig()
     writtenCfg.agents.coding.reasoningEffort = "high"
     writtenCfg.endpoints.local = "http://127.0.0.1:19042"
+    writtenCfg.timeouts.codingAgentMaxAttempts = 2
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -3886,6 +3891,9 @@ suite "concurrent agent execution":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-staller.md", "# Ticket Staller\n\n**Area:** area-s\n")
     addTicketToPlan(tmp, "open", "0002-submitter.md", "# Ticket Submitter\n\n**Area:** area-t\n")
+    var stallCfg = defaultConfig()
+    stallCfg.timeouts.codingAgentMaxAttempts = 2
+    writeScriptoriumConfig(tmp, stallCfg)
 
     let assignment1 = assignOldestOpenTicket(tmp)
     let assignment2 = assignOldestOpenTicket(tmp)

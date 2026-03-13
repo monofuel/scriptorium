@@ -36,6 +36,7 @@ type
   TimeoutConfig* = object
     codingAgentHardTimeoutMs*: int
     codingAgentNoOutputTimeoutMs*: int
+    codingAgentMaxAttempts*: int
 
   Config* = object
     agents*: AgentConfigs
@@ -72,6 +73,7 @@ proc defaultConfig*(): Config =
     timeouts: TimeoutConfig(
       codingAgentHardTimeoutMs: 14_400_000,
       codingAgentNoOutputTimeoutMs: 300_000,
+      codingAgentMaxAttempts: 5,
     ),
   )
 
@@ -118,6 +120,8 @@ proc loadConfig*(repoPath: string): Config =
     result.timeouts.codingAgentHardTimeoutMs = parsed.timeouts.codingAgentHardTimeoutMs
   if parsed.timeouts.codingAgentNoOutputTimeoutMs > 0:
     result.timeouts.codingAgentNoOutputTimeoutMs = parsed.timeouts.codingAgentNoOutputTimeoutMs
+  if parsed.timeouts.codingAgentMaxAttempts > 0:
+    result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
   if parsed.logLevel.len > 0:
     result.logLevel = parsed.logLevel
   if parsed.fileLogLevel.len > 0:

@@ -15,6 +15,7 @@
   },
   "timeouts": {
     "codingAgentHardTimeoutMs": 14400000,
-    "codingAgentNoOutputTimeoutMs": 300000
+    "codingAgentNoOutputTimeoutMs": 300000,
+    "codingAgentMaxAttempts": 5
   }
 }
