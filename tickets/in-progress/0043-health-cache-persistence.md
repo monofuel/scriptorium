@@ -71,3 +71,5 @@ The orchestrator caches master health status in memory (`MasterHealthState` in `
 ## Spec References
 
 - Section 22: Commit Health Cache (V4).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0043-health-cache-persistence
