@@ -27,6 +27,10 @@ const
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   MergeQueueStuckCommitPrefix = "scriptorium: park stuck ticket"
   TicketAgentFailReopenCommitPrefix = "scriptorium: reopen failed ticket"
+  HealthCacheDir = "health"
+  HealthCacheFileName = "cache.json"
+  HealthCacheRelPath = "health/cache.json"
+  HealthCacheCommitMessage = "scriptorium: update health cache"
   PlanTicketsStuckDir = "tickets/stuck"
   MaxMergeFailures = 3
   PlanSpecCommitMessage = "scriptorium: update spec from architect"
@@ -158,6 +162,14 @@ type
     healthy*: bool
     initialized*: bool
     lastHealthLogged*: bool
+
+  HealthCacheEntry* = object
+    healthy*: bool
+    timestamp*: string
+    test_exit_code*: int
+    integration_test_exit_code*: int
+    test_wall_seconds*: int
+    integration_test_wall_seconds*: int
 
   SessionStats* = object
     startTime*: float
@@ -2858,20 +2870,121 @@ proc masterHeadCommit(repoPath: string): string =
     raise newException(IOError, fmt"git rev-parse master failed: {output.strip()}")
   result = output.strip()
 
-proc checkMasterHealth(repoPath: string): bool =
-  ## Run the master health check command and return true on success.
-  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string, failedTarget: string] =
-    runRequiredQualityChecks(masterPath)
+proc readHealthCache*(planPath: string): Table[string, HealthCacheEntry] =
+  ## Read health/cache.json from a plan worktree path and return the cache table.
+  let cachePath = planPath / HealthCacheRelPath
+  if not fileExists(cachePath):
+    return initTable[string, HealthCacheEntry]()
+  let raw = readFile(cachePath)
+  let rootNode = parseJson(raw)
+  for commitHash, entryNode in rootNode.pairs:
+    var entry = HealthCacheEntry(
+      healthy: entryNode["healthy"].getBool(),
+      timestamp: entryNode["timestamp"].getStr(),
+      test_exit_code: entryNode["test_exit_code"].getInt(),
+      integration_test_exit_code: entryNode["integration_test_exit_code"].getInt(),
+      test_wall_seconds: entryNode["test_wall_seconds"].getInt(),
+      integration_test_wall_seconds: entryNode["integration_test_wall_seconds"].getInt(),
+    )
+    result[commitHash] = entry
+
+proc writeHealthCache*(planPath: string, cache: Table[string, HealthCacheEntry]) =
+  ## Write the health cache table to health/cache.json in a plan worktree path.
+  let cacheDir = planPath / HealthCacheDir
+  if not dirExists(cacheDir):
+    createDir(cacheDir)
+  var rootNode = newJObject()
+  for commitHash, entry in cache.pairs:
+    var entryNode = newJObject()
+    entryNode["healthy"] = newJBool(entry.healthy)
+    entryNode["timestamp"] = newJString(entry.timestamp)
+    entryNode["test_exit_code"] = newJInt(entry.test_exit_code)
+    entryNode["integration_test_exit_code"] = newJInt(entry.integration_test_exit_code)
+    entryNode["test_wall_seconds"] = newJInt(entry.test_wall_seconds)
+    entryNode["integration_test_wall_seconds"] = newJInt(entry.integration_test_wall_seconds)
+    rootNode[commitHash] = entryNode
+  writeFile(planPath / HealthCacheRelPath, $rootNode)
+
+proc commitHealthCache(planPath: string) =
+  ## Stage and commit health/cache.json on the plan branch.
+  gitRun(planPath, "add", HealthCacheRelPath)
+  gitRun(planPath, "commit", "-m", HealthCacheCommitMessage)
+
+proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int] =
+  ## Run the master health check and return detailed results.
+  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int] =
+    var testExitCode = 0
+    var integrationTestExitCode = 0
+    var testWall = 0
+    var integrationTestWall = 0
+    for target in RequiredQualityTargets:
+      let t0 = epochTime()
+      let targetResult = runCommandCapture(masterPath, "make", @[target])
+      let elapsed = int(epochTime() - t0)
+      if target == "test":
+        testExitCode = targetResult.exitCode
+        testWall = elapsed
+      elif target == "integration-test":
+        integrationTestExitCode = targetResult.exitCode
+        integrationTestWall = elapsed
+      if targetResult.exitCode != 0:
+        break
+    result = (testExitCode: testExitCode, integrationTestExitCode: integrationTestExitCode, testWallSeconds: testWall, integrationTestWallSeconds: integrationTestWall)
   )
-  result = checkResult.exitCode == 0
+  let healthy = checkResult.testExitCode == 0 and checkResult.integrationTestExitCode == 0
+  result = (healthy: healthy, testExitCode: checkResult.testExitCode, integrationTestExitCode: checkResult.integrationTestExitCode, testWallSeconds: checkResult.testWallSeconds, integrationTestWallSeconds: checkResult.integrationTestWallSeconds)
 
 proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   ## Return cached master health, refreshing only when the master commit changes.
+  ## Checks in-memory cache first, then file cache on plan branch, then runs checks.
   let currentHead = masterHeadCommit(repoPath)
-  if (not state.initialized) or state.head != currentHead:
-    state.head = currentHead
-    state.healthy = checkMasterHealth(repoPath)
-    state.initialized = true
+  if state.initialized and state.head == currentHead:
+    return state.healthy
+
+  # In-memory miss — check file cache on plan branch.
+  if hasPlanBranch(repoPath):
+    let cachedEntry = withPlanWorktree(repoPath, proc(planPath: string): tuple[found: bool, entry: HealthCacheEntry] =
+      let cache = readHealthCache(planPath)
+      if currentHead in cache:
+        result = (found: true, entry: cache[currentHead])
+      else:
+        result = (found: false, entry: HealthCacheEntry())
+    )
+    if cachedEntry.found:
+      state.head = currentHead
+      state.healthy = cachedEntry.entry.healthy
+      state.initialized = true
+      if cachedEntry.entry.healthy:
+        logInfo(&"master health: cached healthy for {currentHead}")
+      else:
+        logInfo(&"master health: cached unhealthy for {currentHead}")
+      return state.healthy
+
+  # Cache miss — run health checks.
+  let healthResult = checkMasterHealth(repoPath)
+  state.head = currentHead
+  state.healthy = healthResult.healthy
+  state.initialized = true
+
+  # Persist to file cache on plan branch.
+  if hasPlanBranch(repoPath):
+    let nowStr = now().utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    let newEntry = HealthCacheEntry(
+      healthy: healthResult.healthy,
+      timestamp: nowStr,
+      test_exit_code: healthResult.testExitCode,
+      integration_test_exit_code: healthResult.integrationTestExitCode,
+      test_wall_seconds: healthResult.testWallSeconds,
+      integration_test_wall_seconds: healthResult.integrationTestWallSeconds,
+    )
+    discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+      var cache = readHealthCache(planPath)
+      cache[currentHead] = newEntry
+      writeHealthCache(planPath, cache)
+      commitHealthCache(planPath)
+      result = true
+    )
+
   result = state.healthy
 
 proc formatDuration*(seconds: float): string =

@@ -1629,12 +1629,9 @@ suite "orchestrator final v1 flow":
         timeoutKind: "none",
       )
 
-    let before = planCommitCount(tmp)
     runOrchestratorForTicks(tmp, 1, fakeRunner)
-    let after = planCommitCount(tmp)
 
     check callCount == 0
-    check after == before
 
   test "integration-test failure on master blocks assignment of open tickets":
     let tmp = getTempDir() / "scriptorium_test_master_red_integration"
@@ -3464,3 +3461,84 @@ suite "ticket difficulty prediction":
       check rc == 0
       check "## Prediction" notin ticketContent
     )
+
+suite "health cache persistence":
+  test "readHealthCache returns empty table when file does not exist":
+    let tmp = getTempDir() / "scriptorium_test_health_cache_empty"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    let cache = readHealthCache(tmp)
+    check cache.len == 0
+
+  test "writeHealthCache creates directory and file then readHealthCache round-trips":
+    let tmp = getTempDir() / "scriptorium_test_health_cache_roundtrip"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    var cache = initTable[string, HealthCacheEntry]()
+    cache["abc123"] = HealthCacheEntry(
+      healthy: true,
+      timestamp: "2026-03-13T12:00:00Z",
+      test_exit_code: 0,
+      integration_test_exit_code: 0,
+      test_wall_seconds: 45,
+      integration_test_wall_seconds: 120,
+    )
+    cache["def456"] = HealthCacheEntry(
+      healthy: false,
+      timestamp: "2026-03-13T13:00:00Z",
+      test_exit_code: 1,
+      integration_test_exit_code: 0,
+      test_wall_seconds: 10,
+      integration_test_wall_seconds: 0,
+    )
+
+    writeHealthCache(tmp, cache)
+
+    check fileExists(tmp / "health" / "cache.json")
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 2
+    check loaded["abc123"].healthy == true
+    check loaded["abc123"].test_exit_code == 0
+    check loaded["abc123"].integration_test_exit_code == 0
+    check loaded["abc123"].test_wall_seconds == 45
+    check loaded["abc123"].integration_test_wall_seconds == 120
+    check loaded["def456"].healthy == false
+    check loaded["def456"].test_exit_code == 1
+
+  test "readHealthCache parses JSON with correct field types":
+    let tmp = getTempDir() / "scriptorium_test_health_cache_parse"
+    createDir(tmp / "health")
+    defer: removeDir(tmp)
+
+    let jsonContent = """{"commit1": {"healthy": true, "timestamp": "2026-03-13T12:00:00Z", "test_exit_code": 0, "integration_test_exit_code": 0, "test_wall_seconds": 30, "integration_test_wall_seconds": 60}}"""
+    writeFile(tmp / "health" / "cache.json", jsonContent)
+
+    let cache = readHealthCache(tmp)
+    check cache.len == 1
+    check "commit1" in cache
+    check cache["commit1"].healthy == true
+    check cache["commit1"].timestamp == "2026-03-13T12:00:00Z"
+    check cache["commit1"].test_wall_seconds == 30
+    check cache["commit1"].integration_test_wall_seconds == 60
+
+  test "writeHealthCache overwrites existing cache":
+    let tmp = getTempDir() / "scriptorium_test_health_cache_overwrite"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    var cache1 = initTable[string, HealthCacheEntry]()
+    cache1["abc"] = HealthCacheEntry(healthy: true, timestamp: "t1", test_exit_code: 0, integration_test_exit_code: 0, test_wall_seconds: 1, integration_test_wall_seconds: 2)
+    writeHealthCache(tmp, cache1)
+
+    var cache2 = initTable[string, HealthCacheEntry]()
+    cache2["abc"] = HealthCacheEntry(healthy: true, timestamp: "t1", test_exit_code: 0, integration_test_exit_code: 0, test_wall_seconds: 1, integration_test_wall_seconds: 2)
+    cache2["def"] = HealthCacheEntry(healthy: false, timestamp: "t2", test_exit_code: 1, integration_test_exit_code: 0, test_wall_seconds: 5, integration_test_wall_seconds: 0)
+    writeHealthCache(tmp, cache2)
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 2
+    check "abc" in loaded
+    check "def" in loaded
