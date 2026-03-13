@@ -31,3 +31,8 @@ The V5 spec (§26) requires monitoring cumulative `stdout_bytes` across all runn
 - No impact when `tokenBudgetMB` is 0 or unset.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 20
+- reasoning: Straightforward aggregation of an existing per-ticket counter with a simple threshold check before assignment, plus basic unit tests — no new data structures or complex concurrency logic required.
