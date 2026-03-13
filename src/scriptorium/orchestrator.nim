@@ -732,8 +732,19 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
     ],
   )
 
-proc runWorktreeMakeTest(worktreePath: string): tuple[exitCode: int, output: string]
-proc formatDuration*(seconds: float): string
+proc formatDuration*(seconds: float): string =
+  ## Format a duration in seconds as a human-readable string like 1h23m or 3m12s.
+  let totalSecs = seconds.int
+  if totalSecs < 60:
+    result = $totalSecs & "s"
+  elif totalSecs < 3600:
+    let mins = totalSecs div 60
+    let secs = totalSecs mod 60
+    result = $mins & "m" & $secs & "s"
+  else:
+    let hours = totalSecs div 3600
+    let mins = (totalSecs mod 3600) div 60
+    result = $hours & "h" & $mins & "m"
 
 proc buildStallContinuationPrompt(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int, testExitCode: int, testOutput: string): string =
   ## Build a continuation prompt for a coding agent that stalled without calling submit_pr.
@@ -1126,7 +1137,9 @@ proc runPostAnalysis*(ticketContent: string, ticketId: string, outcome: string, 
   logInfo(&"ticket {ticketId}: post-analysis: predicted={prediction.difficulty} actual={actualDifficulty} accuracy={predictionAccuracy} wall={wallDuration}")
   result = appendPostAnalysisNote(ticketContent, actualDifficulty, predictionAccuracy, briefSummary)
 
-proc branchNameForTicket(ticketRelPath: string): string
+proc branchNameForTicket(ticketRelPath: string): string =
+  ## Build a deterministic branch name for a ticket.
+  result = TicketBranchPrefix & ticketIdFromTicketPath(ticketRelPath)
 
 proc buildPlanScopePrompt(repoPath: string, planPath: string): string =
   ## Build shared planning prompt context with read and write scope.
@@ -1186,8 +1199,33 @@ proc planAgentLogRoot(ticketId: string): string =
   else:
     result = getTempDir() / PlanLogRoot
 
-proc listMarkdownFiles(basePath: string): seq[string]
-proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string]
+proc listMarkdownFiles(basePath: string): seq[string] =
+  ## Collect markdown files recursively and return sorted absolute paths.
+  if not dirExists(basePath):
+    result = @[]
+  else:
+    for filePath in walkDirRec(basePath):
+      if filePath.toLowerAscii().endsWith(".md"):
+        result.add(filePath)
+    result.sort()
+
+proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string] =
+  ## Run a process and return combined stdout/stderr with its exit code.
+  let process = startProcess(
+    command,
+    workingDir = workingDir,
+    args = args,
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  let output = process.outputStream.readAll()
+  let exitCode = process.waitForExit(timeoutMs)
+  if exitCode == -1 and running(process):
+    process.kill()
+    process.close()
+    let cmdStr = command & " " & args.join(" ")
+    raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
+  process.close()
+  result = (exitCode: exitCode, output: output)
 
 proc normalizeRelativeWritePath(rawPath: string): string =
   ## Validate and normalize one relative path for write guard checks.
@@ -1461,24 +1499,6 @@ proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash:
       if oldState != newState:
         inc result
 
-proc runCommandCapture(workingDir: string, command: string, args: seq[string], timeoutMs: int = QualityCheckTimeoutMs): tuple[exitCode: int, output: string] =
-  ## Run a process and return combined stdout/stderr with its exit code.
-  let process = startProcess(
-    command,
-    workingDir = workingDir,
-    args = args,
-    options = {poUsePath, poStdErrToStdOut},
-  )
-  let output = process.outputStream.readAll()
-  let exitCode = process.waitForExit(timeoutMs)
-  if exitCode == -1 and running(process):
-    process.kill()
-    process.close()
-    let cmdStr = command & " " & args.join(" ")
-    raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
-  process.close()
-  result = (exitCode: exitCode, output: output)
-
 proc runWorktreeMakeTest(worktreePath: string): tuple[exitCode: int, output: string] =
   ## Run `make test` in the agent worktree and return exit code and combined output.
   result = runCommandCapture(worktreePath, "make", @["test"], MakeTestTimeoutMs)
@@ -1681,16 +1701,6 @@ proc formatMergeSuccessNote(summary: string, checkOutput: string): string =
       checkPreview & "\n" &
       "```\n"
 
-proc listMarkdownFiles(basePath: string): seq[string] =
-  ## Collect markdown files recursively and return sorted absolute paths.
-  if not dirExists(basePath):
-    result = @[]
-  else:
-    for filePath in walkDirRec(basePath):
-      if filePath.toLowerAscii().endsWith(".md"):
-        result.add(filePath)
-    result.sort()
-
 proc computeContentHash(content: string): string =
   ## SHA-1 hex digest of content for change detection.
   result = $secureHash(content)
@@ -1828,35 +1838,11 @@ proc oldestOpenTicketInPlanPath(planPath: string): string =
       bestRel = rel
   result = bestRel
 
-proc branchNameForTicket(ticketRelPath: string): string =
-  ## Build a deterministic branch name for a ticket.
-  result = TicketBranchPrefix & ticketIdFromTicketPath(ticketRelPath)
-
 proc worktreePathForTicket(repoPath: string, ticketRelPath: string): string =
   ## Build a deterministic absolute worktree path for a ticket.
   let ticketName = splitFile(ticketRelPath).name
   let root = managedTicketWorktreeRootPath(repoPath)
   result = absolutePath(root / ticketName)
-
-proc cleanupLegacyManagedTicketWorktrees(repoPath: string): seq[string]
-  ## Remove legacy repo-local managed ticket worktrees from older versions.
-
-proc ensureWorktreeCreated(repoPath: string, ticketRelPath: string): tuple[branch: string, path: string] =
-  ## Ensure the code worktree exists for the ticket and return branch/path.
-  let branch = branchNameForTicket(ticketRelPath)
-  let path = worktreePathForTicket(repoPath, ticketRelPath)
-  discard cleanupLegacyManagedTicketWorktrees(repoPath)
-  createDir(parentDir(path))
-
-  discard gitCheck(repoPath, "worktree", "remove", "--force", path)
-  if dirExists(path):
-    removeDir(path)
-
-  if gitCheck(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/" & branch) == 0:
-    gitRun(repoPath, "branch", "-D", branch)
-  gitRun(repoPath, "worktree", "add", "-b", branch, path)
-
-  result = (branch: branch, path: path)
 
 proc listGitWorktreePaths(repoPath: string): seq[string] =
   ## Return absolute worktree paths from git worktree list.
@@ -1885,6 +1871,23 @@ proc cleanupLegacyManagedTicketWorktrees(repoPath: string): seq[string] =
 
   if dirExists(legacyRoot):
     removeDir(legacyRoot)
+
+proc ensureWorktreeCreated(repoPath: string, ticketRelPath: string): tuple[branch: string, path: string] =
+  ## Ensure the code worktree exists for the ticket and return branch/path.
+  let branch = branchNameForTicket(ticketRelPath)
+  let path = worktreePathForTicket(repoPath, ticketRelPath)
+  discard cleanupLegacyManagedTicketWorktrees(repoPath)
+  createDir(parentDir(path))
+
+  discard gitCheck(repoPath, "worktree", "remove", "--force", path)
+  if dirExists(path):
+    removeDir(path)
+
+  if gitCheck(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/" & branch) == 0:
+    gitRun(repoPath, "branch", "-D", branch)
+  gitRun(repoPath, "worktree", "add", "-b", branch, path)
+
+  result = (branch: branch, path: path)
 
 proc writeAreasAndCommit(planPath: string, docs: seq[AreaDocument]): bool =
   ## Write generated area files and commit only when contents changed.
@@ -2287,9 +2290,41 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
         true
   )
 
-proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]]
-proc doneTicketIdsInPlanPath(planPath: string): HashSet[string]
-proc dependenciesSatisfied(ticketContent: string, doneIds: HashSet[string]): bool
+proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]] =
+  ## Return all open tickets sorted by numeric ID (ascending).
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
+    let rel = relativePath(ticketPath, planPath).replace('\\', '/')
+    let parsedId = parseInt(ticketIdFromTicketPath(rel))
+    result.add((id: parsedId, rel: rel))
+  result.sort(proc(a, b: tuple[id: int, rel: string]): int =
+    if a.id != b.id: a.id - b.id
+    else: cmp(a.rel, b.rel)
+  )
+
+proc inProgressAreasInPlanPath(planPath: string): HashSet[string] =
+  ## Collect area identifiers from in-progress tickets.
+  result = initHashSet[string]()
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):
+    let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+    if areaId.len > 0:
+      result.incl(areaId)
+
+proc doneTicketIdsInPlanPath(planPath: string): HashSet[string] =
+  ## Collect ticket IDs from done tickets.
+  result = initHashSet[string]()
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsDoneDir):
+    let rel = PlanTicketsDoneDir / extractFilename(ticketPath)
+    result.incl(ticketIdFromTicketPath(rel))
+
+proc dependenciesSatisfied(ticketContent: string, doneIds: HashSet[string]): bool =
+  ## Check whether all declared dependencies are in the done set.
+  let deps = parseDependsFromTicketContent(ticketContent)
+  if deps.len == 0:
+    return true
+  for dep in deps:
+    if dep notin doneIds:
+      return false
+  return true
 
 proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
   ## Move the oldest assignable open ticket to in-progress and attach a code worktree.
@@ -2339,42 +2374,6 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       worktree: worktreeInfo.path,
     )
   )
-
-proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]] =
-  ## Return all open tickets sorted by numeric ID (ascending).
-  for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
-    let rel = relativePath(ticketPath, planPath).replace('\\', '/')
-    let parsedId = parseInt(ticketIdFromTicketPath(rel))
-    result.add((id: parsedId, rel: rel))
-  result.sort(proc(a, b: tuple[id: int, rel: string]): int =
-    if a.id != b.id: a.id - b.id
-    else: cmp(a.rel, b.rel)
-  )
-
-proc inProgressAreasInPlanPath(planPath: string): HashSet[string] =
-  ## Collect area identifiers from in-progress tickets.
-  result = initHashSet[string]()
-  for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):
-    let areaId = parseAreaFromTicketContent(readFile(ticketPath))
-    if areaId.len > 0:
-      result.incl(areaId)
-
-proc doneTicketIdsInPlanPath(planPath: string): HashSet[string] =
-  ## Collect ticket IDs from done tickets.
-  result = initHashSet[string]()
-  for ticketPath in listMarkdownFiles(planPath / PlanTicketsDoneDir):
-    let rel = PlanTicketsDoneDir / extractFilename(ticketPath)
-    result.incl(ticketIdFromTicketPath(rel))
-
-proc dependenciesSatisfied(ticketContent: string, doneIds: HashSet[string]): bool =
-  ## Check whether all declared dependencies are in the done set.
-  let deps = parseDependsFromTicketContent(ticketContent)
-  if deps.len == 0:
-    return true
-  for dep in deps:
-    if dep notin doneIds:
-      return false
-  return true
 
 proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment] =
   ## Assign multiple open tickets concurrently when they touch independent areas.
@@ -3321,20 +3320,6 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
     )
 
   result = state.healthy
-
-proc formatDuration*(seconds: float): string =
-  ## Format a duration in seconds as a human-readable string like 1h23m or 3m12s.
-  let totalSecs = seconds.int
-  if totalSecs < 60:
-    result = $totalSecs & "s"
-  elif totalSecs < 3600:
-    let mins = totalSecs div 60
-    let secs = totalSecs mod 60
-    result = $mins & "m" & $secs & "s"
-  else:
-    let hours = totalSecs div 3600
-    let mins = (totalSecs mod 3600) div 60
-    result = $hours & "h" & $mins & "m"
 
 proc resetSessionStats*() =
   ## Reset session statistics to default values.

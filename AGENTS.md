@@ -141,6 +141,7 @@ import
 
 ### Nim Procs
 
+- do not use forward declarations. If a proc is called before it is defined, move the proc definition above the call site instead.
 - do not put comments before functions! comments go inside functions.
 - every proc should have a nimdoc comment
 - nimdoc comments start with ##
