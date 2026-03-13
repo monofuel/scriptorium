@@ -34,3 +34,5 @@ The V5 spec (§26) requires detecting HTTP 429 (rate limit) responses from agent
 - `make test` passes with new tests.
 - Rate limit detection logged clearly.
 - Running agents not interrupted by backpressure.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0052-resource-management-rate-limit-backpressure
