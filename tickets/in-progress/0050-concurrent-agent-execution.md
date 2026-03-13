@@ -27,3 +27,5 @@ With the non-blocking tick (ticket 0049) providing the framework, the actual con
 - Two coding agents can run simultaneously when `maxAgents >= 2`.
 - MCP `submit_pr` correctly identifies the calling agent's ticket.
 - Stall detection works independently per agent.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0050-concurrent-agent-execution
