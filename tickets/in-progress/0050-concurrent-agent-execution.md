@@ -29,3 +29,8 @@ With the non-blocking tick (ticket 0049) providing the framework, the actual con
 - Stall detection works independently per agent.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0050-concurrent-agent-execution
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 90
+- reasoning: Requires refactoring shared mutable state (activeWorktreePathBuffer/activeTicketIdBuffer) to support concurrent access, wiring up multi-threaded/subprocess agent execution with independent lifecycle management, ensuring thread safety across MCP handlers and metrics tables, and adding integration tests for parallel worktree isolation.
