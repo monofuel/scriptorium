@@ -51,3 +51,5 @@ No tests are run. The merge queue later runs `make test` and `make integration-t
 ## Spec References
 
 - Section 20: Pre-Submit Test Gate (V4).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate
