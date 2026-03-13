@@ -70,3 +70,10 @@ eTicketWorktree`, `clearActiveTicketWorktree`, `getActiveTicketWorktree` all now
 ```text
 |finished)`\n- Graceful shutdown waits for running agent threads\n\n### Tests\n- 8 new tests across 3 suites: per-ticket submit_pr state, agent slot types, non-blocking tick loop\n- All 224 tests pass","stop_reason":"end_turn","session_id":"7c408661-2981-491d-a17b-e8248a31abb5","total_cost_usd":6.64284575,"usage":{"input_tokens":82,"cache_creation_input_tokens":131075,"cache_read_input_tokens":8436056,"output_tokens":53284,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":131075,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":82,"outputTokens":53284,"cacheReadInputTokens":8436056,"cacheCreationInputTokens":131075,"webSearchRequests":0,"costUSD":6.36975675,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":27,"outputTokens":8975,"cacheReadInputTokens":1376345,"cacheCreationInputTokens":72442,"webSearchRequests":0,"costUSD":0.273089,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"92f053ca-0634-4b09-8d84-998b02406892"}
 ```
+
+## Review
+**Review:** approved
+- Model: codex-fake-unit-test-model
+- Backend: claude-code
+- Exit Code: 1
+- Wall Time: 7s
