@@ -68,3 +68,26 @@ After the `submit_review` MCP tool and reviewer config are in place (ticket 0041
 - predicted_difficulty: hard
 - predicted_duration_minutes: 55
 - reasoning: Requires orchestrator flow changes with multiple branching paths (approve/reject/stall), prompt template creation, ticket markdown mutation, retry logic restarting the coding agent, and unit tests covering all three review outcome paths.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0042-review-agent-execution-flow/.scriptorium/logs/0042/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0042-review-agent-execution-flow/.scriptorium/logs/0042/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Changes committed and merge request enqueued. Here's a summary of what was implemented:
+
+**Files changed (5):**
+- `src/scriptorium/prompts/review_agent.md` — New review agent prompt template with ticket content, diff, area context, and submit summary placeholders
+- `src/scriptorium/prompt_catalog.nim` — Added `ReviewAgentTemplate` constant
+- `src/scriptorium/orchestrator.nim` — Core implementation:
+  - `buildReviewAgentPrompt` — renders the review prompt template
+  - `runReviewAgent` — runs the review agent session, consumes the decision, writes review notes to ticket markdown
+  - `processMergeQueue` — now accepts a `runner` param, runs review agent after auto-commit but before quality gates; on `request_changes`, reopens ticket with feedback
+  - Review constants for timeouts and commit prefix
+- `tests/test_scriptorium.nim` — Three new unit tests (approve, request_changes, stall) plus updated existing tests to pass `noopRunner`
+- `tests/integration_orchestrator_queue.nim` — Updated to pass `noopRunner` for review agent
+```
+
+### Agent Stdout Tail
+```text
+prove, request_changes, stall) plus updated existing tests to pass `noopRunner`\n- `tests/integration_orchestrator_queue.nim` — Updated to pass `noopRunner` for review agent","stop_reason":"end_turn","session_id":"10b42b77-d140-4a9b-93db-1e283841a00a","total_cost_usd":4.055049099999999,"usage":{"input_tokens":80,"cache_creation_input_tokens":88217,"cache_read_input_tokens":5338584,"output_tokens":24622,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":88217,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":80,"outputTokens":24622,"cacheReadInputTokens":5338584,"cacheCreationInputTokens":88217,"webSearchRequests":0,"costUSD":3.8365982499999993,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":2347,"outputTokens":7439,"cacheReadInputTokens":1081451,"cacheCreationInputTokens":56611,"webSearchRequests":0,"costUSD":0.21845085000000003,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f1f78acc-850e-4730-8848-a9e6c4afef19"}
+```
