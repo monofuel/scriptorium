@@ -113,3 +113,21 @@ All tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as i
 ```text
 skips new assignments when exceeded, but allows running agents to complete normally.\n\n2. **`tests/test_scriptorium.nim`** — Added 7 tests covering: session byte summation, no enforcement at 0 or negative, assignment paused when exceeded, allowed when under budget, running agents not interrupted.\n\nAll tests pass via `make test`. I'm unable to call the `submit_pr` MCP tool as it's not available in my current environment.","stop_reason":"end_turn","session_id":"eec46c92-7fb4-4998-a497-8ce4df99bed4","total_cost_usd":0.6622295,"usage":{"input_tokens":25,"cache_creation_input_tokens":27584,"cache_read_input_tokens":656559,"output_tokens":6457,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":27584,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":25,"outputTokens":6457,"cacheReadInputTokens":656559,"cacheCreationInputTokens":27584,"webSearchRequests":0,"costUSD":0.6622295,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"41601284-307b-4588-8092-4b3466dfefbb"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0051-resource-management-token-budget/.scriptorium/logs/0051/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+`submit_pr` returned "Merge request enqueued." successfully. The ticket is complete:
+
+- **Token budget tracking** added to `orchestrator.nim` with `getSessionStdoutBytes` and `isTokenBudgetExceeded` procs
+- Budget checks before ticket assignment in both serial and parallel tick paths
+- No enforcement when `tokenBudgetMB` is 0 or unset
+- 7 unit tests covering all acceptance criteria
+- All tests pass via `make test`
+```
+
+### Agent Stdout Tail
+```text
+ned \"Merge request enqueued.\" successfully. The ticket is complete:\n\n- **Token budget tracking** added to `orchestrator.nim` with `getSessionStdoutBytes` and `isTokenBudgetExceeded` procs\n- Budget checks before ticket assignment in both serial and parallel tick paths\n- No enforcement when `tokenBudgetMB` is 0 or unset\n- 7 unit tests covering all acceptance criteria\n- All tests pass via `make test`","stop_reason":"end_turn","session_id":"c3cf6825-5ba8-4d63-b978-53a7f3d9a1f3","total_cost_usd":0.48528725000000006,"usage":{"input_tokens":26,"cache_creation_input_tokens":22151,"cache_read_input_tokens":543527,"output_tokens":2998,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22151,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":26,"outputTokens":2998,"cacheReadInputTokens":543527,"cacheCreationInputTokens":22151,"webSearchRequests":0,"costUSD":0.48528725000000006,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"5d24ea85-6a89-4053-a06c-6658e220c74c"}
+```
