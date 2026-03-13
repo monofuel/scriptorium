@@ -224,6 +224,9 @@ var
   agentResultChanOpen = false
   runningAgentSlots: seq[AgentSlot]
   runningAgentThreadPtrs: seq[ptr Thread[AgentThreadArgs]]
+  agentRunnerOverride*: AgentRunner
+  planWorktreeLock: Lock
+  planWorktreeLockInitialized = false
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -242,6 +245,12 @@ proc ensureAgentResultChanOpen() =
   if not agentResultChanOpen:
     agentResultChan.open()
     agentResultChanOpen = true
+
+proc ensurePlanWorktreeLockInitialized() {.gcsafe.} =
+  ## Initialize the in-process plan worktree lock once.
+  if not planWorktreeLockInitialized:
+    initLock(planWorktreeLock)
+    planWorktreeLockInitialized = true
 
 proc recordSubmitPrSummary*(summary: string, ticketId: string = "") {.gcsafe.} =
   ## Store the submit_pr summary for a specific ticket or the sole active ticket.
@@ -531,8 +540,9 @@ proc addWorktreeWithRecovery(repoPath: string, worktreePath: string, branch: str
     if dirExists(worktreePath):
       removeDir(worktreePath)
 
-proc withPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T): T =
+proc withPlanWorktreeImpl[T](repoPath: string, operation: proc(planPath: string): T): T =
   ## Open a deterministic /tmp worktree for the plan branch, then remove it.
+  ## Internal: callers must hold planWorktreeLock.
   if gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) != 0:
     raise newException(ValueError, "scriptorium/plan branch does not exist")
 
@@ -544,11 +554,23 @@ proc withPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T)
 
   result = operation(planWorktree)
 
+proc withPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T): T =
+  ## Thread-safe plan worktree access for read-only operations.
+  ensurePlanWorktreeLockInitialized()
+  {.cast(gcsafe).}:
+    acquire(planWorktreeLock)
+    defer: release(planWorktreeLock)
+    result = withPlanWorktreeImpl(repoPath, operation)
+
 proc withLockedPlanWorktree[T](repoPath: string, operation: proc(planPath: string): T): T =
-  ## Acquire the per-repo lock, then open a deterministic plan worktree and remove it.
-  result = withRepoLock(repoPath, proc(): T =
-    withPlanWorktree(repoPath, operation)
-  )
+  ## Thread-safe plan worktree access with file-based repo lock for write operations.
+  ensurePlanWorktreeLockInitialized()
+  {.cast(gcsafe).}:
+    acquire(planWorktreeLock)
+    defer: release(planWorktreeLock)
+    result = withRepoLock(repoPath, proc(): T =
+      withPlanWorktreeImpl(repoPath, operation)
+    )
 
 proc loadSpecFromPlanPath(planPath: string): string =
   ## Load spec.md from an existing plan branch worktree path.
@@ -682,6 +704,7 @@ proc formatPlanStreamEvent(event: AgentStreamEvent): string =
 
 proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string): string =
   ## Build the coding-agent prompt from ticket context.
+  let ticketId = ticketIdFromTicketPath(ticketRelPath)
   result = renderPromptTemplate(
     CodingAgentTemplate,
     [
@@ -689,6 +712,7 @@ proc buildCodingAgentPrompt(repoPath: string, worktreePath: string, ticketRelPat
       (name: "WORKTREE_PATH", value: worktreePath),
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
+      (name: "TICKET_ID", value: ticketId),
     ],
   )
 
@@ -2879,7 +2903,8 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
 proc agentWorkerThread(args: AgentThreadArgs) {.thread.} =
   ## Run executeAssignedTicket in a background thread and send the result to the channel.
   {.cast(gcsafe).}:
-    let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runAgent)
+    let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
+    let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runner)
     agentResultChan.send((ticketId: args.ticketId, result: agentResult))
 
 proc runningAgentCount*(): int =
@@ -3231,6 +3256,7 @@ proc logSessionSummary*() =
 
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
+  agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
   ensureTimingsLockInitialized()
   let cfg = loadConfig(repoPath)

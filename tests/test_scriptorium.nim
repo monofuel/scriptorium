@@ -1,7 +1,7 @@
 ## Tests for the scriptorium CLI and core utilities.
 
 import
-  std/[algorithm, json, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, times, unittest],
+  std/[algorithm, json, locks, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, times, unittest],
   jsony,
   scriptorium/[agent_runner, config, init, logging, orchestrator]
 
@@ -3772,3 +3772,154 @@ suite "non-blocking tick loop":
     # Serial mode: ticket submitted and merged in the same tick.
     check "tickets/done/0001-serial.md" in files
     check "tickets/open/0001-serial.md" notin files
+
+suite "concurrent agent execution":
+  test "two agents run concurrently in separate worktrees without interfering":
+    let tmp = getTempDir() / "scriptorium_test_concurrent_agents"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nConcurrent test.\n")
+    addTicketToPlan(tmp, "open", "0001-alpha.md", "# Ticket Alpha\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-beta.md", "# Ticket Beta\n\n**Area:** area-b\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 2
+    writeScriptoriumConfig(tmp, cfg)
+
+    var codingCallCount = 0
+    var codingCallLock: Lock
+    initLock(codingCallLock)
+    var seenTickets: seq[string] = @[]
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      if request.ticketId == "architect-areas":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.startsWith("manager"):
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      elif request.ticketId == "0001" or request.ticketId == "0002":
+        {.cast(gcsafe).}:
+          acquire(codingCallLock)
+          inc codingCallCount
+          seenTickets.add(request.ticketId)
+          release(codingCallLock)
+        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    runOrchestratorForTicks(tmp, 3, fakeRunner)
+
+    acquire(codingCallLock)
+    let finalCount = codingCallCount
+    let finalTickets = seenTickets
+    release(codingCallLock)
+    deinitLock(codingCallLock)
+
+    check finalCount == 2
+    check "0001" in finalTickets
+    check "0002" in finalTickets
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0001-alpha.md" notin files
+    check "tickets/open/0002-beta.md" notin files
+
+  test "submit_pr correctly identifies calling agent ticket in parallel mode":
+    let tmp = getTempDir() / "scriptorium_test_concurrent_submit_pr"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-x\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-y\n")
+
+    let assignment1 = assignOldestOpenTicket(tmp)
+    let assignment2 = assignOldestOpenTicket(tmp)
+    check assignment1.inProgressTicket.len > 0
+    check assignment2.inProgressTicket.len > 0
+
+    setActiveTicketWorktree(assignment1.worktree, "0001")
+    setActiveTicketWorktree(assignment2.worktree, "0002")
+    defer: clearActiveTicketWorktree()
+
+    let httpServer = createOrchestratorServer()
+    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+
+    discard submitPrHandler(%*{"summary": "done ticket 1", "ticket_id": "0001"})
+    discard submitPrHandler(%*{"summary": "done ticket 2", "ticket_id": "0002"})
+
+    let summary1 = consumeSubmitPrSummary("0001")
+    let summary2 = consumeSubmitPrSummary("0002")
+    check summary1 == "done ticket 1"
+    check summary2 == "done ticket 2"
+
+  test "stall detection works independently per agent":
+    let tmp = getTempDir() / "scriptorium_test_concurrent_stall"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-staller.md", "# Ticket Staller\n\n**Area:** area-s\n")
+    addTicketToPlan(tmp, "open", "0002-submitter.md", "# Ticket Submitter\n\n**Area:** area-t\n")
+
+    let assignment1 = assignOldestOpenTicket(tmp)
+    let assignment2 = assignOldestOpenTicket(tmp)
+    check assignment1.inProgressTicket.len > 0
+    check assignment2.inProgressTicket.len > 0
+
+    ticketStartTimes["0001"] = epochTime()
+    ticketStartTimes["0002"] = epochTime()
+    ticketAttemptCounts["0001"] = 0
+    ticketAttemptCounts["0002"] = 0
+    ticketCodingWalls["0001"] = 0.0
+    ticketCodingWalls["0002"] = 0.0
+    ticketTestWalls["0001"] = 0.0
+    ticketTestWalls["0002"] = 0.0
+    ticketModels["0001"] = ""
+    ticketModels["0002"] = ""
+    ticketStdoutBytes["0001"] = 0
+    ticketStdoutBytes["0002"] = 0
+
+    var stallCallCount = 0
+    proc stallingRunner(request: AgentRunRequest): AgentRunResult =
+      ## Stalls on every call: exit 0 without calling submit_pr.
+      inc stallCallCount
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "I stalled.",
+        timeoutKind: "none",
+      )
+
+    proc submittingRunner(request: AgentRunRequest): AgentRunResult =
+      ## Submits immediately on first call.
+      recordSubmitPrSummary("submitted", "0002")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "Done.",
+        timeoutKind: "none",
+      )
+
+    let result1 = executeAssignedTicket(tmp, assignment1, stallingRunner)
+    let result2 = executeAssignedTicket(tmp, assignment2, submittingRunner)
+
+    check stallCallCount == 2
+    check result1.submitted == false
+    check result2.submitted == true
+
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0001-staller.md" in files
+    let hasMergeEntry = files.anyIt(it.startsWith("queue/merge/pending/") and it.contains("0002"))
+    check hasMergeEntry

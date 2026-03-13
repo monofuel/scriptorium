@@ -21,3 +21,6 @@ IMPORTANT: Before calling submit_pr, you MUST commit all changes:
 When your work is complete and all changes are committed, call the `submit_pr`
 MCP tool with a short summary of what you did. This signals the orchestrator
 to enqueue your changes for merge. Do not skip this step.
+
+When calling `submit_pr`, always include the `ticket_id` argument set to
+"{{TICKET_ID}}" so the orchestrator can identify this ticket in parallel mode.
