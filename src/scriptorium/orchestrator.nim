@@ -183,17 +183,30 @@ type
     completedCodingWalls*: seq[float]
     completedTestWalls*: seq[float]
 
+  AgentSlot* = object
+    ticketId*: string
+    branch*: string
+    worktree*: string
+    startTime*: float
+
+  AgentThreadArgs = tuple[
+    repoPath: string,
+    assignment: TicketAssignment,
+    ticketId: string,
+  ]
+
+  AgentCompletionResult = tuple[
+    ticketId: string,
+    result: AgentRunResult,
+  ]
+
 var
   shouldRun {.volatile.} = true
   interactivePlanInterrupted {.volatile.} = false
   submitPrLock: Lock
   submitPrLockInitialized = false
-  submitPrSummaryLen = 0
-  submitPrSummaryBuffer: array[SubmitPrSummaryMaxBytes, char]
-  activeWorktreePathLen = 0
-  activeWorktreePathBuffer: array[ActiveWorktreePathMaxBytes, char]
-  activeTicketIdLen = 0
-  activeTicketIdBuffer: array[ActiveTicketIdMaxBytes, char]
+  submitPrSummaries: Table[string, string]
+  activeTicketEntries: Table[string, string]
   reviewActionLen = 0
   reviewActionBuffer: array[ReviewActionMaxBytes, char]
   reviewFeedbackLen = 0
@@ -205,6 +218,12 @@ var
   ticketModels*: Table[string, string]
   ticketStdoutBytes*: Table[string, int]
   sessionStats*: SessionStats
+  timingsLock: Lock
+  timingsLockInitialized = false
+  agentResultChan: Channel[AgentCompletionResult]
+  agentResultChanOpen = false
+  runningAgentSlots: seq[AgentSlot]
+  runningAgentThreadPtrs: seq[ptr Thread[AgentThreadArgs]]
 
 proc ensureSubmitPrLockInitialized() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -212,54 +231,74 @@ proc ensureSubmitPrLockInitialized() {.gcsafe.} =
     initLock(submitPrLock)
     submitPrLockInitialized = true
 
-proc recordSubmitPrSummary(summary: string) {.gcsafe.} =
-  ## Store the latest submit_pr summary reported by the coding agent.
-  ensureSubmitPrLockInitialized()
-  withLock submitPrLock:
-    let storedLen = min(summary.len, SubmitPrSummaryMaxBytes)
-    submitPrSummaryLen = storedLen
-    if storedLen > 0:
-      copyMem(addr submitPrSummaryBuffer[0], unsafeAddr summary[0], storedLen)
+proc ensureTimingsLockInitialized() =
+  ## Initialize the timing tables lock once.
+  if not timingsLockInitialized:
+    initLock(timingsLock)
+    timingsLockInitialized = true
 
-proc consumeSubmitPrSummary*(): string {.gcsafe.} =
-  ## Return and clear the latest submit_pr summary reported by the coding agent.
+proc ensureAgentResultChanOpen() =
+  ## Open the agent result channel once.
+  if not agentResultChanOpen:
+    agentResultChan.open()
+    agentResultChanOpen = true
+
+proc recordSubmitPrSummary*(summary: string, ticketId: string = "") {.gcsafe.} =
+  ## Store the submit_pr summary for a specific ticket or the sole active ticket.
   ensureSubmitPrLockInitialized()
-  withLock submitPrLock:
-    if submitPrSummaryLen > 0:
-      result = newString(submitPrSummaryLen)
-      copyMem(addr result[0], addr submitPrSummaryBuffer[0], submitPrSummaryLen)
-    submitPrSummaryLen = 0
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      var id = ticketId
+      if id.len == 0 and activeTicketEntries.len > 0:
+        for k in activeTicketEntries.keys:
+          id = k
+          break
+      submitPrSummaries[id] = summary
+
+proc consumeSubmitPrSummary*(ticketId: string = ""): string {.gcsafe.} =
+  ## Return and clear the submit_pr summary for a ticket or the first available.
+  ensureSubmitPrLockInitialized()
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      if ticketId.len > 0:
+        if submitPrSummaries.hasKey(ticketId):
+          result = submitPrSummaries[ticketId]
+          submitPrSummaries.del(ticketId)
+      else:
+        for k, v in submitPrSummaries:
+          result = v
+          submitPrSummaries.del(k)
+          break
 
 proc setActiveTicketWorktree*(worktreePath: string, ticketId: string) {.gcsafe.} =
-  ## Store the active ticket worktree path and ticket ID for the submit_pr handler.
+  ## Register an active ticket worktree mapping.
   ensureSubmitPrLockInitialized()
-  withLock submitPrLock:
-    let pathLen = min(worktreePath.len, ActiveWorktreePathMaxBytes)
-    activeWorktreePathLen = pathLen
-    if pathLen > 0:
-      copyMem(addr activeWorktreePathBuffer[0], unsafeAddr worktreePath[0], pathLen)
-    let idLen = min(ticketId.len, ActiveTicketIdMaxBytes)
-    activeTicketIdLen = idLen
-    if idLen > 0:
-      copyMem(addr activeTicketIdBuffer[0], unsafeAddr ticketId[0], idLen)
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      activeTicketEntries[ticketId] = worktreePath
 
-proc clearActiveTicketWorktree*() {.gcsafe.} =
-  ## Clear the active ticket worktree path and ticket ID.
+proc clearActiveTicketWorktree*(ticketId: string = "") {.gcsafe.} =
+  ## Clear one or all active ticket worktree mappings.
   ensureSubmitPrLockInitialized()
-  withLock submitPrLock:
-    activeWorktreePathLen = 0
-    activeTicketIdLen = 0
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      if ticketId.len > 0:
+        activeTicketEntries.del(ticketId)
+      else:
+        activeTicketEntries.clear()
 
-proc getActiveTicketWorktree(): tuple[worktreePath: string, ticketId: string] {.gcsafe.} =
-  ## Return the active ticket worktree path and ticket ID.
+proc getActiveTicketWorktree*(ticketId: string = ""): tuple[worktreePath: string, ticketId: string] {.gcsafe.} =
+  ## Return the active worktree for a ticket or the first available entry.
   ensureSubmitPrLockInitialized()
-  withLock submitPrLock:
-    if activeWorktreePathLen > 0:
-      result.worktreePath = newString(activeWorktreePathLen)
-      copyMem(addr result.worktreePath[0], addr activeWorktreePathBuffer[0], activeWorktreePathLen)
-    if activeTicketIdLen > 0:
-      result.ticketId = newString(activeTicketIdLen)
-      copyMem(addr result.ticketId[0], addr activeTicketIdBuffer[0], activeTicketIdLen)
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      if ticketId.len > 0:
+        if activeTicketEntries.hasKey(ticketId):
+          result = (worktreePath: activeTicketEntries[ticketId], ticketId: ticketId)
+      elif activeTicketEntries.len > 0:
+        for k, v in activeTicketEntries:
+          result = (worktreePath: v, ticketId: k)
+          break
 
 proc recordReviewDecision*(action: string, feedback: string) {.gcsafe.} =
   ## Store the latest review decision reported by the review agent.
@@ -2657,7 +2696,7 @@ proc executeAssignedTicket*(
   let model = cfg.agents.coding.model
 
   setActiveTicketWorktree(assignment.worktree, ticketId)
-  defer: clearActiveTicketWorktree()
+  defer: clearActiveTicketWorktree(ticketId)
 
   while totalAttemptsUsed < DefaultAgentMaxAttempts:
     let attemptsForThisCall = DefaultAgentMaxAttempts - totalAttemptsUsed
@@ -2682,7 +2721,7 @@ proc executeAssignedTicket*(
         elif event.kind == agentEventStatus:
           logDebug(fmt"coding[{ticketId}]: status {event.text}"),
     )
-    discard consumeSubmitPrSummary()
+    discard consumeSubmitPrSummary(ticketId)
 
     logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{DefaultAgentMaxAttempts})")
     let agentResult = runner(request)
@@ -2694,6 +2733,8 @@ proc executeAssignedTicket*(
     let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
     logInfo(fmt"ticket {ticketId}: coding agent finished (exit={agentResult.exitCode}, wall={agentWallDuration}, stall={isStall})")
 
+    ensureTimingsLockInitialized()
+    acquire(timingsLock)
     if ticketCodingWalls.hasKey(ticketId):
       ticketCodingWalls[ticketId] = ticketCodingWalls[ticketId] + agentWallTime
     else:
@@ -2709,6 +2750,7 @@ proc executeAssignedTicket*(
       ticketStdoutBytes[ticketId] = ticketStdoutBytes[ticketId] + agentResult.stdout.len
     else:
       ticketStdoutBytes[ticketId] = agentResult.stdout.len
+    release(timingsLock)
 
     let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
     let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
@@ -2734,7 +2776,7 @@ proc executeAssignedTicket*(
       0
     )
 
-    submitSummary = consumeSubmitPrSummary()
+    submitSummary = consumeSubmitPrSummary(ticketId)
     if submitSummary.len > 0:
       break
 
@@ -2747,10 +2789,12 @@ proc executeAssignedTicket*(
       let testStatus = if testResult.exitCode == 0: "PASS" else: "FAIL"
       logInfo(fmt"ticket {ticketId}: make test before retry: {testStatus} (exit={testResult.exitCode}, wall={testWallDuration})")
 
+      acquire(timingsLock)
       if ticketTestWalls.hasKey(ticketId):
         ticketTestWalls[ticketId] = ticketTestWalls[ticketId] + testWallTime
       else:
         ticketTestWalls[ticketId] = testWallTime
+      release(timingsLock)
 
       currentAttemptBase = agentResult.attempt + agentResult.attemptCount
       let testStatusLabel = if testResult.exitCode == 0: "passing" else: "failing"
@@ -2832,6 +2876,69 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     result = executeAssignedTicket(repoPath, assignment, runner)
     result.ticketId = ticketId
 
+proc agentWorkerThread(args: AgentThreadArgs) {.thread.} =
+  ## Run executeAssignedTicket in a background thread and send the result to the channel.
+  {.cast(gcsafe).}:
+    let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runAgent)
+    agentResultChan.send((ticketId: args.ticketId, result: agentResult))
+
+proc runningAgentCount*(): int =
+  ## Return the number of currently running agent slots.
+  result = runningAgentSlots.len
+
+proc emptySlotCount*(maxAgents: int): int =
+  ## Return the number of available agent slots.
+  result = maxAgents - runningAgentSlots.len
+
+proc startAgentAsync*(repoPath: string, assignment: TicketAssignment, maxAgents: int) =
+  ## Start a coding agent in a background thread for the given assignment.
+  ensureAgentResultChanOpen()
+  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+  let slot = AgentSlot(
+    ticketId: ticketId,
+    branch: assignment.branch,
+    worktree: assignment.worktree,
+    startTime: epochTime(),
+  )
+  runningAgentSlots.add(slot)
+  let threadPtr = create(Thread[AgentThreadArgs])
+  let args: AgentThreadArgs = (
+    repoPath: repoPath,
+    assignment: assignment,
+    ticketId: ticketId,
+  )
+  createThread(threadPtr[], agentWorkerThread, args)
+  runningAgentThreadPtrs.add(threadPtr)
+  let running = runningAgentSlots.len
+  logInfo(&"agent slots: {running}/{maxAgents} (ticket {ticketId} started)")
+
+proc checkCompletedAgents*(): seq[AgentCompletionResult] =
+  ## Poll the result channel for completed agents and clean up their slots and threads.
+  ensureAgentResultChanOpen()
+  while true:
+    let (hasData, completion) = agentResultChan.tryRecv()
+    if not hasData:
+      break
+    result.add(completion)
+    var slotIdx = -1
+    for i, slot in runningAgentSlots:
+      if slot.ticketId == completion.ticketId:
+        slotIdx = i
+        break
+    if slotIdx >= 0:
+      runningAgentSlots.delete(slotIdx)
+      joinThread(runningAgentThreadPtrs[slotIdx][])
+      dealloc(runningAgentThreadPtrs[slotIdx])
+      runningAgentThreadPtrs.delete(slotIdx)
+
+proc joinAllAgentThreads*() =
+  ## Block until all running agent threads complete and clean up.
+  for i in 0..<runningAgentThreadPtrs.len:
+    joinThread(runningAgentThreadPtrs[i][])
+    dealloc(runningAgentThreadPtrs[i])
+  runningAgentSlots.setLen(0)
+  runningAgentThreadPtrs.setLen(0)
+
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
   ensureSubmitPrLockInitialized()
@@ -2845,6 +2952,10 @@ proc createOrchestratorServer*(): HttpMcpServer =
         "summary": {
           "type": "string",
           "description": "Short summary of changes"
+        },
+        "ticket_id": {
+          "type": "string",
+          "description": "Ticket ID for this submission (optional, used in parallel mode)"
         }
       },
       "required": ["summary"]
@@ -2852,13 +2963,14 @@ proc createOrchestratorServer*(): HttpMcpServer =
   )
   let submitPrHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
     let summary = arguments["summary"].getStr()
-    let active = getActiveTicketWorktree()
+    let reqTicketId = if arguments.hasKey("ticket_id"): arguments["ticket_id"].getStr() else: ""
+    let active = getActiveTicketWorktree(reqTicketId)
     let ticketLabel = if active.ticketId.len > 0: active.ticketId else: "unknown"
 
     if active.worktreePath.len == 0:
       {.cast(gcsafe).}:
         logInfo(&"ticket {ticketLabel}: submit_pr pre-check: SKIP (no active worktree)")
-      recordSubmitPrSummary(summary)
+      recordSubmitPrSummary(summary, active.ticketId)
       return %*"Merge request enqueued."
 
     let testStartTime = epochTime()
@@ -2874,7 +2986,7 @@ proc createOrchestratorServer*(): HttpMcpServer =
       let outputTail = truncateTail(testResult.output.strip(), SubmitPrTestOutputMaxChars)
       return %*(&"Pre-submit test gate failed (exit={testExitCode}). Fix the failing tests and call submit_pr again.\n\n{outputTail}")
 
-    recordSubmitPrSummary(summary)
+    recordSubmitPrSummary(summary, active.ticketId)
     %*"Merge request enqueued."
   server.registerTool(submitPrTool, submitPrHandler)
   let submitReviewTool = McpTool(
@@ -3120,6 +3232,9 @@ proc logSessionSummary*() =
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
   sessionStats.startTime = epochTime()
+  ensureTimingsLockInitialized()
+  let cfg = loadConfig(repoPath)
+  let maxAgents = cfg.concurrency.maxAgents
   var ticks = 0
   var idle = false
   var masterHealthState = MasterHealthState()
@@ -3129,6 +3244,14 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
     try:
       idle = false
       logDebug(fmt"tick {ticks}")
+
+      # Check for completed agents at the start of every tick (parallel mode).
+      if maxAgents > 1:
+        let completions = checkCompletedAgents()
+        for completion in completions:
+          let running = runningAgentCount()
+          logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
+
       if not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
         idle = true
@@ -3153,6 +3276,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           var managerStatus = "skipped"
           var codingStatus = "idle"
           var mergeStatus = "idle"
+          var codingDidWork = false
 
           if hasRunnableSpec(repoPath):
             logInfo("architect: generating areas from spec")
@@ -3179,19 +3303,34 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
 
-            t0 = epochTime()
-            let agentResult = executeOldestOpenTicket(repoPath, runner)
-            let codingWallTime = epochTime() - t0
-            logDebug(fmt"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
+            if maxAgents <= 1:
+              # Serial mode: blocking execution of one ticket per tick.
+              t0 = epochTime()
+              let agentResult = executeOldestOpenTicket(repoPath, runner)
+              let codingWallTime = epochTime() - t0
+              logDebug(fmt"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
 
-            if agentResult.command.len > 0:
-              let codingDuration = formatDuration(codingWallTime)
-              if agentResult.timeoutKind != "none":
-                codingStatus = fmt"{agentResult.ticketId}(stalled, {codingDuration})"
-              elif agentResult.submitted:
-                codingStatus = fmt"{agentResult.ticketId}(submitted, {codingDuration})"
-              else:
-                codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
+              if agentResult.command.len > 0:
+                codingDidWork = true
+                let codingDuration = formatDuration(codingWallTime)
+                if agentResult.timeoutKind != "none":
+                  codingStatus = fmt"{agentResult.ticketId}(stalled, {codingDuration})"
+                elif agentResult.submitted:
+                  codingStatus = fmt"{agentResult.ticketId}(submitted, {codingDuration})"
+                else:
+                  codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
+            else:
+              # Parallel mode: assign tickets to empty slots and start non-blocking.
+              let slotsAvailable = emptySlotCount(maxAgents)
+              if slotsAvailable > 0:
+                let assignments = assignOpenTickets(repoPath, slotsAvailable)
+                for assignment in assignments:
+                  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+                  runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
+                  startAgentAsync(repoPath, assignment, maxAgents)
+                  codingDidWork = true
+                let running = runningAgentCount()
+                codingStatus = &"{running}/{maxAgents} agents"
 
             if not shouldRun: break
 
@@ -3203,9 +3342,14 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               logInfo("merge queue: item processed")
               mergeStatus = "processing"
 
-            if not architectChanged and not managerChanged and agentResult.command.len == 0 and not mergeProcessed:
-              logDebug(fmt"tick {ticks}: idle")
-              idle = true
+            if maxAgents <= 1:
+              if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
+                logDebug(fmt"tick {ticks}: idle")
+                idle = true
+            else:
+              if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed and runningAgentCount() == 0:
+                logDebug(fmt"tick {ticks}: idle")
+                idle = true
           else:
             logDebug(WaitingNoSpecMessage)
             idle = true
@@ -3221,6 +3365,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
     else:
       sleep(IdleSleepMs)
     inc ticks
+  # On shutdown, wait for running agents to complete.
+  if maxAgents > 1 and runningAgentCount() > 0:
+    logInfo(&"shutdown: waiting for {runningAgentCount()} running agent(s)")
+    joinAllAgentThreads()
   sessionStats.totalTicks = ticks
   logSessionSummary()
 

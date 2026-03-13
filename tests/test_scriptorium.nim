@@ -3659,3 +3659,116 @@ suite "health cache persistence":
     check loaded.len == 2
     check "abc" in loaded
     check "def" in loaded
+
+suite "per-ticket submit_pr state":
+  test "consumeSubmitPrSummary with ticketId returns per-ticket summary":
+    discard consumeSubmitPrSummary()
+    setActiveTicketWorktree("/tmp/wt-a", "0001")
+    setActiveTicketWorktree("/tmp/wt-b", "0002")
+    defer:
+      clearActiveTicketWorktree("0001")
+      clearActiveTicketWorktree("0002")
+
+    recordSubmitPrSummary("summary for 0001", "0001")
+    recordSubmitPrSummary("summary for 0002", "0002")
+
+    check consumeSubmitPrSummary("0001") == "summary for 0001"
+    check consumeSubmitPrSummary("0002") == "summary for 0002"
+    check consumeSubmitPrSummary("0001") == ""
+    check consumeSubmitPrSummary("0002") == ""
+
+  test "consumeSubmitPrSummary without ticketId returns first available":
+    discard consumeSubmitPrSummary()
+    recordSubmitPrSummary("some summary", "0005")
+    let result = consumeSubmitPrSummary()
+    check result == "some summary"
+    check consumeSubmitPrSummary() == ""
+
+  test "setActiveTicketWorktree registers multiple entries":
+    clearActiveTicketWorktree()
+    setActiveTicketWorktree("/tmp/wt-a", "0010")
+    setActiveTicketWorktree("/tmp/wt-b", "0011")
+    defer: clearActiveTicketWorktree()
+
+    let a = getActiveTicketWorktree("0010")
+    check a.worktreePath == "/tmp/wt-a"
+    check a.ticketId == "0010"
+
+    let b = getActiveTicketWorktree("0011")
+    check b.worktreePath == "/tmp/wt-b"
+    check b.ticketId == "0011"
+
+  test "clearActiveTicketWorktree with ticketId removes only that entry":
+    clearActiveTicketWorktree()
+    setActiveTicketWorktree("/tmp/wt-a", "0020")
+    setActiveTicketWorktree("/tmp/wt-b", "0021")
+    defer: clearActiveTicketWorktree()
+
+    clearActiveTicketWorktree("0020")
+    let a = getActiveTicketWorktree("0020")
+    check a.worktreePath == ""
+    let b = getActiveTicketWorktree("0021")
+    check b.worktreePath == "/tmp/wt-b"
+
+  test "clearActiveTicketWorktree without ticketId removes all entries":
+    setActiveTicketWorktree("/tmp/wt-a", "0030")
+    setActiveTicketWorktree("/tmp/wt-b", "0031")
+    clearActiveTicketWorktree()
+    check getActiveTicketWorktree("0030").worktreePath == ""
+    check getActiveTicketWorktree("0031").worktreePath == ""
+
+suite "agent slot types":
+  test "AgentSlot stores ticket metadata":
+    let slot = AgentSlot(
+      ticketId: "0042",
+      branch: "scriptorium/ticket-0042",
+      worktree: "/tmp/worktrees/0042",
+      startTime: 1234567890.0,
+    )
+    check slot.ticketId == "0042"
+    check slot.branch == "scriptorium/ticket-0042"
+    check slot.worktree == "/tmp/worktrees/0042"
+    check slot.startTime == 1234567890.0
+
+  test "runningAgentCount returns zero initially":
+    check runningAgentCount() == 0
+
+  test "emptySlotCount returns maxAgents when no agents running":
+    check emptySlotCount(4) == 4
+
+suite "non-blocking tick loop":
+  test "serial mode executes one ticket per tick when maxAgents is 1":
+    let tmp = getTempDir() / "scriptorium_test_serial_tick"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nSerial test.\n")
+    addTicketToPlan(tmp, "open", "0001-serial.md", "# Ticket 1\n\n**Area:** a\n")
+
+    var codingCalled = false
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      if request.ticketId == "architect-areas":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.startsWith("manager"):
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId == "0001-prediction":
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      elif request.ticketId == "0001":
+        codingCalled = true
+        recordSubmitPrSummary("serial done", "0001")
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 1
+    writeScriptoriumConfig(tmp, cfg)
+
+    runOrchestratorForTicks(tmp, 1, fakeRunner)
+
+    check codingCalled
+    let files = planTreeFiles(tmp)
+    # Serial mode: ticket submitted and merged in the same tick.
+    check "tickets/done/0001-serial.md" in files
+    check "tickets/open/0001-serial.md" notin files
