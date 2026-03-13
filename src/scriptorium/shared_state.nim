@@ -1,5 +1,5 @@
 import
-  std/[locks, math, strformat, tables, times],
+  std/[locks, math, strformat, strutils, tables, times],
   ./[agent_runner, logging]
 
 const
