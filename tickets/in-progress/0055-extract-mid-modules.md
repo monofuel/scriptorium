@@ -33,3 +33,5 @@ Continuing the V7 §27 module split after leaf modules are extracted. This batch
 - `orchestrator.nim` imports these modules.
 - `make test` passes after each extraction commit.
 - No functional changes.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0055-extract-mid-modules
