@@ -58,3 +58,32 @@ No tests are run. The merge queue later runs `make test` and `make integration-t
 - predicted_difficulty: medium
 - predicted_duration_minutes: 35
 - reasoning: Requires adding shared state variables, modifying an existing handler with test execution and error handling logic, and updating unit tests, but the pattern is well-established in the codebase and the requirements are clearly specified.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate/.scriptorium/logs/0040/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate/.scriptorium/logs/0040/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+
+
+**Changes in `src/scriptorium/orchestrator.nim`:**
+- Added constants `SubmitPrTestOutputMaxChars` (2000), `ActiveWorktreePathMaxBytes` (1024), `ActiveTicketIdMaxBytes` (256)
+- Added thread-safe shared variables `activeWorktreePathBuffer`/`activeTicketIdBuffer` (same pattern as `submitPrSummaryBuffer`)
+- Added `setActiveTicketWorktree`, `clearActiveTicketWorktree`, and `getActiveTicketWorktree` procs
+- `executeAssignedTicket` now calls `setActiveTicketWorktree` before running the agent (with `defer: clearActiveTicketWorktree()`)
+- The `submit_pr` handler now runs `make test` via `runWorktreeMakeTest` before accepting:
+  - On pass: enqueues normally
+  - On fail: returns error with truncated test output, does NOT call `recordSubmitPrSummary`
+  - Logs `ticket <id>: submit_pr pre-check: PASS|FAIL (exit=<code>, wall=<duration>)`
+  - Gracefully handles missing active worktree (skips test gate)
+
+**Changes in `tests/test_scriptorium.nim`:**
+- Added test "submit_pr runs make test and enqueues on pass"
+- Added test "submit_pr runs make test and rejects on failure"
+
+All existing tests continue to pass, including the `executeAssignedTicket` tests that call `submit_pr` through the fake runner.
+```
+
+### Agent Stdout Tail
+```text
+- Added test \"submit_pr runs make test and rejects on failure\"\n\nAll existing tests continue to pass, including the `executeAssignedTicket` tests that call `submit_pr` through the fake runner.","stop_reason":"end_turn","session_id":"2ee9aa8b-525a-446e-9c45-c784ae6fa95a","total_cost_usd":1.36210895,"usage":{"input_tokens":42,"cache_creation_input_tokens":43048,"cache_read_input_tokens":1516718,"output_tokens":10344,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":43048,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":42,"outputTokens":10344,"cacheReadInputTokens":1516718,"cacheCreationInputTokens":43048,"webSearchRequests":0,"costUSD":1.286219,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":59,"outputTokens":5077,"cacheReadInputTokens":173972,"cacheCreationInputTokens":26439,"webSearchRequests":0,"costUSD":0.07588995000000001,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"0cb18694-2198-4683-a0df-d0055d2f5387"}
+```
