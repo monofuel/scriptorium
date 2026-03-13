@@ -3953,3 +3953,44 @@ suite "concurrent agent execution":
     check "tickets/open/0001-staller.md" in files
     let hasMergeEntry = files.anyIt(it.startsWith("queue/merge/pending/") and it.contains("0002"))
     check hasMergeEntry
+
+suite "token budget tracking":
+  setup:
+    ticketStdoutBytes.clear()
+
+  test "getSessionStdoutBytes sums all ticket values":
+    ticketStdoutBytes["0001"] = 1000
+    ticketStdoutBytes["0002"] = 2000
+    ticketStdoutBytes["0003"] = 3000
+    check getSessionStdoutBytes() == 6000
+
+  test "getSessionStdoutBytes returns 0 when empty":
+    check getSessionStdoutBytes() == 0
+
+  test "isTokenBudgetExceeded returns false when tokenBudgetMB is 0":
+    ticketStdoutBytes["0001"] = 100 * 1024 * 1024
+    check isTokenBudgetExceeded(0) == false
+
+  test "isTokenBudgetExceeded returns false when tokenBudgetMB is negative":
+    ticketStdoutBytes["0001"] = 100 * 1024 * 1024
+    check isTokenBudgetExceeded(-1) == false
+
+  test "isTokenBudgetExceeded returns true when budget exceeded":
+    ticketStdoutBytes["0001"] = 5 * 1024 * 1024
+    ticketStdoutBytes["0002"] = 6 * 1024 * 1024
+    check isTokenBudgetExceeded(10) == true
+
+  test "isTokenBudgetExceeded returns false when under budget":
+    ticketStdoutBytes["0001"] = 2 * 1024 * 1024
+    ticketStdoutBytes["0002"] = 3 * 1024 * 1024
+    check isTokenBudgetExceeded(10) == false
+
+  test "running agents not interrupted when budget exceeded":
+    ## Verify that ticketStdoutBytes entries remain intact when budget is exceeded.
+    ticketStdoutBytes["0001"] = 5 * 1024 * 1024
+    ticketStdoutBytes["0002"] = 6 * 1024 * 1024
+    let exceeded = isTokenBudgetExceeded(10)
+    check exceeded == true
+    # Existing entries are not cleared or modified.
+    check ticketStdoutBytes["0001"] == 5 * 1024 * 1024
+    check ticketStdoutBytes["0002"] == 6 * 1024 * 1024

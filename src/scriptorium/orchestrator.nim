@@ -829,6 +829,23 @@ proc formatMetricsNote*(ticketId: string, outcome: string, failureReason: string
     &"- model: {model}\n" &
     &"- stdout_bytes: {stdoutBytes}\n"
 
+proc getSessionStdoutBytes*(): int =
+  ## Sum all ticketStdoutBytes values to get the session-level total.
+  for bytes in ticketStdoutBytes.values:
+    result += bytes
+
+proc isTokenBudgetExceeded*(tokenBudgetMB: int): bool =
+  ## Check if cumulative stdout bytes exceed the token budget. Returns false when budget is 0 (unlimited).
+  if tokenBudgetMB <= 0:
+    return false
+  let budgetBytes = tokenBudgetMB * 1024 * 1024
+  let usedBytes = getSessionStdoutBytes()
+  if usedBytes >= budgetBytes:
+    let usedMB = usedBytes div (1024 * 1024)
+    logInfo(&"resource limit: token budget exhausted ({usedMB}MB/{tokenBudgetMB}MB), pausing new assignments")
+    return true
+  return false
+
 proc appendMetricsNote*(ticketContent: string, ticketId: string, outcome: string, failureReason: string): string =
   ## Append a structured metrics section to a ticket markdown document.
   let base = ticketContent.strip()
@@ -3326,7 +3343,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
 
-            if maxAgents <= 1:
+            let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
+            if isTokenBudgetExceeded(tokenBudgetMB):
+              codingStatus = "budget-exceeded"
+            elif maxAgents <= 1:
               # Serial mode: blocking execution of one ticket per tick.
               t0 = epochTime()
               let agentResult = executeOldestOpenTicket(repoPath, runner)
