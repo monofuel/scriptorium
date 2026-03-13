@@ -106,3 +106,46 @@ The PR has been submitted successfully. The implementation adds a pre-submit tes
 ```text
  pre-submit test gate to the `submit_pr` MCP tool handler that:\n\n- Runs `make test` in the agent's worktree before accepting submissions\n- Returns error with truncated test output on failure (without enqueuing)\n- Enqueues normally on success\n- Logs with ticket ID, pass/fail, exit code, and wall time\n- Uses thread-safe shared variables for worktree path and ticket ID\n- Includes unit tests for both pass and fail paths","stop_reason":"end_turn","session_id":"1da2ff8b-97e7-4760-8b3d-71b24209251b","total_cost_usd":0.31758425,"usage":{"input_tokens":16,"cache_creation_input_tokens":18175,"cache_read_input_tokens":304871,"output_tokens":2059,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":18175,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":16,"outputTokens":2059,"cacheReadInputTokens":304871,"cacheCreationInputTokens":18175,"webSearchRequests":0,"costUSD":0.31758425,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a04fb75a-fefa-4384-a010-098ef136ba5f"}
 ```
+
+## Merge Queue Success
+- Summary: Add pre-submit test gate in submit_pr MCP tool handler. The handler now runs make test in the agent worktree before accepting submissions. Failing tests return error to agent without enqueuing. Thread-safe shared variables track active worktree path and ticket ID. Unit tests cover both pass and fail paths.\n
+### Quality Check Output
+```text
+820f98a8c30a4d9/worktrees/tickets/0001-first)
+[2026-03-13T01:41:26Z] [INFO] ticket 0001: merge queue entered (position=1)
+[2026-03-13T01:41:26Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:41:56Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T01:41:56Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T01:41:56Z] [INFO] architect: generating areas from spec
+[2026-03-13T01:41:57Z] [INFO] architect: areas updated
+[2026-03-13T01:41:57Z] [INFO] manager: generating tickets
+[2026-03-13T01:41:57Z] [INFO] merge queue: processing
+[2026-03-13T01:41:57Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T01:41:57Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T01:41:57Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T01:41:57Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T01:41:57Z] [INFO] merge queue: item processed
+[2026-03-13T01:41:57Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T01:41:57Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:41:57Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T01:41:58Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T01:42:28Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T01:42:28Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1058
+- coding_wall_seconds: 734
+- test_wall_seconds: 312
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1362482
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted medium, actual was hard with 2 attempt(s) in 17m38s.
