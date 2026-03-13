@@ -87,3 +87,46 @@ enBudgetMB` added to `Config`\n3. **Unit tests** covering: different-area parall
 - Backend: claude-code
 - Exit Code: 1
 - Wall Time: 7s
+
+## Merge Queue Success
+- Summary: Implemented assignOpenTickets proc for parallel ticket assignment by area independence. Added ConcurrencyConfig with maxAgents to Config. Includes unit tests for multi-area assignment, same-area serialization, maxAgents cap, and single-agent backward compatibility.\n
+### Quality Check Output
+```text
+ping tick
+[2026-03-13T03:45:39Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T03:45:39Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T03:45:39Z] [INFO] architect: generating areas from spec
+[2026-03-13T03:45:40Z] [INFO] architect: areas updated
+[2026-03-13T03:45:40Z] [INFO] manager: generating tickets
+[2026-03-13T03:45:40Z] [INFO] merge queue: processing
+[2026-03-13T03:45:40Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-13T03:45:40Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-13T03:45:40Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T03:45:40Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T03:45:40Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T03:45:40Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T03:45:40Z] [INFO] merge queue: item processed
+[2026-03-13T03:45:40Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T03:45:40Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T03:45:40Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T03:45:41Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T03:46:11Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T03:46:11Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1419
+- coding_wall_seconds: 1092
+- test_wall_seconds: 309
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1224268
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted medium, actual was hard with 2 attempt(s) in 23m39s.
