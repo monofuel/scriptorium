@@ -250,17 +250,20 @@ suite "scriptorium --init":
       runInit(tmp, quiet = true)
 
 suite "config":
-  test "defaults to fake unit-test codex model for architect, coding, and manager roles":
+  test "defaults to fake unit-test codex model for architect, coding, manager, and reviewer roles":
     let cfg = defaultConfig()
     check cfg.agents.architect.model == "codex-fake-unit-test-model"
     check cfg.agents.coding.model == "codex-fake-unit-test-model"
     check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.reviewer.model == "codex-fake-unit-test-model"
     check cfg.agents.architect.harness == harnessCodex
     check cfg.agents.coding.harness == harnessCodex
     check cfg.agents.manager.harness == harnessCodex
+    check cfg.agents.reviewer.harness == harnessCodex
     check cfg.agents.architect.reasoningEffort == ""
     check cfg.agents.coding.reasoningEffort == ""
     check cfg.agents.manager.reasoningEffort == ""
+    check cfg.agents.reviewer.reasoningEffort == ""
 
   test "loads from scriptorium.json":
     let tmp = getTempDir() / "scriptorium_test_config"
@@ -284,6 +287,24 @@ suite "config":
     check cfg.agents.coding.reasoningEffort == "high"
     check cfg.agents.manager.reasoningEffort == "low"
     check cfg.endpoints.local == "http://localhost:1234/v1"
+
+  test "loads reviewer config from scriptorium.json":
+    let tmp = getTempDir() / "scriptorium_test_config_reviewer"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.agents.reviewer = AgentConfig(harness: harnessClaudeCode, model: "claude-sonnet-4-6", reasoningEffort: "low")
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.agents.reviewer.model == "claude-sonnet-4-6"
+    check cfg.agents.reviewer.harness == harnessClaudeCode
+    check cfg.agents.reviewer.reasoningEffort == "low"
+
+  test "inferHarness works for reviewer models":
+    check inferHarness("claude-sonnet-4-6") == harnessClaudeCode
+    check inferHarness("codex-mini-review") == harnessCodex
+    check inferHarness("grok-review-1") == harnessTypoi
 
   test "manager model remains independent when manager is unset":
     let tmp = getTempDir() / "scriptorium_test_config_manager_independent"
@@ -989,6 +1010,40 @@ suite "orchestrator mcp tools":
     check toolResponse.getStr() == "Merge request enqueued."
     check consumeSubmitPrSummary() == "ship tool"
     check consumeSubmitPrSummary() == ""
+
+  test "submit_review tool is registered and handler stores decision":
+    discard consumeReviewDecision()
+    let httpServer = createOrchestratorServer()
+
+    check httpServer.server.tools.hasKey("submit_review")
+    check httpServer.server.toolHandlers.hasKey("submit_review")
+    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
+    let approveResponse = reviewHandler(%*{"action": "approve"})
+    check approveResponse.getStr() == "Review decision recorded."
+    let decision = consumeReviewDecision()
+    check decision.action == "approve"
+    check decision.feedback == ""
+    check consumeReviewDecision().action == ""
+
+    let changesResponse = reviewHandler(%*{"action": "request_changes", "feedback": "fix the tests"})
+    check changesResponse.getStr() == "Review decision recorded."
+    let decision2 = consumeReviewDecision()
+    check decision2.action == "request_changes"
+    check decision2.feedback == "fix the tests"
+
+  test "submit_review rejects request_changes without feedback":
+    let httpServer = createOrchestratorServer()
+    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
+    let response = reviewHandler(%*{"action": "request_changes"})
+    check "Feedback is required" in response.getStr()
+    check consumeReviewDecision().action == ""
+
+  test "submit_review rejects invalid action":
+    let httpServer = createOrchestratorServer()
+    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
+    let response = reviewHandler(%*{"action": "reject"})
+    check "Invalid action" in response.getStr()
+    check consumeReviewDecision().action == ""
 
   test "submit_pr runs make test and enqueues on pass":
     discard consumeSubmitPrSummary()

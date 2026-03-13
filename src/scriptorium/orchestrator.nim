@@ -81,6 +81,8 @@ const
   SubmitPrTestOutputMaxChars = 2000
   ActiveWorktreePathMaxBytes = 1024
   ActiveTicketIdMaxBytes = 256
+  ReviewActionMaxBytes = 32
+  ReviewFeedbackMaxBytes = 4096
   StallContinuationText = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes = 8192
   MakeTestTimeoutMs = 300_000
@@ -177,6 +179,10 @@ var
   activeWorktreePathBuffer: array[ActiveWorktreePathMaxBytes, char]
   activeTicketIdLen = 0
   activeTicketIdBuffer: array[ActiveTicketIdMaxBytes, char]
+  reviewActionLen = 0
+  reviewActionBuffer: array[ReviewActionMaxBytes, char]
+  reviewFeedbackLen = 0
+  reviewFeedbackBuffer: array[ReviewFeedbackMaxBytes, char]
   ticketStartTimes*: Table[string, float]
   ticketAttemptCounts*: Table[string, int]
   ticketCodingWalls*: Table[string, float]
@@ -239,6 +245,32 @@ proc getActiveTicketWorktree(): tuple[worktreePath: string, ticketId: string] {.
     if activeTicketIdLen > 0:
       result.ticketId = newString(activeTicketIdLen)
       copyMem(addr result.ticketId[0], addr activeTicketIdBuffer[0], activeTicketIdLen)
+
+proc recordReviewDecision*(action: string, feedback: string) {.gcsafe.} =
+  ## Store the latest review decision reported by the review agent.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    let actionLen = min(action.len, ReviewActionMaxBytes)
+    reviewActionLen = actionLen
+    if actionLen > 0:
+      copyMem(addr reviewActionBuffer[0], unsafeAddr action[0], actionLen)
+    let fbLen = min(feedback.len, ReviewFeedbackMaxBytes)
+    reviewFeedbackLen = fbLen
+    if fbLen > 0:
+      copyMem(addr reviewFeedbackBuffer[0], unsafeAddr feedback[0], fbLen)
+
+proc consumeReviewDecision*(): tuple[action: string, feedback: string] {.gcsafe.} =
+  ## Return and clear the latest review decision reported by the review agent.
+  ensureSubmitPrLockInitialized()
+  withLock submitPrLock:
+    if reviewActionLen > 0:
+      result.action = newString(reviewActionLen)
+      copyMem(addr result.action[0], addr reviewActionBuffer[0], reviewActionLen)
+    if reviewFeedbackLen > 0:
+      result.feedback = newString(reviewFeedbackLen)
+      copyMem(addr result.feedback[0], addr reviewFeedbackBuffer[0], reviewFeedbackLen)
+    reviewActionLen = 0
+    reviewFeedbackLen = 0
 
 proc gitRun(dir: string, args: varargs[string]) =
   ## Run a git subcommand in dir and raise an IOError on non-zero exit.
@@ -2631,6 +2663,35 @@ proc createOrchestratorServer*(): HttpMcpServer =
     recordSubmitPrSummary(summary)
     %*"Merge request enqueued."
   server.registerTool(submitPrTool, submitPrHandler)
+  let submitReviewTool = McpTool(
+    name: "submit_review",
+    description: "Submit a review decision for the current ticket",
+    inputSchema: %*{
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["approve", "request_changes"],
+          "description": "Review action to take"
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Feedback for the review (required when action is request_changes)"
+        }
+      },
+      "required": ["action"]
+    },
+  )
+  let submitReviewHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
+    let action = arguments["action"].getStr()
+    if action != "approve" and action != "request_changes":
+      return %*"Invalid action. Must be \"approve\" or \"request_changes\"."
+    let feedback = if arguments.hasKey("feedback"): arguments["feedback"].getStr() else: ""
+    if action == "request_changes" and feedback.len == 0:
+      return %*"Feedback is required when action is \"request_changes\"."
+    recordReviewDecision(action, feedback)
+    %*"Review decision recorded."
+  server.registerTool(submitReviewTool, submitReviewHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =

@@ -24,6 +24,7 @@ type
     architect*: AgentConfig
     coding*: AgentConfig
     manager*: AgentConfig
+    reviewer*: AgentConfig
 
   Endpoints* = object
     local*: string
@@ -49,6 +50,7 @@ proc defaultConfig*(): Config =
       architect: defaultAgentConfig(),
       coding: defaultAgentConfig(),
       manager: defaultAgentConfig(),
+      reviewer: defaultAgentConfig(),
     ),
     endpoints: Endpoints(
       local: "",
@@ -87,6 +89,7 @@ proc loadConfig*(repoPath: string): Config =
   mergeAgentConfig(result.agents.architect, parsed.agents.architect)
   mergeAgentConfig(result.agents.coding, parsed.agents.coding)
   mergeAgentConfig(result.agents.manager, parsed.agents.manager)
+  mergeAgentConfig(result.agents.reviewer, parsed.agents.reviewer)
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
   if parsed.logLevel.len > 0:
