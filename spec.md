@@ -262,7 +262,7 @@ This spec describes behavior that is present in the code and covered by current 
 ## Known Current Limitations
 
 - `typoi` is routed but not implemented.
-- Ticket execution is single-agent and single-ticket at a time.
+- Ticket execution is single-agent and single-ticket at a time (addressed in v5, sections 23-26).
 - Interactive planning and ask history are in-memory only.
 - No dedicated reviewer or merger agent stage exists yet (addressed in v4, section 21).
 - The queue merges directly from ticket worktrees and decides success or failure from local git plus required quality-gate results.
@@ -601,3 +601,77 @@ This spec describes behavior that is present in the code and covered by current 
 - Review outcomes are logged and persisted in ticket markdown.
 - `master` health check results are cached on the plan branch and survive restarts.
 - Cached healthy commits skip redundant health checks on startup.
+
+## V5 Features — Multi-Ticket Parallelism
+
+### 23. Parallel Ticket Assignment
+
+- The orchestrator must be able to assign multiple open tickets concurrently when they touch independent areas.
+- Independence is determined by area: two tickets are independent if they reference different areas (via `**Area:** <area-id>`).
+- Tickets that reference the same area must be serialized — only one ticket per area may be in-progress at a time.
+- The orchestrator must assign up to N tickets per tick, where N is the configured concurrency limit.
+- Assignment order remains oldest-first: the orchestrator scans open tickets in ID order and assigns each one whose area is not already occupied by an in-progress ticket.
+- Each assigned ticket gets its own worktree and branch as before (`scriptorium/ticket-<id>`).
+- The existing single-ticket assignment path (section 4) is replaced by the parallel assignment logic, but behavior is identical when concurrency is 1.
+
+### 24. Concurrent Agent Execution
+
+- The orchestrator must run multiple coding agent processes in parallel, one per assigned in-progress ticket.
+- Each coding agent runs in its own worktree with its own branch, fully isolated from other agents.
+- The orchestrator must track all running agent processes and their associated ticket state.
+- Agent lifecycle (start, stall detection, continuation, submit_pr) applies independently to each running agent — the existing v2 stall detection and v4 pre-submit test gate operate per-agent.
+- The orchestrator tick must not block on a single agent completing — it must:
+  - Check for newly completable agents (exited processes).
+  - Start new agents for newly assigned tickets.
+  - Continue processing other tick phases (architect, manager, merge queue) while agents run.
+- The concurrency limit is configurable via `scriptorium.json` under `concurrency.maxAgents` (integer, default 1).
+  - A value of 1 preserves the existing serial behavior.
+  - Recommended starting value for parallel operation is 2-3.
+- The orchestrator must log when an agent slot opens or fills: `agent slots: <running>/<max> (ticket <id> started|finished)`.
+
+### 25. Merge Queue Ordering With Parallel Agents
+
+- Multiple coding agents may call `submit_pr` independently, resulting in multiple pending merge queue entries.
+- Merge queue processing remains single-flight (section 7): the orchestrator processes at most one pending item per tick.
+- Pending merge queue items are processed in submission order (FIFO by queue item ID).
+- The existing review agent flow (section 21) applies to each merge queue item individually.
+- If a merge fails (test failure, merge conflict), the ticket is reopened as before — this does not affect other in-flight agents or pending queue items.
+- After a successful merge changes `master`, all other in-progress ticket worktrees must merge `master` into their branch before their next `submit_pr` pre-check or merge queue processing. This is handled by:
+  - The merge queue already merges `master` into the ticket branch before running quality gates (section 7).
+  - No additional synchronization is needed for running agents — they work against their branch and conflicts are caught at merge time.
+
+### 26. Resource Management
+
+- The orchestrator must monitor and respect API rate limits and token budgets across all parallel agents.
+- Backpressure: when approaching rate limits, the orchestrator must delay new agent starts rather than failing running agents.
+- The orchestrator must track aggregate `stdout_bytes` across all running agents as a proxy for token consumption.
+- If a configurable token budget is set (`concurrency.tokenBudgetMB` in `scriptorium.json`, integer megabytes, optional), the orchestrator must:
+  - Pause new ticket assignment when cumulative session `stdout_bytes` exceeds the budget.
+  - Log a warning: `resource limit: token budget exhausted (<used>MB/<budget>MB), pausing new assignments`.
+  - Allow running agents to complete normally.
+- Rate limit detection: if an agent harness returns a rate-limit error (HTTP 429 or equivalent), the orchestrator must:
+  - Log the event: `resource limit: rate limited (ticket <id>, backing off <n>s)`.
+  - Apply exponential backoff before starting new agents (not before retrying the failed agent — the harness handles its own retries).
+  - Reduce effective concurrency by 1 temporarily until the backoff period expires.
+
+## V5 Known Limitations
+
+- Conflict detection is area-level only — two tickets in different areas that happen to touch the same file will not be detected as conflicting until merge time.
+- Speculative execution (starting tickets that might conflict) is out of scope — only clearly independent tickets are parallelized.
+- Dynamic concurrency scaling based on v3 metrics is out of scope — the concurrency limit is static per session.
+- Token budget tracking uses `stdout_bytes` as a rough proxy — real token counts require harness-level API integration (same limitation as v3).
+- Rate limit detection depends on harness-specific error reporting — not all backends may surface 429s uniformly.
+- The merge queue remains single-flight even with parallel agents — this serialization point may become a bottleneck at high concurrency.
+
+## V5 Acceptance Criteria
+
+- All v1, v2, v3, and v4 acceptance criteria remain.
+- Multiple tickets can be assigned and worked concurrently when they touch independent areas.
+- Tickets sharing an area are serialized — only one in-progress ticket per area.
+- The concurrency limit is configurable and defaults to 1 (preserving serial behavior).
+- Multiple coding agents run in parallel, each in its own worktree.
+- Agent lifecycle (stall detection, pre-submit tests, review) operates independently per agent.
+- The merge queue processes submissions in FIFO order, one at a time.
+- Failed merges do not affect other in-flight agents.
+- Token budget and rate limit backpressure prevent resource exhaustion.
+- Orchestrator logs show agent slot utilization.
