@@ -87,3 +87,22 @@ All existing tests continue to pass, including the `executeAssignedTicket` tests
 ```text
 - Added test \"submit_pr runs make test and rejects on failure\"\n\nAll existing tests continue to pass, including the `executeAssignedTicket` tests that call `submit_pr` through the fake runner.","stop_reason":"end_turn","session_id":"2ee9aa8b-525a-446e-9c45-c784ae6fa95a","total_cost_usd":1.36210895,"usage":{"input_tokens":42,"cache_creation_input_tokens":43048,"cache_read_input_tokens":1516718,"output_tokens":10344,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":43048,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":42,"outputTokens":10344,"cacheReadInputTokens":1516718,"cacheCreationInputTokens":43048,"webSearchRequests":0,"costUSD":1.286219,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":59,"outputTokens":5077,"cacheReadInputTokens":173972,"cacheCreationInputTokens":26439,"webSearchRequests":0,"costUSD":0.07588995000000001,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"0cb18694-2198-4683-a0df-d0055d2f5387"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate/.scriptorium/logs/0040/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0040-pre-submit-test-gate/.scriptorium/logs/0040/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The PR has been submitted successfully. The implementation adds a pre-submit test gate to the `submit_pr` MCP tool handler that:
+
+- Runs `make test` in the agent's worktree before accepting submissions
+- Returns error with truncated test output on failure (without enqueuing)
+- Enqueues normally on success
+- Logs with ticket ID, pass/fail, exit code, and wall time
+- Uses thread-safe shared variables for worktree path and ticket ID
+- Includes unit tests for both pass and fail paths
+```
+
+### Agent Stdout Tail
+```text
+ pre-submit test gate to the `submit_pr` MCP tool handler that:\n\n- Runs `make test` in the agent's worktree before accepting submissions\n- Returns error with truncated test output on failure (without enqueuing)\n- Enqueues normally on success\n- Logs with ticket ID, pass/fail, exit code, and wall time\n- Uses thread-safe shared variables for worktree path and ticket ID\n- Includes unit tests for both pass and fail paths","stop_reason":"end_turn","session_id":"1da2ff8b-97e7-4760-8b3d-71b24209251b","total_cost_usd":0.31758425,"usage":{"input_tokens":16,"cache_creation_input_tokens":18175,"cache_read_input_tokens":304871,"output_tokens":2059,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":18175,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":16,"outputTokens":2059,"cacheReadInputTokens":304871,"cacheCreationInputTokens":18175,"webSearchRequests":0,"costUSD":0.31758425,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a04fb75a-fefa-4384-a010-098ef136ba5f"}
+```
