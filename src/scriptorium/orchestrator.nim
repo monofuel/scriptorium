@@ -17,6 +17,7 @@ const
   AreaCommitMessage = "scriptorium: update areas from spec"
   TicketCommitMessage = "scriptorium: create tickets from areas"
   AreaFieldPrefix = "**Area:**"
+  DependsFieldPrefix = "**Depends:**"
   WorktreeFieldPrefix = "**Worktree:**"
   TicketAssignCommitPrefix = "scriptorium: assign ticket"
   TicketAgentRunCommitPrefix = "scriptorium: record agent run"
@@ -637,6 +638,19 @@ proc parseAreaFromTicketContent(ticketContent: string): string =
     let trimmed = line.strip()
     if trimmed.startsWith(AreaFieldPrefix):
       result = trimmed[AreaFieldPrefix.len..^1].strip()
+      break
+
+proc parseDependsFromTicketContent*(ticketContent: string): seq[string] =
+  ## Extract dependency ticket IDs from a ticket markdown body.
+  for line in ticketContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith(DependsFieldPrefix):
+      let raw = trimmed[DependsFieldPrefix.len..^1].strip()
+      if raw.len > 0:
+        for part in raw.split(","):
+          let id = part.strip()
+          if id.len > 0:
+            result.add(id)
       break
 
 proc parseWorktreeFromTicketContent(ticketContent: string): string =
@@ -2273,10 +2287,25 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
         true
   )
 
+proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]]
+proc doneTicketIdsInPlanPath(planPath: string): HashSet[string]
+proc dependenciesSatisfied(ticketContent: string, doneIds: HashSet[string]): bool
+
 proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
-  ## Move the oldest open ticket to in-progress and attach a code worktree.
+  ## Move the oldest assignable open ticket to in-progress and attach a code worktree.
+  ## Skips tickets whose dependencies are not yet in done.
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): TicketAssignment =
-    let openTicket = oldestOpenTicketInPlanPath(planPath)
+    let openTickets = openTicketsByIdInPlanPath(planPath)
+    if openTickets.len == 0:
+      return TicketAssignment()
+
+    let doneIds = doneTicketIdsInPlanPath(planPath)
+    var openTicket = ""
+    for ticket in openTickets:
+      let content = readFile(planPath / ticket.rel)
+      if dependenciesSatisfied(content, doneIds):
+        openTicket = ticket.rel
+        break
     if openTicket.len == 0:
       return TicketAssignment()
 
@@ -2330,6 +2359,23 @@ proc inProgressAreasInPlanPath(planPath: string): HashSet[string] =
     if areaId.len > 0:
       result.incl(areaId)
 
+proc doneTicketIdsInPlanPath(planPath: string): HashSet[string] =
+  ## Collect ticket IDs from done tickets.
+  result = initHashSet[string]()
+  for ticketPath in listMarkdownFiles(planPath / PlanTicketsDoneDir):
+    let rel = PlanTicketsDoneDir / extractFilename(ticketPath)
+    result.incl(ticketIdFromTicketPath(rel))
+
+proc dependenciesSatisfied(ticketContent: string, doneIds: HashSet[string]): bool =
+  ## Check whether all declared dependencies are in the done set.
+  let deps = parseDependsFromTicketContent(ticketContent)
+  if deps.len == 0:
+    return true
+  for dep in deps:
+    if dep notin doneIds:
+      return false
+  return true
+
 proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment] =
   ## Assign multiple open tickets concurrently when they touch independent areas.
   ## Scans open tickets in ID order (oldest first), skipping tickets whose area
@@ -2341,6 +2387,7 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       return @[]
 
     var occupiedAreas = inProgressAreasInPlanPath(planPath)
+    let doneIds = doneTicketIdsInPlanPath(planPath)
     var assignments: seq[TicketAssignment]
 
     for ticket in openTickets:
@@ -2351,6 +2398,9 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       let areaId = parseAreaFromTicketContent(content)
 
       if areaId.len > 0 and areaId in occupiedAreas:
+        continue
+
+      if not dependenciesSatisfied(content, doneIds):
         continue
 
       let inProgressTicket = PlanTicketsInProgressDir / splitFile(ticket.rel).name & ".md"

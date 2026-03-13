@@ -13,6 +13,10 @@ Create ticket markdown files directly under tickets/open/ or tickets/done/.
 Each ticket filename must start with a zero-padded numeric ID, then a slug.
 Start IDs at {{START_ID}} and increase monotonically for additional tickets.
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} <area-id>` matching its area.
+Optionally include `**Depends:** <ticket-ids>` (comma-separated) if a ticket
+must wait for other tickets to complete before it can be started. Only add
+dependencies when there is a genuine build-on relationship. Most tickets
+should have no dependencies.
 Do not edit areas/, queue/, or spec.md in this task.
 
 Each ticket should be scoped so a coding agent can complete it in under one hour.

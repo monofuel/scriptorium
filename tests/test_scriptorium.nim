@@ -1147,6 +1147,84 @@ suite "parallel ticket assignment":
     let assignments = assignOpenTickets(tmp, 3)
     check assignments.len == 0
 
+suite "ticket dependency parsing":
+  test "parseDependsFromTicketContent with no depends returns empty":
+    let content = "# Ticket\n\n**Area:** a\n"
+    check parseDependsFromTicketContent(content).len == 0
+
+  test "parseDependsFromTicketContent with single dependency":
+    let content = "# Ticket\n\n**Area:** a\n**Depends:** 0045\n"
+    check parseDependsFromTicketContent(content) == @["0045"]
+
+  test "parseDependsFromTicketContent with multiple dependencies":
+    let content = "# Ticket\n\n**Area:** a\n**Depends:** 0045, 0046\n"
+    check parseDependsFromTicketContent(content) == @["0045", "0046"]
+
+  test "parseDependsFromTicketContent with empty value returns empty":
+    let content = "# Ticket\n\n**Area:** a\n**Depends:**\n"
+    check parseDependsFromTicketContent(content).len == 0
+
+  test "parseDependsFromTicketContent trims whitespace":
+    let content = "# Ticket\n\n**Depends:**  0045 , 0046 \n"
+    check parseDependsFromTicketContent(content) == @["0045", "0046"]
+
+suite "ticket dependency assignment":
+  test "assignOldestOpenTicket skips ticket with unsatisfied dependency":
+    let tmp = getTempDir() / "scriptorium_test_dep_unsatisfied"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    check assignment.inProgressTicket.len == 0
+
+  test "assignOldestOpenTicket assigns ticket with satisfied dependency":
+    let tmp = getTempDir() / "scriptorium_test_dep_satisfied"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n**Depends:** 0001\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    check assignment.inProgressTicket == "tickets/in-progress/0002-second.md"
+
+  test "assignOldestOpenTicket skips blocked ticket and assigns next":
+    let tmp = getTempDir() / "scriptorium_test_dep_skip_blocked"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    check assignment.inProgressTicket == "tickets/in-progress/0002-second.md"
+
+  test "assignOpenTickets skips ticket with unsatisfied dependency":
+    let tmp = getTempDir() / "scriptorium_test_dep_parallel_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 9999\n")
+
+    let assignments = assignOpenTickets(tmp, 2)
+    check assignments.len == 1
+    check assignments[0].openTicket == "tickets/open/0001-first.md"
+
+  test "assignOpenTickets assigns ticket after dependency is done":
+    let tmp = getTempDir() / "scriptorium_test_dep_parallel_done"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 0001\n")
+
+    let assignments = assignOpenTickets(tmp, 2)
+    check assignments.len == 1
+    check assignments[0].openTicket == "tickets/open/0002-second.md"
+
 suite "orchestrator mcp tools":
   test "createOrchestratorServer registers submit_pr and consumeSubmitPrSummary clears state":
     discard consumeSubmitPrSummary()
