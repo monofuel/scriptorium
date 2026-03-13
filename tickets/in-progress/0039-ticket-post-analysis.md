@@ -39,3 +39,27 @@ No post-analysis infrastructure exists. Tickets move to terminal states without 
 - Section 19: Ticket Post-Analysis (V3).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0039-ticket-post-analysis
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0039-ticket-post-analysis/.scriptorium/logs/0039/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0039-ticket-post-analysis/.scriptorium/logs/0039/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Work is complete. Here's a summary of what was implemented:
+
+**Changes in `src/scriptorium/orchestrator.nim`:**
+- Added `PostAnalysisCommitPrefix` constant
+- `parsePredictionFromContent` - extracts predicted difficulty/duration from ticket markdown's `## Prediction` section
+- `classifyActualDifficulty` - classifies actual difficulty based on attempt count, outcome, and wall time (trivial/easy/medium/hard/complex)
+- `compareDifficulty` - compares predicted vs actual to determine accuracy (accurate/underestimated/overestimated)
+- `formatPostAnalysisNote` / `appendPostAnalysisNote` - formats and appends `## Post-Analysis` section
+- `runPostAnalysis` - orchestrates the full analysis; skips if no prediction section exists
+- Integrated `runPostAnalysis` at all 5 terminal state transitions: done (merge success), parked (stuck), reopened (merge failure), reopened (worktree missing), reopened (stall/no submit_pr)
+
+**Changes in `tests/test_scriptorium.nim`:**
+- 18 new tests covering all post-analysis functions: parsing predictions from markdown, classifying actual difficulty, comparing difficulties, formatting output, and the full runPostAnalysis flow (including skip behavior)
+```
+
+### Agent Stdout Tail
+```text
+lysis functions: parsing predictions from markdown, classifying actual difficulty, comparing difficulties, formatting output, and the full runPostAnalysis flow (including skip behavior)","stop_reason":"end_turn","session_id":"a4ba4476-105d-4b92-9757-fb600193c574","total_cost_usd":4.907472900000002,"usage":{"input_tokens":115,"cache_creation_input_tokens":84263,"cache_read_input_tokens":7085111,"output_tokens":26144,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":84263,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":115,"outputTokens":26144,"cacheReadInputTokens":7085111,"cacheCreationInputTokens":84263,"webSearchRequests":0,"costUSD":4.7233742500000035,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":40,"outputTokens":5706,"cacheReadInputTokens":821849,"cacheCreationInputTokens":58675,"webSearchRequests":0,"costUSD":0.18409865,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"943df347-2b9f-4551-9163-0ba9fa14f929"}
+```
