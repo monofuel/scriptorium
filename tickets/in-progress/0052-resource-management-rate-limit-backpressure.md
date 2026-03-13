@@ -36,3 +36,8 @@ The V5 spec (§26) requires detecting HTTP 429 (rate limit) responses from agent
 - Running agents not interrupted by backpressure.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0052-resource-management-rate-limit-backpressure
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 35
+- reasoning: Requires implementing exponential backoff logic, concurrency reduction/restoration, and rate limit detection in the agent pool, plus unit tests — moderately complex but well-scoped with clear acceptance criteria and existing infrastructure from dependency tickets.
