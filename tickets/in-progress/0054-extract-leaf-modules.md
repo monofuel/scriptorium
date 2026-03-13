@@ -36,3 +36,8 @@
 - No functional changes — identical behavior.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0054-extract-leaf-modules
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Extracting 4 modules from a 3877-line file requires moving many procs and shared type definitions while maintaining compilation order and Nim import correctness across each of 4 sequential commits, with high risk of circular dependency or export issues especially around shared_state types.
