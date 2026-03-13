@@ -34,3 +34,8 @@ The orchestrator tick currently blocks on `executeAssignedTicket` until the sing
 - Serial behavior preserved when `maxAgents = 1`.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0049-nonblocking-tick-agent-tracking
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 55
+- reasoning: Requires introducing new AgentSlot/AgentPool abstractions, refactoring the core tick loop from blocking to non-blocking process management, wiring up per-slot lifecycle handling, and ensuring backward compatibility with serial mode—touching orchestration, process management, and post-execution logic across multiple modules.
