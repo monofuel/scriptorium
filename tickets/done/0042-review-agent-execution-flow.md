@@ -91,3 +91,46 @@ Changes committed and merge request enqueued. Here's a summary of what was imple
 ```text
 prove, request_changes, stall) plus updated existing tests to pass `noopRunner`\n- `tests/integration_orchestrator_queue.nim` — Updated to pass `noopRunner` for review agent","stop_reason":"end_turn","session_id":"10b42b77-d140-4a9b-93db-1e283841a00a","total_cost_usd":4.055049099999999,"usage":{"input_tokens":80,"cache_creation_input_tokens":88217,"cache_read_input_tokens":5338584,"output_tokens":24622,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":88217,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":80,"outputTokens":24622,"cacheReadInputTokens":5338584,"cacheCreationInputTokens":88217,"webSearchRequests":0,"costUSD":3.8365982499999993,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":2347,"outputTokens":7439,"cacheReadInputTokens":1081451,"cacheCreationInputTokens":56611,"webSearchRequests":0,"costUSD":0.21845085000000003,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f1f78acc-850e-4730-8848-a9e6c4afef19"}
 ```
+
+## Merge Queue Success
+- Summary: Add review agent execution flow in merge queue: review prompt template, runReviewAgent proc, processMergeQueue integration with approve/request_changes/stall handling, ticket markdown review notes, lifecycle logging, and unit tests for all three review paths.\n
+### Quality Check Output
+```text
+ping tick
+[2026-03-13T02:28:18Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=2 tickets_reopened=3 tickets_parked=0 merge_queue_processed=2
+[2026-03-13T02:28:18Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-13T02:28:18Z] [INFO] architect: generating areas from spec
+[2026-03-13T02:28:20Z] [INFO] architect: areas updated
+[2026-03-13T02:28:20Z] [INFO] manager: generating tickets
+[2026-03-13T02:28:20Z] [INFO] merge queue: processing
+[2026-03-13T02:28:20Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-13T02:28:20Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-13T02:28:20Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-13T02:28:20Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-13T02:28:20Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-13T02:28:20Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-13T02:28:20Z] [INFO] merge queue: item processed
+[2026-03-13T02:28:20Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-13T02:28:20Z] [INFO] session summary: uptime=2s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T02:28:20Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-13T02:28:20Z] [WARN] master is unhealthy — skipping tick
+[2026-03-13T02:28:50Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-13T02:28:50Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1649
+- coding_wall_seconds: 1393
+- test_wall_seconds: 245
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 2327851
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: overestimated
+- brief_summary: Predicted hard, actual was medium with 1 attempt(s) in 27m29s.
