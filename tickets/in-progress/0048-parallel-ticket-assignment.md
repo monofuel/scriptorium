@@ -64,3 +64,19 @@ All tests pass (`make test` exits 0). Backward compatibility preserved — when 
 ```text
 rogress\n   - Returns empty when no open tickets\n\nAll tests pass (`make test` exits 0). Backward compatibility preserved — when `maxAgents = 1`, only one ticket is assigned.","stop_reason":"end_turn","session_id":"4e667556-81b4-4b48-a47f-fe3b8699a00a","total_cost_usd":1.7860202999999997,"usage":{"input_tokens":44,"cache_creation_input_tokens":52100,"cache_read_input_tokens":1985007,"output_tokens":9773,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":52100,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":44,"outputTokens":9773,"cacheReadInputTokens":1985007,"cacheCreationInputTokens":52100,"webSearchRequests":0,"costUSD":1.5626735000000003,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":1598,"outputTokens":5108,"cacheReadInputTokens":912238,"cacheCreationInputTokens":83988,"webSearchRequests":0,"costUSD":0.22334679999999998,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"41ed6e6d-031d-482b-a560-7ff878131e09"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0048-parallel-ticket-assignment/.scriptorium/logs/0048/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0048-parallel-ticket-assignment/.scriptorium/logs/0048/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+`submit_pr` called successfully — merge request has been enqueued. The implementation includes:
+
+1. **`assignOpenTickets` proc** — scans open tickets in ID order, tracks occupied areas, assigns tickets with independent areas up to `maxAgents` limit
+2. **`ConcurrencyConfig`** with `maxAgents` and `tokenBudgetMB` added to `Config`
+3. **Unit tests** covering: different-area parallel assignment, same-area serialization, `maxAgents` cap enforcement, and `maxAgents=1` backward compatibility
+```
+
+### Agent Stdout Tail
+```text
+enBudgetMB` added to `Config`\n3. **Unit tests** covering: different-area parallel assignment, same-area serialization, `maxAgents` cap enforcement, and `maxAgents=1` backward compatibility","stop_reason":"end_turn","session_id":"239d7c68-248a-4c5e-8644-7b2e245eba28","total_cost_usd":0.5149375500000001,"usage":{"input_tokens":21,"cache_creation_input_tokens":17328,"cache_read_input_tokens":401224,"output_tokens":2958,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":17328,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":21,"outputTokens":2958,"cacheReadInputTokens":401224,"cacheCreationInputTokens":17328,"webSearchRequests":0,"costUSD":0.38296700000000006,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":53,"outputTokens":3465,"cacheReadInputTokens":488613,"cacheCreationInputTokens":52585,"webSearchRequests":0,"costUSD":0.13197055,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"440dc3ba-4976-4ff4-b493-59a7efe8b079"}
+```
