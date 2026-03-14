@@ -9,6 +9,7 @@ const
   TicketAgentRunCommitPrefix = "scriptorium: record agent run"
   TicketAgentFailReopenCommitPrefix = "scriptorium: reopen failed ticket"
   SubmitPrTestOutputMaxChars = 2000
+  PartialWorkCommitPrefix* = "scriptorium: save partial agent work (attempt "
 
 type
   AgentThreadArgs* = tuple[
@@ -33,6 +34,20 @@ proc ensureAgentResultChanOpen() =
   if not agentResultChanOpen:
     agentResultChan.open()
     agentResultChanOpen = true
+
+proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: string, ticketId: string, attempt: int) =
+  ## Validate worktree state before a retry attempt.
+  ## Corrupt worktrees are removed and recreated. Dirty worktrees have changes committed.
+  let statusResult = runCommandCapture(worktreePath, "git", @["status", "--porcelain"])
+  if statusResult.exitCode != 0:
+    logInfo(&"ticket {ticketId}: worktree corrupt, recreated from branch")
+    discard gitCheck(repoPath, "worktree", "remove", "--force", worktreePath)
+    addWorktreeWithRecovery(repoPath, worktreePath, branch)
+  elif statusResult.output.strip().len > 0:
+    let commitMsg = PartialWorkCommitPrefix & $attempt & ")"
+    gitRun(worktreePath, "add", "-A")
+    gitRun(worktreePath, "commit", "-m", commitMsg)
+    logInfo(&"ticket {ticketId}: saved uncommitted agent work before retry")
 
 proc predictTicketDifficulty*(
   repoPath: string,
@@ -157,6 +172,8 @@ proc executeAssignedTicket*(
   defer: clearActiveTicketWorktree(ticketId)
 
   while totalAttemptsUsed < maxAttempts:
+    if totalAttemptsUsed > 0:
+      validateWorktreeHealth(repoPath, assignment.worktree, assignment.branch, ticketId, currentAttemptBase)
     let attemptsForThisCall = maxAttempts - totalAttemptsUsed
     logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
     let agentStartTime = epochTime()
