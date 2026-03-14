@@ -106,3 +106,49 @@ All ticket work is complete:
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 1m5s
+
+## Merge Queue Success
+- Summary: Pin Docker image and npm dependencies for build reproducibility: base image pinned to monolab-nim:2.2.4, npm packages pinned to @openai/codex@0.114.0 and @anthropic-ai/claude-code@2.1.76, entrypoint logs version info on startup, and make check-updates target reports available updates.\n
+### Quality Check Output
+```text
+FO] recovery: clean startup, no recovery needed
+[2026-03-14T05:50:42Z] [INFO] architect: generating areas from spec
+[2026-03-14T05:50:43Z] [INFO] architect: areas updated
+[2026-03-14T05:50:43Z] [INFO] manager: generating tickets
+[2026-03-14T05:50:43Z] [INFO] merge queue: processing
+[2026-03-14T05:50:43Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-14T05:50:44Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-14T05:50:44Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-14T05:50:44Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-14T05:50:44Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-14T05:50:44Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-14T05:50:44Z] [INFO] merge queue: item processed
+[2026-03-14T05:50:44Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-14T05:50:44Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T05:50:44Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-14T05:50:44Z] [INFO] recovery: clean startup, no recovery needed
+[2026-03-14T05:50:44Z] [WARN] master is unhealthy — skipping tick
+[2026-03-14T05:51:14Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T05:51:14Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+```
+
+## Metrics
+- wall_time_seconds: 1353
+- coding_wall_seconds: 857
+- test_wall_seconds: 420
+- attempt_count: 3
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 437036
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was complex with 3 attempt(s) in 22m33s.
