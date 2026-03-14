@@ -35,3 +35,5 @@ Pin all external dependencies in the Dockerfile for build reproducibility (V8, Â
 - Entrypoint logs version information on startup.
 - `make check-updates` reports whether newer versions exist.
 - Docker image builds successfully with pinned versions.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0068-docker-image-reproducibility
