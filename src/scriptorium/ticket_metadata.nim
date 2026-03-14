@@ -110,6 +110,22 @@ proc listMarkdownFiles*(basePath: string): seq[string] =
         result.add(filePath)
     result.sort()
 
+proc parseMetricField*(content: string, fieldName: string): string =
+  ## Extract a metric value from the ## Metrics section of a ticket markdown body.
+  var inMetrics = false
+  for line in content.splitLines():
+    let trimmed = line.strip()
+    if trimmed == "## Metrics":
+      inMetrics = true
+      continue
+    if inMetrics:
+      if trimmed.startsWith("## "):
+        break
+      let prefix = "- " & fieldName & ": "
+      if trimmed.startsWith(prefix):
+        result = trimmed[prefix.len..^1].strip()
+        break
+
 proc parseQueueField*(content: string, prefix: string): string =
   ## Parse one single-line markdown field from queue item content.
   for line in content.splitLines():

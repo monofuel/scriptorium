@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[init, orchestrator]
+  ./scriptorium/[init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -27,7 +27,7 @@ proc cmdRun() =
   runOrchestrator(getCurrentDir())
 
 proc cmdStatus() =
-  ## Show ticket counts and current agent activity.
+  ## Show ticket counts, agent activity, elapsed times, recent done tickets, and first-attempt success rate.
   let status = readOrchestratorStatus(getCurrentDir())
   echo fmt"Open: {status.openTickets}"
   echo fmt"In Progress: {status.inProgressTickets}"
@@ -41,6 +41,17 @@ proc cmdStatus() =
       echo fmt"Active Agent Worktree: {status.activeTicketWorktree}"
     else:
       echo "Active Agent Worktree: unknown"
+  for item in status.inProgressElapsed:
+    echo fmt"In-Progress Ticket {item.ticketId}: elapsed {item.elapsed}"
+  if status.recentDoneTickets.len > 0:
+    echo ""
+    echo "Recent Completed Tickets:"
+    for item in status.recentDoneTickets:
+      let wallDuration = formatDuration(item.wallTimeSeconds.float)
+      echo fmt"  {item.ticketId}: outcome={item.outcome}, wall={wallDuration}"
+  if status.totalDoneWithAttempts > 0:
+    let pct = (status.firstAttemptSuccessCount * 100) div status.totalDoneWithAttempts
+    echo fmt"First-attempt success: {pct}% ({status.firstAttemptSuccessCount}/{status.totalDoneWithAttempts})"
 
 proc cmdPlan(args: seq[string]) =
   ## Ask the architect model to revise spec.md, interactively or one-shot.

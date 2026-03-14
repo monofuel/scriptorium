@@ -3,7 +3,7 @@
 import
   std/[algorithm, json, locks, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, times, unittest],
   jsony,
-  scriptorium/[agent_runner, config, init, logging, orchestrator]
+  scriptorium/[agent_runner, config, init, logging, orchestrator, ticket_metadata]
 
 const
   OrchestratorTestBasePort = 19000
@@ -3345,6 +3345,28 @@ suite "formatDuration":
     check formatDuration(3600.0) == "1h0m"
     check formatDuration(4980.0) == "1h23m"
     check formatDuration(7200.0) == "2h0m"
+
+suite "parseMetricField":
+  const
+    SampleTicket = "# Ticket\n\n**Area:** a\n\n## Metrics\n- wall_time_seconds: 120\n- outcome: done\n- attempt_count: 1\n- model: opus\n\n## Post-Analysis\n- actual_difficulty: easy\n"
+
+  test "extracts wall_time_seconds from metrics section":
+    check parseMetricField(SampleTicket, "wall_time_seconds") == "120"
+
+  test "extracts outcome from metrics section":
+    check parseMetricField(SampleTicket, "outcome") == "done"
+
+  test "extracts attempt_count from metrics section":
+    check parseMetricField(SampleTicket, "attempt_count") == "1"
+
+  test "returns empty string when field missing":
+    check parseMetricField(SampleTicket, "nonexistent") == ""
+
+  test "returns empty string when no metrics section":
+    check parseMetricField("# Ticket\n\nNo metrics here.\n", "outcome") == ""
+
+  test "stops at next section":
+    check parseMetricField(SampleTicket, "actual_difficulty") == ""
 
 suite "session summary":
   test "logSessionSummary writes two INFO lines with session stats":

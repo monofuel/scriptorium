@@ -1,6 +1,6 @@
 import
-  std/[algorithm, os, sequtils, sets, strformat, strutils, tables, times, uri],
-  ./[config, git_ops, lock_management, logging, merge_queue, shared_state, ticket_analysis, ticket_metadata]
+  std/[algorithm, os, posix, sequtils, sets, strformat, strutils, tables, times, uri],
+  ./[config, git_ops, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
 
 const
   TicketAssignCommitPrefix* = "scriptorium: assign ticket"
@@ -325,8 +325,23 @@ proc cleanupStaleTicketWorktrees*(repoPath: string): seq[string] =
         removeDir(path)
       result.add(path)
 
+proc worktreeElapsed(worktreePath: string): string =
+  ## Return formatted elapsed time since worktree creation, or empty string if unavailable.
+  if worktreePath.len == 0 or not dirExists(worktreePath):
+    return ""
+  var statBuf: Stat
+  if stat(worktreePath.cstring, statBuf) == 0:
+    let createdAt = statBuf.st_ctime.float
+    let elapsed = epochTime() - createdAt
+    if elapsed >= 0:
+      return formatDuration(elapsed)
+  return ""
+
+const
+  DefaultRecentDoneCount = 5
+
 proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
-  ## Return plan ticket counts and current active agent metadata.
+  ## Return plan ticket counts, active agent metadata, elapsed times, recent done tickets, and first-attempt success rate.
   result = withPlanWorktree(repoPath, proc(planPath: string): OrchestratorStatus =
     result = OrchestratorStatus(
       openTickets: listMarkdownFiles(planPath / PlanTicketsOpenDir).len,
@@ -354,6 +369,51 @@ proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
         result.activeTicketId = active.ticketId
         result.activeTicketBranch = active.branch
         result.activeTicketWorktree = active.worktree
+
+    for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):
+      let relPath = relativePath(ticketPath, planPath).replace('\\', '/')
+      let ticketId = ticketIdFromTicketPath(relPath)
+      let content = readFile(ticketPath)
+      let wtPath = parseWorktreeFromTicketContent(content)
+      let elapsed = worktreeElapsed(wtPath)
+      if elapsed.len > 0:
+        result.inProgressElapsed.add(InProgressTicketElapsed(
+          ticketId: ticketId,
+          elapsed: elapsed,
+        ))
+
+    let doneFiles = listMarkdownFiles(planPath / PlanTicketsDoneDir)
+    var firstAttemptCount = 0
+    var totalWithAttempts = 0
+    var doneSummaries: seq[DoneTicketSummary]
+    for ticketPath in doneFiles:
+      let relPath = relativePath(ticketPath, planPath).replace('\\', '/')
+      let ticketId = ticketIdFromTicketPath(relPath)
+      let content = readFile(ticketPath)
+      let outcome = parseMetricField(content, "outcome")
+      let wallStr = parseMetricField(content, "wall_time_seconds")
+      let attemptStr = parseMetricField(content, "attempt_count")
+      var wallSecs = 0
+      if wallStr.len > 0:
+        wallSecs = parseInt(wallStr)
+      doneSummaries.add(DoneTicketSummary(
+        ticketId: ticketId,
+        outcome: outcome,
+        wallTimeSeconds: wallSecs,
+      ))
+      if attemptStr.len > 0:
+        totalWithAttempts += 1
+        if parseInt(attemptStr) == 1:
+          firstAttemptCount += 1
+
+    doneSummaries.sort(proc(a, b: DoneTicketSummary): int =
+      cmp(b.ticketId, a.ticketId)
+    )
+    if doneSummaries.len > DefaultRecentDoneCount:
+      doneSummaries.setLen(DefaultRecentDoneCount)
+    result.recentDoneTickets = doneSummaries
+    result.firstAttemptSuccessCount = firstAttemptCount
+    result.totalDoneWithAttempts = totalWithAttempts
   )
 
 proc validateTicketStateInvariant*(repoPath: string) =

@@ -62,6 +62,15 @@ type
     branch*: string
     worktree*: string
 
+  InProgressTicketElapsed* = object
+    ticketId*: string
+    elapsed*: string
+
+  DoneTicketSummary* = object
+    ticketId*: string
+    outcome*: string
+    wallTimeSeconds*: int
+
   OrchestratorStatus* = object
     openTickets*: int
     inProgressTickets*: int
@@ -70,6 +79,10 @@ type
     activeTicketId*: string
     activeTicketBranch*: string
     activeTicketWorktree*: string
+    inProgressElapsed*: seq[InProgressTicketElapsed]
+    recentDoneTickets*: seq[DoneTicketSummary]
+    firstAttemptSuccessCount*: int
+    totalDoneWithAttempts*: int
 
   MergeQueueItem* = object
     pendingPath*: string
