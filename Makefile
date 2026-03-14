@@ -1,4 +1,4 @@
-.PHONY: test integration-test integration-test-claude e2e-test e2e-test-claude build docker-build docker-build-push ci
+.PHONY: test integration-test integration-test-claude e2e-test e2e-test-claude build docker-build docker-build-push ci check-updates
 
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
@@ -75,6 +75,21 @@ docker-build:
 		--load \
 		--tag $(DOCKER_IMAGE) \
 		.
+
+check-updates:
+	@echo "Checking for npm package updates..."
+	@echo "--- @openai/codex ---"
+	@pinned=$$(grep 'CODEX_VERSION=' Dockerfile | head -1 | sed 's/.*=//'); \
+	latest=$$(npm view @openai/codex version 2>/dev/null); \
+	echo "  Pinned: $$pinned"; \
+	echo "  Latest: $$latest"; \
+	if [ "$$pinned" != "$$latest" ]; then echo "  ** Update available **"; fi
+	@echo "--- @anthropic-ai/claude-code ---"
+	@pinned=$$(grep 'CLAUDE_CODE_VERSION=' Dockerfile | head -1 | sed 's/.*=//'); \
+	latest=$$(npm view @anthropic-ai/claude-code version 2>/dev/null); \
+	echo "  Pinned: $$pinned"; \
+	echo "  Latest: $$latest"; \
+	if [ "$$pinned" != "$$latest" ]; then echo "  ** Update available **"; fi
 
 docker-build-push:
 	docker buildx build \

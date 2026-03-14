@@ -1,4 +1,9 @@
-FROM gitea.solution-nine.monofuel.dev/monolab/monolab/monolab-nim:latest
+ARG MONOLAB_NIM_TAG=2.2.4
+FROM gitea.solution-nine.monofuel.dev/monolab/monolab-nim:${MONOLAB_NIM_TAG}
+LABEL monolab.nim.tag="${MONOLAB_NIM_TAG}"
+
+ARG MONOLAB_NIM_TAG
+ENV MONOLAB_NIM_TAG=${MONOLAB_NIM_TAG}
 
 WORKDIR /app
 
@@ -7,7 +12,9 @@ RUN mkdir -p /etc/portage/package.use && \
 RUN emerge --quiet net-libs/nodejs \
     && node --version \
     && npm --version
-RUN npm install --global @openai/codex @anthropic-ai/claude-code \
+ARG CODEX_VERSION=0.114.0
+ARG CLAUDE_CODE_VERSION=2.1.76
+RUN npm install --global @openai/codex@${CODEX_VERSION} @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
     && codex --version \
     && claude --version
 
