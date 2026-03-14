@@ -95,3 +95,8 @@ ion_api_ms":134760,"num_turns":35,"result":"The `submit_pr` MCP tool returned \"
 1. **Truncation tests must verify the `... [truncated]` marker.** The ticket requirement says "truncated with `... [truncated]` marker" and the area context spec says "it must be truncated with a `... [truncated]` marker." Currently the tests assert `decision.feedback == 'z.repeat(ReviewFeedbackMaxBytes)` — plain byte truncation with no marker. The implementation in `recordReviewDecision` (shared_state.nim:213) also just does `min(feedback.len, ReviewFeedbackMaxBytes)` without appending a marker. Fix the implementation to append `... [truncated]` when truncating, and update the truncation tests to verify the marker is present in the truncated output and that the total length accounts for the marker.
 
 2. **Remove unnecessary `prompt_catalog` import.** `buildReviewAgentPrompt` is already accessible through the existing `orchestrator` import (orchestrator.nim:6 exports `prompt_builders`). Remove `prompt_catalog` from the import list to avoid a needless direct dependency.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Writing 9 unit tests across two suites for an existing function plus fixing truncation implementation to append a marker requires reading and modifying 2-3 files with boundary-condition logic, but no architectural risk.
