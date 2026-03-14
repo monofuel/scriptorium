@@ -41,3 +41,8 @@ Implement progress-based stall detection that terminates agents producing output
 - Unit tests cover: progress timeout fires when only status events received, progress timer resets on tool events, no false trigger when tools are called within window.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0073-progress-based-stall-detection
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Focused changes in coding_agent.nim to add timestamp tracking in the existing onEvent callback and a watchdog timer, with clear integration points into existing stall continuation flow; moderate logic but contained to one module.
