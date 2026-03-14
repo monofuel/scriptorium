@@ -786,3 +786,225 @@ This spec describes behavior that is present in the code and covered by current 
 - The orchestrator shuts down cleanly without SIGSEGV.
 - Circular ticket dependencies are detected at creation time and surfaced in `scriptorium status`.
 - Review agent has unit tests for prompt structure, diff edge cases, and feedback truncation, plus a live integration test.
+
+## V8 Features — Crash Recovery And Deployment Reproducibility
+
+### 31. Startup Recovery Sequence
+
+- On orchestrator start, before entering the main polling loop, the orchestrator must run a `recoverFromCrash` procedure that detects and reconciles stale state from a previous crash or unclean shutdown.
+- The recovery sequence must execute the following steps in order:
+
+#### Step 1: Clean Orphaned Worktrees
+
+- Call `cleanupStaleTicketWorktrees(repoPath)` to prune worktrees under `/tmp/scriptorium/` that do not correspond to any in-progress ticket.
+- Remove git worktree locks held by dead processes: for each worktree with a lock file, check if the holding PID is still alive. If the PID is dead, remove the lock file and prune the worktree.
+- If a PID is alive but not a known scriptorium process, log a warning: `recovery: worktree <path> locked by unknown process <pid>, skipping`.
+- Log each cleaned worktree: `recovery: cleaned orphaned worktree <path>`.
+
+#### Step 2: Detect Stale Agent Processes
+
+- Scan `/tmp/scriptorium-*/` worktree directories for lock files or PID markers left by previous agent processes (`codex`, `claude` CLI processes).
+- For each marker, check if the referenced PID is still alive.
+- If the PID is dead, clean up the marker and log: `recovery: cleared stale agent marker for PID <pid>`.
+- If the PID is alive, log a warning: `recovery: stale agent process <pid> still running in <worktree>, manual intervention may be needed`.
+- The orchestrator must not kill orphaned agent processes automatically — it must log warnings and let the operator decide. Automatic process killing is out of scope for v8.
+
+#### Step 3: Reconcile Dirty Plan Branch
+
+- Open the plan worktree and check for uncommitted changes (`git status --porcelain`).
+- If the working tree is clean, skip this step.
+- If uncommitted changes are detected:
+  - Check for the presence of a transition journal file (see section 32). If a journal exists, delegate to the journal replay/rollback logic.
+  - If no journal exists, commit all uncommitted changes with message `scriptorium: recovery commit (unclean shutdown)` and log: `recovery: committed dirty plan branch state`.
+- Log the recovery action taken: `recovery: plan branch reconciled (<action>)` where action is `clean`, `journal-replayed`, `journal-rolled-back`, or `committed`.
+
+#### Step 4: Validate Merge Queue Vs Master HEAD
+
+- For each pending item in `queue/merge/pending/`, resolve the ticket's branch and check whether it is already merged into `master` (via `git merge-base --is-ancestor`).
+- If the ticket branch is already merged into `master` but the plan branch still shows the ticket as in-progress:
+  - Move the ticket from `tickets/in-progress/` to `tickets/done/`.
+  - Remove the pending merge queue entry.
+  - Clear `queue/merge/active.md` if it references this ticket.
+  - Commit with message `scriptorium: recovery — completed already-merged ticket <id>`.
+  - Log: `recovery: ticket <id> already merged to master, completed on plan branch`.
+- If `queue/merge/active.md` references a ticket that is no longer in-progress or whose branch does not exist, clear the active marker and log: `recovery: cleared stale active merge marker`.
+
+#### Step 5: Log Recovery Summary
+
+- After all recovery steps complete, log a single INFO-level summary: `recovery: cleaned <n> worktrees, cleared <m> stale markers, reconciled plan branch (<action>), completed <k> already-merged tickets`.
+- If no recovery actions were needed, log: `recovery: clean startup, no recovery needed`.
+
+- Acceptance criteria:
+  - `recoverFromCrash` runs before the first orchestrator tick.
+  - Orphaned worktrees from a previous run are cleaned up on startup.
+  - Git worktree locks held by dead PIDs are removed.
+  - Uncommitted plan branch changes are committed or reconciled via journal replay.
+  - Merge queue entries for already-merged tickets are completed on the plan branch.
+  - A recovery summary is logged at INFO level on every startup.
+
+### 32. Atomic Plan Branch Transitions
+
+- Multi-step plan branch operations (file content update, file move, queue cleanup, git commit) must be wrapped in a write-ahead journal to enable crash recovery.
+- Journal file location: `.scriptorium-journal.json` in the plan worktree root.
+
+#### Journal Structure
+
+- The journal is a JSON file recording the intended transition before any filesystem operations begin:
+  ```json
+  {
+    "operation": "ticket-transition",
+    "timestamp": "2026-03-14T10:30:00Z",
+    "steps": [
+      {"action": "write", "path": "tickets/in-progress/0042.md", "content_hash": "<sha1>"},
+      {"action": "move", "source": "tickets/in-progress/0042.md", "dest": "tickets/done/0042.md"},
+      {"action": "remove", "path": "queue/merge/pending/0042.md"},
+      {"action": "write", "path": "queue/merge/active.md", "content": ""}
+    ],
+    "commit_message": "scriptorium: complete ticket 0042"
+  }
+  ```
+
+#### Write-Ahead Protocol
+
+- Before executing any filesystem operations for a plan branch transition, the orchestrator must:
+  1. Write the journal file describing all intended steps.
+  2. `git add` and commit the journal file with message `scriptorium: begin transition — <operation>`.
+  3. Execute the filesystem operations (writes, moves, removes) as described in the journal.
+  4. `git add -A` and commit all changes with the transition's commit message.
+  5. Remove the journal file and commit with message `scriptorium: complete transition`.
+- If the process crashes at any point, the journal file's presence on the plan branch signals an incomplete transition.
+
+#### Crash Recovery Replay
+
+- During startup recovery (section 31, step 3), if a journal file is found:
+  - Read the journal and inspect the current filesystem state.
+  - For each step in the journal, check whether it has already been applied:
+    - `write`: check if the file exists with the expected content hash.
+    - `move`: check if the destination exists and the source does not.
+    - `remove`: check if the file no longer exists.
+  - If all steps are applied: commit any uncommitted changes and remove the journal (complete the transition).
+  - If some steps are applied and some are not: replay the remaining steps, then commit and remove the journal.
+  - If no steps are applied: roll back by removing any partial changes (`git checkout -- .` for unstaged changes), remove the journal, and commit. Log: `recovery: rolled back incomplete transition`.
+- The replay/rollback decision must be deterministic based on filesystem state — no human intervention required.
+
+- Acceptance criteria:
+  - All ticket state transitions (open->in-progress, in-progress->done, in-progress->open) use the write-ahead journal.
+  - Merge queue operations (enqueue, dequeue, clear active) use the write-ahead journal.
+  - A crash at any point during a transition is recoverable on next startup.
+  - Journal replay completes partial transitions correctly.
+  - Journal rollback reverts incomplete transitions cleanly.
+  - The journal file is removed after successful completion.
+  - No journal file persists across a clean orchestrator run.
+
+### 33. Docker Image Reproducibility
+
+- The Dockerfile must pin all external dependencies to specific versions for build reproducibility.
+
+#### Base Image Pinning
+
+- The base image must be pinned to a specific tag rather than `:latest`:
+  ```dockerfile
+  FROM gitea.solution-nine.monofuel.dev/monolab/monolab-nim:2.2.4
+  ```
+- Optionally, the image may also be pinned by digest (`@sha256:...`) for immutable builds, but tag pinning is the minimum requirement.
+
+#### NPM Package Version Pinning
+
+- The `@openai/codex` and `@anthropic-ai/claude-code` npm packages must be installed with explicit version specifiers:
+  ```dockerfile
+  RUN npm install --global @openai/codex@<version> @anthropic-ai/claude-code@<version>
+  ```
+- The exact versions to pin are the current latest stable versions at the time of implementation.
+
+#### Version Traceability
+
+- The Docker entrypoint or a startup log line must print the installed versions of pinned dependencies for traceability:
+  - Base image tag (from a build arg or label).
+  - `codex --version` output.
+  - `claude --version` output.
+- This allows operators to confirm which versions are running in a given container.
+
+#### Update Mechanism
+
+- A Makefile target (`make check-updates` or similar) should check for available updates to pinned npm packages and report whether newer versions exist.
+- This target is advisory only — it does not automatically update the Dockerfile.
+
+- Acceptance criteria:
+  - The Dockerfile does not use `:latest` for the base image.
+  - The Dockerfile specifies explicit versions for `@openai/codex` and `@anthropic-ai/claude-code`.
+  - Builds on different days with the same Dockerfile produce the same dependency versions.
+  - Installed dependency versions are logged on container startup.
+
+### 34. Agent Crash Recovery
+
+- The orchestrator must improve its handling of agent process crashes and hangs beyond the existing no-output and hard timeout mechanisms.
+
+#### Progress-Based Stall Detection
+
+- In addition to the existing no-output timeout (which triggers when the agent produces no stdout for a configured interval), the orchestrator must implement progress-based stall detection.
+- "Progress" is defined as the agent calling an MCP tool or producing a tool-call stream event within a configurable window (`agents.coding.progressTimeout` in `scriptorium.json`, default 10 minutes).
+- If the agent produces stdout output (e.g., reasoning tokens, status messages) but makes no tool calls within the progress timeout window, the orchestrator must treat this as a stall.
+- On progress-based stall detection:
+  - Log: `ticket <id>: agent stalled — output active but no tool calls for <duration>`.
+  - Terminate the agent process.
+  - Proceed with the existing stall continuation flow (section 11): run pre-retry tests (section 12), send continuation prompt with test results.
+- The no-output timeout and hard timeout remain as independent safety nets — progress-based detection is an additional layer.
+- Progress tracking must use the existing `AgentEventHandler` callback: tool-type events reset the progress timer, other event types do not.
+
+#### Worktree Health Check Before Retry
+
+- Before starting a retry attempt (whether triggered by stall detection, progress timeout, or agent crash), the orchestrator must validate the worktree's health.
+- Health check steps:
+  1. Run `git status --porcelain` in the worktree. If it fails, the worktree is corrupt.
+  2. Run `git diff --stat` to assess uncommitted changes.
+  3. If the worktree is corrupt (git commands fail):
+     - Remove and recreate the worktree from the ticket branch: `git worktree remove --force <path>` followed by `git worktree add <path> <branch>`.
+     - Log: `ticket <id>: worktree corrupt, recreated from branch`.
+  4. If the worktree has uncommitted changes:
+     - Commit them with message `scriptorium: save partial agent work (attempt <n>)` on the ticket branch.
+     - Log: `ticket <id>: saved uncommitted agent work before retry`.
+  5. If the worktree is clean, proceed normally.
+- The retry agent receives the worktree in a known-good state with all prior work committed to the branch.
+
+#### Detect Committed-But-Not-Submitted Work
+
+- At the start of each coding agent attempt (including the first attempt), the orchestrator must check whether the ticket branch already has commits ahead of `master` that were not submitted via `submit_pr`.
+- Detection: compare the ticket branch HEAD against `master` using `git log master..<branch> --oneline`. If commits exist, prior work is present.
+- When committed-but-not-submitted work is detected:
+  - Log: `ticket <id>: found <n> committed changes from prior attempt, agent will continue from branch tip`.
+  - Include a note in the agent prompt: inform the agent that prior work exists on the branch and it should review existing changes before proceeding.
+  - Do not reset the branch — the agent works from the branch tip, building on prior commits.
+- This handles the crash window where an agent committed work to the branch but crashed before calling `submit_pr`.
+
+- Acceptance criteria:
+  - Progress-based stall detection terminates agents that produce output but make no tool calls within the configured window.
+  - The progress timeout is configurable and defaults to 10 minutes.
+  - Worktree health is validated before every retry attempt.
+  - Corrupt worktrees are recreated from the branch automatically.
+  - Uncommitted agent work is saved to the branch before retry.
+  - Committed-but-not-submitted work is detected and surfaced in the agent prompt.
+  - Existing no-output timeout and hard timeout behavior is preserved.
+
+## V8 Known Limitations
+
+- The orchestrator does not automatically kill orphaned agent processes — operators must handle this manually. Automatic process killing risks terminating legitimate processes.
+- Progress-based stall detection relies on tool-call events from the harness stream. If a harness does not emit tool events (e.g., a future backend), the progress timeout will not function and the no-output timeout remains the only stall detector.
+- Write-ahead journal adds two extra commits per transition (journal write and journal removal). This increases plan branch commit volume but ensures recoverability.
+- Docker version pinning requires manual updates when new versions are released — the `make check-updates` target is advisory only.
+- Worktree health checks add latency before each retry attempt due to git status and diff operations.
+- Committed-but-not-submitted detection depends on `master` as the comparison base — if `master` has advanced significantly, the diff may be large.
+
+## V8 Acceptance Criteria
+
+- All v1, v2, v3, v4, v5, and v7 acceptance criteria remain.
+- The orchestrator runs a startup recovery sequence before the first tick.
+- Orphaned worktrees and stale locks are cleaned up on startup.
+- Dirty plan branch state is reconciled via journal replay or committed on startup.
+- Merge queue entries for already-merged tickets are completed automatically on startup.
+- All plan branch transitions use a write-ahead journal for crash safety.
+- Journal-based recovery replays or rolls back incomplete transitions deterministically.
+- The Dockerfile pins the base image tag and npm package versions.
+- Installed dependency versions are logged on container startup.
+- Progress-based stall detection catches agents that output but make no tool calls.
+- Worktree health is validated and repaired before agent retries.
+- Committed-but-not-submitted work is detected and communicated to retry agents.
