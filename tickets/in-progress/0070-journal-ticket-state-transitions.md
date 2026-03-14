@@ -33,3 +33,8 @@ All ticket state transitions must go through the journal protocol:
 - No `.scriptorium-journal.json` persists after clean operations.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0070-journal-ticket-state-transitions
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Three well-defined state transitions in three separate files need refactoring from direct file ops to journal API calls; the journal infrastructure already exists from ticket 0066, so this is mechanical multi-file plumbing with moderate integration risk.
