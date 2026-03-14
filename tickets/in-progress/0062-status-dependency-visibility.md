@@ -130,3 +130,10 @@ PR submitted successfully. Here's a summary of what was done:
 ```text
 s reported). Also identifies tickets with unsatisfied non-circular dependencies as waiting.\n\n3. **`src/scriptorium.nim`** — Added `Blocked:` and `Waiting:` output lines to `cmdStatus`.\n\n4. **`tests/test_scriptorium.nim`** — Added 5 unit tests covering: two-node cycle (both reported), unsatisfied deps (waiting), satisfied deps (no output), no-deps tickets, and three-node cycle (all three reported).","stop_reason":"end_turn","session_id":"e8aa729e-35e1-476a-a5cd-a9583b63b244","total_cost_usd":1.6281437500000002,"usage":{"input_tokens":43,"cache_creation_input_tokens":53963,"cache_read_input_tokens":2112270,"output_tokens":9381,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":53963,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":43,"outputTokens":9381,"cacheReadInputTokens":2112270,"cacheCreationInputTokens":53963,"webSearchRequests":0,"costUSD":1.6281437500000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"65fad93b-056f-4fb4-b58f-361ef6d5eb58"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 2m4s
