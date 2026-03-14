@@ -1,10 +1,10 @@
 import
   std/[os, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_runner, architect_agent, coding_agent, config, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions
+  architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection
 
 const
   IdleSleepMs = 200
@@ -206,6 +206,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             if managerChanged:
               logInfo("manager: tickets created")
               managerStatus = "updated"
+              discard withPlanWorktree(repoPath, proc(planPath: string): int =
+                discard detectAndLogCycles(planPath)
+                0
+              )
             else:
               managerStatus = "no-op"
 
@@ -267,6 +271,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           else:
             logDebug(WaitingNoSpecMessage)
             idle = true
+
+          discard withPlanWorktree(repoPath, proc(planPath: string): int =
+            scanForCycleBlockedTickets(planPath)
+            0
+          )
 
           let ticketCounts = readOrchestratorStatus(repoPath)
           let summary = fmt"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets}"
