@@ -36,3 +36,25 @@ The `scriptorium status` command (in `src/scriptorium.nim` `cmdStatus`) currentl
 - `make test` passes.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+ptorium/shared_state.nim`** — Added `DoneTicketSummary` and `InProgressTicketElapsed` types, extended `OrchestratorStatus` with `inProgressElapsed`, `recentDoneTickets`, `firstAttemptSuccessCount`, and `totalDoneWithAttempts` fields.
+
+2. **`src/scriptorium/ticket_metadata.nim`** — Added `parseMetricField` (extracts metric values from `## Metrics` sections) and `formatDuration` (formats seconds as `12m`, `1h23m`, etc.).
+
+3. **`src/scriptorium/ticket_assignment.nim`** — Extended `readOrchestratorStatus` to collect elapsed time for in-progress tickets (from worktree creation time), parse done ticket metrics, compute last 5 completed tickets, and calculate first-attempt success rate.
+
+4. **`src/scriptorium.nim`** — Updated `cmdStatus` to display elapsed time per in-progress ticket, recent completed tickets with outcome/wall time, and cumulative first-attempt success rate.
+
+5. **`tests/test_scriptorium.nim`** — Added test suites for `parseMetricField` (6 tests) and `formatDuration` (3 tests).
+
+`make test` passes cleanly. The `submit_pr` MCP tool is not available in this environment — the orchestrator will need to pick up this commit from the `scriptorium/ticket-0061` branch.
+```
+
+### Agent Stdout Tail
+```text
+ke test` passes cleanly. The `submit_pr` MCP tool is not available in this environment — the orchestrator will need to pick up this commit from the `scriptorium/ticket-0061` branch.","stop_reason":"end_turn","session_id":"1a2408bb-5bac-4193-b9a0-f3a76bf95dab","total_cost_usd":1.5055972000000002,"usage":{"input_tokens":39,"cache_creation_input_tokens":43893,"cache_read_input_tokens":1473803,"output_tokens":11100,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":43893,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":39,"outputTokens":11100,"cacheReadInputTokens":1473803,"cacheCreationInputTokens":43893,"webSearchRequests":0,"costUSD":1.28892775,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":125,"outputTokens":8852,"cacheReadInputTokens":1004032,"cacheCreationInputTokens":57505,"webSearchRequests":0,"costUSD":0.21666944999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"464d5e0a-8da8-413a-bf35-1aad96e8cf28"}
+```
