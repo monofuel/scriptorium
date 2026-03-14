@@ -72,17 +72,19 @@ proc createOrchestratorServer*(): HttpMcpServer =
       return %*"Merge request enqueued."
 
     let testStartTime = epochTime()
-    let testResult = runWorktreeMakeTest(active.worktreePath)
+    let testResult = runRequiredQualityChecks(active.worktreePath)
     let testWallTime = epochTime() - testStartTime
     let testExitCode = testResult.exitCode
     {.cast(gcsafe).}:
       let testWallDuration = formatDuration(testWallTime)
       let testStatus = if testExitCode == 0: "PASS" else: "FAIL"
-      logInfo(&"ticket {ticketLabel}: submit_pr pre-check: {testStatus} (exit={testExitCode}, wall={testWallDuration})")
+      let failInfo = if testResult.failedTarget.len > 0: &", failed={testResult.failedTarget}" else: ""
+      logInfo(&"ticket {ticketLabel}: submit_pr pre-check: {testStatus} (exit={testExitCode}, wall={testWallDuration}{failInfo})")
 
     if testExitCode != 0:
       let outputTail = truncateTail(testResult.output.strip(), SubmitPrTestOutputMaxChars)
-      return %*(&"Pre-submit test gate failed (exit={testExitCode}). Fix the failing tests and call submit_pr again.\n\n{outputTail}")
+      let failedOn = if testResult.failedTarget.len > 0: &" on '{testResult.failedTarget}'" else: ""
+      return %*(&"Pre-submit quality gate failed{failedOn} (exit={testExitCode}). Fix the failing tests and call submit_pr again.\n\n{outputTail}")
 
     recordSubmitPrSummary(summary, active.ticketId)
     %*"Merge request enqueued."

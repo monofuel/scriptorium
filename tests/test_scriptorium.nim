@@ -1351,7 +1351,7 @@ suite "orchestrator mcp tools":
     let tmp = getTempDir() / "scriptorium_test_submit_pr_pass"
     createDir(tmp)
     defer: removeDir(tmp)
-    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\n")
+    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\nintegration-test:\n\t@echo PASS integration-test\n")
     setActiveTicketWorktree(tmp, "0099")
     defer: clearActiveTicketWorktree()
 
@@ -1373,8 +1373,23 @@ suite "orchestrator mcp tools":
     let httpServer = createOrchestratorServer()
     let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
     let toolResponse = submitPrHandler(%*{"summary": "tests fail"})
-    check "Pre-submit test gate failed" in toolResponse.getStr()
+    check "Pre-submit quality gate failed" in toolResponse.getStr()
     check "Fix the failing tests" in toolResponse.getStr()
+    check consumeSubmitPrSummary() == ""
+
+  test "submit_pr rejects when integration-test fails":
+    discard consumeSubmitPrSummary()
+    let tmp = getTempDir() / "scriptorium_test_submit_pr_integ_fail"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\nintegration-test:\n\t@echo FAIL integration-test\n\t@false\n")
+    setActiveTicketWorktree(tmp, "0099")
+    defer: clearActiveTicketWorktree()
+
+    let httpServer = createOrchestratorServer()
+    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+    let toolResponse = submitPrHandler(%*{"summary": "integ fails"})
+    check "Pre-submit quality gate failed on 'integration-test'" in toolResponse.getStr()
     check consumeSubmitPrSummary() == ""
 
 suite "orchestrator coding agent execution":
@@ -3145,6 +3160,7 @@ suite "logging":
     writeOrchestratorEndpointConfig(tmp, 902)
 
     let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
     var capturedRequests: seq[AgentRunRequest]
@@ -3223,7 +3239,7 @@ suite "logging":
     writeOrchestratorEndpointConfig(tmp, 904)
 
     let assignment = assignOldestOpenTicket(tmp)
-    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo PASS\n")
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo PASS\nintegration-test:\n\t@echo PASS\n")
 
     var callCount = 0
     var capturedRequests: seq[AgentRunRequest]
@@ -3261,7 +3277,7 @@ suite "logging":
     writeOrchestratorEndpointConfig(tmp, 905)
 
     let assignment = assignOldestOpenTicket(tmp)
-    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo FAILURE OUTPUT\n\t@false\n")
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo FAILURE OUTPUT\n\t@false\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
     var capturedRequests: seq[AgentRunRequest]
@@ -3300,7 +3316,7 @@ suite "logging":
     writeOrchestratorEndpointConfig(tmp, 906)
 
     let assignment = assignOldestOpenTicket(tmp)
-    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     let ticketId = "0037"
 
@@ -4353,7 +4369,7 @@ suite "progress-based stall detection":
     writeOrchestratorEndpointConfig(tmp, 950)
 
     let assignment = assignOldestOpenTicket(tmp)
-    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
     var capturedRequests: seq[AgentRunRequest]
@@ -4391,7 +4407,7 @@ suite "progress-based stall detection":
     writeOrchestratorEndpointConfig(tmp, 951)
 
     let assignment = assignOldestOpenTicket(tmp)
-    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
     let before = planCommitCount(tmp)
 
     var callCount = 0
@@ -4427,6 +4443,7 @@ suite "progress-based stall detection":
     writeOrchestratorEndpointConfig(tmp, 952)
 
     let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var capturedRequest: AgentRunRequest
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
