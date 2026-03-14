@@ -59,3 +59,21 @@ All work is committed. The `submit_pr` MCP tool is not available in this environ
 ```text
 ompt_builders.nim`** - Extended `buildCodingAgentPrompt` with an optional `priorWorkNote` parameter (default `\"\"`). When non-empty, the note is appended to the prompt.\n\n3. **`tests/test_prior_work.nim`** - Four unit tests covering:\n   - No prior commits returns zero\n   - Prior commits detected with correct count (2 commits)\n   - No prior work note leaves prompt unchanged\n   - Prior work note is appended to prompt","stop_reason":"end_turn","session_id":"2a1e24e4-7e25-4f0e-9622-7d0e6a9a6f57","total_cost_usd":1.49365375,"usage":{"input_tokens":42,"cache_creation_input_tokens":54495,"cache_read_input_tokens":1921350,"output_tokens":7687,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":54495,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":42,"outputTokens":7687,"cacheReadInputTokens":1921350,"cacheCreationInputTokens":54495,"webSearchRequests":0,"costUSD":1.49365375,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"d0644c28-04c1-4608-b036-a3a3e2342a2a"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work/.scriptorium/logs/0064/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work/.scriptorium/logs/0064/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool has been called successfully. The response confirms: **"Merge request enqueued."**
+
+The previous attempt had already implemented all the required changes and tests were passing. The work includes:
+- `detectPriorWork` proc that runs `git log master..<branch> --oneline` to find commits ahead of master
+- Integration into `executeAssignedTicket` before prompt building
+- Extended `buildCodingAgentPrompt` to accept an optional prior-work note
+- Unit tests covering no prior work and prior work detected with correct count
+```
+
+### Agent Stdout Tail
+```text
+ady implemented all the required changes and tests were passing. The work includes:\n- `detectPriorWork` proc that runs `git log master..<branch> --oneline` to find commits ahead of master\n- Integration into `executeAssignedTicket` before prompt building\n- Extended `buildCodingAgentPrompt` to accept an optional prior-work note\n- Unit tests covering no prior work and prior work detected with correct count","stop_reason":"end_turn","session_id":"a5b649fa-de3a-4c12-be94-a225a792b474","total_cost_usd":0.5320552500000001,"usage":{"input_tokens":28,"cache_creation_input_tokens":24017,"cache_read_input_tokens":587618,"output_tokens":3520,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":24017,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":28,"outputTokens":3520,"cacheReadInputTokens":587618,"cacheCreationInputTokens":24017,"webSearchRequests":0,"costUSD":0.5320552500000001,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a634aae5-1204-4661-85b0-60bb6e5acf9c"}
+```
