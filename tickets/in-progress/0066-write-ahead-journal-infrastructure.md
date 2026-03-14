@@ -45,3 +45,5 @@ Implement the write-ahead journal file structure and protocol for atomic plan br
 - Replay correctly handles: all-applied, partially-applied, and none-applied states.
 - Rollback restores files to pre-transition state.
 - Unit tests cover all three replay scenarios plus normal completion path.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0066-write-ahead-journal-infrastructure
