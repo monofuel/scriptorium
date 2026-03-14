@@ -1472,7 +1472,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
-    check after == before + 2
+    check after == before + 4
     check "queue/merge/pending/0001-0001.md" in files
     let (queueEntry, queueRc) = execCmdEx(
       "git -C " & quoteShell(tmp) & " show scriptorium/plan:queue/merge/pending/0001-0001.md"

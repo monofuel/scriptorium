@@ -108,20 +108,6 @@ proc ticketPathInState(planPath: string, stateDir: string, item: MergeQueueItem)
   ## Return the expected ticket path for one ticket state directory.
   result = planPath / stateDir / extractFilename(item.ticketPath)
 
-proc clearActiveQueueInPlanPath(planPath: string): bool =
-  ## Clear queue/merge/active.md when it contains a pending item path.
-  let activePath = planPath / PlanMergeQueueActivePath
-  if fileExists(activePath) and readFile(activePath).strip().len > 0:
-    writeFile(activePath, "")
-    result = true
-
-proc commitMergeQueueCleanup(planPath: string, ticketId: string) =
-  ## Commit merge queue cleanup changes when tracked files were modified.
-  gitRun(planPath, "add", "-A", PlanMergeQueueDir)
-  if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-    let suffix = if ticketId.len > 0: " " & ticketId else: ""
-    gitRun(planPath, "commit", "-m", MergeQueueCleanupCommitPrefix & suffix)
-
 proc listMergeQueueItems*(planPath: string): seq[MergeQueueItem] =
   ## Return merge queue items ordered by file name.
   let pendingRoot = planPath / PlanMergeQueuePendingDir
@@ -181,10 +167,13 @@ proc enqueueMergeRequest*(
       summary: summary.strip(),
     )
 
-    writeFile(planPath / pendingRelPath, queueItemToMarkdown(item))
-    gitRun(planPath, "add", PlanMergeQueueDir)
-    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-      gitRun(planPath, "commit", "-m", MergeQueueEnqueueCommitPrefix & " " & ticketId)
+    let enqueueCommitMsg = MergeQueueEnqueueCommitPrefix & " " & ticketId
+    let enqueueSteps = @[
+      newWriteStep(pendingRelPath, queueItemToMarkdown(item)),
+    ]
+    beginJournalTransition(planPath, "enqueue " & ticketId, enqueueSteps, enqueueCommitMsg)
+    executeJournalSteps(planPath)
+    completeJournalTransition(planPath)
     logInfo(fmt"ticket {ticketId}: merge queue entered (position={queueId})")
     pendingRelPath
   )
@@ -283,13 +272,25 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
 
     let queueItems = listMergeQueueItems(planPath)
     if queueItems.len == 0:
-      if clearActiveQueueInPlanPath(planPath):
-        commitMergeQueueCleanup(planPath, "")
+      if fileExists(activePath) and readFile(activePath).strip().len > 0:
+        let clearSteps = @[
+          newWriteStep(PlanMergeQueueActivePath, ""),
+        ]
+        beginJournalTransition(planPath, "clear active", clearSteps, MergeQueueCleanupCommitPrefix)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
         return true
       return false
 
     let item = queueItems[0]
-    writeFile(activePath, item.pendingPath & "\n")
+    let dequeueCommitMsg = MergeQueueCleanupCommitPrefix & " dequeue " & item.ticketId
+    let dequeueSteps = @[
+      newWriteStep(PlanMergeQueueActivePath, item.pendingPath & "\n"),
+      newRemoveStep(item.pendingPath),
+    ]
+    beginJournalTransition(planPath, "dequeue " & item.ticketId, dequeueSteps, dequeueCommitMsg)
+    executeJournalSteps(planPath)
+    completeJournalTransition(planPath)
     let queuePath = planPath / item.pendingPath
     let ticketPath = planPath / item.ticketPath
     if not fileExists(ticketPath):
@@ -297,10 +298,14 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       let openTicketPath = ticketPathInState(planPath, PlanTicketsOpenDir, item)
       let hasTerminalTicket = fileExists(doneTicketPath) or fileExists(openTicketPath)
       if hasTerminalTicket:
+        var cleanupSteps: seq[JournalStep] = @[]
         if fileExists(queuePath):
-          removeFile(queuePath)
-        writeFile(activePath, "")
-        commitMergeQueueCleanup(planPath, item.ticketId)
+          cleanupSteps.add(newRemoveStep(item.pendingPath))
+        cleanupSteps.add(newWriteStep(PlanMergeQueueActivePath, ""))
+        let cleanupCommitMsg = MergeQueueCleanupCommitPrefix & " " & item.ticketId
+        beginJournalTransition(planPath, "cleanup " & item.ticketId, cleanupSteps, cleanupCommitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
         return true
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {item.ticketPath}")
 
@@ -330,7 +335,6 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let reopenSteps = @[
           newWriteStep(item.ticketPath, updatedContent),
           newMoveStep(item.ticketPath, openRelPath),
-          newRemoveStep(item.pendingPath),
           newWriteStep(PlanMergeQueueActivePath, ""),
         ]
         beginJournalTransition(planPath, "reopen " & item.ticketId, reopenSteps, reopenCommitMsg)
@@ -360,7 +364,6 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       let reviewReopenSteps = @[
         newWriteStep(item.ticketPath, currentContent),
         newMoveStep(item.ticketPath, openRelPath),
-        newRemoveStep(item.pendingPath),
         newWriteStep(PlanMergeQueueActivePath, ""),
       ]
       beginJournalTransition(planPath, "reopen " & item.ticketId, reviewReopenSteps, reviewReopenCommitMsg)
@@ -440,7 +443,6 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       let doneSteps = @[
         newWriteStep(item.ticketPath, updatedContent),
         newMoveStep(item.ticketPath, doneRelPath),
-        newRemoveStep(item.pendingPath),
         newWriteStep(PlanMergeQueueActivePath, ""),
       ]
       beginJournalTransition(planPath, "complete " & item.ticketId, doneSteps, doneCommitMsg)
@@ -476,7 +478,6 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let stuckSteps = @[
           newWriteStep(item.ticketPath, contentWithMetrics),
           newMoveStep(item.ticketPath, stuckRelPath),
-          newRemoveStep(item.pendingPath),
           newWriteStep(PlanMergeQueueActivePath, ""),
         ]
         beginJournalTransition(planPath, "park " & item.ticketId, stuckSteps, stuckCommitMsg)
@@ -497,7 +498,6 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let failReopenSteps = @[
           newWriteStep(item.ticketPath, contentWithMetrics),
           newMoveStep(item.ticketPath, openRelPath),
-          newRemoveStep(item.pendingPath),
           newWriteStep(PlanMergeQueueActivePath, ""),
         ]
         beginJournalTransition(planPath, "reopen " & item.ticketId, failReopenSteps, failReopenCommitMsg)
