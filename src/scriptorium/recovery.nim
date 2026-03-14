@@ -1,0 +1,196 @@
+## Startup recovery sequence that runs before the first orchestrator tick.
+
+import
+  std/[os, osproc, posix, strformat, strutils],
+  ./[git_ops, journal, lock_management, logging, merge_queue, shared_state, ticket_assignment, ticket_metadata]
+
+const
+  RecoveryCommitMessage = "scriptorium: recovery commit (unclean shutdown)"
+  RecoveryMergedCommitPrefix = "scriptorium: recovery — completed already-merged ticket"
+
+type
+  RecoverySummary* = object
+    worktreesCleaned*: int
+    staleMarkersCleared*: int
+    planAction*: string
+    alreadyMergedCompleted*: int
+
+proc isScriptoriumProcess(pid: int): bool =
+  ## Check if a PID corresponds to a known scriptorium process.
+  let cmdlinePath = "/proc/" & $pid & "/cmdline"
+  if not fileExists(cmdlinePath):
+    return false
+  let cmdline = readFile(cmdlinePath)
+  result = "scriptorium" in cmdline
+
+proc cleanOrphanedWorktrees*(repoPath: string): int =
+  ## Step 1: Clean orphaned worktrees and remove locks held by dead PIDs.
+  if not hasPlanBranch(repoPath):
+    return 0
+
+  let cleaned = cleanupStaleTicketWorktrees(repoPath)
+  for path in cleaned:
+    logInfo(&"recovery: cleaned orphaned worktree {path}")
+  result = cleaned.len
+
+  # Remove git worktree locks held by dead PIDs.
+  let worktreeGitDir = repoPath / ".git" / "worktrees"
+  if dirExists(worktreeGitDir):
+    for kind, path in walkDir(worktreeGitDir):
+      if kind != pcDir:
+        continue
+      let lockFile = path / "locked"
+      if not fileExists(lockFile):
+        continue
+      let lockContent = readFile(lockFile).strip()
+      # Try to extract PID from lock content.
+      var lockPid = 0
+      for word in lockContent.splitWhitespace():
+        if word.allCharsInSet(Digits) and word.len > 0:
+          lockPid = parseInt(word)
+          break
+      if lockPid <= 0:
+        continue
+      let killRc = posix.kill(Pid(lockPid), 0)
+      if killRc != 0 and int(osLastError()) == ESRCH:
+        removeFile(lockFile)
+        logInfo(&"recovery: cleaned orphaned worktree {path} (dead lock PID {lockPid})")
+        inc result
+      elif killRc == 0 and not isScriptoriumProcess(lockPid):
+        logWarn(&"recovery: worktree lock held by unknown process PID {lockPid} in {path}, skipping")
+
+proc detectStaleAgentProcesses*(repoPath: string): int =
+  ## Step 2: Detect stale agent processes in worktree directories.
+  let managedRoot = managedWorktreeRootPath(repoPath)
+  let ticketRoot = managedTicketWorktreeRootPath(repoPath)
+  if not dirExists(ticketRoot):
+    return 0
+
+  for kind, worktreePath in walkDir(ticketRoot):
+    if kind != pcDir:
+      continue
+    # Check for PID marker files.
+    for fileKind, filePath in walkDir(worktreePath):
+      if fileKind != pcFile:
+        continue
+      let fileName = extractFilename(filePath)
+      if not (fileName.endsWith(".pid") or fileName.endsWith(".lock")):
+        continue
+      let content = readFile(filePath).strip()
+      var markerPid = 0
+      for word in content.splitWhitespace():
+        if word.allCharsInSet(Digits) and word.len > 0:
+          markerPid = parseInt(word)
+          break
+      if markerPid <= 0:
+        continue
+      let killRc = posix.kill(Pid(markerPid), 0)
+      if killRc != 0 and int(osLastError()) == ESRCH:
+        removeFile(filePath)
+        logInfo(&"recovery: cleared stale agent marker for PID {markerPid}")
+        inc result
+      elif killRc == 0:
+        logWarn(&"recovery: stale agent process {markerPid} still running in {worktreePath}, manual intervention may be needed")
+
+proc reconcileDirtyPlanBranch*(repoPath: string): string =
+  ## Step 3: Reconcile dirty plan branch.
+  if not hasPlanBranch(repoPath):
+    return "clean"
+
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+    # Check for journal first.
+    if journalExists(planPath):
+      replayOrRollbackJournal(planPath)
+      # Determine what happened by checking the last commit.
+      let (logOut, logRc) = execCmdEx("git -C " & planPath & " log -1 --format=%s")
+      let lastSubject = logOut.strip()
+      if "complete transition" in lastSubject:
+        let (logOut2, _) = execCmdEx("git -C " & planPath & " log -2 --format=%s")
+        let lines = logOut2.strip().splitLines()
+        if lines.len >= 2:
+          let prevSubject = lines[1].strip()
+          if "begin transition" in prevSubject:
+            result = "journal-rolled-back"
+          else:
+            result = "journal-replayed"
+        else:
+          result = "journal-replayed"
+      else:
+        result = "journal-replayed"
+      logInfo(&"recovery: plan branch reconciled ({result})")
+      return
+
+    # Check for uncommitted changes.
+    let statusResult = runCommandCapture(planPath, "git", @["status", "--porcelain"])
+    if statusResult.exitCode == 0 and statusResult.output.strip().len > 0:
+      gitRun(planPath, "add", "-A")
+      gitRun(planPath, "commit", "-m", RecoveryCommitMessage)
+      result = "committed"
+      logInfo(&"recovery: plan branch reconciled ({result})")
+      return
+
+    result = "clean"
+  )
+
+proc validateMergeQueueVsMaster*(repoPath: string): int =
+  ## Step 4: Complete tickets whose branches are already merged into master.
+  if not hasPlanBranch(repoPath):
+    return 0
+
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    discard ensureMergeQueueInitializedInPlanPath(planPath)
+    let items = listMergeQueueItems(planPath)
+    var completed = 0
+
+    for item in items:
+      # Check if ticket branch is ancestor of master.
+      let checkResult = runCommandCapture(
+        repoPath, "git", @["merge-base", "--is-ancestor", item.branch, "master"],
+      )
+      if checkResult.exitCode != 0:
+        continue
+
+      # Branch is already merged. Move ticket to done and remove queue entry.
+      let ticketPath = planPath / item.ticketPath
+      if not fileExists(ticketPath):
+        continue
+
+      let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
+      createDir(planPath / PlanTicketsDoneDir)
+      moveFile(ticketPath, planPath / doneRelPath)
+
+      let queuePath = planPath / item.pendingPath
+      if fileExists(queuePath):
+        removeFile(queuePath)
+
+      # Clear active marker if it points to this item.
+      let activePath = planPath / PlanMergeQueueActivePath
+      if fileExists(activePath):
+        let activeContent = readFile(activePath).strip()
+        if activeContent == item.pendingPath:
+          writeFile(activePath, "")
+
+      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanMergeQueueDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        let commitMsg = RecoveryMergedCommitPrefix & " " & item.ticketId
+        gitRun(planPath, "commit", "-m", commitMsg)
+
+      logInfo(&"recovery: completed already-merged ticket {item.ticketId}")
+      inc completed
+
+    result = completed
+  )
+
+proc recoverFromCrash*(repoPath: string): RecoverySummary =
+  ## Execute the full startup recovery sequence before the first orchestrator tick.
+  result.worktreesCleaned = cleanOrphanedWorktrees(repoPath)
+  result.staleMarkersCleared = detectStaleAgentProcesses(repoPath)
+  result.planAction = reconcileDirtyPlanBranch(repoPath)
+  result.alreadyMergedCompleted = validateMergeQueueVsMaster(repoPath)
+
+  # Step 5: Log recovery summary.
+  if result.worktreesCleaned == 0 and result.staleMarkersCleared == 0 and result.planAction == "clean" and result.alreadyMergedCompleted == 0:
+    logInfo("recovery: clean startup, no recovery needed")
+  else:
+    let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets"
+    logInfo(summaryLine)

@@ -1,10 +1,10 @@
 import
   std/[os, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection
+  architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery
 
 const
   IdleSleepMs = 200
@@ -133,6 +133,7 @@ proc logSessionSummary*() =
 
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop for an optional bounded number of ticks.
+  discard recoverFromCrash(repoPath)
   agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
   ensureTimingsLockInitialized()
