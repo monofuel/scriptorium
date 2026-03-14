@@ -30,3 +30,5 @@ All merge queue operations must go through the journal protocol:
 - Journal file is created and cleaned up for each operation.
 - Existing integration tests continue to pass.
 - No `.scriptorium-journal.json` persists after clean operations.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0071-journal-merge-queue-operations
