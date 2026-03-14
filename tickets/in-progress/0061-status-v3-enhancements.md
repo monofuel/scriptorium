@@ -154,3 +154,27 @@ make: *** [Makefile:36: integration-test] Error 1
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Multi-file enhancement (4 files + tests) with straightforward parsing and formatting logic, but integration test compatibility risk as demonstrated by the merge queue failure on existing status output expectations.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. The `submit_pr` MCP tool returned "Merge request enqueued."
+
+Here's what was implemented:
+
+1. **`src/scriptorium/shared_state.nim`** — Added `InProgressTicketElapsed` and `DoneTicketSummary` types, extended `OrchestratorStatus` with `inProgressElapsed`, `recentDoneTickets`, `firstAttemptSuccessCount`, and `totalDoneWithAttempts` fields.
+
+2. **`src/scriptorium/ticket_metadata.nim`** — Added `parseMetricField` to extract metric values from `## Metrics` sections in ticket markdown.
+
+3. **`src/scriptorium/ticket_assignment.nim`** — Extended `readOrchestratorStatus` to collect elapsed time for in-progress tickets (from worktree directory creation time via `stat`), parse done ticket metrics for last 5 completed tickets, and calculate first-attempt success rate. Only shows elapsed when the worktree directory actually exists — this was the fix for the previous attempt's integration test failure.
+
+4. **`src/scriptorium.nim`** — Updated `cmdStatus` to display elapsed time per in-progress ticket, recent completed tickets with outcome/wall time, and cumulative first-attempt success rate.
+
+5. **`tests/test_scriptorium.nim`** — Added 6 unit tests for `parseMetricField`.
+```
+
+### Agent Stdout Tail
+```text
+lapsed when the worktree directory actually exists — this was the fix for the previous attempt's integration test failure.\n\n4. **`src/scriptorium.nim`** — Updated `cmdStatus` to display elapsed time per in-progress ticket, recent completed tickets with outcome/wall time, and cumulative first-attempt success rate.\n\n5. **`tests/test_scriptorium.nim`** — Added 6 unit tests for `parseMetricField`.","stop_reason":"end_turn","session_id":"608a994c-56df-48cc-958e-c66f1a4e18f0","total_cost_usd":1.4643169999999999,"usage":{"input_tokens":37,"cache_creation_input_tokens":46822,"cache_read_input_tokens":1799789,"output_tokens":10864,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":46822,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":37,"outputTokens":10864,"cacheReadInputTokens":1799789,"cacheCreationInputTokens":46822,"webSearchRequests":0,"costUSD":1.4643169999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a54df08f-ddb1-45c0-90ca-cd838b37c412"}
+```
