@@ -38,3 +38,28 @@ Before each retry in `executeAssignedTicket` (in `coding_agent.nim`), validate t
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Single-file insertion of a three-branch conditional (corrupt/dirty/clean) into an existing retry loop using established git helpers, plus unit tests for each case — moderate logic but well-scoped with clear implementation guidance.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0063-worktree-health-check-before-retry/.scriptorium/logs/0063/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0063-worktree-health-check-before-retry/.scriptorium/logs/0063/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool is not available as a deferred tool in this session. All changes are committed. Let me provide a summary:
+
+**Done.** Implemented worktree health check before retry attempts:
+
+**Changes:**
+1. **`src/scriptorium/coding_agent.nim`** — Added `validateWorktreeHealth*` proc that checks worktree state before retries:
+   - **Corrupt**: If `git status --porcelain` fails, removes and recreates worktree from branch
+   - **Dirty**: If there are uncommitted changes, stages all and commits with `scriptorium: save partial agent work (attempt N)`
+   - **Clean**: No action needed
+   - Called in the `while totalAttemptsUsed < maxAttempts` loop when `totalAttemptsUsed > 0`
+
+2. **`tests/test_worktree_health.nim`** — Unit tests covering all three cases (clean, dirty, corrupt), each verifying correct behavior and log messages.
+
+Note: The `submit_pr` MCP tool is not available in this environment. The commit is ready on branch `scriptorium/ticket-0063`.
+```
+
+### Agent Stdout Tail
+```text
+ (attempt N)`\n   - **Clean**: No action needed\n   - Called in the `while totalAttemptsUsed < maxAttempts` loop when `totalAttemptsUsed > 0`\n\n2. **`tests/test_worktree_health.nim`** — Unit tests covering all three cases (clean, dirty, corrupt), each verifying correct behavior and log messages.\n\nNote: The `submit_pr` MCP tool is not available in this environment. The commit is ready on branch `scriptorium/ticket-0063`.","stop_reason":"end_turn","session_id":"1ef64591-f671-479a-90d2-77e2c12686d6","total_cost_usd":0.935539,"usage":{"input_tokens":30,"cache_creation_input_tokens":39564,"cache_read_input_tokens":1004328,"output_tokens":7438,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":39564,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":30,"outputTokens":7438,"cacheReadInputTokens":1004328,"cacheCreationInputTokens":39564,"webSearchRequests":0,"costUSD":0.935539,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"9713e4a2-b591-4af7-ba0f-da31915aa382"}
+```
