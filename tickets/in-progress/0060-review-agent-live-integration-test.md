@@ -59,3 +59,10 @@ The PR has been submitted. The integration test has been created and committed, 
 ```text
 onsumable via `consumeReviewDecision` and consumed only once\n  - Cleans up temp directories after completion\n  - Automatically included in `make integration-test` via the `integration_*.nim` glob pattern","stop_reason":"end_turn","session_id":"bdaa8f94-3080-4b03-88ff-1f7224b03b16","total_cost_usd":1.3066264,"usage":{"input_tokens":37,"cache_creation_input_tokens":40477,"cache_read_input_tokens":1439233,"output_tokens":7513,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":40477,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":37,"outputTokens":7513,"cacheReadInputTokens":1439233,"cacheCreationInputTokens":40477,"webSearchRequests":0,"costUSD":1.16060775,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":73,"outputTokens":4183,"cacheReadInputTokens":383244,"cacheCreationInputTokens":69365,"webSearchRequests":0,"costUSD":0.14601865,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"7be139b0-230a-4673-a148-0a5662db8f93"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m42s
