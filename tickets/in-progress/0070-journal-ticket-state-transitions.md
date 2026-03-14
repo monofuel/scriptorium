@@ -31,3 +31,5 @@ All ticket state transitions must go through the journal protocol:
 - Each transition creates and cleans up the journal file.
 - Existing integration tests continue to pass.
 - No `.scriptorium-journal.json` persists after clean operations.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0070-journal-ticket-state-transitions
