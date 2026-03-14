@@ -65,3 +65,20 @@ All done. Here's a summary of what was implemented:
 ```text
 `\n\n`make test` passes. The `submit_pr` MCP tool is not available in this environment — the orchestrator should pick up the committed changes on branch `scriptorium/ticket-0059`.","stop_reason":"end_turn","session_id":"0780b170-0806-4ea7-afaa-74786ec7d70a","total_cost_usd":0.9254149500000002,"usage":{"input_tokens":30,"cache_creation_input_tokens":29406,"cache_read_input_tokens":890786,"output_tokens":6047,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":29406,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":30,"outputTokens":6047,"cacheReadInputTokens":890786,"cacheCreationInputTokens":29406,"webSearchRequests":0,"costUSD":0.7805055000000001,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":41,"outputTokens":4704,"cacheReadInputTokens":594047,"cacheCreationInputTokens":49555,"webSearchRequests":0,"costUSD":0.14490945000000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"bb955168-9557-4062-a480-15693287882a"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` MCP tool returned "Merge request enqueued." successfully. The ticket is complete:
+
+- **Commit 874774c** added unit tests for `buildReviewAgentPrompt` and feedback truncation
+- Tests cover prompt sections, empty diff edge cases, and boundary conditions at `ReviewFeedbackMaxBytes` (4096 bytes)
+- `make test` passes
+- PR submitted to merge queue
+```
+
+### Agent Stdout Tail
+```text
+ion_api_ms":134760,"num_turns":35,"result":"The `submit_pr` MCP tool returned \"Merge request enqueued.\" successfully. The ticket is complete:\n\n- **Commit 874774c** added unit tests for `buildReviewAgentPrompt` and feedback truncation\n- Tests cover prompt sections, empty diff edge cases, and boundary conditions at `ReviewFeedbackMaxBytes` (4096 bytes)\n- `make test` passes\n- PR submitted to merge queue","stop_reason":"end_turn","session_id":"dcf8803f-970a-4ae3-ab9b-edc3c4eea106","total_cost_usd":0.6097637499999999,"usage":{"input_tokens":36,"cache_creation_input_tokens":20209,"cache_read_input_tokens":745055,"output_tokens":4430,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":20209,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":36,"outputTokens":4430,"cacheReadInputTokens":745055,"cacheCreationInputTokens":20209,"webSearchRequests":0,"costUSD":0.6097637499999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"49d0a0cb-141a-4937-a3fe-17a1d71ea6b0"}
+```
