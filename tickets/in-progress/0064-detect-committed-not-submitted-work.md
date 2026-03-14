@@ -28,3 +28,5 @@ At the start of each coding agent attempt (including the first), check whether t
 - Agent prompt includes prior-work awareness note when commits exist.
 - No branch reset occurs — agent continues from branch tip.
 - Unit tests cover: no prior work, prior work detected with correct count.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work
