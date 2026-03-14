@@ -50,8 +50,9 @@ proc formatPlanStreamEvent*(event: AgentStreamEvent): string =
   of agentEventMessage:
     result = ""
 
-proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string): string =
+proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string, priorWorkNote: string = ""): string =
   ## Build the coding-agent prompt from ticket context.
+  ## When priorWorkNote is non-empty, it is appended to inform the agent of existing commits.
   result = renderPromptTemplate(
     CodingAgentTemplate,
     [
@@ -61,6 +62,8 @@ proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPa
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
   )
+  if priorWorkNote.len > 0:
+    result = result.strip() & "\n\n" & priorWorkNote
 
 proc buildStallContinuationPrompt*(initialPrompt: string, ticketContent: string, ticketId: string, attempt: int, testExitCode: int, testOutput: string): string =
   ## Build a continuation prompt for a coding agent that stalled without calling submit_pr.

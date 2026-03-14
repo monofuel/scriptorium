@@ -35,6 +35,18 @@ proc ensureAgentResultChanOpen() =
     agentResultChan.open()
     agentResultChanOpen = true
 
+proc detectPriorWork*(worktreePath: string, ticketId: string): int =
+  ## Detect commits ahead of master on the ticket branch.
+  ## Returns the number of prior commits found.
+  let logResult = runCommandCapture(worktreePath, "git", @["log", "master..HEAD", "--oneline"])
+  if logResult.exitCode != 0:
+    return 0
+  let lines = logResult.output.strip()
+  if lines.len == 0:
+    return 0
+  result = lines.countLines()
+  logInfo(&"ticket {ticketId}: found {result} committed changes from prior attempt, agent will continue from branch tip")
+
 proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: string, ticketId: string, attempt: int) =
   ## Validate worktree state before a retry attempt.
   ## Corrupt worktrees are removed and recreated. Dirty worktrees have changes committed.
@@ -159,7 +171,12 @@ proc executeAssignedTicket*(
 
   logDebug(fmt"executeAssignedTicket: buildCodingAgentPrompt")
   let ticketId = ticketIdFromTicketPath(ticketRelPath)
-  let initialPrompt = buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent)
+  let priorCommitCount = detectPriorWork(assignment.worktree, ticketId)
+  var priorWorkNote = ""
+  if priorCommitCount > 0:
+    priorWorkNote = "## Prior Work Detected\n\nThis branch has " & $priorCommitCount &
+      " commit(s) from a prior attempt. Review existing changes with `git log master..HEAD` and `git diff master` before proceeding. Build on the existing work rather than starting over."
+  let initialPrompt = buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent, priorWorkNote)
 
   var currentPrompt = initialPrompt
   var currentAttemptBase = DefaultAgentAttempt
