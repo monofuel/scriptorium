@@ -20,6 +20,7 @@ const
   ActiveTicketIdMaxBytes* = 256
   ReviewActionMaxBytes* = 32
   ReviewFeedbackMaxBytes* = 4096
+  ReviewTruncationMarker* = "... [truncated]"
   RateLimitBaseBackoffSeconds* = 2.0
   RateLimitMaxBackoffSeconds* = 120.0
   RateLimitBackoffMultiplier* = 2.0
@@ -210,10 +211,17 @@ proc recordReviewDecision*(action: string, feedback: string) {.gcsafe.} =
     reviewActionLen = actionLen
     if actionLen > 0:
       copyMem(addr reviewActionBuffer[0], unsafeAddr action[0], actionLen)
-    let fbLen = min(feedback.len, ReviewFeedbackMaxBytes)
-    reviewFeedbackLen = fbLen
-    if fbLen > 0:
-      copyMem(addr reviewFeedbackBuffer[0], unsafeAddr feedback[0], fbLen)
+    if feedback.len > ReviewFeedbackMaxBytes:
+      let marker = ReviewTruncationMarker
+      let markerLen = marker.len
+      let textLen = ReviewFeedbackMaxBytes - markerLen
+      reviewFeedbackLen = ReviewFeedbackMaxBytes
+      copyMem(addr reviewFeedbackBuffer[0], unsafeAddr feedback[0], textLen)
+      copyMem(addr reviewFeedbackBuffer[textLen], unsafeAddr marker[0], markerLen)
+    else:
+      reviewFeedbackLen = feedback.len
+      if feedback.len > 0:
+        copyMem(addr reviewFeedbackBuffer[0], unsafeAddr feedback[0], feedback.len)
 
 proc consumeReviewDecision*(): tuple[action: string, feedback: string] {.gcsafe.} =
   ## Return and clear the latest review decision reported by the review agent.

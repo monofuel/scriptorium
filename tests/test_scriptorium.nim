@@ -4163,3 +4163,83 @@ suite "rate limit detection and backpressure":
     # Backpressure only affects new agent starts via effectiveMaxAgents.
     # Running agents tracked in runningAgentSlots are never modified.
     check runningAgentCount() == 0
+
+suite "buildReviewAgentPrompt":
+  test "contains expected sections":
+    ## Verify the rendered prompt includes ticket, diff, area, and summary sections.
+    let prompt = buildReviewAgentPrompt(
+      "Fix the login bug",
+      "--- a/login.nim\n+++ b/login.nim\n@@ -1 +1 @@\n-old\n+new",
+      "area: auth\nResponsible for authentication flows.",
+      "Fixed the login validation logic.",
+    )
+    check "Fix the login bug" in prompt
+    check "old" in prompt
+    check "new" in prompt
+    check "area: auth" in prompt
+    check "Fixed the login validation logic" in prompt
+
+  test "contains review instructions and submit_review tool":
+    ## Verify the prompt includes review instructions and the submit_review MCP tool.
+    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary")
+    check "submit_review" in prompt
+    check "approve" in prompt
+    check "request_changes" in prompt
+
+  test "sections are delimited with markdown headers":
+    ## Verify each section is labeled with a markdown header for parseability.
+    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary")
+    check "## Ticket Content" in prompt
+    check "## Changes" in prompt
+    check "## Area Context" in prompt
+    check "## Coding Agent Summary" in prompt
+    check "## Instructions" in prompt
+
+  test "empty diff does not crash":
+    ## Verify the prompt builder handles an empty diff gracefully.
+    let prompt = buildReviewAgentPrompt("ticket", "", "area", "summary")
+    check "## Changes" in prompt
+    check "## Ticket Content" in prompt
+
+  test "whitespace-only diff handled gracefully":
+    ## Verify the prompt builder handles a whitespace-only diff.
+    let prompt = buildReviewAgentPrompt("ticket", "   \n  \n", "area", "summary")
+    check "## Changes" in prompt
+
+suite "review feedback truncation":
+  setup:
+    discard consumeReviewDecision()
+
+  test "feedback under limit passes through unchanged":
+    ## Verify feedback well under ReviewFeedbackMaxBytes is stored verbatim.
+    let feedback = 'a'.repeat(100)
+    recordReviewDecision("approve", feedback)
+    let decision = consumeReviewDecision()
+    check decision.feedback == feedback
+    check decision.feedback.len == 100
+
+  test "feedback exactly at limit passes through unchanged":
+    ## Verify feedback exactly at ReviewFeedbackMaxBytes is stored verbatim.
+    let feedback = 'b'.repeat(ReviewFeedbackMaxBytes)
+    recordReviewDecision("approve", feedback)
+    let decision = consumeReviewDecision()
+    check decision.feedback == feedback
+    check decision.feedback.len == ReviewFeedbackMaxBytes
+
+  test "feedback one byte over limit is truncated with marker":
+    ## Verify feedback at 4097 bytes is truncated with the truncation marker.
+    let feedback = 'c'.repeat(ReviewFeedbackMaxBytes + 1)
+    recordReviewDecision("approve", feedback)
+    let decision = consumeReviewDecision()
+    check decision.feedback.len == ReviewFeedbackMaxBytes
+    check decision.feedback.endsWith(ReviewTruncationMarker)
+    let expectedText = 'c'.repeat(ReviewFeedbackMaxBytes - ReviewTruncationMarker.len)
+    check decision.feedback == expectedText & ReviewTruncationMarker
+
+  test "large feedback is truncated with marker":
+    ## Verify feedback at 2x the limit is truncated to ReviewFeedbackMaxBytes with marker.
+    let feedback = 'd'.repeat(ReviewFeedbackMaxBytes * 2)
+    recordReviewDecision("request_changes", feedback)
+    let decision = consumeReviewDecision()
+    check decision.feedback.len == ReviewFeedbackMaxBytes
+    check decision.feedback.endsWith(ReviewTruncationMarker)
