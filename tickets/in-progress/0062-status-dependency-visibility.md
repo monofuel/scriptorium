@@ -108,3 +108,25 @@ check status.blockedTickets.len == 2  # not >= 1
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Multi-file integration wiring existing cycle detection into the status command with new OrchestratorStatus fields, dependency parsing, and formatted output — moderate complexity but building on established patterns from ticket 0058.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0062-status-dependency-visibility/.scriptorium/logs/0062/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0062-status-dependency-visibility/.scriptorium/logs/0062/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+PR submitted successfully. Here's a summary of what was done:
+
+**Changes across 4 files:**
+
+1. **`src/scriptorium/shared_state.nim`** — Added `BlockedTicket` and `WaitingTicket` types with `blockedTickets`/`waitingTickets` fields on `OrchestratorStatus`.
+
+2. **`src/scriptorium/ticket_assignment.nim`** — Extended `readOrchestratorStatus` to build the dependency graph, run cycle detection, and report **all** cycle participants as blocked (fixing the review bug where only `cycle[0]` was reported). Also identifies tickets with unsatisfied non-circular dependencies as waiting.
+
+3. **`src/scriptorium.nim`** — Added `Blocked:` and `Waiting:` output lines to `cmdStatus`.
+
+4. **`tests/test_scriptorium.nim`** — Added 5 unit tests covering: two-node cycle (both reported), unsatisfied deps (waiting), satisfied deps (no output), no-deps tickets, and three-node cycle (all three reported).
+```
+
+### Agent Stdout Tail
+```text
+s reported). Also identifies tickets with unsatisfied non-circular dependencies as waiting.\n\n3. **`src/scriptorium.nim`** — Added `Blocked:` and `Waiting:` output lines to `cmdStatus`.\n\n4. **`tests/test_scriptorium.nim`** — Added 5 unit tests covering: two-node cycle (both reported), unsatisfied deps (waiting), satisfied deps (no output), no-deps tickets, and three-node cycle (all three reported).","stop_reason":"end_turn","session_id":"e8aa729e-35e1-476a-a5cd-a9583b63b244","total_cost_usd":1.6281437500000002,"usage":{"input_tokens":43,"cache_creation_input_tokens":53963,"cache_read_input_tokens":2112270,"output_tokens":9381,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":53963,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":43,"outputTokens":9381,"cacheReadInputTokens":2112270,"cacheCreationInputTokens":53963,"webSearchRequests":0,"costUSD":1.6281437500000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"65fad93b-056f-4fb4-b58f-361ef6d5eb58"}
+```
