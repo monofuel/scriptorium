@@ -103,3 +103,8 @@ Also strengthen the test to verify ALL cycle participants are reported:
 check status.blockedTickets.len == 2  # not >= 1
 # Verify both 0010 and 0011 are blocked
 ```
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file integration wiring existing cycle detection into the status command with new OrchestratorStatus fields, dependency parsing, and formatted output — moderate complexity but building on established patterns from ticket 0058.
