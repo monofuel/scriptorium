@@ -391,6 +391,7 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.timeouts.codingAgentHardTimeoutMs == 14_400_000
     check cfg.timeouts.codingAgentNoOutputTimeoutMs == 300_000
+    check cfg.timeouts.codingAgentProgressTimeoutMs == 600_000
     check cfg.timeouts.codingAgentMaxAttempts == 5
 
   test "timeout parses custom values":
@@ -400,12 +401,14 @@ suite "config":
     var writtenCfg = defaultConfig()
     writtenCfg.timeouts.codingAgentHardTimeoutMs = 7_200_000
     writtenCfg.timeouts.codingAgentNoOutputTimeoutMs = 600_000
+    writtenCfg.timeouts.codingAgentProgressTimeoutMs = 900_000
     writtenCfg.timeouts.codingAgentMaxAttempts = 3
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
     check cfg.timeouts.codingAgentHardTimeoutMs == 7_200_000
     check cfg.timeouts.codingAgentNoOutputTimeoutMs == 600_000
+    check cfg.timeouts.codingAgentProgressTimeoutMs == 900_000
     check cfg.timeouts.codingAgentMaxAttempts == 3
 
 suite "orchestrator endpoint":
