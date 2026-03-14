@@ -30,3 +30,8 @@ At the start of each coding agent attempt (including the first), check whether t
 - Unit tests cover: no prior work, prior work detected with correct count.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single-file change in coding_agent.nim adding a git log check and string interpolation into the prompt builder, with straightforward unit tests for line counting logic.
