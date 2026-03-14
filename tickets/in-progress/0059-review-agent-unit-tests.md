@@ -82,3 +82,16 @@ The `submit_pr` MCP tool returned "Merge request enqueued." successfully. The ti
 ```text
 ion_api_ms":134760,"num_turns":35,"result":"The `submit_pr` MCP tool returned \"Merge request enqueued.\" successfully. The ticket is complete:\n\n- **Commit 874774c** added unit tests for `buildReviewAgentPrompt` and feedback truncation\n- Tests cover prompt sections, empty diff edge cases, and boundary conditions at `ReviewFeedbackMaxBytes` (4096 bytes)\n- `make test` passes\n- PR submitted to merge queue","stop_reason":"end_turn","session_id":"dcf8803f-970a-4ae3-ab9b-edc3c4eea106","total_cost_usd":0.6097637499999999,"usage":{"input_tokens":36,"cache_creation_input_tokens":20209,"cache_read_input_tokens":745055,"output_tokens":4430,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":20209,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":36,"outputTokens":4430,"cacheReadInputTokens":745055,"cacheCreationInputTokens":20209,"webSearchRequests":0,"costUSD":0.6097637499999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"49d0a0cb-141a-4937-a3fe-17a1d71ea6b0"}
 ```
+
+## Review
+**Review:** changes requested
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 3m25s
+
+**Review Feedback:** Two issues to fix:
+
+1. **Truncation tests must verify the `... [truncated]` marker.** The ticket requirement says "truncated with `... [truncated]` marker" and the area context spec says "it must be truncated with a `... [truncated]` marker." Currently the tests assert `decision.feedback == 'z.repeat(ReviewFeedbackMaxBytes)` — plain byte truncation with no marker. The implementation in `recordReviewDecision` (shared_state.nim:213) also just does `min(feedback.len, ReviewFeedbackMaxBytes)` without appending a marker. Fix the implementation to append `... [truncated]` when truncating, and update the truncation tests to verify the marker is present in the truncated output and that the total length accounts for the marker.
+
+2. **Remove unnecessary `prompt_catalog` import.** `buildReviewAgentPrompt` is already accessible through the existing `orchestrator` import (orchestrator.nim:6 exports `prompt_builders`). Remove `prompt_catalog` from the import list to avoid a needless direct dependency.
