@@ -14,6 +14,7 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `logLevel`
   - `concurrency.maxAgents` (V5, integer, default 1)
   - `concurrency.tokenBudgetMB` (V5, optional integer megabytes)
+  - `agents.coding.progressTimeout` (V8, integer minutes, default 10)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.
 - Repository test commands:
   - `make test` runs `tests/test_*.nim`.
@@ -29,3 +30,4 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
 - Section 9: Config, Logging, Tests, And CI Baseline.
 - Section 24: Concurrent Agent Execution (V5, concurrency config).
 - Section 26: Resource Management (V5, token budget config).
+- Section 34: Agent Crash Recovery (V8, progress timeout config).

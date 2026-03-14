@@ -10,6 +10,7 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
   - `tickets/open/*.md`, `tickets/in-progress/*.md`, `tickets/done/*.md`
   - `queue/merge/pending/*.md`, `queue/merge/active.md`
   - `health/cache.json`
+  - `.scriptorium-journal.json` (transient, present only during in-flight transitions)
 - `queue/merge/` created lazily by orchestrator, not by `--init`.
 - Ticket state: exactly one state directory at a time, transitions via single orchestrator commits.
 - Ticket IDs: monotonic, zero-padded filenames.
@@ -32,9 +33,15 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
   - Non-circular dependency checking (`dependenciesSatisfied`) continues to work as before.
   - Unit tests must cover: simple cycle (A->B->A), multi-node cycle (A->B->C->A), no cycle, self-dependency.
 
+- Atomic plan branch transitions (V8, §32):
+  - All ticket state transitions and merge queue operations use a write-ahead journal (`.scriptorium-journal.json`) for crash safety.
+  - Journal records intended steps before filesystem operations begin, enabling deterministic replay or rollback on crash recovery.
+  - Detail in crash-recovery area.
+
 ## Spec References
 
 - Section 4: Planning Artifacts And State Model.
 - Section 22: Commit Health Cache (V4, `health/cache.json` layout).
 - Section 23: Parallel Ticket Assignment (V5, detail in parallel-execution area).
 - Section 29: Ticket Dependency Cycle Detection (V7).
+- Section 32: Atomic Plan Branch Transitions (V8, detail in crash-recovery area).

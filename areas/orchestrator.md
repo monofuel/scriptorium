@@ -42,6 +42,11 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - No sleep-based workarounds — shutdown must be event-driven.
 - If mummy does not support flag-based shutdown, investigate newer mummy versions or alternative HTTP server libraries.
 
+**Startup recovery sequence (V8, §31):**
+- On orchestrator start, before the first tick, run `recoverFromCrash` to detect and reconcile stale state from a previous crash or unclean shutdown.
+- Recovery steps: clean orphaned worktrees, detect stale agent processes, reconcile dirty plan branch (via journal replay if applicable), validate merge queue vs master HEAD, log recovery summary.
+- Detail in crash-recovery area.
+
 ## Spec References
 
 - Section 3: Orchestrator Run Loop.
@@ -51,3 +56,4 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - Sections 23-24: Parallel Ticket Assignment and Concurrent Agent Execution (V5, detail in parallel-execution area).
 - Section 27: Orchestrator Module Split (V7).
 - Section 28: SIGSEGV Shutdown Fix (V7).
+- Section 31: Startup Recovery Sequence (V8, detail in crash-recovery area).

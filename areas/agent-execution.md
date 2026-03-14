@@ -48,6 +48,22 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
   - Agent lifecycle (start, stall detection, continuation, submit_pr) applies independently per agent.
   - Detail in parallel-execution area.
 
+- Worktree health check before retry (V8, §34):
+  - Before starting any retry attempt (stall, progress timeout, or crash), validate the worktree's health.
+  - Run `git status --porcelain` in the worktree; if it fails, the worktree is corrupt.
+  - Run `git diff --stat` to assess uncommitted changes.
+  - Corrupt worktree: remove and recreate from ticket branch (`git worktree remove --force` then `git worktree add`). Log: `ticket <id>: worktree corrupt, recreated from branch`.
+  - Uncommitted changes: commit with `scriptorium: save partial agent work (attempt <n>)` on the ticket branch. Log: `ticket <id>: saved uncommitted agent work before retry`.
+  - Clean worktree: proceed normally.
+  - The retry agent receives the worktree in a known-good state with all prior work committed.
+
+- Detect committed-but-not-submitted work (V8, §34):
+  - At the start of each coding agent attempt (including the first), check whether the ticket branch has commits ahead of `master` not submitted via `submit_pr`.
+  - Detection: compare ticket branch HEAD against `master` using `git log master..<branch> --oneline`.
+  - When prior work detected: log `ticket <id>: found <n> committed changes from prior attempt, agent will continue from branch tip`.
+  - Include a note in the agent prompt informing the agent that prior work exists and it should review existing changes before proceeding.
+  - Do not reset the branch — the agent works from the branch tip, building on prior commits.
+
 ## Spec References
 
 - Section 5: Architect, Manager, And Coding Agent Execution.
@@ -55,3 +71,4 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
 - Section 20: Pre-Submit Test Gate (V4, detail in merge-queue area).
 - Section 21: Review Agent (V4, detail in review-agent area).
 - Section 24: Concurrent Agent Execution (V5, detail in parallel-execution area).
+- Section 34: Agent Crash Recovery — worktree health check and committed-but-not-submitted detection (V8).
