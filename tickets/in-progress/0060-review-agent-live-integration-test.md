@@ -31,3 +31,8 @@ V7 §30 requires a live integration test for the review agent, similar to `integ
 - No mocks or fakes used.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0060-review-agent-live-integration-test
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single new test file but requires wiring together MCP server, review agent, real model, and git worktree cleanup — mitigated by having a clear template in integration_mcp_submit_pr_live.nim to follow, likely one attempt.
