@@ -33,3 +33,8 @@ Before each retry in `executeAssignedTicket` (in `coding_agent.nim`), validate t
 - Unit tests cover all three cases (corrupt, dirty, clean).
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0063-worktree-health-check-before-retry
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-file insertion of a three-branch conditional (corrupt/dirty/clean) into an existing retry loop using established git helpers, plus unit tests for each case — moderate logic but well-scoped with clear implementation guidance.
