@@ -23,3 +23,5 @@ Add the `agents.coding.progressTimeout` config key to `config.nim` as specified 
 - `loadConfig` reads and merges the value from `scriptorium.json`.
 - Existing tests continue to pass.
 - New unit test verifies default and override behavior.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0065-progress-timeout-config-key
