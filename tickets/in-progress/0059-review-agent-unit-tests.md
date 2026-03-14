@@ -29,3 +29,5 @@ V7 §30 requires unit test coverage for `buildReviewAgentPrompt`, diff edge case
 - Tests exercise `buildReviewAgentPrompt` with realistic inputs.
 - Tests exercise feedback truncation boundary conditions.
 - `make test` passes.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests
