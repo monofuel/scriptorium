@@ -36,3 +36,32 @@ V7 §30 requires unit test coverage for `buildReviewAgentPrompt`, diff edge case
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Writing unit tests for an existing function (buildReviewAgentPrompt) and feedback truncation requires reading the implementation, crafting realistic test inputs, and handling boundary conditions across one or two test files, but involves no architectural changes or cross-module integration risk.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+All done. Here's a summary of what was implemented:
+
+**Added 9 unit tests** to `tests/test_scriptorium.nim` in two new suites:
+
+**`buildReviewAgentPrompt` suite (5 tests):**
+- Verifies rendered prompt contains all expected sections (ticket content, diff, area context, submit summary)
+- Verifies review instructions and `submit_review` tool references are present
+- Verifies sections are delimited with markdown headers for parseability
+- Verifies empty diff doesn't crash and still produces a valid prompt
+- Verifies whitespace-only diff is handled gracefully
+
+**`review feedback truncation` suite (4 tests):**
+- Feedback under 4096 bytes passes through unchanged
+- Feedback exactly at `ReviewFeedbackMaxBytes` (4096) passes through unchanged  
+- Feedback at 4097 bytes is truncated to 4096
+- Large feedback (2x limit) is truncated to `ReviewFeedbackMaxBytes`
+
+`make test` passes. The `submit_pr` MCP tool is not available in this environment — the orchestrator should pick up the committed changes on branch `scriptorium/ticket-0059`.
+```
+
+### Agent Stdout Tail
+```text
+`\n\n`make test` passes. The `submit_pr` MCP tool is not available in this environment — the orchestrator should pick up the committed changes on branch `scriptorium/ticket-0059`.","stop_reason":"end_turn","session_id":"0780b170-0806-4ea7-afaa-74786ec7d70a","total_cost_usd":0.9254149500000002,"usage":{"input_tokens":30,"cache_creation_input_tokens":29406,"cache_read_input_tokens":890786,"output_tokens":6047,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":29406,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":30,"outputTokens":6047,"cacheReadInputTokens":890786,"cacheCreationInputTokens":29406,"webSearchRequests":0,"costUSD":0.7805055000000001,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":41,"outputTokens":4704,"cacheReadInputTokens":594047,"cacheCreationInputTokens":49555,"webSearchRequests":0,"costUSD":0.14490945000000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"bb955168-9557-4062-a480-15693287882a"}
+```
