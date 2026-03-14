@@ -56,3 +56,27 @@ On orchestrator start, before the first tick, execute these recovery steps in or
 - predicted_difficulty: hard
 - predicted_duration_minutes: 30
 - reasoning: Five-step recovery procedure touching worktree management, process scanning, git operations, journal replay integration, and merge queue reconciliation across multiple modules, with unit tests for each step — likely 2+ attempts due to integration complexity and dependency on ticket 0066's journal infrastructure.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0067-startup-recovery-sequence/.scriptorium/logs/0067/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0067-startup-recovery-sequence/.scriptorium/logs/0067/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. Here's a summary of what was implemented:
+
+**New file: `src/scriptorium/recovery.nim`** - Implements the `recoverFromCrash` procedure with 5 ordered steps:
+
+1. **Clean Orphaned Worktrees** - Calls `cleanupStaleTicketWorktrees` and removes git worktree locks held by dead PIDs
+2. **Detect Stale Agent Processes** - Scans ticket worktree directories for `.pid`/`.lock` files with dead PIDs
+3. **Reconcile Dirty Plan Branch** - Delegates to `replayOrRollbackJournal` if journal exists, otherwise commits uncommitted changes
+4. **Validate Merge Queue vs Master** - Uses `git merge-base --is-ancestor` to detect already-merged tickets and moves them to done
+5. **Log Recovery Summary** - Single INFO line with counts, or "clean startup, no recovery needed"
+
+**Modified: `src/scriptorium/orchestrator.nim`** - Added `recovery` import and `discard recoverFromCrash(repoPath)` call at the top of `runOrchestratorMainLoop`
+
+**New file: `tests/test_recovery.nim`** - 12 unit tests covering each recovery step independently, including clean startup, dead PID cleanup, journal replay, and already-merged ticket completion.
+```
+
+### Agent Stdout Tail
+```text
+e: `tests/test_recovery.nim`** - 12 unit tests covering each recovery step independently, including clean startup, dead PID cleanup, journal replay, and already-merged ticket completion.","stop_reason":"end_turn","session_id":"9cd0ff10-3ae7-4b10-8003-e6f0d0042740","total_cost_usd":2.6278517500000005,"usage":{"input_tokens":44,"cache_creation_input_tokens":86270,"cache_read_input_tokens":3156246,"output_tokens":14046,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":86270,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":44,"outputTokens":14046,"cacheReadInputTokens":3156246,"cacheCreationInputTokens":86270,"webSearchRequests":0,"costUSD":2.4686805000000005,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":87,"outputTokens":8273,"cacheReadInputTokens":430755,"cacheCreationInputTokens":59715,"webSearchRequests":0,"costUSD":0.15917125,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"9e1ca099-f4ce-409e-afa9-2e70b617bc2b"}
+```
