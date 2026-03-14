@@ -51,3 +51,8 @@ On orchestrator start, before the first tick, execute these recovery steps in or
 - Unit tests cover each recovery step independently.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0067-startup-recovery-sequence
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Five-step recovery procedure touching worktree management, process scanning, git operations, journal replay integration, and merge queue reconciliation across multiple modules, with unit tests for each step — likely 2+ attempts due to integration complexity and dependency on ticket 0066's journal infrastructure.
