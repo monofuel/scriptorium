@@ -32,3 +32,8 @@ All merge queue operations must go through the journal protocol:
 - No `.scriptorium-journal.json` persists after clean operations.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0071-journal-merge-queue-operations
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-file refactor of merge_queue.nim replacing direct file writes with existing journal infrastructure (beginJournalTransition/executeJournalSteps/completeJournalTransition), three distinct operations to migrate but all follow the same pattern established by ticket 0066.
