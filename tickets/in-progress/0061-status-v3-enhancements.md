@@ -178,3 +178,10 @@ Here's what was implemented:
 ```text
 lapsed when the worktree directory actually exists — this was the fix for the previous attempt's integration test failure.\n\n4. **`src/scriptorium.nim`** — Updated `cmdStatus` to display elapsed time per in-progress ticket, recent completed tickets with outcome/wall time, and cumulative first-attempt success rate.\n\n5. **`tests/test_scriptorium.nim`** — Added 6 unit tests for `parseMetricField`.","stop_reason":"end_turn","session_id":"608a994c-56df-48cc-958e-c66f1a4e18f0","total_cost_usd":1.4643169999999999,"usage":{"input_tokens":37,"cache_creation_input_tokens":46822,"cache_read_input_tokens":1799789,"output_tokens":10864,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":46822,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":37,"outputTokens":10864,"cacheReadInputTokens":1799789,"cacheCreationInputTokens":46822,"webSearchRequests":0,"costUSD":1.4643169999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a54df08f-ddb1-45c0-90ca-cd838b37c412"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 137
+- Wall Time: 4m15s
