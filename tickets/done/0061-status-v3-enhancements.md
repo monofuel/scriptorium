@@ -185,3 +185,48 @@ lapsed when the worktree directory actually exists — this was the fix for the 
 - Backend: claude-code
 - Exit Code: 137
 - Wall Time: 4m15s
+
+## Merge Queue Success
+- Summary: Add elapsed time for in-progress tickets, last 5 completed tickets with outcomes/wall time, and first-attempt success rate to status command. Only shows elapsed when worktree exists (fixes integration test failure from previous attempt). Adds parseMetricField helper and 6 unit tests.\n
+### Quality Check Output
+```text
+3-14T02:25:58Z] [INFO] session summary: avg_ticket_wall=0s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[2026-03-14T02:25:58Z] [INFO] architect: generating areas from spec
+[2026-03-14T02:25:59Z] [INFO] architect: areas updated
+[2026-03-14T02:25:59Z] [INFO] manager: generating tickets
+[2026-03-14T02:25:59Z] [INFO] merge queue: processing
+[2026-03-14T02:25:59Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-14T02:25:59Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-14T02:25:59Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-14T02:25:59Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-14T02:25:59Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-14T02:25:59Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-14T02:25:59Z] [INFO] merge queue: item processed
+[2026-03-14T02:25:59Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-14T02:25:59Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T02:25:59Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-14T02:26:00Z] [WARN] master is unhealthy — skipping tick
+[2026-03-14T02:26:30Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T02:26:30Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+```
+
+## Metrics
+- wall_time_seconds: 1937
+- coding_wall_seconds: 1430
+- test_wall_seconds: 240
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 709468
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 32m17s.
