@@ -31,3 +31,5 @@ Before each retry in `executeAssignedTicket` (in `coding_agent.nim`), validate t
 - Clean worktrees proceed without extra operations.
 - Each case produces the specified log message.
 - Unit tests cover all three cases (corrupt, dirty, clean).
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0063-worktree-health-check-before-retry
