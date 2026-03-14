@@ -34,3 +34,5 @@ The `scriptorium status` command (in `src/scriptorium.nim` `cmdStatus`) currentl
 - Shows cumulative first-attempt success rate.
 - Existing status output unchanged.
 - `make test` passes.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements
