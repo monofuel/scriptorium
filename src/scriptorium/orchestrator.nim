@@ -303,7 +303,7 @@ proc runOrchestratorLoop(
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
 
   shouldRun = false
-  httpServer.close()
+  signalServerShutdown()
   logDebug("waiting for HTTP server thread to exit")
   joinThread(serverThread)
   logDebug("HTTP server thread exited")

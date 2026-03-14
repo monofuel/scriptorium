@@ -1,6 +1,7 @@
 import
-  std/[httpclient, json, os, strformat, strutils, times],
+  std/[httpclient, json, locks, os, strformat, strutils, times],
   mcport,
+  mummy,
   ./[git_ops, logging, merge_queue, output_formatting, prompt_builders, shared_state]
 
 const
@@ -17,6 +18,24 @@ type
     address: string,
     port: int,
   ]
+
+var
+  shutdownLock: Lock
+  shutdownCond: Cond
+  shutdownLockInitialized = false
+
+proc ensureShutdownLockInitialized*() =
+  ## Initialize the shutdown coordination lock and condition variable.
+  if not shutdownLockInitialized:
+    initLock(shutdownLock)
+    initCond(shutdownCond)
+    shutdownLockInitialized = true
+
+proc signalServerShutdown*() =
+  ## Signal the server shutdown monitor to close the HTTP server.
+  acquire(shutdownLock)
+  signal(shutdownCond)
+  release(shutdownLock)
 
 proc createOrchestratorServer*(): HttpMcpServer =
   ## Create the orchestrator MCP HTTP server.
@@ -99,9 +118,21 @@ proc createOrchestratorServer*(): HttpMcpServer =
   server.registerTool(submitReviewTool, submitReviewHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
+proc shutdownMonitor(server: mummy.Server) {.thread.} =
+  ## Wait for the shutdown signal and close the mummy server from the monitor thread.
+  acquire(shutdownLock)
+  while shouldRun:
+    wait(shutdownCond, shutdownLock)
+  release(shutdownLock)
+  server.close()
+
 proc runHttpServer*(args: ServerThreadArgs) {.thread.} =
-  ## Run the MCP HTTP server in a background thread.
+  ## Run the MCP HTTP server in a background thread with coordinated shutdown.
+  ensureShutdownLockInitialized()
+  var monitorThread: Thread[mummy.Server]
+  createThread(monitorThread, shutdownMonitor, args.httpServer.httpServer)
   args.httpServer.serve(args.port, args.address)
+  joinThread(monitorThread)
 
 proc waitForServerReady*(address: string, port: int, timeoutMs: int = ServerReadyTimeoutMs) =
   ## Poll the MCP endpoint until it responds or timeout is reached.
