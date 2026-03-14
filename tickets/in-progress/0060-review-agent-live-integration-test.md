@@ -29,3 +29,5 @@ V7 §30 requires a live integration test for the review agent, similar to `integ
 - Test verifies `submit_review` was called.
 - `make integration-test` includes the new test.
 - No mocks or fakes used.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0060-review-agent-live-integration-test
