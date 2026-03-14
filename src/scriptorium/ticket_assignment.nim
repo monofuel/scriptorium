@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, posix, sequtils, sets, strformat, strutils, tables, times, uri],
-  ./[config, git_ops, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
+  ./[config, cycle_detection, git_ops, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
 
 const
   TicketAssignCommitPrefix* = "scriptorium: assign ticket"
@@ -414,6 +414,41 @@ proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
     result.recentDoneTickets = doneSummaries
     result.firstAttemptSuccessCount = firstAttemptCount
     result.totalDoneWithAttempts = totalWithAttempts
+
+    let graph = buildDependencyGraph(planPath)
+    let cycles = detectCycles(graph)
+    var cycleTicketIds = initHashSet[string]()
+    var reportedCycleTickets = initHashSet[string]()
+    for cycle in cycles:
+      let members = cycle[0 ..< cycle.len - 1]
+      for member in members:
+        cycleTicketIds.incl(member)
+        if member in reportedCycleTickets:
+          continue
+        reportedCycleTickets.incl(member)
+        var others: seq[string]
+        for other in members:
+          if other != member:
+            others.add(other)
+        result.blockedTickets.add(BlockedTicket(ticketId: member, cycleIds: others))
+
+    let doneIds = doneTicketIdsInPlanPath(planPath)
+    for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
+      for ticketPath in listMarkdownFiles(planPath / stateDir):
+        let rel = stateDir / extractFilename(ticketPath)
+        let ticketId = ticketIdFromTicketPath(rel)
+        if ticketId in cycleTicketIds:
+          continue
+        let content = readFile(ticketPath)
+        let deps = parseDependsFromTicketContent(content)
+        if deps.len == 0:
+          continue
+        var unsatisfied: seq[string]
+        for dep in deps:
+          if dep notin doneIds:
+            unsatisfied.add(dep)
+        if unsatisfied.len > 0:
+          result.waitingTickets.add(WaitingTicket(ticketId: ticketId, dependsOn: unsatisfied))
   )
 
 proc validateTicketStateInvariant*(repoPath: string) =

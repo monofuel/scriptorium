@@ -52,6 +52,12 @@ proc cmdStatus() =
   if status.totalDoneWithAttempts > 0:
     let pct = (status.firstAttemptSuccessCount * 100) div status.totalDoneWithAttempts
     echo fmt"First-attempt success: {pct}% ({status.firstAttemptSuccessCount}/{status.totalDoneWithAttempts})"
+  for item in status.blockedTickets:
+    let cycleList = item.cycleIds.join(", ")
+    echo fmt"Blocked: {item.ticketId} (circular dependency with {cycleList})"
+  for item in status.waitingTickets:
+    let depList = item.dependsOn.join(", ")
+    echo fmt"Waiting: {item.ticketId} (depends on {depList})"
 
 proc cmdPlan(args: seq[string]) =
   ## Ask the architect model to revise spec.md, interactively or one-shot.

@@ -71,6 +71,14 @@ type
     outcome*: string
     wallTimeSeconds*: int
 
+  BlockedTicket* = object
+    ticketId*: string
+    cycleIds*: seq[string]
+
+  WaitingTicket* = object
+    ticketId*: string
+    dependsOn*: seq[string]
+
   OrchestratorStatus* = object
     openTickets*: int
     inProgressTickets*: int
@@ -83,6 +91,8 @@ type
     recentDoneTickets*: seq[DoneTicketSummary]
     firstAttemptSuccessCount*: int
     totalDoneWithAttempts*: int
+    blockedTickets*: seq[BlockedTicket]
+    waitingTickets*: seq[WaitingTicket]
 
   MergeQueueItem* = object
     pendingPath*: string

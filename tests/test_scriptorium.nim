@@ -1225,6 +1225,77 @@ suite "ticket dependency assignment":
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0002-second.md"
 
+suite "status dependency visibility":
+  test "readOrchestratorStatus reports all cycle participants as blocked":
+    let tmp = getTempDir() / "scriptorium_test_status_cycle_blocked"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0010-alpha.md", "# Alpha\n\n**Area:** a\n**Depends:** 0011\n")
+    addTicketToPlan(tmp, "open", "0011-beta.md", "# Beta\n\n**Area:** b\n**Depends:** 0010\n")
+
+    let status = readOrchestratorStatus(tmp)
+    check status.blockedTickets.len == 2
+    var blockedIds: seq[string]
+    for bt in status.blockedTickets:
+      blockedIds.add(bt.ticketId)
+    check "0010" in blockedIds
+    check "0011" in blockedIds
+
+  test "readOrchestratorStatus reports tickets with unsatisfied deps as waiting":
+    let tmp = getTempDir() / "scriptorium_test_status_waiting"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0020-first.md", "# First\n\n**Area:** a\n**Depends:** 9999\n")
+
+    let status = readOrchestratorStatus(tmp)
+    check status.waitingTickets.len == 1
+    check status.waitingTickets[0].ticketId == "0020"
+    check status.waitingTickets[0].dependsOn == @["9999"]
+
+  test "readOrchestratorStatus does not report tickets with satisfied deps":
+    let tmp = getTempDir() / "scriptorium_test_status_satisfied"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "done", "0030-prereq.md", "# Prereq\n\n**Area:** a\n")
+    addTicketToPlan(tmp, "open", "0031-next.md", "# Next\n\n**Area:** b\n**Depends:** 0030\n")
+
+    let status = readOrchestratorStatus(tmp)
+    check status.blockedTickets.len == 0
+    check status.waitingTickets.len == 0
+
+  test "readOrchestratorStatus does not report tickets without dependencies":
+    let tmp = getTempDir() / "scriptorium_test_status_no_deps"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0040-plain.md", "# Plain\n\n**Area:** a\n")
+
+    let status = readOrchestratorStatus(tmp)
+    check status.blockedTickets.len == 0
+    check status.waitingTickets.len == 0
+
+  test "readOrchestratorStatus reports all members of a three-node cycle":
+    let tmp = getTempDir() / "scriptorium_test_status_cycle_three"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0050-a.md", "# A\n\n**Area:** a\n**Depends:** 0051\n")
+    addTicketToPlan(tmp, "open", "0051-b.md", "# B\n\n**Area:** b\n**Depends:** 0052\n")
+    addTicketToPlan(tmp, "open", "0052-c.md", "# C\n\n**Area:** c\n**Depends:** 0050\n")
+
+    let status = readOrchestratorStatus(tmp)
+    check status.blockedTickets.len == 3
+    var blockedIds: seq[string]
+    for bt in status.blockedTickets:
+      blockedIds.add(bt.ticketId)
+    check "0050" in blockedIds
+    check "0051" in blockedIds
+    check "0052" in blockedIds
+    check status.waitingTickets.len == 0
+
 suite "orchestrator mcp tools":
   test "createOrchestratorServer registers submit_pr and consumeSubmitPrSummary clears state":
     discard consumeSubmitPrSummary()
