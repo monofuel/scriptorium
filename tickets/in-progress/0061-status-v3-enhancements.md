@@ -58,3 +58,22 @@ ptorium/shared_state.nim`** — Added `DoneTicketSummary` and `InProgressTicketE
 ```text
 ke test` passes cleanly. The `submit_pr` MCP tool is not available in this environment — the orchestrator will need to pick up this commit from the `scriptorium/ticket-0061` branch.","stop_reason":"end_turn","session_id":"1a2408bb-5bac-4193-b9a0-f3a76bf95dab","total_cost_usd":1.5055972000000002,"usage":{"input_tokens":39,"cache_creation_input_tokens":43893,"cache_read_input_tokens":1473803,"output_tokens":11100,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":43893,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":39,"outputTokens":11100,"cacheReadInputTokens":1473803,"cacheCreationInputTokens":43893,"webSearchRequests":0,"costUSD":1.28892775,"contextWindow":200000,"maxOutputTokens":32000},"claude-haiku-4-5-20251001":{"inputTokens":125,"outputTokens":8852,"cacheReadInputTokens":1004032,"cacheCreationInputTokens":57505,"webSearchRequests":0,"costUSD":0.21666944999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"464d5e0a-8da8-413a-bf35-1aad96e8cf28"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/.scriptorium/logs/0061/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The `submit_pr` tool returned "Merge request enqueued." successfully. 
+
+The ticket work was already complete from the previous attempt - the implementation adds:
+1. **Elapsed time** for in-progress tickets (parsed from worktree creation time)
+2. **Last 5 completed tickets** with outcome and wall time (from `## Metrics` section)
+3. **First-attempt success rate** percentage (from `attempt_count` metric)
+
+All existing status output is preserved, and tests pass.
+```
+
+### Agent Stdout Tail
+```text
+st enqueued.\" successfully. \n\nThe ticket work was already complete from the previous attempt - the implementation adds:\n1. **Elapsed time** for in-progress tickets (parsed from worktree creation time)\n2. **Last 5 completed tickets** with outcome and wall time (from `## Metrics` section)\n3. **First-attempt success rate** percentage (from `attempt_count` metric)\n\nAll existing status output is preserved, and tests pass.","stop_reason":"end_turn","session_id":"68c57220-473e-48d1-83a2-930160e668eb","total_cost_usd":0.4816305,"usage":{"input_tokens":20,"cache_creation_input_tokens":25724,"cache_read_input_tokens":509161,"output_tokens":2647,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":25724,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":2647,"cacheReadInputTokens":509161,"cacheCreationInputTokens":25724,"webSearchRequests":0,"costUSD":0.4816305,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"efa194ea-0a1a-4e22-9dcb-c100780d98d0"}
+```
