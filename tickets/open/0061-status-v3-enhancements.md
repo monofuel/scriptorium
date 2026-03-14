@@ -84,3 +84,68 @@ st enqueued.\" successfully. \n\nThe ticket work was already complete from the p
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 2m9s
+
+## Merge Queue Failure
+- Summary: Add elapsed time for in-progress tickets, last 5 completed tickets with outcomes and wall time, and first-attempt success rate to the status command output. All existing status output is preserved.\n- Failed gate: make integration-test\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+marker
+[tests/test_scriptorium.nim]   [OK] large feedback is truncated with marker
+[tests/test_scriptorium.nim] 
+[tests/test_scriptorium.nim] [Suite] parseMetricField
+[tests/test_scriptorium.nim]   [OK] extracts wall_time_seconds from metrics section
+[tests/test_scriptorium.nim]   [OK] extracts outcome from metrics section
+[tests/test_scriptorium.nim]   [OK] extracts attempt_count from metrics section
+[tests/test_scriptorium.nim]   [OK] returns empty string when field missing
+[tests/test_scriptorium.nim]   [OK] returns empty string when no metrics section
+[tests/test_scriptorium.nim]   [OK] stops at next section
+[tests/test_scriptorium.nim] 
+[tests/test_scriptorium.nim] [Suite] formatDuration
+[tests/test_scriptorium.nim]   [OK] formats seconds
+[tests/test_scriptorium.nim]   [OK] formats minutes
+[tests/test_scriptorium.nim]   [OK] formats hours
+
+$ make integration-test
+--- tests/integration_claude_code_harness.nim ---
+
+[Suite] integration claude-code harness
+  [OK] real claude-code one-shot smoke test
+--- tests/integration_cli.nim ---
+
+[Suite] scriptorium CLI
+    /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0061-status-v3-enhancements/tests/integration_cli.nim(88, 17): Check failed: output == expected
+    output was Open: 1
+In Progress: 1
+Done: 0
+Active Agent Ticket: 0002 (tickets/in-progress/0002-second.md)
+Active Agent Branch: scriptorium/ticket-0002
+Active Agent Worktree: /tmp/worktree-0002
+In-Progress Ticket 0002: elapsed 0s
+
+    expected was Open: 1
+In Progress: 1
+Done: 0
+Active Agent Ticket: 0002 (tickets/in-progress/0002-second.md)
+Active Agent Branch: scriptorium/ticket-0002
+Active Agent Worktree: /tmp/worktree-0002
+
+  [FAILED] status command prints ticket counts and active agent snapshot
+  [OK] worktrees command lists active ticket worktrees
+Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_cli_d/integration_cli_9F2D0CCE4B7584251C4A83C84DC697DB3641BB42'
+make: *** [Makefile:36: integration-test] Error 1
+```
+
+## Metrics
+- wall_time_seconds: 1341
+- coding_wall_seconds: 983
+- test_wall_seconds: 77
+- attempt_count: 2
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 829150
