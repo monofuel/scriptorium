@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_runner, config, git_ops, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_runner, config, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -325,11 +325,14 @@ proc executeAssignedTicket*(
       if fileExists(ticketPath):
         let currentContent = readFile(ticketPath)
         let contentWithMetrics = runPostAnalysis(currentContent.strip() & "\n\n" & metricsNote & "\n", ticketId, "reopened", attempts, stallWallSeconds)
-        writeFile(ticketPath, contentWithMetrics)
-        moveFile(ticketPath, planPath / openRelPath)
-        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", TicketAgentFailReopenCommitPrefix & " " & ticketId)
+        let commitMsg = TicketAgentFailReopenCommitPrefix & " " & ticketId
+        let steps = @[
+          newWriteStep(ticketRelPath, contentWithMetrics),
+          newMoveStep(ticketRelPath, openRelPath),
+        ]
+        beginJournalTransition(planPath, "reopen " & ticketId, steps, commitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
       0
     )
 

@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, posix, sequtils, sets, strformat, strutils, tables, times, uri],
-  ./[config, cycle_detection, git_ops, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
+  ./[config, cycle_detection, git_ops, journal, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
 
 const
   TicketAssignCommitPrefix* = "scriptorium: assign ticket"
@@ -209,18 +209,18 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       return TicketAssignment()
 
     let inProgressTicket = PlanTicketsInProgressDir / splitFile(openTicket).name & ".md"
-    let openAbs = planPath / openTicket
-    let inProgressAbs = planPath / inProgressTicket
-    moveFile(openAbs, inProgressAbs)
-
+    let content = readFile(planPath / openTicket)
     let worktreeInfo = ensureWorktreeCreated(repoPath, inProgressTicket)
-    let content = readFile(inProgressAbs)
-    writeFile(inProgressAbs, setTicketWorktree(content, worktreeInfo.path))
-
-    gitRun(planPath, "add", "-A", PlanTicketsOpenDir, PlanTicketsInProgressDir)
-    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-      let ticketName = splitFile(inProgressTicket).name
-      gitRun(planPath, "commit", "-m", TicketAssignCommitPrefix & " " & ticketName)
+    let updatedContent = setTicketWorktree(content, worktreeInfo.path)
+    let ticketName = splitFile(inProgressTicket).name
+    let commitMsg = TicketAssignCommitPrefix & " " & ticketName
+    let steps = @[
+      newMoveStep(openTicket, inProgressTicket),
+      newWriteStep(inProgressTicket, updatedContent),
+    ]
+    beginJournalTransition(planPath, "assign " & ticketName, steps, commitMsg)
+    executeJournalSteps(planPath)
+    completeJournalTransition(planPath)
 
     let ticketId = ticketIdFromTicketPath(inProgressTicket)
     logInfo(fmt"ticket {ticketId}: open -> in-progress (assigned, worktree={worktreeInfo.path})")
@@ -252,6 +252,7 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
     var occupiedAreas = inProgressAreasInPlanPath(planPath)
     let doneIds = doneTicketIdsInPlanPath(planPath)
     var assignments: seq[TicketAssignment]
+    var journalSteps: seq[JournalStep]
 
     for ticket in openTickets:
       if assignments.len >= maxAgents:
@@ -267,13 +268,10 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
         continue
 
       let inProgressTicket = PlanTicketsInProgressDir / splitFile(ticket.rel).name & ".md"
-      let openAbs = planPath / ticket.rel
-      let inProgressAbs = planPath / inProgressTicket
-      moveFile(openAbs, inProgressAbs)
-
       let worktreeInfo = ensureWorktreeCreated(repoPath, inProgressTicket)
-      let updatedContent = readFile(inProgressAbs)
-      writeFile(inProgressAbs, setTicketWorktree(updatedContent, worktreeInfo.path))
+      let updatedContent = setTicketWorktree(content, worktreeInfo.path)
+      journalSteps.add(newMoveStep(ticket.rel, inProgressTicket))
+      journalSteps.add(newWriteStep(inProgressTicket, updatedContent))
 
       if areaId.len > 0:
         occupiedAreas.incl(areaId)
@@ -295,10 +293,11 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       ))
 
     if assignments.len > 0:
-      gitRun(planPath, "add", "-A", PlanTicketsOpenDir, PlanTicketsInProgressDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        let ticketNames = assignments.mapIt(splitFile(it.inProgressTicket).name).join(", ")
-        gitRun(planPath, "commit", "-m", TicketAssignCommitPrefix & " " & ticketNames)
+      let ticketNames = assignments.mapIt(splitFile(it.inProgressTicket).name).join(", ")
+      let commitMsg = TicketAssignCommitPrefix & " " & ticketNames
+      beginJournalTransition(planPath, "assign " & ticketNames, journalSteps, commitMsg)
+      executeJournalSteps(planPath)
+      completeJournalTransition(planPath)
 
     result = assignments
   )

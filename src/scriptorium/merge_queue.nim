@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, config, git_ops, lock_management, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, config, git_ops, journal, lock_management, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -326,14 +326,16 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let contentWithNotes = readFile(ticketPath).strip() & "\n\n" & failureNote & "\n\n" & metricsNote & "\n"
         let updatedContent = runPostAnalysis(contentWithNotes, item.ticketId, "reopened", missingAttempts, missingWallSeconds)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
-        writeFile(ticketPath, updatedContent)
-        moveFile(ticketPath, planPath / openRelPath)
-        if fileExists(queuePath):
-          removeFile(queuePath)
-        writeFile(activePath, "")
-        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+        let reopenCommitMsg = MergeQueueReopenCommitPrefix & " " & item.ticketId
+        let reopenSteps = @[
+          newWriteStep(item.ticketPath, updatedContent),
+          newMoveStep(item.ticketPath, openRelPath),
+          newRemoveStep(item.pendingPath),
+          newWriteStep(PlanMergeQueueActivePath, ""),
+        ]
+        beginJournalTransition(planPath, "reopen " & item.ticketId, reopenSteps, reopenCommitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
         return true
 
     let dirtyCheck = runCommandCapture(item.worktree, "git", @["status", "--porcelain"])
@@ -354,14 +356,16 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       sessionStats.ticketsReopened += 1
       let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
       let currentContent = readFile(ticketPath)
-      writeFile(ticketPath, currentContent)
-      moveFile(ticketPath, planPath / openRelPath)
-      if fileExists(queuePath):
-        removeFile(queuePath)
-      writeFile(activePath, "")
-      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+      let reviewReopenCommitMsg = MergeQueueReopenCommitPrefix & " " & item.ticketId
+      let reviewReopenSteps = @[
+        newWriteStep(item.ticketPath, currentContent),
+        newMoveStep(item.ticketPath, openRelPath),
+        newRemoveStep(item.pendingPath),
+        newWriteStep(PlanMergeQueueActivePath, ""),
+      ]
+      beginJournalTransition(planPath, "reopen " & item.ticketId, reviewReopenSteps, reviewReopenCommitMsg)
+      executeJournalSteps(planPath)
+      completeJournalTransition(planPath)
       return true
 
     logInfo(fmt"ticket {item.ticketId}: merge started (make test running)")
@@ -432,15 +436,16 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       cleanupTicketTimings(item.ticketId)
       let contentWithNotes = readFile(ticketPath).strip() & "\n\n" & successNote & "\n\n" & metricsNote & "\n"
       let updatedContent = runPostAnalysis(contentWithNotes, item.ticketId, "done", attempts, doneWallSeconds)
-      writeFile(ticketPath, updatedContent)
-      moveFile(ticketPath, planPath / doneRelPath)
-      if fileExists(queuePath):
-        removeFile(queuePath)
-      writeFile(activePath, "")
-
-      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanMergeQueueDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", MergeQueueDoneCommitPrefix & " " & item.ticketId)
+      let doneCommitMsg = MergeQueueDoneCommitPrefix & " " & item.ticketId
+      let doneSteps = @[
+        newWriteStep(item.ticketPath, updatedContent),
+        newMoveStep(item.ticketPath, doneRelPath),
+        newRemoveStep(item.pendingPath),
+        newWriteStep(PlanMergeQueueActivePath, ""),
+      ]
+      beginJournalTransition(planPath, "complete " & item.ticketId, doneSteps, doneCommitMsg)
+      executeJournalSteps(planPath)
+      completeJournalTransition(planPath)
       true
     else:
       let failureReason = if mergeMasterResult.exitCode != 0: "git merge conflict"
@@ -466,16 +471,17 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let parkedWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
         cleanupTicketTimings(item.ticketId)
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
-        createDir(planPath / PlanTicketsStuckDir)
         let contentWithMetrics = runPostAnalysis(updatedContent.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "parked", attempts, parkedWallSeconds)
-        writeFile(ticketPath, contentWithMetrics)
-        moveFile(ticketPath, planPath / stuckRelPath)
-        if fileExists(queuePath):
-          removeFile(queuePath)
-        writeFile(activePath, "")
-        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsStuckDir, PlanMergeQueueDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", MergeQueueStuckCommitPrefix & " " & item.ticketId)
+        let stuckCommitMsg = MergeQueueStuckCommitPrefix & " " & item.ticketId
+        let stuckSteps = @[
+          newWriteStep(item.ticketPath, contentWithMetrics),
+          newMoveStep(item.ticketPath, stuckRelPath),
+          newRemoveStep(item.pendingPath),
+          newWriteStep(PlanMergeQueueActivePath, ""),
+        ]
+        beginJournalTransition(planPath, "park " & item.ticketId, stuckSteps, stuckCommitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         sessionStats.ticketsReopened += 1
@@ -487,13 +493,15 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         cleanupTicketTimings(item.ticketId)
         let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
         let contentWithMetrics = runPostAnalysis(updatedContent.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "reopened", attempts, reopenWallSeconds)
-        writeFile(ticketPath, contentWithMetrics)
-        moveFile(ticketPath, planPath / openRelPath)
-        if fileExists(queuePath):
-          removeFile(queuePath)
-        writeFile(activePath, "")
-        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir, PlanMergeQueueDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", MergeQueueReopenCommitPrefix & " " & item.ticketId)
+        let failReopenCommitMsg = MergeQueueReopenCommitPrefix & " " & item.ticketId
+        let failReopenSteps = @[
+          newWriteStep(item.ticketPath, contentWithMetrics),
+          newMoveStep(item.ticketPath, openRelPath),
+          newRemoveStep(item.pendingPath),
+          newWriteStep(PlanMergeQueueActivePath, ""),
+        ]
+        beginJournalTransition(planPath, "reopen " & item.ticketId, failReopenSteps, failReopenCommitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
       true
   )

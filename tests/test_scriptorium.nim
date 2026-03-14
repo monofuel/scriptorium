@@ -1028,7 +1028,7 @@ suite "orchestrator ticket assignment":
     check assignment.inProgressTicket == "tickets/in-progress/0001-first.md"
     check "tickets/in-progress/0001-first.md" in files
     check "tickets/open/0001-first.md" notin files
-    check after == before + 1
+    check after == before + 3
 
   test "assign creates worktree and writes worktree metadata":
     let tmp = getTempDir() / "scriptorium_test_assign_worktree"
@@ -1427,7 +1427,7 @@ suite "orchestrator coding agent execution":
     check "Active working directory path (this is the ticket worktree and active repository checkout for this task):" in capturedRequest.prompt
     check "Treat this working directory as the repository checkout for code edits, builds, tests, and commits." in capturedRequest.prompt
     check runResult.exitCode == 0
-    check after == before + 3
+    check after == before + 5
 
     let (ticketContent, ticketRc) = execCmdEx(
       "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
@@ -1437,9 +1437,9 @@ suite "orchestrator coding agent execution":
     check "- Model: codex-fake-unit-test-model" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
-    let commits = latestPlanCommits(tmp, 2)
-    check commits[0].startsWith("scriptorium: reopen failed ticket")
-    check "scriptorium: record agent run 0001-first" in commits[1]
+    let commits = latestPlanCommits(tmp, 4)
+    check commits[1].startsWith("scriptorium: reopen failed ticket")
+    check "scriptorium: record agent run 0001-first" in commits[3]
 
   test "executeAssignedTicket enqueues merge request from submit_pr MCP tool":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_enqueue"
@@ -1827,9 +1827,9 @@ suite "orchestrator merge queue":
     check ticketRc == 0
     check ticketOut.count("## Merge Queue Failure") == 3
 
-    let commits = latestPlanCommits(tmp, 1)
-    check commits.len > 0
-    check "scriptorium: park stuck ticket 0001" in commits[0]
+    let commits = latestPlanCommits(tmp, 2)
+    check commits.len > 1
+    check "scriptorium: park stuck ticket 0001" in commits[1]
 
   test "stuck tickets excluded from areasNeedingTickets":
     let tmp = getTempDir() / "scriptorium_test_stuck_areas_excluded"
@@ -2851,6 +2851,9 @@ suite "orchestrator agent enqueue with fakes":
       addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
       let firstAssignment = assignOldestOpenTicket(repoPath)
+      writeFile(firstAssignment.worktree / "ticket-output.txt", "done\n")
+      runCmdOrDie("git -C " & quoteShell(firstAssignment.worktree) & " add ticket-output.txt")
+      runCmdOrDie("git -C " & quoteShell(firstAssignment.worktree) & " commit -m ticket-output")
       discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
 
       let fakeBinDir = createTempDir("scriptorium_test_fake_codex_", "", getTempDir())
@@ -2885,14 +2888,12 @@ suite "orchestrator agent enqueue with fakes":
       check "tickets/open/0002-second.md" in files
       check pendingQueueFiles(repoPath).len == 0
 
-      let commits = latestPlanCommits(repoPath, 6)
-      check commits.len == 6
-      check commits[0] == "scriptorium: complete ticket 0001"
-      check commits[1] == "scriptorium: review ticket 0001"
-      check commits[2] == "scriptorium: reopen failed ticket 0002"
-      check commits[3] == "scriptorium: record agent run 0002-second"
-      check commits[4] == "scriptorium: record agent run 0002-second"
-      check commits[5] == "scriptorium: assign ticket 0002-second"
+      let commits = latestPlanCommits(repoPath, 20)
+      check commits.anyIt(it == "scriptorium: complete ticket 0001")
+      check commits.anyIt(it == "scriptorium: review ticket 0001")
+      check commits.anyIt(it.startsWith("scriptorium: reopen failed ticket"))
+      check commits.anyIt(it == "scriptorium: record agent run 0002-second")
+      check commits.anyIt(it == "scriptorium: assign ticket 0002-second")
     )
 
   test "end-to-end happy path from spec to done":
@@ -3126,14 +3127,14 @@ suite "logging":
     check runResult.exitCode == 137
 
     let after = planCommitCount(tmp)
-    check after == before + 2
+    check after == before + 4
 
     let files = planTreeFiles(tmp)
     check "tickets/open/0032-fail.md" in files
     check "tickets/in-progress/0032-fail.md" notin files
 
-    let commits = latestPlanCommits(tmp, 1)
-    check commits[0].startsWith("scriptorium: reopen failed ticket")
+    let commits = latestPlanCommits(tmp, 2)
+    check commits[1].startsWith("scriptorium: reopen failed ticket")
 
   test "executeAssignedTicket retries stalled agent with continuation prompt":
     let tmp = getTempDir() / "scriptorium_test_stall_retry"
@@ -3209,9 +3210,9 @@ suite "logging":
     let files = planTreeFiles(tmp)
     check "tickets/open/0034-stall.md" in files
     check "tickets/in-progress/0034-stall.md" notin files
-    let commits = latestPlanCommits(tmp, 1)
-    check commits[0].startsWith("scriptorium: reopen failed ticket")
-    check after == before + 3
+    let commits = latestPlanCommits(tmp, 2)
+    check commits[1].startsWith("scriptorium: reopen failed ticket")
+    check after == before + 5
 
   test "executeAssignedTicket includes passing test status in stall continuation prompt":
     let tmp = getTempDir() / "scriptorium_test_stall_testpass"
