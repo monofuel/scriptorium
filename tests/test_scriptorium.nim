@@ -4340,3 +4340,109 @@ suite "review feedback truncation":
     let decision = consumeReviewDecision()
     check decision.feedback.len == ReviewFeedbackMaxBytes
     check decision.feedback.endsWith(ReviewTruncationMarker)
+
+suite "progress-based stall detection":
+  test "progress timeout triggers stall continuation flow":
+    ## When the agent returns with timeoutKind="progress", it should be treated
+    ## as a stall and retried with a continuation prompt.
+    let tmp = getTempDir() / "scriptorium_test_progress_stall"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0080-progress.md", "# Ticket 80\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 950)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+
+    var callCount = 0
+    var capturedRequests: seq[AgentRunRequest]
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      inc callCount
+      capturedRequests.add(request)
+      if callCount == 2:
+        callSubmitPrTool("progress stall fixed")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: if callCount == 1: 137 else: 0,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "reasoning output...",
+        lastMessage: "stuck in a loop",
+        timeoutKind: if callCount == 1: "progress" else: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    check callCount == 2
+    check capturedRequests.len == 2
+    let retryPrompt = capturedRequests[1].prompt
+    check "Ticket 80" in retryPrompt
+
+  test "progress timeout reopens ticket after maxAttempts exhausted":
+    ## When the agent repeatedly hits progress timeout and exhausts all attempts,
+    ## the ticket should be reopened with timeout_progress failure reason.
+    let tmp = getTempDir() / "scriptorium_test_progress_exhaust"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0081-progress-exhaust.md", "# Ticket 81\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 951)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\n")
+    let before = planCommitCount(tmp)
+
+    var callCount = 0
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      inc callCount
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 137,
+        attempt: callCount,
+        attemptCount: 1,
+        stdout: "reasoning output...",
+        lastMessage: "still stuck",
+        timeoutKind: "progress",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    let after = planCommitCount(tmp)
+    check after > before
+    let files = planTreeFiles(tmp)
+    check "tickets/open/0081-progress-exhaust.md" in files
+    check "tickets/in-progress/0081-progress-exhaust.md" notin files
+
+  test "progressTimeoutMs is passed through to agent request":
+    ## Verify that the config value for codingAgentProgressTimeoutMs is
+    ## passed through to the AgentRunRequest.
+    let tmp = getTempDir() / "scriptorium_test_progress_config"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addTicketToPlan(tmp, "open", "0082-progress-cfg.md", "# Ticket 82\n\n**Area:** a\n")
+    writeOrchestratorEndpointConfig(tmp, 952)
+
+    let assignment = assignOldestOpenTicket(tmp)
+
+    var capturedRequest: AgentRunRequest
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      capturedRequest = request
+      callSubmitPrTool("progress config check done")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        command: @["codex", "exec"],
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        stdout: "",
+        lastMessage: "done",
+        timeoutKind: "none",
+      )
+
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+
+    check capturedRequest.progressTimeoutMs == 600_000

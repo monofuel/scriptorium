@@ -206,6 +206,7 @@ proc executeAssignedTicket*(
       skipGitRepoCheck: true,
       noOutputTimeoutMs: cfg.timeouts.codingAgentNoOutputTimeoutMs,
       hardTimeoutMs: cfg.timeouts.codingAgentHardTimeoutMs,
+      progressTimeoutMs: cfg.timeouts.codingAgentProgressTimeoutMs,
       maxAttempts: attemptsForThisCall,
       onEvent: proc(event: AgentStreamEvent) =
         if event.kind == agentEventTool:
@@ -222,7 +223,10 @@ proc executeAssignedTicket*(
 
     let agentWallTime = epochTime() - agentStartTime
     let agentWallDuration = formatDuration(agentWallTime)
-    let isStall = agentResult.exitCode == 0 and agentResult.timeoutKind == "none"
+    let isProgressStall = agentResult.timeoutKind == "progress"
+    let isStall = (agentResult.exitCode == 0 and agentResult.timeoutKind == "none") or isProgressStall
+    if isProgressStall:
+      logInfo(fmt"ticket {ticketId}: agent stalled — output active but no tool calls for progress timeout window")
     logInfo(fmt"ticket {ticketId}: coding agent finished (exit={agentResult.exitCode}, wall={agentWallDuration}, stall={isStall})")
 
     ensureTimingsLockInitialized()
@@ -315,6 +319,7 @@ proc executeAssignedTicket*(
     let failureReason = case result.timeoutKind
       of "hard": "timeout_hard"
       of "no-output": "timeout_no_output"
+      of "progress": "timeout_progress"
       else: "stall"
     let metricsNote = formatMetricsNote(ticketId, "reopened", failureReason).strip()
     let stallWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0

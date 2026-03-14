@@ -35,6 +35,7 @@ type
     claudeCodeTimeoutNone = "none"
     claudeCodeTimeoutNoOutput = "no-output"
     claudeCodeTimeoutHard = "hard"
+    claudeCodeTimeoutProgress = "progress"
 
   ClaudeCodeRunRequest* = object
     prompt*: string
@@ -48,6 +49,7 @@ type
     logRoot*: string
     noOutputTimeoutMs*: int
     hardTimeoutMs*: int
+    progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: ClaudeCodeEventHandler
     maxAttempts*: int
@@ -505,17 +507,27 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
   let outputFd = cint(process.outputHandle)
   let startTime = getMonoTime()
   var lastOutputTime = startTime
+  var lastToolTime = startTime
   var lastHeartbeatTime = startTime
   var streamClosed = false
   var stopRequested = false
   var pendingLine = ""
+  let progressTimeoutMs = if request.progressTimeoutMs > 0: request.progressTimeoutMs else: 0
+
+  # Wrap onEvent to track last tool-call timestamp for progress-based stall detection.
+  var wrappedOnEvent: ClaudeCodeEventHandler = nil
+  if not request.onEvent.isNil:
+    wrappedOnEvent = proc(event: ClaudeCodeStreamEvent) =
+      if event.kind == claudeCodeEventTool:
+        lastToolTime = getMonoTime()
+      request.onEvent(event)
 
   while not stopRequested:
-    if heartbeatIntervalMs > 0 and not request.onEvent.isNil:
+    if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
         emitClaudeCodeEvent(
-          request.onEvent,
+          wrappedOnEvent,
           ClaudeCodeStreamEvent(
             kind: claudeCodeEventHeartbeat,
             text: "still working",
@@ -532,6 +544,12 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
       result.timeoutKind = claudeCodeTimeoutNoOutput
       process.kill()
       stopRequested = true
+    if progressTimeoutMs > 0 and elapsedMs(lastToolTime) >= progressTimeoutMs.int64:
+      # Only fire if there has been output since the last tool call (agent is alive but not progressing).
+      if elapsedMs(lastOutputTime) < elapsedMs(lastToolTime):
+        result.timeoutKind = claudeCodeTimeoutProgress
+        process.kill()
+        stopRequested = true
 
     if not streamClosed and waitForReadable(outputFd, DefaultPollIntervalMs):
       let (chunk, chunkEof) = readOutputChunk(outputFd)
@@ -542,7 +560,7 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
         logFile.write(chunk)
         lastOutputTime = getMonoTime()
         lastHeartbeatTime = lastOutputTime
-        emitClaudeCodeEventsFromChunk(request.onEvent, pendingLine, chunk)
+        emitClaudeCodeEventsFromChunk(wrappedOnEvent, pendingLine, chunk)
     elif streamClosed and process.peekExitCode() != -1:
       break
 
@@ -551,7 +569,7 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
         streamClosed = true
 
   result.exitCode = process.waitForExit()
-  flushPendingClaudeCodeEvents(request.onEvent, pendingLine)
+  flushPendingClaudeCodeEvents(wrappedOnEvent, pendingLine)
 
   let extractedMessage = extractLastMessageFromStream(result.stdout)
   if extractedMessage.len > 0:

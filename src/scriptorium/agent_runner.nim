@@ -31,6 +31,7 @@ type
     logRoot*: string
     noOutputTimeoutMs*: int
     hardTimeoutMs*: int
+    progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     maxAttempts*: int
     continuationPrompt*: string
@@ -111,6 +112,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       logRoot: request.logRoot,
       noOutputTimeoutMs: request.noOutputTimeoutMs,
       hardTimeoutMs: request.hardTimeoutMs,
+      progressTimeoutMs: request.progressTimeoutMs,
       heartbeatIntervalMs: request.heartbeatIntervalMs,
       maxAttempts: request.maxAttempts,
       continuationPrompt: request.continuationPrompt,
@@ -145,6 +147,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       logRoot: request.logRoot,
       noOutputTimeoutMs: request.noOutputTimeoutMs,
       hardTimeoutMs: request.hardTimeoutMs,
+      progressTimeoutMs: request.progressTimeoutMs,
       heartbeatIntervalMs: request.heartbeatIntervalMs,
       maxAttempts: request.maxAttempts,
       continuationPrompt: request.continuationPrompt,

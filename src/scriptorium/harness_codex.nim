@@ -39,6 +39,7 @@ type
     codexTimeoutNone = "none"
     codexTimeoutNoOutput = "no-output"
     codexTimeoutHard = "hard"
+    codexTimeoutProgress = "progress"
 
   CodexRunRequest* = object
     prompt*: string
@@ -53,6 +54,7 @@ type
     logRoot*: string
     noOutputTimeoutMs*: int
     hardTimeoutMs*: int
+    progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: CodexEventHandler
     maxAttempts*: int
@@ -624,17 +626,27 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
   let outputFd = cint(process.outputHandle)
   let startTime = getMonoTime()
   var lastOutputTime = startTime
+  var lastToolTime = startTime
   var lastHeartbeatTime = startTime
   var streamClosed = false
   var stopRequested = false
   var pendingLine = ""
+  let progressTimeoutMs = if request.progressTimeoutMs > 0: request.progressTimeoutMs else: 0
+
+  # Wrap onEvent to track last tool-call timestamp for progress-based stall detection.
+  var wrappedOnEvent: CodexEventHandler = nil
+  if not request.onEvent.isNil:
+    wrappedOnEvent = proc(event: CodexStreamEvent) =
+      if event.kind == codexEventTool:
+        lastToolTime = getMonoTime()
+      request.onEvent(event)
 
   while not stopRequested:
-    if heartbeatIntervalMs > 0 and not request.onEvent.isNil:
+    if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
         emitCodexEvent(
-          request.onEvent,
+          wrappedOnEvent,
           CodexStreamEvent(
             kind: codexEventHeartbeat,
             text: "still working",
@@ -651,6 +663,12 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
       result.timeoutKind = codexTimeoutNoOutput
       process.kill()
       stopRequested = true
+    if progressTimeoutMs > 0 and elapsedMs(lastToolTime) >= progressTimeoutMs.int64:
+      # Only fire if there has been output since the last tool call (agent is alive but not progressing).
+      if elapsedMs(lastOutputTime) < elapsedMs(lastToolTime):
+        result.timeoutKind = codexTimeoutProgress
+        process.kill()
+        stopRequested = true
 
     if not streamClosed and waitForReadable(outputFd, DefaultPollIntervalMs):
       let (chunk, chunkEof) = readOutputChunk(outputFd)
@@ -661,7 +679,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
         logFile.write(chunk)
         lastOutputTime = getMonoTime()
         lastHeartbeatTime = lastOutputTime
-        emitCodexEventsFromChunk(request.onEvent, pendingLine, chunk)
+        emitCodexEventsFromChunk(wrappedOnEvent, pendingLine, chunk)
     elif streamClosed and process.peekExitCode() != -1:
       break
 
@@ -670,7 +688,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
         streamClosed = true
 
   result.exitCode = process.waitForExit()
-  flushPendingCodexEvents(request.onEvent, pendingLine)
+  flushPendingCodexEvents(wrappedOnEvent, pendingLine)
   if fileExists(lastMessagePath):
     result.lastMessage = readFile(lastMessagePath)
 
