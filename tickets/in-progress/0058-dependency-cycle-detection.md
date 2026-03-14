@@ -33,3 +33,5 @@ The orchestrator has `dependenciesSatisfied` for linear dependency checking, but
 - Periodic tick scan warns about blocked tickets.
 - `dependenciesSatisfied` unchanged for non-circular cases.
 - `make test` passes with all new cycle detection tests.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0058-dependency-cycle-detection
