@@ -49,3 +49,5 @@ On orchestrator start, before the first tick, execute these recovery steps in or
 - Log messages match the specified formats.
 - Clean startup produces the "no recovery needed" message.
 - Unit tests cover each recovery step independently.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0067-startup-recovery-sequence
