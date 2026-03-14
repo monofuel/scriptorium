@@ -64,3 +64,49 @@ ransitions (done, reopen, park) since dequeue already handles it\n5. Removed unu
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 2m19s
+
+## Merge Queue Success
+- Summary: Migrate all merge queue operations (enqueue, dequeue, cleanup) to use the write-ahead journal protocol for crash safety. Removed redundant pending file removal from downstream transitions and unused helper procs.\n
+### Quality Check Output
+```text
+s — dequeue 0001
+[2026-03-14T07:01:22Z] [INFO] journal: transition complete
+[2026-03-14T07:01:22Z] [INFO] ticket 0001: review started (model=codex-fake-unit-test-model)
+[2026-03-14T07:01:22Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-14T07:01:22Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-14T07:01:22Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-14T07:01:22Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-14T07:01:22Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-14T07:01:22Z] [INFO] journal: began transition — complete 0001
+[2026-03-14T07:01:22Z] [INFO] journal: executed steps — complete 0001
+[2026-03-14T07:01:22Z] [INFO] journal: transition complete
+[2026-03-14T07:01:22Z] [INFO] merge queue: item processed
+[2026-03-14T07:01:22Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-14T07:01:22Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T07:01:22Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-14T07:01:23Z] [INFO] recovery: clean startup, no recovery needed
+[2026-03-14T07:01:23Z] [WARN] master is unhealthy — skipping tick
+[2026-03-14T07:01:53Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-14T07:01:53Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+```
+
+## Metrics
+- wall_time_seconds: 1542
+- coding_wall_seconds: 1129
+- test_wall_seconds: 262
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1056755
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 25m42s.
