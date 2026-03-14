@@ -39,3 +39,5 @@ Implement progress-based stall detection that terminates agents producing output
 - Existing stall continuation flow (test-aware retry) triggered after termination.
 - No-output and hard timeouts continue to work independently.
 - Unit tests cover: progress timeout fires when only status events received, progress timer resets on tool events, no false trigger when tools are called within window.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0073-progress-based-stall-detection
