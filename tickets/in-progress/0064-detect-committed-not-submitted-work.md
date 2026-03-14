@@ -35,3 +35,27 @@ At the start of each coding agent attempt (including the first), check whether t
 - predicted_difficulty: easy
 - predicted_duration_minutes: 12
 - reasoning: Single-file change in coding_agent.nim adding a git log check and string interpolation into the prompt builder, with straightforward unit tests for line counting logic.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work/.scriptorium/logs/0064/attempt-01.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0064-detect-committed-not-submitted-work/.scriptorium/logs/0064/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+All work is committed. The `submit_pr` MCP tool is not available in this environment (it's served by the orchestrator's MCP server at runtime). Here's a summary of what was implemented:
+
+**Changes made:**
+
+1. **`src/scriptorium/coding_agent.nim`** - Added `detectPriorWork` proc that runs `git log master..HEAD --oneline` in the worktree and returns the count of commits ahead of master. Wired it into `executeAssignedTicket` before building the prompt, passing a prior-work note when commits are found.
+
+2. **`src/scriptorium/prompt_builders.nim`** - Extended `buildCodingAgentPrompt` with an optional `priorWorkNote` parameter (default `""`). When non-empty, the note is appended to the prompt.
+
+3. **`tests/test_prior_work.nim`** - Four unit tests covering:
+   - No prior commits returns zero
+   - Prior commits detected with correct count (2 commits)
+   - No prior work note leaves prompt unchanged
+   - Prior work note is appended to prompt
+```
+
+### Agent Stdout Tail
+```text
+ompt_builders.nim`** - Extended `buildCodingAgentPrompt` with an optional `priorWorkNote` parameter (default `\"\"`). When non-empty, the note is appended to the prompt.\n\n3. **`tests/test_prior_work.nim`** - Four unit tests covering:\n   - No prior commits returns zero\n   - Prior commits detected with correct count (2 commits)\n   - No prior work note leaves prompt unchanged\n   - Prior work note is appended to prompt","stop_reason":"end_turn","session_id":"2a1e24e4-7e25-4f0e-9622-7d0e6a9a6f57","total_cost_usd":1.49365375,"usage":{"input_tokens":42,"cache_creation_input_tokens":54495,"cache_read_input_tokens":1921350,"output_tokens":7687,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":54495,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":42,"outputTokens":7687,"cacheReadInputTokens":1921350,"cacheCreationInputTokens":54495,"webSearchRequests":0,"costUSD":1.49365375,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"d0644c28-04c1-4608-b036-a3a3e2342a2a"}
+```
