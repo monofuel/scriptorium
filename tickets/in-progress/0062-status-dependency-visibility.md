@@ -31,3 +31,8 @@ V7 §29 requires that `scriptorium status` reports tickets blocked by circular d
 - `make test` passes with tests covering both blocked and waiting output.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0062-status-dependency-visibility
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file integration wiring existing cycle detection into the status command with new OrchestratorStatus fields, dependency parsing, and formatted output — moderate complexity but building on established patterns from ticket 0058.
