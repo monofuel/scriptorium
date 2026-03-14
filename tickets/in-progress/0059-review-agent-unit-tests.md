@@ -122,3 +122,21 @@ All tests pass via `make test`.
 ```text
 two suites:\n   - **`buildReviewAgentPrompt`** (5 tests): expected sections present, review instructions + `submit_review` tool, markdown header delimiters, empty diff handling, whitespace-only diff handling\n   - **`review feedback truncation`** (4 tests): under limit unchanged, exactly at limit unchanged, one byte over truncated with marker, 2x over truncated with marker\n\nAll tests pass via `make test`.","stop_reason":"end_turn","session_id":"8d7ce150-3f17-4897-8638-a38a2d1a8fdb","total_cost_usd":0.7109690000000002,"usage":{"input_tokens":30,"cache_creation_input_tokens":21972,"cache_read_input_tokens":791638,"output_tokens":7107,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":21972,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":30,"outputTokens":7107,"cacheReadInputTokens":791638,"cacheCreationInputTokens":21972,"webSearchRequests":0,"costUSD":0.7109690000000002,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"af2bebcb-d6b8-4142-b3d9-158fd631ef68"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-02.jsonl\n- Last Message File: /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0059-review-agent-unit-tests/.scriptorium/logs/0059/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+`submit_pr` returned "Merge request enqueued." successfully. 
+
+The ticket is complete:
+- **9 unit tests** in `tests/test_scriptorium.nim` covering `buildReviewAgentPrompt` (5 tests) and review feedback truncation (4 tests)
+- Truncation tests verify the `... [truncated]` marker (`ReviewTruncationMarker`) is appended when feedback exceeds `ReviewFeedbackMaxBytes`
+- No unnecessary `prompt_catalog` import
+- `make test` passes
+```
+
+### Agent Stdout Tail
+```text
+rge request enqueued.\" successfully. \n\nThe ticket is complete:\n- **9 unit tests** in `tests/test_scriptorium.nim` covering `buildReviewAgentPrompt` (5 tests) and review feedback truncation (4 tests)\n- Truncation tests verify the `... [truncated]` marker (`ReviewTruncationMarker`) is appended when feedback exceeds `ReviewFeedbackMaxBytes`\n- No unnecessary `prompt_catalog` import\n- `make test` passes","stop_reason":"end_turn","session_id":"5dc8e048-eca0-435d-bf9d-0a011f76be80","total_cost_usd":0.8456929999999999,"usage":{"input_tokens":37,"cache_creation_input_tokens":29366,"cache_read_input_tokens":1057941,"output_tokens":5320,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":29366,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":37,"outputTokens":5320,"cacheReadInputTokens":1057941,"cacheCreationInputTokens":29366,"webSearchRequests":0,"costUSD":0.8456929999999999,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a8136284-4700-49b3-a1b3-95c389b2de1d"}
+```
