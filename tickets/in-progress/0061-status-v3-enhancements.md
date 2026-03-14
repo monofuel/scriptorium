@@ -77,3 +77,10 @@ All existing status output is preserved, and tests pass.
 ```text
 st enqueued.\" successfully. \n\nThe ticket work was already complete from the previous attempt - the implementation adds:\n1. **Elapsed time** for in-progress tickets (parsed from worktree creation time)\n2. **Last 5 completed tickets** with outcome and wall time (from `## Metrics` section)\n3. **First-attempt success rate** percentage (from `attempt_count` metric)\n\nAll existing status output is preserved, and tests pass.","stop_reason":"end_turn","session_id":"68c57220-473e-48d1-83a2-930160e668eb","total_cost_usd":0.4816305,"usage":{"input_tokens":20,"cache_creation_input_tokens":25724,"cache_read_input_tokens":509161,"output_tokens":2647,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":25724,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":2647,"cacheReadInputTokens":509161,"cacheCreationInputTokens":25724,"webSearchRequests":0,"costUSD":0.4816305,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"fast_mode_state":"off","uuid":"efa194ea-0a1a-4e22-9dcb-c100780d98d0"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 2m9s
