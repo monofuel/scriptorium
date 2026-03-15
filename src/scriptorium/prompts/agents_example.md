@@ -11,6 +11,7 @@ This repository uses Nim and keeps dependencies minimal.
 - Let errors bubble up naturally unless there is a strong reason to handle them locally.
 - Do not hide failures with empty catch blocks or discarded errors.
 - Prefer deterministic behavior and idempotent operations.
+- Do not reference, clean, or manage `.nimcache` directories. The build system handles them.
 
 ## Nim
 

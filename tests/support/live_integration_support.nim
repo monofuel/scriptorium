@@ -62,7 +62,7 @@ proc integrationCodingHarness*(): Harness =
     else:
       raise newException(ValueError, "unknown SCRIPTORIUM_TEST_CODING_HARNESS: " & envVal)
   else:
-    result = inferHarness(integrationCodingModel())
+    result = integrationHarness()
 
 proc requiredAgentBinary*(): string =
   ## Return the binary name needed for the configured test harness.

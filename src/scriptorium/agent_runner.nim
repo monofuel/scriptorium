@@ -1,6 +1,6 @@
 import
   std/strformat,
-  ./[common, config, harness_claude_code, harness_codex]
+  ./[common, config, harness_claude_code, harness_codex, harness_typoi]
 
 type
   AgentStreamEventKind* = enum
@@ -90,6 +90,24 @@ proc mapClaudeCodeEvent(event: ClaudeCodeStreamEvent): AgentStreamEvent =
   of claudeCodeEventMessage:
     result.kind = agentEventMessage
 
+proc mapTypoiEvent(event: TypoiStreamEvent): AgentStreamEvent =
+  ## Convert one typoi stream event into an agent stream event.
+  result = AgentStreamEvent(
+    text: event.text,
+    rawLine: event.rawLine,
+  )
+  case event.kind
+  of typoiEventHeartbeat:
+    result.kind = agentEventHeartbeat
+  of typoiEventReasoning:
+    result.kind = agentEventReasoning
+  of typoiEventTool:
+    result.kind = agentEventTool
+  of typoiEventStatus:
+    result.kind = agentEventStatus
+  of typoiEventMessage:
+    result.kind = agentEventMessage
+
 proc runAgent*(request: AgentRunRequest): AgentRunResult =
   ## Run the configured agent backend for one coding request.
   if request.workingDir.len == 0:
@@ -168,5 +186,37 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessage: claudeResult.lastMessage,
       timeoutKind: $claudeResult.timeoutKind,
     )
-  else:
-    raise newException(ValueError, &"agent backend '{request.harness}' is not implemented")
+  of harnessTypoi:
+    let typoiResult = runTypoi(TypoiRunRequest(
+      prompt: request.prompt,
+      workingDir: request.workingDir,
+      model: request.model,
+      mcpEndpoint: request.mcpEndpoint,
+      ticketId: request.ticketId,
+      attempt: request.attempt,
+      typoiBinary: request.binary,
+      logRoot: request.logRoot,
+      noOutputTimeoutMs: request.noOutputTimeoutMs,
+      hardTimeoutMs: request.hardTimeoutMs,
+      progressTimeoutMs: request.progressTimeoutMs,
+      heartbeatIntervalMs: request.heartbeatIntervalMs,
+      maxAttempts: request.maxAttempts,
+      continuationPrompt: request.continuationPrompt,
+      continuationPromptBuilder: request.continuationPromptBuilder,
+      onEvent: proc(event: TypoiStreamEvent) =
+        ## Forward typoi streaming events to the optional agent callback.
+        if not request.onEvent.isNil:
+          request.onEvent(mapTypoiEvent(event))
+    ))
+    result = AgentRunResult(
+      backend: request.harness,
+      command: typoiResult.command,
+      exitCode: typoiResult.exitCode,
+      attempt: typoiResult.attempt,
+      attemptCount: typoiResult.attemptCount,
+      stdout: typoiResult.stdout,
+      logFile: typoiResult.logFile,
+      lastMessageFile: typoiResult.lastMessageFile,
+      lastMessage: typoiResult.lastMessage,
+      timeoutKind: $typoiResult.timeoutKind,
+    )

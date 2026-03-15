@@ -3,7 +3,7 @@
 import
   std/[httpclient, json, os, osproc, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_codex, orchestrator]
+  scriptorium/[agent_runner, config, harness_codex, orchestrator]
 
 const
   LiveMcpBasePort = 22000
@@ -47,6 +47,40 @@ proc hasCodexAuth(): bool =
   ## Return true when API keys or a Codex OAuth auth file are available.
   let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
   result = hasApiKey or fileExists(codexAuthPath())
+
+proc integrationHarness(): Harness =
+  ## Return the test harness from env, or infer from model.
+  let envVal = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip().toLowerAscii()
+  if envVal.len > 0:
+    case envVal
+    of "codex": result = harnessCodex
+    of "claude-code": result = harnessClaudeCode
+    of "typoi": result = harnessTypoi
+    else:
+      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
+  else:
+    result = inferHarness(integrationModel())
+
+proc hasAgentAuth(): bool =
+  ## Return true when API keys are available for the configured test harness.
+  let h = integrationHarness()
+  case h
+  of harnessCodex:
+    result = hasCodexAuth()
+  of harnessClaudeCode:
+    let hasApiKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
+    let hasOauth = fileExists(expandTilde("~/.claude/.credentials.json"))
+    result = hasApiKey or hasOauth
+  of harnessTypoi:
+    result = true
+
+proc requiredAgentBinary(): string =
+  ## Return the binary name needed for the configured test harness.
+  let h = integrationHarness()
+  case h
+  of harnessCodex: result = "codex"
+  of harnessClaudeCode: result = "claude"
+  of harnessTypoi: result = "typoi"
 
 proc mcpPort(offset: int): int =
   ## Return a deterministic local MCP port for one test offset.
@@ -132,12 +166,12 @@ suite "integration mcp submit_pr live":
     check consumeSubmitPrSummary() == summary
     check consumeSubmitPrSummary() == ""
 
-  test "IT-LIVE-02 real Codex calls submit_pr against live MCP HTTP server":
-    let codexPath = findExe("codex")
-    doAssert codexPath.len > 0, "codex binary is required for live integration tests"
-    doAssert hasCodexAuth(),
-      "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for live integration tests (" &
-      codexAuthPath() & ")"
+  test "IT-LIVE-02 real agent calls submit_pr against live MCP HTTP server":
+    let agentBinary = requiredAgentBinary()
+    doAssert findExe(agentBinary).len > 0,
+      agentBinary & " binary is required for live integration tests"
+    doAssert hasAgentAuth(),
+      "API credentials are required for live integration tests"
 
     discard consumeSubmitPrSummary()
     let port = mcpPort(2)
@@ -149,7 +183,7 @@ suite "integration mcp submit_pr live":
     sleep(ServerStartupSleepMs)
     liveServers.add(httpServer)
 
-    let tmpDir = createTempDir("scriptorium_integration_live_mcp_codex_", "", getTempDir())
+    let tmpDir = createTempDir("scriptorium_integration_live_mcp_agent_", "", getTempDir())
     defer:
       removeDir(tmpDir)
 
@@ -157,7 +191,7 @@ suite "integration mcp submit_pr live":
       worktreePath = tmpDir / "worktree"
       timestamp = now().utc().format("yyyyMMddHHmmss")
       nonce = &"it-live-02-{getCurrentProcessId()}-{timestamp}"
-      expectedMcpArg = "mcp_servers.scriptorium={url = \"" & endpoint & "/mcp\", enabled = true, required = true}"
+      harness = integrationHarness()
       prompt =
         "You are running an integration test. " &
         "You have a function called submit_pr in your tool list. " &
@@ -167,26 +201,26 @@ suite "integration mcp submit_pr live":
         "After the function call succeeds, reply with exactly DONE."
     createDir(worktreePath)
 
-    let request = CodexRunRequest(
+    let request = AgentRunRequest(
       prompt: prompt,
       workingDir: worktreePath,
+      harness: harness,
       model: integrationModel(),
       mcpEndpoint: endpoint,
       ticketId: "integration-live-submit-pr",
+      attempt: 1,
       skipGitRepoCheck: true,
       logRoot: tmpDir / "logs",
       hardTimeoutMs: CodexHardTimeoutMs,
       noOutputTimeoutMs: CodexNoOutputTimeoutMs,
+      maxAttempts: 1,
     )
 
-    let runResult = runCodex(request)
+    let runResult = runAgent(request)
     doAssert runResult.exitCode == 0,
-      "codex failed to complete live MCP submit_pr integration.\n" &
+      "agent failed to complete live MCP submit_pr integration.\n" &
       "Command: " & runResult.command.join(" ") & "\n" &
       "Stdout:\n" & runResult.stdout
-    check expectedMcpArg in runResult.command
-    check runResult.stdout.contains("\"type\":\"mcp_tool_call\"")
-    check runResult.stdout.contains("\"tool\":\"submit_pr\"")
     let consumedSummary = consumeSubmitPrSummary()
     doAssert consumedSummary == nonce,
       "expected live submit_pr summary was not captured.\n" &
@@ -194,54 +228,58 @@ suite "integration mcp submit_pr live":
       "Actual: " & consumedSummary & "\n" &
       "Stdout:\n" & runResult.stdout
 
-  test "IT-LIVE-03 codex mcp list confirms server is enabled and required":
-    let codexPath = findExe("codex")
-    doAssert codexPath.len > 0, "codex binary is required for live integration tests"
+  test "IT-LIVE-03 codex-specific: mcp list confirms server is enabled and required":
+    let harnessEnv3 = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
+    if harnessEnv3.len > 0 and harnessEnv3 != "codex":
+      skip()
+    else:
+      let codexPath = findExe("codex")
+      doAssert codexPath.len > 0, "codex binary is required for live integration tests"
 
-    let port = mcpPort(3)
-    let endpoint = mcpBaseUrl(port)
+      let port = mcpPort(3)
+      let endpoint = mcpBaseUrl(port)
 
-    let httpServer = createOrchestratorServer()
-    var serverThread: Thread[ServerThreadArgs]
-    createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-    sleep(ServerStartupSleepMs)
-    liveServers.add(httpServer)
+      let httpServer = createOrchestratorServer()
+      var serverThread: Thread[ServerThreadArgs]
+      createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
+      sleep(ServerStartupSleepMs)
+      liveServers.add(httpServer)
 
-    let request = CodexRunRequest(
-      mcpEndpoint: endpoint,
-    )
-    let args = buildCodexMcpListArgs(request)
-    let cmdParts = @[codexPath] & args
-    var quotedCommandParts: seq[string] = @[]
-    for part in cmdParts:
-      quotedCommandParts.add(quoteShell(part))
-    let fullCommand = quotedCommandParts.join(" ")
-    let (output, exitCode) = execCmdEx(fullCommand)
+      let request = CodexRunRequest(
+        mcpEndpoint: endpoint,
+      )
+      let args = buildCodexMcpListArgs(request)
+      let cmdParts = @[codexPath] & args
+      var quotedCommandParts: seq[string] = @[]
+      for part in cmdParts:
+        quotedCommandParts.add(quoteShell(part))
+      let fullCommand = quotedCommandParts.join(" ")
+      let (output, exitCode) = execCmdEx(fullCommand)
 
-    doAssert exitCode == 0,
-      "codex mcp list --json failed.\n" &
-      "Command: " & fullCommand & "\n" &
-      "Output:\n" & output
+      doAssert exitCode == 0,
+        "codex mcp list --json failed.\n" &
+        "Command: " & fullCommand & "\n" &
+        "Output:\n" & output
 
-    let jsonOutput = parseJson(output.strip())
-    doAssert jsonOutput.kind == JArray,
-      "expected codex mcp list output to be a JSON array.\n" &
-      "Output:\n" & output
+      let jsonOutput = parseJson(output.strip())
+      doAssert jsonOutput.kind == JArray,
+        "expected codex mcp list output to be a JSON array.\n" &
+        "Output:\n" & output
 
-    var foundScriptorium = false
-    var isEnabled = false
-    var isRequired = false
-    var hasRequired = false
+      var foundScriptorium = false
+      var isEnabled = false
+      var isRequired = false
+      var hasRequired = false
 
-    for server in jsonOutput:
-      if server["name"].getStr() == "scriptorium":
-        foundScriptorium = true
-        isEnabled = server["enabled"].getBool()
-        if server.hasKey("required"):
-          hasRequired = true
-          isRequired = server["required"].getBool()
+      for server in jsonOutput:
+        if server["name"].getStr() == "scriptorium":
+          foundScriptorium = true
+          isEnabled = server["enabled"].getBool()
+          if server.hasKey("required"):
+            hasRequired = true
+            isRequired = server["required"].getBool()
 
-    check foundScriptorium
-    check isEnabled
-    if hasRequired:
-      check isRequired
+      check foundScriptorium
+      check isEnabled
+      if hasRequired:
+        check isRequired

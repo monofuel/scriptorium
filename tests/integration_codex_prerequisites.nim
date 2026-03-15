@@ -4,6 +4,11 @@ import
   std/[os, osproc, strutils, tempfiles, unittest],
   jsony
 
+proc isCodexHarness(): bool =
+  ## Return true when the test harness is codex (default) or unset.
+  let envVal = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip().toLowerAscii()
+  result = envVal.len == 0 or envVal == "codex"
+
 type
   OAuthTokensJson = object
     access_token*: string
@@ -56,46 +61,55 @@ proc writeExecutableScript(path: string, body: string) =
 
 suite "integration codex prerequisites":
   test "IT-07 fails clearly when codex binary is missing":
-    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_bin_", "", getTempDir())
-    defer:
-      removeDir(tmpDir)
+    if not isCodexHarness():
+      skip()
+    else:
+      let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_bin_", "", getTempDir())
+      defer:
+        removeDir(tmpDir)
 
-    let harnessBinary = buildCodexHarnessBinary(tmpDir)
-    let runResult = runHarnessWithEnv(
-      harnessBinary,
-      tmpDir,
-      "dummy-openai-key",
-      "dummy-codex-key",
-      tmpDir / "missing-auth.json",
-      false,
-    )
+      let harnessBinary = buildCodexHarnessBinary(tmpDir)
+      let runResult = runHarnessWithEnv(
+        harnessBinary,
+        tmpDir,
+        "dummy-openai-key",
+        "dummy-codex-key",
+        tmpDir / "missing-auth.json",
+        false,
+      )
 
-    check runResult.exitCode != 0
-    check "codex binary is required for integration tests" in runResult.output
+      check runResult.exitCode != 0
+      check "codex binary is required for integration tests" in runResult.output
 
   test "IT-07 fails clearly when API keys and OAuth auth are missing":
-    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_auth_", "", getTempDir())
-    defer:
-      removeDir(tmpDir)
+    if not isCodexHarness():
+      skip()
+    else:
+      let tmpDir = createTempDir("scriptorium_integration_codex_prereq_missing_auth_", "", getTempDir())
+      defer:
+        removeDir(tmpDir)
 
-    let fakeBinDir = tmpDir / "bin"
-    createDir(fakeBinDir)
-    writeExecutableScript(fakeBinDir / "codex", "exit 0\n")
+      let fakeBinDir = tmpDir / "bin"
+      createDir(fakeBinDir)
+      writeExecutableScript(fakeBinDir / "codex", "exit 0\n")
 
-    let harnessBinary = buildCodexHarnessBinary(tmpDir)
-    let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", tmpDir / "missing-auth.json")
+      let harnessBinary = buildCodexHarnessBinary(tmpDir)
+      let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", tmpDir / "missing-auth.json")
 
-    check runResult.exitCode != 0
-    check "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests" in runResult.output
+      check runResult.exitCode != 0
+      check "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests" in runResult.output
 
   test "IT-07 accepts OAuth auth file when API keys are missing":
-    let tmpDir = createTempDir("scriptorium_integration_codex_prereq_oauth_", "", getTempDir())
-    defer:
-      removeDir(tmpDir)
+    if not isCodexHarness():
+      skip()
+    else:
+      let tmpDir = createTempDir("scriptorium_integration_codex_prereq_oauth_", "", getTempDir())
+      defer:
+        removeDir(tmpDir)
 
-    let fakeBinDir = tmpDir / "bin"
-    createDir(fakeBinDir)
-    writeExecutableScript(fakeBinDir / "codex", """
+      let fakeBinDir = tmpDir / "bin"
+      createDir(fakeBinDir)
+      writeExecutableScript(fakeBinDir / "codex", """
 last_message=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -108,10 +122,10 @@ cat >/dev/null
     printf 'ok\n' > "$last_message"
 """)
 
-    let authFilePath = tmpDir / "oauth-auth.json"
-    writeFile(authFilePath, toJson(OAuthAuthJson(tokens: OAuthTokensJson(access_token: "test"))))
-    let harnessBinary = buildCodexHarnessBinary(tmpDir)
-    let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", authFilePath)
+      let authFilePath = tmpDir / "oauth-auth.json"
+      writeFile(authFilePath, toJson(OAuthAuthJson(tokens: OAuthTokensJson(access_token: "test"))))
+      let harnessBinary = buildCodexHarnessBinary(tmpDir)
+      let runResult = runHarnessWithEnv(harnessBinary, fakeBinDir, "", "", authFilePath)
 
-    check runResult.exitCode == 0
-    check "[OK] real codex exec one-shot smoke test" in runResult.output
+      check runResult.exitCode == 0
+      check "[OK] real codex exec one-shot smoke test" in runResult.output

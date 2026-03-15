@@ -1,14 +1,13 @@
-## Integration tests for running the real codex binary.
+## Integration tests for running the real typoi binary.
 
 import
-  std/[os, strformat, strutils, tempfiles, times, unittest],
+  std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_codex, orchestrator]
+  scriptorium/[harness_typoi, orchestrator]
 
 const
-  DefaultIntegrationModel = "gpt-5.1-codex-mini"
-  CodexAuthPathEnv = "CODEX_AUTH_FILE"
-  LiveMcpBasePort = 22100
+  DefaultIntegrationModel = "claude-opus-4-6"
+  LiveMcpBasePort = 22300
   ServerStartupSleepMs = 250
 
 type
@@ -26,75 +25,71 @@ proc mcpPort(offset: int): int =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
-  if result.len == 0:
-    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
+  result = getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel)
 
-proc codexAuthPath(): string =
-  ## Return the configured Codex auth file path used for OAuth credentials.
-  let overridePath = getEnv(CodexAuthPathEnv, "").strip()
-  if overridePath.len > 0:
-    result = overridePath
-  else:
-    result = expandTilde("~/.codex/auth.json")
+proc hasTypoiAuth(): bool =
+  ## Return true when API keys are available for typoi.
+  let hasOpenAiKey = getEnv("OPENAI_API_KEY", "").len > 0
+  let hasAnthropicKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
+  result = hasOpenAiKey or hasAnthropicKey
 
-proc hasCodexAuth(): bool =
-  ## Return true when API keys or a Codex OAuth auth file are available.
-  let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
-  result = hasApiKey or fileExists(codexAuthPath())
-
-suite "integration codex harness":
-  test "real codex exec one-shot smoke test":
+suite "integration typoi harness":
+  test "real typoi one-shot smoke test":
     let harnessEnv = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
-    if harnessEnv.len > 0 and harnessEnv != "codex":
+    if harnessEnv.len > 0 and harnessEnv != "typoi":
       skip()
     else:
-      let codexPath = findExe("codex")
-      doAssert codexPath.len > 0, "codex binary is required for integration tests"
-      doAssert hasCodexAuth(),
-        "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
-        codexAuthPath() & ")"
+      let typoiPath = findExe("typoi")
+      doAssert typoiPath.len > 0, "typoi binary is required for integration tests"
+      doAssert hasTypoiAuth(),
+        "API key is required (OPENAI_API_KEY or ANTHROPIC_API_KEY)"
 
-      let tmpDir = createTempDir("scriptorium_integration_codex_", "", getTempDir())
+      let tmpDir = createTempDir("scriptorium_integration_typoi_", "", getTempDir())
       defer:
         removeDir(tmpDir)
 
       let worktreePath = tmpDir / "worktree"
       createDir(worktreePath)
-      let request = CodexRunRequest(
+      let request = TypoiRunRequest(
         prompt: "Reply with exactly: ok",
         workingDir: worktreePath,
         model: integrationModel(),
         ticketId: "integration-smoke",
-        skipGitRepoCheck: true,
         logRoot: tmpDir / "logs",
         hardTimeoutMs: 45_000,
         noOutputTimeoutMs: 15_000,
       )
 
-      let runResult = runCodex(request)
+      var events: seq[string] = @[]
+      var mutableRequest = request
+      mutableRequest.onEvent = proc(event: TypoiStreamEvent) =
+        ## Capture events for assertion.
+        events.add($event.kind & ":" & event.text)
+
+      let runResult = runTypoi(mutableRequest)
       doAssert runResult.exitCode == 0,
-        "codex exec failed with non-zero exit code.\n" &
+        "typoi failed with non-zero exit code.\n" &
         "Model: " & integrationModel() & "\n" &
         "Command: " & runResult.command.join(" ") & "\n" &
         "Stdout:\n" & runResult.stdout
       doAssert runResult.lastMessage.strip().len > 0,
-        "codex did not produce a last message.\n" &
+        "typoi did not produce a last message.\n" &
         "Last message file: " & runResult.lastMessageFile & "\n" &
         "Stdout:\n" & runResult.stdout
       check fileExists(runResult.logFile)
       check fileExists(runResult.lastMessageFile)
+      check events.len > 0
+      check events.anyIt("message" in it)
 
-  test "real codex MCP tool call against live server":
+  test "real typoi MCP tool call against live server":
     let harnessEnv = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
-    if harnessEnv.len > 0 and harnessEnv != "codex":
+    if harnessEnv.len > 0 and harnessEnv != "typoi":
       skip()
     else:
-      let codexPath = findExe("codex")
-      doAssert codexPath.len > 0, "codex binary is required for integration tests"
-      doAssert hasCodexAuth(),
-        "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
-        codexAuthPath() & ")"
+      let typoiPath = findExe("typoi")
+      doAssert typoiPath.len > 0, "typoi binary is required for integration tests"
+      doAssert hasTypoiAuth(),
+        "API key is required (OPENAI_API_KEY or ANTHROPIC_API_KEY)"
 
       discard consumeSubmitPrSummary()
       let port = mcpPort(1)
@@ -105,14 +100,14 @@ suite "integration codex harness":
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
       sleep(ServerStartupSleepMs)
 
-      let tmpDir = createTempDir("scriptorium_integration_codex_mcp_", "", getTempDir())
+      let tmpDir = createTempDir("scriptorium_integration_typoi_mcp_", "", getTempDir())
       defer:
         removeDir(tmpDir)
 
       let
         worktreePath = tmpDir / "worktree"
         timestamp = now().utc().format("yyyyMMddHHmmss")
-        nonce = &"it-codex-mcp-{getCurrentProcessId()}-{timestamp}"
+        nonce = &"it-typoi-mcp-{getCurrentProcessId()}-{timestamp}"
       createDir(worktreePath)
 
       let prompt =
@@ -123,21 +118,20 @@ suite "integration codex harness":
         "If the function is missing, fail immediately. " &
         "After the function call succeeds, reply with exactly DONE."
 
-      let request = CodexRunRequest(
+      let request = TypoiRunRequest(
         prompt: prompt,
         workingDir: worktreePath,
         model: integrationModel(),
         mcpEndpoint: endpoint,
-        ticketId: "integration-codex-mcp",
-        skipGitRepoCheck: true,
+        ticketId: "integration-typoi-mcp",
         logRoot: tmpDir / "logs",
         hardTimeoutMs: 120_000,
         noOutputTimeoutMs: 45_000,
       )
 
-      let runResult = runCodex(request)
+      let runResult = runTypoi(request)
       doAssert runResult.exitCode == 0,
-        "codex MCP tool call failed.\n" &
+        "typoi MCP tool call failed.\n" &
         "Command: " & runResult.command.join(" ") & "\n" &
         "Stdout:\n" & runResult.stdout
       let consumedSummary = consumeSubmitPrSummary()

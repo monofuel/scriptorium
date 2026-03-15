@@ -98,14 +98,48 @@ printf '{"type":"result","subtype":"success","is_error":false,"result":"ok","sto
       check streamedEvents.anyIt("message" in it and "ok" in it)
     )
 
-  test "runAgent rejects unimplemented backends":
+  test "runAgent routes typoi harness to typoi backend":
     withTempAgentDir(proc(tmpDir: string) =
-      let request = AgentRunRequest(
+      let typoiPath = tmpDir / "fake-typoi.sh"
+      writeExecutableScript(typoiPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '{"type":"status","text":"init"}\n'
+printf '{"type":"message","text":"ok"}\n'
+printf '{"type":"status","text":"done"}\n'
+printf 'done\n' > "$last_message"
+""")
+
+      let worktreePath = tmpDir / "worktree"
+      createDir(worktreePath)
+      var request = AgentRunRequest(
         prompt: "Write code.",
-        workingDir: tmpDir,
+        workingDir: worktreePath,
         harness: harnessTypoi,
         model: "grok-code-fast-1",
+        mcpEndpoint: "http://127.0.0.1:8097",
+        ticketId: "0001",
+        binary: typoiPath,
+        logRoot: tmpDir / "logs",
       )
-      expect ValueError:
-        discard runAgent(request)
+      var streamedEvents: seq[string] = @[]
+      request.onEvent = proc(event: AgentStreamEvent) =
+        ## Capture streamed agent events for callback wiring assertions.
+        streamedEvents.add($event.kind & ":" & event.text)
+      let result = runAgent(request)
+
+      check result.backend == harnessTypoi
+      check result.exitCode == 0
+      check result.timeoutKind == "none"
+      check result.lastMessage.contains("done")
+      check "--mcp-server-url" in result.command
+      check "http://127.0.0.1:8097/mcp" in result.command
+      check streamedEvents.len > 0
+      check streamedEvents.anyIt("message" in it and "ok" in it)
     )
