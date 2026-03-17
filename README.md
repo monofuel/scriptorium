@@ -263,14 +263,6 @@ make e2e-test
 
 This split keeps PR CI safe while still running key-backed integration and e2e coverage on trusted `master` pushes.
 
-## Future plans
-
-V6 focus areas (see `docs/v6.md` for details):
-- Prediction prompt calibration — duration estimates are consistently ~2x too high, need historical timing data as calibration context.
-- MCP tool timing reliability — `submit_pr` sometimes unavailable on first attempt due to race conditions in MCP server startup.
-- Merge queue conflict handling — handle master divergence gracefully (rebase or retry) instead of failing on ff-only merge.
-- Review agent prompt improvements — review agent tends to stall and default-approve; needs investigation into prompt and MCP tool discovery issues.
-
 ## License
 
 MIT. See `LICENSE`.
