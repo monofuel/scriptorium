@@ -130,11 +130,14 @@ proc shutdownMonitor(server: mummy.Server) {.thread.} =
 
 proc runHttpServer*(args: ServerThreadArgs) {.thread.} =
   ## Run the MCP HTTP server in a background thread with coordinated shutdown.
+  ## Note: we intentionally skip joinThread on the monitor thread. Mummy's
+  ## destroy path has a use-after-free bug that causes flaky SIGSEGV during
+  ## deallocShared. Since the process is exiting anyway, a clean join is
+  ## unnecessary.
   ensureShutdownLockInitialized()
   var monitorThread: Thread[mummy.Server]
   createThread(monitorThread, shutdownMonitor, args.httpServer.httpServer)
   args.httpServer.serve(args.port, args.address)
-  joinThread(monitorThread)
 
 proc waitForServerReady*(address: string, port: int, timeoutMs: int = ServerReadyTimeoutMs) =
   ## Poll the MCP endpoint until it responds or timeout is reached.
