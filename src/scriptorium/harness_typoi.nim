@@ -191,7 +191,7 @@ proc buildTypoiExecArgs*(request: TypoiRunRequest, lastMessagePath: string): seq
       endpointBase.setLen(endpointBase.len - 1)
     if endpointBase.len > 0:
       result.add("--mcp-server-url")
-      result.add(endpointBase)
+      result.add(endpointBase & "/mcp")
 
   if request.model.len > 0:
     result.add("--model")

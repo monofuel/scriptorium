@@ -54,7 +54,7 @@ suite "harness typoi":
 
     let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
     check "--mcp-server-url" in args
-    check "http://127.0.0.1:8097" in args
+    check "http://127.0.0.1:8097/mcp" in args
 
   test "buildTypoiExecArgs trims trailing slash from mcp endpoint":
     let request = TypoiRunRequest(
@@ -63,7 +63,7 @@ suite "harness typoi":
     )
 
     let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
-    check "http://127.0.0.1:8097" in args
+    check "http://127.0.0.1:8097/mcp" in args
 
   test "buildTypoiExecArgs infers anthropic provider for claude models":
     let request = TypoiRunRequest(
