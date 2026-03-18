@@ -243,6 +243,7 @@ proc buildMcpServersArgs(request: CodexRunRequest): seq[string] =
   if endpointBase.len == 0:
     return @[]
 
+  # Important: json syntax does NOT work here. separate flags work great. to not try to "optimize" this and break it again.
   let mcpUrl = endpointBase & "/mcp"
   result = @[
     "-c", &"mcp_servers.scriptorium.url=\"{mcpUrl}\"",
