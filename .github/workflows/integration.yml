@@ -51,7 +51,7 @@ jobs:
 
       - name: Build and install typoi
         run: |
-          NIMBY_PATHS=$(awk '{print "--path:" ENVIRON["HOME"] "/.nimby/pkgs/" $1 "/src"}' nimby.lock | tr '\n' ' ')
+          NIMBY_PATHS=$(awk '{p=ENVIRON["HOME"] "/.nimby/pkgs/" $1; print "--path:" p "/src --path:" p}' nimby.lock | tr '\n' ' ')
           nim c -d:release $NIMBY_PATHS -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
           echo "$HOME/.nimby/bin" >> $GITHUB_PATH
 
