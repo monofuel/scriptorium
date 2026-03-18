@@ -46,6 +46,9 @@ jobs:
           which claude
           claude --version
 
+      - name: Install system dependencies
+        run: sudo apt-get install -y libpcre3-dev
+
       - name: Sync Nim dependencies
         run: nimby sync -g nimby.lock
 
