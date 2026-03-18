@@ -46,8 +46,17 @@ jobs:
           which claude
           claude --version
 
+      - name: Install system dependencies
+        run: sudo apt-get install -y libpcre3-dev
+
       - name: Sync Nim dependencies
         run: nimby sync -g nimby.lock
+
+      - name: Build and install typoi
+        run: |
+          NIMBY_PATHS=$(awk '{p=ENVIRON["HOME"] "/.nimby/pkgs/" $1; print "--path:" p "/src --path:" p}' nimby.lock | tr '\n' ' ')
+          nim c -d:release $NIMBY_PATHS -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
+          echo "$HOME/.nimby/bin" >> $GITHUB_PATH
 
       - name: Run integration tests
         run: make integration-test
