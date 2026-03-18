@@ -231,7 +231,7 @@ proc readOutputChunk(fd: cint): tuple[data: string, eof: bool] =
     break
 
 proc buildMcpServersArgs(request: CodexRunRequest): seq[string] =
-  ## Build codex -c args for MCP server configuration using separate flags.
+  ## Build codex -c args for MCP server configuration using table syntax.
   let cleanEndpoint = request.mcpEndpoint.strip()
   if cleanEndpoint.len == 0:
     return @[]
@@ -244,10 +244,9 @@ proc buildMcpServersArgs(request: CodexRunRequest): seq[string] =
     return @[]
 
   let mcpUrl = endpointBase & "/mcp"
+  let mcpString = "{" & &"url = \"{mcpUrl}\", enabled = true, required = true" & "}"
   result = @[
-    "-c", &"mcp_servers.scriptorium.url=\"{mcpUrl}\"",
-    "-c", "mcp_servers.scriptorium.enabled=true",
-    "-c", "mcp_servers.scriptorium.required=true",
+    "-c", "mcp_servers.scriptorium=" & mcpString,
   ]
 
 proc buildCodexMcpListArgs*(request: CodexRunRequest): seq[string] =
@@ -269,12 +268,6 @@ proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq
     DefaultCodexDeveloperInstructions,
   ]
   result.add(mcpServersArgs)
-
-  let reasoningEffort = resolveReasoningEffort(request)
-  if reasoningEffort.len > 0:
-    result.add("-c")
-    result.add(&"model_reasoning_effort=\"{reasoningEffort}\"")
-
   result.add(@[
     "exec",
     "--json",
@@ -286,6 +279,11 @@ proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq
     request.model,
     "--dangerously-bypass-approvals-and-sandbox",
   ])
+
+  let reasoningEffort = resolveReasoningEffort(request)
+  if reasoningEffort.len > 0:
+    result.add("-c")
+    result.add(&"model_reasoning_effort=\"{reasoningEffort}\"")
 
   if request.skipGitRepoCheck:
     result.add("--skip-git-repo-check")

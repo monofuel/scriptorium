@@ -186,7 +186,7 @@ proc buildMcpConfigJson*(endpoint: string): string =
   let configObj = %* {
     "mcpServers": {
       "scriptorium": {
-        "type": "http",
+        "type": "sse",
         "url": mcpUrl
       }
     }
