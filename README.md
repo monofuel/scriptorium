@@ -4,10 +4,29 @@ Git-native agent orchestration for software projects.
 
 Scriptorium keeps planning and execution state in Git, runs a strict Architect → Manager → Coding → Review workflow, and merges work only when `master` stays green.
 
-Path and workflow terminology is defined in `docs/terms.md`.
-
 WARNING: this is a work in progress and is not yet ready for general use.
-there is no warrenty, it is highly experimental, letting agents run loose is a bad idea but this is still a fun project. you should probably run this is a container.
+There is no warranty, it is highly experimental, letting agents run loose is a bad idea but this is still a fun project. You should probably run this in a container.
+
+## Usage
+
+Run `scriptorium run` in one terminal (or in tmux) to start the main orchestration loop. It watches the spec, generates tickets, assigns coding agents, reviews their work, and merges passing changes into `master`.
+
+Use `scriptorium plan` in another terminal to talk to the **Architect** — the planning agent that reads your project source and maintains `spec.md`. The Architect decides what work needs to be done and breaks it into areas and tickets. `scriptorium plan` opens an interactive session where you can describe what you want built or changed, and the Architect updates the spec accordingly.
+
+Use `scriptorium ask` for read-only questions to the Architect. It has the same context as `plan` but won't modify the spec — useful for asking about the codebase, checking status, or getting the Architect's perspective on a design question.
+
+```bash
+# Terminal 1: run the orchestration loop
+scriptorium run
+
+# Terminal 2: tell the Architect what to build
+scriptorium plan
+
+# Or ask a one-off question
+scriptorium ask "What areas of the codebase handle authentication?"
+```
+
+Path and workflow terminology is defined in `docs/terms.md`.
 
 ## Status
 
