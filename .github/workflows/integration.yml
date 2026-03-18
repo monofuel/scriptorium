@@ -49,5 +49,10 @@ jobs:
       - name: Sync Nim dependencies
         run: nimby sync -g nimby.lock
 
+      - name: Build and install typoi
+        run: |
+          nim c -d:release -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
+          echo "$HOME/.nimby/bin" >> $GITHUB_PATH
+
       - name: Run integration tests
         run: make integration-test
