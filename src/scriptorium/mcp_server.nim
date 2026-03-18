@@ -121,23 +121,21 @@ proc createOrchestratorServer*(): HttpMcpServer =
   result = newHttpMcpServer(server, logEnabled = false)
 
 proc shutdownMonitor(server: mummy.Server) {.thread.} =
-  ## Wait for the shutdown signal and close the mummy server from the monitor thread.
+  ## Wait for the shutdown signal then return (do not call server.close()).
+  ## Mummy's destroy path has a use-after-free bug that causes flaky SIGSEGV
+  ## during deallocShared, so we let the OS reclaim resources on exit instead.
   acquire(shutdownLock)
   while shouldRun:
     wait(shutdownCond, shutdownLock)
   release(shutdownLock)
-  server.close()
 
 proc runHttpServer*(args: ServerThreadArgs) {.thread.} =
   ## Run the MCP HTTP server in a background thread with coordinated shutdown.
-  ## Note: we intentionally skip joinThread on the monitor thread. Mummy's
-  ## destroy path has a use-after-free bug that causes flaky SIGSEGV during
-  ## deallocShared. Since the process is exiting anyway, a clean join is
-  ## unnecessary.
   ensureShutdownLockInitialized()
   var monitorThread: Thread[mummy.Server]
   createThread(monitorThread, shutdownMonitor, args.httpServer.httpServer)
   args.httpServer.serve(args.port, args.address)
+  joinThread(monitorThread)
 
 proc waitForServerReady*(address: string, port: int, timeoutMs: int = ServerReadyTimeoutMs) =
   ## Poll the MCP endpoint until it responds or timeout is reached.
