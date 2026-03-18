@@ -3,13 +3,12 @@
 import
   std/[os, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_codex, orchestrator]
+  scriptorium/[harness_codex, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "gpt-5.1-codex-mini"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   LiveMcpBasePort = 22100
-  ServerStartupSleepMs = 250
 
 type
   ServerThreadArgs = tuple[
@@ -103,7 +102,7 @@ suite "integration codex harness":
       let httpServer = createOrchestratorServer()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-      sleep(ServerStartupSleepMs)
+      waitForServerReady("127.0.0.1", port)
 
       let tmpDir = createTempDir("scriptorium_integration_codex_mcp_", "", getTempDir())
       defer:

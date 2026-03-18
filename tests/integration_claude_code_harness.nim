@@ -3,12 +3,11 @@
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_claude_code, orchestrator]
+  scriptorium/[harness_claude_code, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "claude-sonnet-4-6"
   LiveMcpBasePort = 22200
-  ServerStartupSleepMs = 250
 
 type
   ServerThreadArgs = tuple[
@@ -99,7 +98,7 @@ suite "integration claude-code harness":
       let httpServer = createOrchestratorServer()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-      sleep(ServerStartupSleepMs)
+      waitForServerReady("127.0.0.1", port)
 
       let tmpDir = createTempDir("scriptorium_integration_claude_code_mcp_", "", getTempDir())
       defer:

@@ -3,12 +3,11 @@
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_typoi, orchestrator]
+  scriptorium/[harness_typoi, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "claude-opus-4-6"
   LiveMcpBasePort = 22300
-  ServerStartupSleepMs = 250
 
 type
   ServerThreadArgs = tuple[
@@ -98,7 +97,7 @@ suite "integration typoi harness":
       let httpServer = createOrchestratorServer()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-      sleep(ServerStartupSleepMs)
+      waitForServerReady("127.0.0.1", port)
 
       let tmpDir = createTempDir("scriptorium_integration_typoi_mcp_", "", getTempDir())
       defer:
