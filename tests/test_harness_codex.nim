@@ -42,6 +42,8 @@ suite "harness codex":
     check args == @[
       "-c",
       "developer_instructions=\"\"",
+      "-c",
+      "model_reasoning_effort=\"high\"",
       "exec",
       "--json",
       "--output-last-message",
@@ -51,8 +53,6 @@ suite "harness codex":
       "--model",
       "gpt-5.1-codex-mini",
       "--dangerously-bypass-approvals-and-sandbox",
-      "-c",
-      "model_reasoning_effort=\"high\"",
       "--skip-git-repo-check",
       "-",
     ]
