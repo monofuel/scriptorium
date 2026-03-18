@@ -92,8 +92,9 @@ suite "harness codex":
     )
 
     let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
-    let expectedMcpArg = "mcp_servers.scriptorium={url = \"http://127.0.0.1:8097/mcp\", enabled = true, required = true}"
-    check expectedMcpArg in args
+    check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in args
+    check "mcp_servers.scriptorium.enabled=true" in args
+    check "mcp_servers.scriptorium.required=true" in args
 
   test "buildCodexExecArgs trims trailing slash from mcp endpoint":
     let request = CodexRunRequest(
@@ -103,8 +104,9 @@ suite "harness codex":
     )
 
     let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
-    let expectedMcpArg = "mcp_servers.scriptorium={url = \"http://127.0.0.1:8097/mcp\", enabled = true, required = true}"
-    check expectedMcpArg in args
+    check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in args
+    check "mcp_servers.scriptorium.enabled=true" in args
+    check "mcp_servers.scriptorium.required=true" in args
 
   test "buildCodexExecArgs includes reasoning effort override when configured":
     let request = CodexRunRequest(

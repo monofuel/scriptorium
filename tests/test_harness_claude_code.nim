@@ -105,11 +105,11 @@ suite "harness claude-code":
     expect ValueError:
       discard buildClaudeCodeExecArgs(request)
 
-  test "buildMcpConfigJson produces valid json with correct url and type":
+  test "buildMcpConfigJson produces valid json with correct url and http type":
     let result = buildMcpConfigJson("http://127.0.0.1:8097")
     let parsed = parseJson(result)
     check parsed["mcpServers"]["scriptorium"]["url"].getStr() == "http://127.0.0.1:8097/mcp"
-    check parsed["mcpServers"]["scriptorium"]["type"].getStr() == "sse"
+    check parsed["mcpServers"]["scriptorium"]["type"].getStr() == "http"
 
   test "buildMcpConfigJson returns empty for empty endpoint":
     check buildMcpConfigJson("") == ""

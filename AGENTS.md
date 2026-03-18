@@ -76,6 +76,13 @@ Rules:
   - if you don't fully solve an issue, it will come back over and over again until it is fixed.
 - avoid playing "whack a mole" with surface level issues. think through the problem and fix the root cause if possible. if fixing the root cause is not possible, leave comments documenting the issue.
 
+## MCP transport
+
+- MCPort uses plain JSON-RPC over HTTP POST (Streamable HTTP). It does NOT support SSE (Server-Sent Events).
+- mummy (the HTTP server MCPort uses) does not support SSE, and SSE is not planned.
+- when configuring MCP server connections for agent harnesses, do NOT set `"type": "sse"`. Either omit the type field or use `"streamable-http"` / `"http"` depending on what the client expects.
+- codex uses `-c mcp_servers.<name>.url=...` with separate `-c` flags for each field. Do NOT use the table/JSON syntax — codex does not parse it correctly.
+
 ## Agent completion protocol
 
 - coding agents must call the `submit_pr` MCP tool when ticket work is complete.
