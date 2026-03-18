@@ -51,7 +51,7 @@ jobs:
 
       - name: Build and install typoi
         run: |
-          nim c -d:release -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
+          nim c -d:release --cfg:nim.cfg -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
           echo "$HOME/.nimby/bin" >> $GITHUB_PATH
 
       - name: Run e2e tests
