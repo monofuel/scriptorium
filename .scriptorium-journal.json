@@ -1,0 +1,17 @@
+{
+  "operation": "dequeue 0054",
+  "timestamp": "2026-03-19T20:57:51Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "queue/merge/pending/0001-0054.md\n",
+      "contentHash": "08355F80FA51106E020C5F0EFB7929D65B190EDC"
+    },
+    {
+      "action": "remove",
+      "path": "queue/merge/pending/0001-0054.md"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue dequeue 0054"
+}
