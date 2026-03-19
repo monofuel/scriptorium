@@ -8,10 +8,8 @@ nim.cfg: nimby.lock
 
 build: nim.cfg scriptorium
 
-BUILD_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-
 scriptorium: src/scriptorium.nim
-	nim c -d:BuildCommitHash=$(BUILD_COMMIT) -o:scriptorium src/scriptorium.nim
+	nim c -o:scriptorium src/scriptorium.nim
 
 NIM_TEST_FLAGS ?= --hints:off --warnings:off
 

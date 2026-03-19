@@ -7,7 +7,10 @@ import
 const
   OrchestratorServerName = "scriptorium-orchestrator"
   OrchestratorServerVersion = "0.1.0"
-  BuildCommitHash* {.strdefine.} = "unknown"
+  BuildCommitHash* = block:
+    let fromEnv = staticExec("echo $BUILD_COMMIT").strip()
+    if fromEnv.len > 0: fromEnv
+    else: staticExec("git rev-parse --short HEAD 2>/dev/null").strip()
   SubmitPrTestOutputMaxChars = 2000
   ServerReadyTimeoutMs* = 5000
   ServerReadyPollIntervalMs = 50
