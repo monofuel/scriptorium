@@ -55,3 +55,51 @@ input_tokens":0},"output_tokens":1},"context_management":null},"parent_tool_use_
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 2m15s
+
+## Merge Queue Success
+- Summary: Add AGENTS.md generation during scriptorium init. When AGENTS.md is missing, copies agents_example.md template and commits it on the default branch. Skips if AGENTS.md already exists. Includes integration tests for both cases.\n
+### Quality Check Output
+```text
+-19T22:11:19Z] [WARN] ticket 0001: review agent stalled, defaulting to approve
+[2026-03-19T22:11:19Z] [INFO] ticket 0001: merge started (make test running)
+[2026-03-19T22:11:19Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-19T22:11:19Z] [INFO] ticket 0001: in-progress -> done (total wall=31s, attempts=0)
+[2026-03-19T22:11:19Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-19T22:11:19Z] [INFO] journal: began transition — complete 0001
+[2026-03-19T22:11:19Z] [INFO] journal: executed steps — complete 0001
+[2026-03-19T22:11:19Z] [INFO] journal: transition complete
+[2026-03-19T22:11:19Z] [INFO] merge queue: item processed
+[2026-03-19T22:11:19Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=idle merge=processing open=0 in-progress=0 done=1
+[2026-03-19T22:11:20Z] [INFO] session summary: uptime=1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-19T22:11:20Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-19T22:11:20Z] [INFO] recovery: clean startup, no recovery needed
+[2026-03-19T22:11:20Z] [WARN] master is unhealthy — skipping tick
+[2026-03-19T22:11:50Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-19T22:11:50Z] [INFO] session summary: avg_ticket_wall=10s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+--- tests/integration_typoi_harness.nim ---
+
+[Suite] integration typoi harness
+  [SKIPPED] real typoi one-shot smoke test
+  [SKIPPED] real typoi MCP tool call against live server
+```
+
+## Metrics
+- wall_time_seconds: 912
+- coding_wall_seconds: 489
+- test_wall_seconds: 281
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 192330
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was medium with 1 attempt(s) in 15m12s.
