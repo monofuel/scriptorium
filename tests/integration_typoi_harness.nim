@@ -37,12 +37,11 @@ suite "integration typoi harness":
     let harnessEnv = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
     if harnessEnv.len > 0 and harnessEnv != "typoi":
       skip()
+    elif findExe("typoi").len == 0:
+      skip()
+    elif not hasTypoiAuth():
+      skip()
     else:
-      let typoiPath = findExe("typoi")
-      doAssert typoiPath.len > 0, "typoi binary is required for integration tests"
-      doAssert hasTypoiAuth(),
-        "API key is required (OPENAI_API_KEY or ANTHROPIC_API_KEY)"
-
       let tmpDir = createTempDir("scriptorium_integration_typoi_", "", getTempDir())
       defer:
         removeDir(tmpDir)
@@ -84,12 +83,11 @@ suite "integration typoi harness":
     let harnessEnv = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
     if harnessEnv.len > 0 and harnessEnv != "typoi":
       skip()
+    elif findExe("typoi").len == 0:
+      skip()
+    elif not hasTypoiAuth():
+      skip()
     else:
-      let typoiPath = findExe("typoi")
-      doAssert typoiPath.len > 0, "typoi binary is required for integration tests"
-      doAssert hasTypoiAuth(),
-        "API key is required (OPENAI_API_KEY or ANTHROPIC_API_KEY)"
-
       discard consumeSubmitPrSummary()
       let port = mcpPort(1)
       let endpoint = &"http://127.0.0.1:{port}"
