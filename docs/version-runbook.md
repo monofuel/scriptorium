@@ -3,6 +3,8 @@
 Step-by-step process for using scriptorium to implement its own version
 updates, driven by `docs/v#.md` plan files.
 
+Helper scripts in `scripts/` wrap the docker-compose commands for convenience.
+
 ## Prerequisites
 
 - Docker and docker-compose installed
@@ -27,45 +29,51 @@ git push origin master
 Rebuild the Docker image so it picks up the latest code and dependencies.
 
 ```bash
-docker-compose build
+docker compose build
 ```
 
-The build commit hash is embedded automatically at compile time via
-`staticExec("git rev-parse --short HEAD")` — no build args needed.
+The build commit hash is embedded at compile time — pass `BUILD_COMMIT` as a
+build arg for Docker builds, or it falls back to `git rev-parse` for local
+builds.
 
 ## 3. Update the spec via the architect
 
-Run `scriptorium plan` interactively inside the container to tell the
-architect about the new version plan.
+Use `scripts/plan.sh` to one-shot the architect with the new version plan:
 
 ```bash
-docker-compose run --rm scriptorium plan
-```
-
-In the interactive session, tell the architect to incorporate the version
-plan:
-
-```
-Read docs/v12.md and update the spec to include the planned changes.
+./scripts/plan.sh "Read docs/v12.md and update the spec to include the planned changes."
 ```
 
 The architect will read the plan file and your source tree, then update
-`spec.md` on the plan branch. Review the changes with `/show` before
-exiting with `/quit`.
+`spec.md` on the plan branch.
 
-You can also do this as a one-shot:
+If you need to review or iterate on the spec afterward, run interactively:
 
 ```bash
-docker-compose run --rm scriptorium plan "Read docs/v12.md and update the spec to include the planned changes."
+./scripts/plan.sh
+```
+
+Use `/show` to review the current spec, give feedback, and `/quit` when done.
+
+Use `scripts/ask.sh` for read-only questions about the project without
+modifying the spec:
+
+```bash
+./scripts/ask.sh
 ```
 
 ## 4. Start the orchestrator
 
-Launch the orchestrator in detached mode. The default docker-compose command
-is `run`, which starts the main loop.
+Use `scripts/run.sh` to start the orchestrator in the foreground:
 
 ```bash
-docker-compose up -d
+./scripts/run.sh
+```
+
+Or launch detached with docker compose directly:
+
+```bash
+docker compose up -d
 ```
 
 ## 5. Monitor progress
@@ -75,7 +83,7 @@ docker-compose up -d
 Watch the container stdout (INFO level by default):
 
 ```bash
-docker-compose logs -f scriptorium
+docker compose logs -f scriptorium
 ```
 
 ### Detailed logs inside the container
@@ -84,13 +92,13 @@ The orchestrator writes DEBUG-level logs to `/tmp/scriptorium/` inside the
 container. To follow them:
 
 ```bash
-docker-compose exec scriptorium bash -c 'tail -f /tmp/scriptorium/*/run_*.log'
+docker compose exec scriptorium bash -c 'tail -f /tmp/scriptorium/*/run_*.log'
 ```
 
 Or copy them out for inspection:
 
 ```bash
-docker-compose cp scriptorium:/tmp/scriptorium ./scriptorium-logs
+docker compose cp scriptorium:/tmp/scriptorium ./scriptorium-logs
 ```
 
 ### Check status
@@ -98,13 +106,13 @@ docker-compose cp scriptorium:/tmp/scriptorium ./scriptorium-logs
 Run the status command to see ticket counts and active agents:
 
 ```bash
-docker-compose exec scriptorium /app/scriptorium status
+docker compose exec scriptorium /app/scriptorium status
 ```
 
 List active worktrees:
 
 ```bash
-docker-compose exec scriptorium /app/scriptorium worktrees
+docker compose exec scriptorium /app/scriptorium worktrees
 ```
 
 ## 6. What to watch for
@@ -124,7 +132,7 @@ docker-compose exec scriptorium /app/scriptorium worktrees
 ## 7. Stop the orchestrator
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 The orchestrator handles SIGTERM gracefully — it waits for running agents to
@@ -158,10 +166,20 @@ Once all TODO items in `docs/v<N>.md` are checked off:
    git push origin master --tags
    ```
 
+## Helper scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/plan.sh` | Interactive or one-shot architect planning session |
+| `scripts/ask.sh` | Read-only Q&A with the architect |
+| `scripts/run.sh` | Start the orchestrator in the foreground |
+
+All scripts `cd` to the repo root and use `docker compose run --rm`.
+
 ## Tips
 
 - **Iterate on the spec:** If the agents aren't doing what you want, stop
-  the orchestrator, run `scriptorium plan` to refine the spec, then restart.
+  the orchestrator, run `./scripts/plan.sh` to refine the spec, then restart.
   The orchestrator picks up spec changes on the next tick.
 
 - **Check agent output:** Each coding agent writes a log file. The path is
