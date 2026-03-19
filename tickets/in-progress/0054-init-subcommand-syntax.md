@@ -28,3 +28,5 @@ The current CLI uses `scriptorium --init [path]` flag syntax. The spec requires
 - `scriptorium init` works as a subcommand.
 - `scriptorium --init` no longer works (or prints a deprecation message).
 - Existing tests pass with the new syntax.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0054-init-subcommand-syntax
