@@ -1,9 +1,4 @@
-ARG MONOLAB_NIM_TAG=2.2.4
-FROM gitea.solution-nine.monofuel.dev/monolab/monolab-nim:${MONOLAB_NIM_TAG}
-LABEL monolab.nim.tag="${MONOLAB_NIM_TAG}"
-
-ARG MONOLAB_NIM_TAG
-ENV MONOLAB_NIM_TAG=${MONOLAB_NIM_TAG}
+FROM gitea.solution-nine.monofuel.dev/monolab/monolab/monolab-nim:latest
 
 WORKDIR /app
 
@@ -24,8 +19,6 @@ COPY scripts ./scripts
 
 RUN echo 'path = "src"' > nim.cfg
 RUN nimby sync -g nimby.lock
-ARG BUILD_COMMIT
-ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN make build
 
 RUN useradd -m -s /bin/bash scriptorium && \

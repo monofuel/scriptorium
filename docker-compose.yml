@@ -2,8 +2,6 @@ services:
   scriptorium:
     build:
       context: .
-      args:
-        BUILD_COMMIT: "${BUILD_COMMIT:-}"
     volumes:
       # Mount a target repo for scriptorium to work on
       - .:/workspace

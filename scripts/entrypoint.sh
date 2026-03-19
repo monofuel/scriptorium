@@ -2,7 +2,7 @@
 # Sync nimby deps in workspace so nim.cfg paths resolve inside the container.
 
 echo "=== Scriptorium Container Versions ==="
-echo "Base image tag: ${MONOLAB_NIM_TAG:-unknown}"
+echo "Base image: monolab-nim:latest"
 echo "Codex: $(codex --version 2>/dev/null || echo 'not found')"
 echo "Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
 echo "======================================="
