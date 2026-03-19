@@ -111,7 +111,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           prompt: buildManagerTicketsBatchPrompt(repoPath, planPath, areas, nextId),
           workingDir: planPath,
           harness: cfg.agents.manager.harness,
-          model: cfg.agents.manager.model,
+          model: resolveModel(cfg.agents.manager.model),
           reasoningEffort: cfg.agents.manager.reasoningEffort,
           ticketId: ManagerTicketIdPrefix & "batch",
           attempt: DefaultAgentAttempt,

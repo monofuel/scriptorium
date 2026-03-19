@@ -85,9 +85,9 @@ proc resolveModel*(model: string): string =
   if getEnv("CLAUDE_CODE_USE_BEDROCK", "").len == 0:
     return model
   case model
-  of "claude-opus-4-6": "anthropic.claude-opus-4-6-v1"
-  of "claude-sonnet-4-6": "anthropic.claude-sonnet-4-6"
-  of "claude-haiku-4-5-20251001": "anthropic.claude-haiku-4-5-20251001-v1:0"
+  of "claude-opus-4-6": "us.anthropic.claude-opus-4-6-v1"
+  of "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6-v1"
+  of "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   else: model
 
 proc inferHarness*(model: string): Harness =

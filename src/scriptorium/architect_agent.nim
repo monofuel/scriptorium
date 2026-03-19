@@ -459,7 +459,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
       prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
       workingDir: planPath,
       harness: cfg.agents.architect.harness,
-      model: cfg.agents.architect.model,
+      model: resolveModel(cfg.agents.architect.model),
       reasoningEffort: cfg.agents.architect.reasoningEffort,
       ticketId: ArchitectAreasTicketId,
       attempt: DefaultAgentAttempt,

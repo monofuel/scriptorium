@@ -62,21 +62,34 @@ modifying the spec:
 ./scripts/ask.sh
 ```
 
-## 4. Start the orchestrator
+## 4. Commit any uncommitted work
 
-Use `scripts/run.sh` to start the orchestrator in the foreground:
+The orchestrator caches master health per commit hash. If the previous commit
+is cached as unhealthy (e.g. from a prior run), the orchestrator will skip
+every tick without re-checking. Committing your changes advances HEAD to a new
+hash that has no cached result, forcing a fresh health check.
 
 ```bash
-./scripts/run.sh
+git add -A && git commit -m "wip: pre-orchestrator checkpoint"
 ```
 
-Or launch detached with docker compose directly:
+If the working tree is already clean, skip this step.
+
+## 5. Start the orchestrator
+
+Launch detached so the orchestrator runs in the background:
 
 ```bash
 docker compose up -d
 ```
 
-## 5. Monitor progress
+Or use `scripts/run.sh` to run in the foreground (blocks the terminal):
+
+```bash
+./scripts/run.sh
+```
+
+## 6. Monitor progress
 
 ### Container logs
 
@@ -115,7 +128,7 @@ List active worktrees:
 docker compose exec scriptorium /app/scriptorium worktrees
 ```
 
-## 6. What to watch for
+## 7. What to watch for
 
 - **Agents starting:** Look for `coding agent started` log lines with model
   and attempt info.
@@ -129,7 +142,7 @@ docker compose exec scriptorium /app/scriptorium worktrees
 - **Merge conflicts:** Look for `merge failed` — the ticket goes back for
   another coding attempt.
 
-## 7. Stop the orchestrator
+## 8. Stop the orchestrator
 
 ```bash
 docker compose down
@@ -138,7 +151,7 @@ docker compose down
 The orchestrator handles SIGTERM gracefully — it waits for running agents to
 finish, logs a session summary, and exits cleanly.
 
-## 8. Verify and tag
+## 9. Verify and tag
 
 Once all TODO items in `docs/v<N>.md` are checked off:
 

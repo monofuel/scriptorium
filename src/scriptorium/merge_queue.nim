@@ -211,7 +211,7 @@ proc runReviewAgent*(
     prompt: prompt,
     workingDir: item.worktree,
     harness: cfg.agents.reviewer.harness,
-    model: cfg.agents.reviewer.model,
+    model: resolveModel(cfg.agents.reviewer.model),
     reasoningEffort: cfg.agents.reviewer.reasoningEffort,
     mcpEndpoint: cfg.endpoints.local,
     ticketId: item.ticketId,
