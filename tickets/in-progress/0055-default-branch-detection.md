@@ -36,3 +36,5 @@ as their default branch will break.
 - Resolver correctly finds default branch from origin/HEAD or by probing.
 - Init sets `origin/HEAD` after resolving.
 - Clear error message when no default branch can be determined.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0055-default-branch-detection
