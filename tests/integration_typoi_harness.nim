@@ -3,7 +3,7 @@
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_typoi, mcp_server, orchestrator]
+  scriptorium/[config, harness_typoi, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "claude-opus-4-6"
@@ -24,7 +24,7 @@ proc mcpPort(offset: int): int =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel)
+  result = resolveModel(getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel))
 
 proc hasTypoiAuth(): bool =
   ## Return true when API keys are available for typoi.

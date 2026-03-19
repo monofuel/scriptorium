@@ -10,9 +10,16 @@ services:
       - ~/.codex:/home/scriptorium/.codex
       - ~/.claude:/home/scriptorium/.claude
       - ~/.claude.json:/home/scriptorium/.claude.json
+      - ~/.aws:/home/scriptorium/.aws:ro
     working_dir: /workspace
     environment:
       - OPENAI_API_KEY
       - CODEX_API_KEY
+      - ANTHROPIC_API_KEY
+      - CLAUDE_CODE_USE_BEDROCK
+      - ANTHROPIC_MODEL
+      - ANTHROPIC_SMALL_FAST_MODEL
+      - AWS_PROFILE
+      - AWS_REGION
     entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]

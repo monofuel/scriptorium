@@ -3,10 +3,10 @@
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
   mcport,
-  scriptorium/[harness_claude_code, mcp_server, orchestrator]
+  scriptorium/[config, harness_claude_code, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "claude-sonnet-4-6"
+  DefaultIntegrationModel = "claude-opus-4-6"
   LiveMcpBasePort = 22200
 
 type
@@ -24,7 +24,7 @@ proc mcpPort(offset: int): int =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel)
+  result = resolveModel(getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel))
 
 proc hasClaudeAuth(): bool =
   ## Return true when Claude Code OAuth or an Anthropic API key is available.

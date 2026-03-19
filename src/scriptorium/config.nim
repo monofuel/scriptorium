@@ -79,6 +79,17 @@ proc defaultConfig*(): Config =
     ),
   )
 
+proc resolveModel*(model: string): string =
+  ## Translate Anthropic-style model IDs to Bedrock format when
+  ## CLAUDE_CODE_USE_BEDROCK is set. Non-claude models pass through unchanged.
+  if getEnv("CLAUDE_CODE_USE_BEDROCK", "").len == 0:
+    return model
+  case model
+  of "claude-opus-4-6": "anthropic.claude-opus-4-6-v1"
+  of "claude-sonnet-4-6": "anthropic.claude-sonnet-4-6"
+  of "claude-haiku-4-5-20251001": "anthropic.claude-haiku-4-5-20251001-v1:0"
+  else: model
+
 proc inferHarness*(model: string): Harness =
   ## Infer a harness from a model name prefix. Intended for test convenience only.
   if model.startsWith("claude-"):
