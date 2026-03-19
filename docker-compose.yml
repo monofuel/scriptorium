@@ -1,5 +1,6 @@
 services:
   scriptorium:
+    init: true
     build:
       context: .
     volumes:
