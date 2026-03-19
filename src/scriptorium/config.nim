@@ -86,7 +86,7 @@ proc resolveModel*(model: string): string =
     return model
   case model
   of "claude-opus-4-6": "us.anthropic.claude-opus-4-6-v1"
-  of "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6-v1"
+  of "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6"
   of "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   else: model
 
