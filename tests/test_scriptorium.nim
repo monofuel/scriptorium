@@ -4463,3 +4463,61 @@ suite "progress-based stall detection":
     discard executeAssignedTicket(tmp, assignment, fakeRunner)
 
     check capturedRequest.progressTimeoutMs == 600_000
+
+suite "resolveDefaultBranch":
+  test "detects master when it exists":
+    let tmp = getTempDir() / "scriptorium_test_resolve_master"
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      removeDir(tmp)
+    discard execCmdEx("git -C " & tmp & " init")
+    discard execCmdEx("git -C " & tmp & " config user.email test@test.com")
+    discard execCmdEx("git -C " & tmp & " config user.name Test")
+    discard execCmdEx("git -C " & tmp & " commit --allow-empty -m initial")
+    check resolveDefaultBranch(tmp) == "master"
+
+  test "detects main when master does not exist":
+    let tmp = getTempDir() / "scriptorium_test_resolve_main"
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      removeDir(tmp)
+    discard execCmdEx("git -C " & tmp & " init -b main")
+    discard execCmdEx("git -C " & tmp & " config user.email test@test.com")
+    discard execCmdEx("git -C " & tmp & " config user.name Test")
+    discard execCmdEx("git -C " & tmp & " commit --allow-empty -m initial")
+    check resolveDefaultBranch(tmp) == "main"
+
+  test "errors when no known default branch exists":
+    let tmp = getTempDir() / "scriptorium_test_resolve_none"
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      removeDir(tmp)
+    discard execCmdEx("git -C " & tmp & " init -b feature")
+    discard execCmdEx("git -C " & tmp & " config user.email test@test.com")
+    discard execCmdEx("git -C " & tmp & " config user.name Test")
+    discard execCmdEx("git -C " & tmp & " commit --allow-empty -m initial")
+    expect IOError:
+      discard resolveDefaultBranch(tmp)
+
+  test "prefers origin/HEAD when set":
+    let tmp = getTempDir() / "scriptorium_test_resolve_origin_head"
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      removeDir(tmp)
+    discard execCmdEx("git -C " & tmp & " init -b main")
+    discard execCmdEx("git -C " & tmp & " config user.email test@test.com")
+    discard execCmdEx("git -C " & tmp & " config user.name Test")
+    discard execCmdEx("git -C " & tmp & " commit --allow-empty -m initial")
+    # Create a fake remote and set origin/HEAD.
+    discard execCmdEx("git -C " & tmp & " remote add origin " & tmp)
+    discard execCmdEx("git -C " & tmp & " fetch origin")
+    discard execCmdEx("git -C " & tmp & " remote set-head origin main")
+    check resolveDefaultBranch(tmp) == "main"

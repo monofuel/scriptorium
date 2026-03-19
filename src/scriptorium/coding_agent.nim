@@ -36,9 +36,10 @@ proc ensureAgentResultChanOpen() =
     agentResultChanOpen = true
 
 proc detectPriorWork*(worktreePath: string, ticketId: string): int =
-  ## Detect commits ahead of master on the ticket branch.
+  ## Detect commits ahead of the default branch on the ticket branch.
   ## Returns the number of prior commits found.
-  let logResult = runCommandCapture(worktreePath, "git", @["log", "master..HEAD", "--oneline"])
+  let defaultBranch = resolveDefaultBranch(worktreePath)
+  let logResult = runCommandCapture(worktreePath, "git", @["log", defaultBranch & "..HEAD", "--oneline"])
   if logResult.exitCode != 0:
     return 0
   let lines = logResult.output.strip()
@@ -175,7 +176,7 @@ proc executeAssignedTicket*(
   var priorWorkNote = ""
   if priorCommitCount > 0:
     priorWorkNote = "## Prior Work Detected\n\nThis branch has " & $priorCommitCount &
-      " commit(s) from a prior attempt. Review existing changes with `git log master..HEAD` and `git diff master` before proceeding. Build on the existing work rather than starting over."
+      " commit(s) from a prior attempt. Review existing changes with `git log` and `git diff` against the default branch before proceeding. Build on the existing work rather than starting over."
   let initialPrompt = buildCodingAgentPrompt(repoPath, assignment.worktree, ticketRelPath, ticketContent, priorWorkNote)
 
   var currentPrompt = initialPrompt

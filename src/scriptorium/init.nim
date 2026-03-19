@@ -32,6 +32,32 @@ proc gitCheck(dir: string, args: varargs[string]): int =
   result = p.waitForExit()
   p.close()
 
+proc resolveDefaultBranch(repoPath: string): string =
+  ## Dynamically detect the default branch for the repository.
+  ## Checks refs/remotes/origin/HEAD first, then probes for master, main, develop.
+  let symrefProcess = startProcess(
+    "git",
+    args = @["-C", repoPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  let symrefOutput = symrefProcess.outputStream.readAll()
+  let symrefRc = symrefProcess.waitForExit()
+  symrefProcess.close()
+  if symrefRc == 0:
+    let symref = symrefOutput.strip()
+    let prefix = "refs/remotes/origin/"
+    if symref.startsWith(prefix):
+      result = symref[prefix.len..^1]
+      return
+
+  const ProbeBranches = ["master", "main", "develop"]
+  for branch in ProbeBranches:
+    if gitCheck(repoPath, "rev-parse", "--verify", branch) == 0:
+      result = branch
+      return
+
+  raise newException(IOError, "cannot determine default branch: refs/remotes/origin/HEAD is not set and none of master, main, develop exist")
+
 proc runInit*(path: string, quiet: bool = false) =
   ## Initialize a new scriptorium workspace in the given git repository.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()
@@ -41,6 +67,9 @@ proc runInit*(path: string, quiet: bool = false) =
 
   if gitCheck(target, "rev-parse", "--verify", PlanBranch) == 0:
     raise newException(ValueError, "workspace already initialized (scriptorium/plan branch exists)")
+
+  let defaultBranch = resolveDefaultBranch(target)
+  discard execCmdEx("git -C " & quoteShell(target) & " remote set-head origin " & quoteShell(defaultBranch))
 
   let tmpPlan = getTempDir() / "scriptorium_plan_init"
   if dirExists(tmpPlan):

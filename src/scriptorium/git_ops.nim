@@ -163,18 +163,46 @@ proc hasPlanBranch*(repoPath: string): bool =
   ## Return true when the repository has the scriptorium plan branch.
   result = gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) == 0
 
-proc masterHeadCommit*(repoPath: string): string =
-  ## Return the current master branch commit SHA.
+proc resolveDefaultBranch*(repoPath: string): string =
+  ## Dynamically detect the default branch for the repository.
+  ## Checks refs/remotes/origin/HEAD first, then probes for master, main, develop.
+  let symrefProcess = startProcess(
+    "git",
+    args = @["-C", repoPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  let symrefOutput = symrefProcess.outputStream.readAll()
+  let symrefRc = symrefProcess.waitForExit()
+  symrefProcess.close()
+  if symrefRc == 0:
+    let symref = symrefOutput.strip()
+    let prefix = "refs/remotes/origin/"
+    if symref.startsWith(prefix):
+      result = symref[prefix.len..^1]
+      return
+
+  const ProbeBranches = ["master", "main", "develop"]
+  for branch in ProbeBranches:
+    if gitCheck(repoPath, "rev-parse", "--verify", branch) == 0:
+      result = branch
+      return
+
+  raise newException(IOError, "cannot determine default branch: refs/remotes/origin/HEAD is not set and none of master, main, develop exist")
+
+proc defaultBranchHeadCommit*(repoPath: string): string =
+  ## Return the current default branch commit SHA.
+  let branch = resolveDefaultBranch(repoPath)
   let process = startProcess(
     "git",
-    args = @["-C", repoPath, "rev-parse", "master"],
+    args = @["-C", repoPath, "rev-parse", branch],
     options = {poUsePath, poStdErrToStdOut},
   )
   let output = process.outputStream.readAll()
   let rc = process.waitForExit()
   process.close()
   if rc != 0:
-    raise newException(IOError, fmt"git rev-parse master failed: {output.strip()}")
+    let errMsg = output.strip()
+    raise newException(IOError, &"git rev-parse {branch} failed: {errMsg}")
   result = output.strip()
 
 proc listGitWorktreePaths*(repoPath: string): seq[string] =

@@ -143,9 +143,9 @@ proc validateMergeQueueVsMaster*(repoPath: string): int =
     var completed = 0
 
     for item in items:
-      # Check if ticket branch is ancestor of master.
+      let defaultBranch = resolveDefaultBranch(repoPath)
       let checkResult = runCommandCapture(
-        repoPath, "git", @["merge-base", "--is-ancestor", item.branch, "master"],
+        repoPath, "git", @["merge-base", "--is-ancestor", item.branch, defaultBranch],
       )
       if checkResult.exitCode != 0:
         continue

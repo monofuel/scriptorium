@@ -48,7 +48,7 @@ proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int
 proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   ## Return cached master health, refreshing only when the master commit changes.
   ## Checks in-memory cache first, then file cache on plan branch, then runs checks.
-  let currentHead = masterHeadCommit(repoPath)
+  let currentHead = defaultBranchHeadCommit(repoPath)
   if state.initialized and state.head == currentHead:
     return state.healthy
 

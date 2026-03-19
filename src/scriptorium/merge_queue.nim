@@ -50,23 +50,25 @@ proc runRequiredQualityChecks*(workingDir: string): tuple[exitCode: int, output:
   )
 
 proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string): T): T =
-  ## Open a deterministic /tmp worktree for master when needed, then remove it.
-  if gitCheck(repoPath, "rev-parse", "--verify", "master") != 0:
-    raise newException(ValueError, "master branch does not exist")
+  ## Open a deterministic /tmp worktree for the default branch when needed, then remove it.
+  let defaultBranch = resolveDefaultBranch(repoPath)
+  if gitCheck(repoPath, "rev-parse", "--verify", defaultBranch) != 0:
+    raise newException(ValueError, &"{defaultBranch} branch does not exist")
 
   let worktreeList = runCommandCapture(repoPath, "git", @["worktree", "list", "--porcelain"])
   if worktreeList.exitCode != 0:
     raise newException(IOError, fmt"git worktree list failed: {worktreeList.output.strip()}")
 
+  let expectedBranchRef = &"branch refs/heads/{defaultBranch}"
   var currentPath = ""
   for line in worktreeList.output.splitLines():
     if line.startsWith("worktree "):
       currentPath = line["worktree ".len..^1].strip()
-    elif line == "branch refs/heads/master" and currentPath.len > 0:
+    elif line == expectedBranchRef and currentPath.len > 0:
       return operation(currentPath)
 
   let masterWorktree = managedMasterWorktreePath(repoPath)
-  addWorktreeWithRecovery(repoPath, masterWorktree, "master")
+  addWorktreeWithRecovery(repoPath, masterWorktree, defaultBranch)
   defer:
     discard gitCheck(repoPath, "worktree", "remove", "--force", masterWorktree)
 
@@ -191,7 +193,8 @@ proc runReviewAgent*(
   let cfg = loadConfig(repoPath)
   let model = cfg.agents.reviewer.model
 
-  let diffResult = runCommandCapture(item.worktree, "git", @["diff", "master..." & item.branch])
+  let defaultBranch = resolveDefaultBranch(repoPath)
+  let diffResult = runCommandCapture(item.worktree, "git", @["diff", defaultBranch & "..." & item.branch])
   let diffContent = if diffResult.exitCode == 0: diffResult.output else: "(diff unavailable)"
 
   let areaId = parseAreaFromTicketContent(ticketContent)
@@ -373,7 +376,8 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
 
     logInfo(fmt"ticket {item.ticketId}: merge started (make test running)")
     let mergeStartTime = epochTime()
-    let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", "master"])
+    let defaultBranch = resolveDefaultBranch(repoPath)
+    let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", defaultBranch])
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
       qualityCheckResult = runRequiredQualityChecks(item.worktree)
