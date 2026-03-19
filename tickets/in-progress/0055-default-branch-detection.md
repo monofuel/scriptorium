@@ -38,3 +38,8 @@ as their default branch will break.
 - Clear error message when no default branch can be determined.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0055-default-branch-detection
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file search-and-replace of hardcoded branch refs plus a new resolver proc with straightforward fallback logic; moderate integration surface across 4-5 files but no deep architectural risk, one attempt expected.
