@@ -76,6 +76,14 @@ Rules:
   - if you don't fully solve an issue, it will come back over and over again until it is fixed.
 - avoid playing "whack a mole" with surface level issues. think through the problem and fix the root cause if possible. if fixing the root cause is not possible, leave comments documenting the issue.
 
+## Checking the spec
+
+The spec on the `scriptorium/plan` branch can be very large (70KB+, 40+ sections). When checking whether specific content exists in the spec, always search with `grep` rather than reading only the first N lines. Using `head` or reading a small offset will miss content further down the file and lead to incorrect conclusions about what the spec contains.
+
+```
+git show scriptorium/plan:spec.md | grep -i "keyword"
+```
+
 ## MCP transport
 
 - MCPort uses plain JSON-RPC over HTTP POST (Streamable HTTP). It does NOT support SSE (Server-Sent Events).
