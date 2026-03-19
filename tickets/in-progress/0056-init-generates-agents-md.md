@@ -30,3 +30,8 @@ agent instructions until the user creates one manually.
 - The generated file matches `agents_example.md` content.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0056-init-generates-agents-md
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single-file change in init.nim to check for AGENTS.md existence and copy a template, plus a straightforward integration test addition — minimal logic complexity with one attempt expected.
