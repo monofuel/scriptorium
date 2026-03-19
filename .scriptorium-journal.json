@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0056",
+  "timestamp": "2026-03-19T22:05:01Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0056.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0056-init-generates-agents-md.md\n**Ticket ID:** 0056\n**Branch:** scriptorium/ticket-0056\n**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0056-init-generates-agents-md\n**Summary:** Add AGENTS.md generation during scriptorium init. When AGENTS.md is missing, copies agents_example.md template and commits it on the default branch. Skips if AGENTS.md already exists. Includes integration tests for both cases.\n",
+      "contentHash": "A78D295F45312F4028B68F57B3C5D267F3E3BEF8"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0056"
+}
