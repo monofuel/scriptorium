@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0055",
+  "timestamp": "2026-03-19T21:43:59Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0055.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0055-default-branch-detection.md\n**Ticket ID:** 0055\n**Branch:** scriptorium/ticket-0055\n**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0055-default-branch-detection\n**Summary:** Add resolveDefaultBranch() that checks origin/HEAD then probes master/main/develop. Replace all hardcoded master references in git_ops, merge_queue, coding_agent, recovery, orchestrator. Cache resolved branch during init via git remote set-head. Add unit tests for the resolver.\n",
+      "contentHash": "C3F3C89327F531F3B2B2851017E207A15CC6A30C"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0055"
+}
