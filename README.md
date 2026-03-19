@@ -26,6 +26,21 @@ scriptorium ask "What areas of the codebase handle authentication?"
 scriptorium run
 ```
 
+### Importing an existing project
+
+If you already have a Nim project and want scriptorium to manage it, run
+`scriptorium init` in the repo root, then use `scriptorium plan` to tell the
+Architect about what's already there:
+
+```bash
+scriptorium --init
+scriptorium plan "Read the existing source code and write a spec that describes the current project structure, features, and areas."
+```
+
+The Architect will read your source tree and produce a `spec.md` that matches
+the project as it exists. From there you can iterate on the spec to plan new
+work, and `scriptorium run` will pick up tickets as usual.
+
 Path and workflow terminology is defined in `docs/terms.md`.
 
 ## Status
