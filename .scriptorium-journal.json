@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0057",
+  "timestamp": "2026-03-19T23:05:05Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0057.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0057-init-generates-makefile.md\n**Ticket ID:** 0057\n**Branch:** scriptorium/ticket-0057\n**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0057-init-generates-makefile\n**Summary:** Generate starter Makefile with test and build placeholder targets during scriptorium init. Skips if Makefile already exists. Includes integration test.\n",
+      "contentHash": "45D96F17A22E2C7A9B676D0AE3ED6E4319A1D9D3"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0057"
+}
