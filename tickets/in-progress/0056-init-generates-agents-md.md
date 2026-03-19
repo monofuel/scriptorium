@@ -28,3 +28,5 @@ agent instructions until the user creates one manually.
 - Running `scriptorium init` on a repo without AGENTS.md creates one from the template.
 - Running `scriptorium init` on a repo that already has AGENTS.md skips this step.
 - The generated file matches `agents_example.md` content.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0056-init-generates-agents-md
