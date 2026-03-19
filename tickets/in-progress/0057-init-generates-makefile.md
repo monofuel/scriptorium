@@ -27,3 +27,5 @@
 - Running `scriptorium init` on a repo without a Makefile creates one with placeholder targets.
 - Running `scriptorium init` on a repo that already has a Makefile skips this step.
 - Generated Makefile has `test` and `build` targets at minimum.
+
+**Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0057-init-generates-makefile
