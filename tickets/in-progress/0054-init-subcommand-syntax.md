@@ -30,3 +30,8 @@ The current CLI uses `scriptorium --init [path]` flag syntax. The spec requires
 - Existing tests pass with the new syntax.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0054-init-subcommand-syntax
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Straightforward CLI refactor in a single main file changing flag-based parsing to subcommand parsing, with minor test updates — low integration risk, one attempt expected.
