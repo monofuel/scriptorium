@@ -6,6 +6,8 @@ const
   SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
   AgentsFileName = "AGENTS.md"
   AgentsTemplate = staticRead("prompts/agents_example.md")
+  MakefileName = "Makefile"
+  MakefileTemplate = ".PHONY: test build\n\ntest:\n\t@echo \"no tests configured\"\n\nbuild:\n\t@echo \"no build configured\"\n"
   PlanDirs = [
     "areas",
     "tickets/open",
@@ -83,6 +85,13 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(target, "add", AgentsFileName)
     gitRun(target, "commit", "-m", "scriptorium: add AGENTS.md from template")
 
+  let makefilePath = target / MakefileName
+  let createdMakefile = not fileExists(makefilePath)
+  if createdMakefile:
+    writeFile(makefilePath, MakefileTemplate)
+    gitRun(target, "add", MakefileName)
+    gitRun(target, "commit", "-m", "scriptorium: add starter Makefile")
+
   let tmpPlan = target / ".scriptorium" / "plan_init"
   if dirExists(tmpPlan):
     removeDir(tmpPlan)
@@ -106,6 +115,8 @@ proc runInit*(path: string, quiet: bool = false) =
     echo &"  Plan branch: {PlanBranch}"
     if createdAgents:
       echo &"  Created: {AgentsFileName}"
+    if createdMakefile:
+      echo &"  Created: {MakefileName}"
     echo ""
     echo "Next steps:"
     echo "  scriptorium plan   — build your spec with the Architect"

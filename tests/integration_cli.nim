@@ -1,7 +1,7 @@
 ## Integration tests for the scriptorium CLI binary.
 
 import
-  std/[os, osproc, unittest],
+  std/[os, osproc, strutils, unittest],
   scriptorium/init
 
 const
@@ -126,6 +126,35 @@ suite "scriptorium CLI":
     let agentsPath = tmp / "AGENTS.md"
     check fileExists(agentsPath)
     check readFile(agentsPath) == AgentsExampleContent
+
+  test "init creates Makefile with placeholder targets when missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_makefile_create"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let makefilePath = tmp / "Makefile"
+    check fileExists(makefilePath)
+    let content = readFile(makefilePath)
+    check content.contains("test:")
+    check content.contains("build:")
+    check content.contains("no tests configured")
+    check content.contains("no build configured")
+
+  test "init skips Makefile when it already exists":
+    let tmp = getTempDir() / "scriptorium_test_cli_makefile_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let makefilePath = tmp / "Makefile"
+    let existingContent = "all:\n\t@echo custom\n"
+    writeFile(makefilePath, existingContent)
+    runCmdOrDie("git -C " & tmp & " add Makefile")
+    runCmdOrDie("git -C " & tmp & " commit -m add-makefile")
+
+    runInit(tmp, quiet = true)
+
+    check readFile(makefilePath) == existingContent
 
   test "init skips AGENTS.md when it already exists":
     let tmp = getTempDir() / "scriptorium_test_cli_agents_skip"
