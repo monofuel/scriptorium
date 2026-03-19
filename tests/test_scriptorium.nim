@@ -213,7 +213,7 @@ proc noopRunner(request: AgentRunRequest): AgentRunResult =
   discard request
   AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-suite "scriptorium --init":
+suite "scriptorium init":
   test "creates scriptorium/plan branch":
     let tmp = getTempDir() / "scriptorium_test_init_branch"
     makeTestRepo(tmp)
