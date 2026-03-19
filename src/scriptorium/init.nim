@@ -3,6 +3,8 @@ import std/[os, osproc, streams, strformat, strutils]
 const
   PlanBranch = "scriptorium/plan"
   SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
+  AgentsFileName = "AGENTS.md"
+  AgentsTemplate = staticRead("prompts/agents_example.md")
   PlanDirs = [
     "areas",
     "tickets/open",
@@ -71,6 +73,13 @@ proc runInit*(path: string, quiet: bool = false) =
   let defaultBranch = resolveDefaultBranch(target)
   discard execCmdEx("git -C " & quoteShell(target) & " remote set-head origin " & quoteShell(defaultBranch))
 
+  let agentsPath = target / AgentsFileName
+  let createdAgents = not fileExists(agentsPath)
+  if createdAgents:
+    writeFile(agentsPath, AgentsTemplate)
+    gitRun(target, "add", AgentsFileName)
+    gitRun(target, "commit", "-m", "scriptorium: add AGENTS.md from template")
+
   let tmpPlan = getTempDir() / "scriptorium_plan_init"
   if dirExists(tmpPlan):
     removeDir(tmpPlan)
@@ -91,7 +100,9 @@ proc runInit*(path: string, quiet: bool = false) =
 
   if not quiet:
     echo "Initialized scriptorium workspace."
-    echo fmt"  Plan branch: {PlanBranch}"
+    echo &"  Plan branch: {PlanBranch}"
+    if createdAgents:
+      echo &"  Created: {AgentsFileName}"
     echo ""
     echo "Next steps:"
     echo "  scriptorium plan   — build your spec with the Architect"

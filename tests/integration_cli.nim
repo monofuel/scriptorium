@@ -5,6 +5,9 @@ import
   scriptorium/init
 
 const
+  AgentsExampleContent = staticRead("../src/scriptorium/prompts/agents_example.md")
+
+const
   CliBinaryName = "scriptorium_test_cli"
 let
   ProjectRoot = getCurrentDir()
@@ -113,3 +116,28 @@ suite "scriptorium CLI":
 
     check rc == 0
     check output == expected
+
+  test "init creates AGENTS.md from template when missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_agents_create"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let agentsPath = tmp / "AGENTS.md"
+    check fileExists(agentsPath)
+    check readFile(agentsPath) == AgentsExampleContent
+
+  test "init skips AGENTS.md when it already exists":
+    let tmp = getTempDir() / "scriptorium_test_cli_agents_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let agentsPath = tmp / "AGENTS.md"
+    let existingContent = "# Custom agents file\n"
+    writeFile(agentsPath, existingContent)
+    runCmdOrDie("git -C " & tmp & " add AGENTS.md")
+    runCmdOrDie("git -C " & tmp & " commit -m add-agents")
+
+    runInit(tmp, quiet = true)
+
+    check readFile(agentsPath) == existingContent
