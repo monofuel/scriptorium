@@ -13,6 +13,9 @@
       "model": "claude-opus-4-6"
     }
   },
+  "concurrency": {
+    "maxAgents": 4
+  },
   "timeouts": {
     "codingAgentHardTimeoutMs": 14400000,
     "codingAgentNoOutputTimeoutMs": 300000,

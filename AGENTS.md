@@ -26,6 +26,8 @@ docker-compose up --build
 
 This mounts the current directory as `/workspace`, passes through `~/.codex` and `~/.claude` credentials, and runs the orchestrator. Set `OPENAI_API_KEY` or `CODEX_API_KEY` environment variables as needed.
 
+the docker build is ONLY needed to update the scriptorium binary. the entire git folder is passed in through a docker compose volume, so it can run directly against our git repo (including .git).
+
 To build the Docker image separately:
 ```
 make docker-build
