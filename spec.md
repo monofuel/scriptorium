@@ -1008,3 +1008,188 @@ This spec describes behavior that is present in the code and covered by current 
 - Progress-based stall detection catches agents that output but make no tool calls.
 - Worktree health is validated and repaired before agent retries.
 - Committed-but-not-submitted work is detected and communicated to retry agents.
+
+## V11 Features — Fresh Project Onboarding
+
+### 35. Project Opinions
+
+- Scriptorium is opinionated about managed project structure. These opinions are rigid and apply to all managed Nim projects.
+- Language and dependency management:
+  - Nim is the implementation language.
+  - nimby is the dependency manager (`nimby.lock` for pinned deps, `nimby sync`).
+  - A `.nimble` file provides package metadata and versioning.
+- Required project structure:
+  - `src/` for source code.
+  - `tests/` for all test files (unit, integration, e2e).
+  - `Makefile` at repo root with required targets.
+  - `AGENTS.md` at repo root for coding agent instructions.
+  - `scriptorium.json` at repo root for orchestrator configuration.
+  - `docs/` for project documentation and version plans.
+- Make targets (quality gates):
+  - `make build` — compile the project. Must exit 0 on success. Run before tests.
+  - `make test` — unit tests. Must be fast, require no network access, and no API keys. Run on every commit and before every merge. Failure is a hard gate.
+  - `make integration-test` — tests that hit real services. May require credentials. Run on default branch pushes. Failure reopens the ticket.
+  - `make e2e-test` — (optional) full end-to-end smoke tests. Run on default branch pushes if present. Failure reopens the ticket.
+
+### 36. Default Branch Detection
+
+- The orchestrator must not hardcode `master` or `main`. Instead it must resolve the default branch dynamically.
+- Resolution order:
+  1. Check `refs/remotes/origin/HEAD` — if set, use that.
+  2. If not set, probe for common names (`master`, `main`, `develop`) and use whichever exists locally.
+  3. During `scriptorium init`, once resolved, run `git remote set-head origin <branch>` so future runs skip the probe.
+  4. If nothing works, error with a clear message asking the user to set the default branch.
+- All hardcoded `master` references in the orchestrator, merge queue, and init code must be replaced with the resolved default branch.
+- A unit test must cover the resolution logic.
+- Acceptance criteria:
+  - The orchestrator resolves the default branch dynamically on startup.
+  - `scriptorium init` sets `origin/HEAD` after resolving the default branch.
+  - No hardcoded `master` or `main` strings remain in orchestrator, merge queue, or init code paths.
+  - Projects using `main` or other branch names work without additional configuration.
+
+### 37. CLI Init Subcommand
+
+- The init command must change from `scriptorium --init` flag syntax to `scriptorium init` subcommand syntax, consistent with all other commands (`run`, `plan`, `ask`, `status`, `worktrees`).
+- `scriptorium init [path]` is the new syntax.
+- `--init` may be kept as a deprecated alias or dropped — there are no external users yet.
+- CLI help and documentation must be updated to reflect the new syntax.
+- Acceptance criteria:
+  - `scriptorium init` and `scriptorium init <path>` work as the primary init interface.
+  - CLI help lists `init` as a subcommand alongside `run`, `plan`, `ask`, `status`, `worktrees`.
+
+### 38. Init Generates AGENTS.md
+
+- On `scriptorium init`, if `AGENTS.md` does not already exist on the default branch, copy `agents_example.md` to `AGENTS.md` and commit it.
+- The example file is a generic Nim template covering style, imports, error handling, and testing conventions.
+- If `AGENTS.md` already exists, skip this step — do not overwrite user work.
+- Print a note: `Created AGENTS.md — edit to match your project conventions.`
+- Acceptance criteria:
+  - `scriptorium init` creates `AGENTS.md` on the default branch when it does not exist.
+  - Existing `AGENTS.md` is not overwritten.
+  - The generated file is committed to the default branch.
+
+### 39. Init Generates Starter Makefile
+
+- On `scriptorium init`, if no Makefile exists on the default branch, generate a minimal one with placeholder targets:
+  ```makefile
+  test:
+  	@echo "no tests yet"
+
+  integration-test:
+  	@echo "no integration tests yet"
+
+  e2e-test:
+  	@echo "no e2e tests yet"
+  ```
+- Commit it on the default branch.
+- If a Makefile already exists, skip — do not overwrite.
+- Print a note: `Created Makefile with placeholder targets — replace with real build commands.`
+- The placeholder targets exit 0 so the orchestrator can run immediately.
+- Acceptance criteria:
+  - `scriptorium init` creates a Makefile with placeholder `test`, `integration-test`, and `e2e-test` targets when none exists.
+  - Existing Makefiles are not overwritten.
+  - The generated Makefile is committed to the default branch.
+
+### 40. Init Generates Starter scriptorium.json
+
+- On `scriptorium init`, if no `scriptorium.json` exists, generate one using `defaultConfig()` and write it to the repo root.
+- Do not commit it — it may contain user-specific preferences and should be gitignored or committed at the user's discretion.
+- Print a note: `Created scriptorium.json — configure agent models and harnesses.`
+- Acceptance criteria:
+  - `scriptorium init` creates `scriptorium.json` when it does not exist.
+  - The file is written but not committed.
+  - Existing `scriptorium.json` is not overwritten.
+
+### 41. Pre-Flight Validation In `scriptorium run`
+
+- Before launching the orchestrator polling loop, `scriptorium run` must perform upfront validation checks with clear, actionable error messages.
+- Required checks:
+  - `scriptorium/plan` branch exists (already done).
+  - `AGENTS.md` exists on the default branch. Warn if missing.
+  - Makefile exists on the default branch. Error if missing — the orchestrator cannot function without quality gates.
+  - `make test` and `make integration-test` targets exist (verify via `make -n test` and `make -n integration-test` dry-run). Warn if either fails.
+  - Agent binary is available (`codex`, `claude`, or `typoi` depending on configured harness). Error if missing.
+  - Agent auth is available (API keys or OAuth credentials for the configured harness). Error if missing.
+- Error messages must be clear and actionable, e.g.:
+  - `Error: Makefile not found. Run 'scriptorium init' or create a Makefile with 'test' and 'integration-test' targets.`
+- Acceptance criteria:
+  - Missing Makefile or agent binary causes `scriptorium run` to exit with an error before polling starts.
+  - Missing `AGENTS.md` produces a warning but does not block startup.
+  - Missing make targets produce warnings.
+  - Missing agent auth produces an error.
+  - All error messages suggest corrective action.
+
+### 42. Improved Post-Init Guidance
+
+- After `scriptorium init` completes, the output must provide comprehensive setup guidance listing all created artifacts and next steps.
+- Output format:
+  ```
+  Initialized scriptorium workspace.
+
+  Created:
+    AGENTS.md           — project conventions for coding agents (edit to fit)
+    Makefile            — placeholder test targets (replace with real commands)
+    scriptorium.json    — agent configuration (set your models and API keys)
+    scriptorium/plan    — plan branch with spec, areas, and tickets
+
+  Next steps:
+    1. Edit scriptorium.json to configure your agent models and harnesses
+    2. Edit AGENTS.md to describe your project conventions
+    3. Run `scriptorium plan` to build your spec with the Architect
+    4. Run `scriptorium run` to start the orchestrator
+  ```
+- Only list artifacts that were actually created (skip items that already existed).
+- Acceptance criteria:
+  - Post-init output lists all created artifacts with descriptions.
+  - Post-init output includes numbered next steps.
+  - Artifacts that were skipped (already existed) are not listed in the "Created" section.
+
+### 43. Updated Spec Placeholder
+
+- The spec placeholder created by `scriptorium init` must be updated to indicate this is a new project:
+  ```
+  # Spec
+
+  This is a new project. See AGENTS.md for project conventions.
+
+  Run `scriptorium plan` to build your spec with the Architect.
+  ```
+- This replaces the current placeholder which does not reference `AGENTS.md`.
+- Acceptance criteria:
+  - New projects initialized with `scriptorium init` get the updated spec placeholder.
+  - The placeholder references `AGENTS.md`.
+
+### 44. E2E Test Uses `scriptorium init`
+
+- The existing e2e test (Euler test) must be updated to use `scriptorium init` instead of manually seeding `AGENTS.md` and `Makefile`.
+- Changes:
+  - Remove manual `AGENTS.md` and Makefile creation from test setup.
+  - Run `scriptorium init` (programmatically via `runInit`) on the temp repo.
+  - Verify `AGENTS.md`, Makefile, and `scriptorium.json` were created by init.
+  - Continue with the existing flow: write spec, start orchestrator, verify ticket completion and `make test` passing.
+- This proves init produces a repo the orchestrator can run against without any manual scaffolding.
+- Acceptance criteria:
+  - The e2e test uses `scriptorium init` for repo setup instead of manual file creation.
+  - The test verifies that init-created artifacts are sufficient for orchestrator operation.
+  - The existing test flow (spec, orchestrator, ticket completion) continues to pass.
+
+## V11 Known Limitations
+
+- Project opinions are Nim-only — support for other languages is out of scope.
+- The starter Makefile contains placeholder targets that exit 0 — real build and test commands must be added by the user or via tickets.
+- `scriptorium.json` is not committed by init — users must decide whether to commit or gitignore it.
+- Default branch detection relies on `refs/remotes/origin/HEAD` or probing common names — unusual branch naming conventions may require manual `git remote set-head` setup.
+- Pre-flight validation checks for agent auth are best-effort — some auth mechanisms (OAuth tokens, environment-specific credentials) may not be detectable at startup.
+- The `agents_example.md` template is generic Nim guidance — users must customize it for their specific project conventions.
+
+## V11 Acceptance Criteria
+
+- All v1, v2, v3, v4, v5, v7, and v8 acceptance criteria remain.
+- `scriptorium init` is a subcommand (not `--init` flag).
+- `scriptorium init` generates `AGENTS.md`, a starter Makefile, and `scriptorium.json` on fresh repos.
+- Existing files are never overwritten by init.
+- The default branch is resolved dynamically — no hardcoded `master` or `main`.
+- `scriptorium run` performs pre-flight validation with clear error messages before polling.
+- Post-init output provides comprehensive setup guidance.
+- The spec placeholder references `AGENTS.md` for new projects.
+- The e2e test uses `scriptorium init` and proves a fresh repo can run without manual scaffolding.
