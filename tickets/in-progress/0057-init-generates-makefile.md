@@ -29,3 +29,8 @@
 - Generated Makefile has `test` and `build` targets at minimum.
 
 **Worktree:** /tmp/scriptorium/workspace-304b40cf6073a3f1/worktrees/tickets/0057-init-generates-makefile
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Single-file addition of Makefile generation logic in init.nim following the existing pattern for AGENTS.md generation, plus a straightforward integration test — minimal complexity, one attempt expected.
