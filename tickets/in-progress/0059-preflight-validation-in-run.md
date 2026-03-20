@@ -43,3 +43,27 @@ missing, the orchestrator silently waits or fails with unclear errors.
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Six sequential validation checks in the orchestrator with clear error messages plus integration tests covering each failure case — straightforward logic but multi-file with moderate test surface.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/worktrees/tickets/0059-preflight-validation-in-run/.scriptorium/logs/0059/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/worktrees/tickets/0059-preflight-validation-in-run/.scriptorium/logs/0059/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. Here's what was implemented:
+
+**`src/scriptorium/orchestrator.nim`** — Added `preflightValidation*` proc called from `runOrchestrator` before `initLog`. It validates:
+1. `scriptorium/plan` branch exists
+2. `AGENTS.md` exists in repo root
+3. `Makefile` exists in repo root
+4. Makefile contains a `test:` target
+5. Agent binary (codex/claude/typoi based on config) is in PATH
+6. API credentials are set (warning only, not a hard error)
+
+On failure, prints clear error messages and exits with non-zero status.
+
+**`tests/integration_cli.nim`** — Added 4 integration tests verifying each hard-failure case via the compiled CLI binary.
+```
+
+### Agent Stdout Tail
+```text
+le` exists in repo root\n4. Makefile contains a `test:` target\n5. Agent binary (codex/claude/typoi based on config) is in PATH\n6. API credentials are set (warning only, not a hard error)\n\nOn failure, prints clear error messages and exits with non-zero status.\n\n**`tests/integration_cli.nim`** — Added 4 integration tests verifying each hard-failure case via the compiled CLI binary.","stop_reason":"end_turn","session_id":"25a49845-2fc3-4b2d-93d2-a34b1aff86fd","total_cost_usd":1.0044970000000002,"usage":{"input_tokens":1357,"cache_creation_input_tokens":57302,"cache_read_input_tokens":947149,"output_tokens":6640,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":57302},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":1357,"outputTokens":6640,"cacheReadInputTokens":947149,"cacheCreationInputTokens":57302,"webSearchRequests":0,"costUSD":1.0044970000000002,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"8a2b985a-770a-4ba6-98b9-274a6f1fbc24"}
+```
