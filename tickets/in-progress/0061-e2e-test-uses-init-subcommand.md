@@ -32,3 +32,5 @@ tested end-to-end.
 - Manual seeding of AGENTS.md, Makefile, and scriptorium.json is removed where
   init now handles it.
 - All e2e and integration tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0061-e2e-test-uses-init-subcommand
