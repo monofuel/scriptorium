@@ -173,9 +173,9 @@ proc addEulerMakefile*(repoPath: string) =
   let makefileContent =
     "EXPECTED=" & EulerExpectedAnswer & "\n\n" &
     "test:\n" &
-    "\t@test ! -f multiples.nim || { nim c --nimcache:.nimcache-test -o:" & EulerDebugBinary & " multiples.nim >/dev/null && output=$$(" & EulerDebugBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
+    "\t@test ! -f multiples.nim || { rm -f " & EulerDebugBinary & " && nim c --nimcache:.nimcache-test -o:" & EulerDebugBinary & " multiples.nim >/dev/null && output=$$(" & EulerDebugBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
     "integration-test:\n" &
-    "\t@test ! -f multiples.nim || { nim c --nimcache:.nimcache-release -d:release -o:" & EulerReleaseBinary & " multiples.nim >/dev/null && output=$$(" & EulerReleaseBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n"
+    "\t@test ! -f multiples.nim || { rm -f " & EulerReleaseBinary & " && nim c --nimcache:.nimcache-release -d:release -o:" & EulerReleaseBinary & " multiples.nim >/dev/null && output=$$(" & EulerReleaseBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n"
   writeFile(repoPath / "Makefile", makefileContent)
   runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-live-add-euler-makefile")
