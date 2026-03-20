@@ -171,6 +171,31 @@ suite "scriptorium CLI":
 
     check readFile(agentsPath) == existingContent
 
+  test "init creates tests/config.nims when missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_test_config_create"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let testConfigPath = tmp / "tests" / "config.nims"
+    check fileExists(testConfigPath)
+    check readFile(testConfigPath) == "--path:\"../src\"\n"
+
+  test "init skips tests/config.nims when it already exists":
+    let tmp = getTempDir() / "scriptorium_test_cli_test_config_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    createDir(tmp / "tests")
+    let existingContent = "--path:\"../src\"\n--threads:on\n"
+    writeFile(tmp / "tests" / "config.nims", existingContent)
+    runCmdOrDie("git -C " & tmp & " add tests/config.nims")
+    runCmdOrDie("git -C " & tmp & " commit -m add-test-config")
+
+    runInit(tmp, quiet = true)
+
+    check readFile(tmp / "tests" / "config.nims") == existingContent
+
   test "init creates scriptorium.json with default config when missing":
     let tmp = getTempDir() / "scriptorium_test_cli_config_create"
     makeTestRepo(tmp)
@@ -210,6 +235,7 @@ suite "scriptorium CLI":
     check output.contains("spec.md")
     check output.contains("AGENTS.md")
     check output.contains("Makefile")
+    check output.contains("tests" / "config.nims")
     check output.contains("scriptorium.json")
     # Next steps section.
     check output.contains("Edit AGENTS.md to describe your project.")

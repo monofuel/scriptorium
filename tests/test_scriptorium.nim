@@ -257,16 +257,16 @@ suite "scriptorium init":
       runInit(tmp, quiet = true)
 
 suite "config":
-  test "defaults to fake unit-test codex model for architect, coding, manager, and reviewer roles":
+  test "defaults to claude models with claude-code harness for all roles":
     let cfg = defaultConfig()
-    check cfg.agents.architect.model == "codex-fake-unit-test-model"
-    check cfg.agents.coding.model == "codex-fake-unit-test-model"
-    check cfg.agents.manager.model == "codex-fake-unit-test-model"
-    check cfg.agents.reviewer.model == "codex-fake-unit-test-model"
-    check cfg.agents.architect.harness == harnessCodex
-    check cfg.agents.coding.harness == harnessCodex
-    check cfg.agents.manager.harness == harnessCodex
-    check cfg.agents.reviewer.harness == harnessCodex
+    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.coding.model == "claude-sonnet-4-6"
+    check cfg.agents.manager.model == "claude-sonnet-4-6"
+    check cfg.agents.reviewer.model == "claude-sonnet-4-6"
+    check cfg.agents.architect.harness == harnessClaudeCode
+    check cfg.agents.coding.harness == harnessClaudeCode
+    check cfg.agents.manager.harness == harnessClaudeCode
+    check cfg.agents.reviewer.harness == harnessClaudeCode
     check cfg.agents.architect.reasoningEffort == ""
     check cfg.agents.coding.reasoningEffort == ""
     check cfg.agents.manager.reasoningEffort == ""
@@ -324,7 +324,7 @@ suite "config":
 
     let cfg = loadConfig(tmp)
     check cfg.agents.coding.model == "grok-code-fast-1"
-    check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.manager.model == "claude-sonnet-4-6"
     check cfg.agents.coding.reasoningEffort == "high"
     check cfg.agents.manager.reasoningEffort == ""
 
@@ -334,9 +334,9 @@ suite "config":
     defer: removeDir(tmp)
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.architect.model == "codex-fake-unit-test-model"
-    check cfg.agents.coding.model == "codex-fake-unit-test-model"
-    check cfg.agents.manager.model == "codex-fake-unit-test-model"
+    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.coding.model == "claude-sonnet-4-6"
+    check cfg.agents.manager.model == "claude-sonnet-4-6"
     check cfg.agents.architect.reasoningEffort == ""
     check cfg.agents.coding.reasoningEffort == ""
     check cfg.agents.manager.reasoningEffort == ""
@@ -344,7 +344,7 @@ suite "config":
   test "inferHarness routing":
     check inferHarness("claude-opus-4-6") == harnessClaudeCode
     check inferHarness("claude-haiku-4-5") == harnessClaudeCode
-    check inferHarness("codex-fake-unit-test-model") == harnessCodex
+    check inferHarness("codex-mini") == harnessCodex
     check inferHarness("gpt-4o") == harnessCodex
     check inferHarness("grok-code-fast-1") == harnessTypoi
     check inferHarness("local/qwen3.5-35b-a3b") == harnessTypoi
@@ -517,7 +517,7 @@ suite "orchestrator plan spec update":
     check changed
     check not unchanged
     check callCount == 2
-    check capturedFirstModel == "codex-fake-unit-test-model"
+    check capturedFirstModel == "claude-opus-4-6"
     check capturedFirstReasoningEffort == "high"
     check capturedFirstWorkingDir != tmp
     check capturedFirstRepoPath == tmp
@@ -1432,7 +1432,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
 
     check callCount == 2
-    check capturedRequest.model == "codex-fake-unit-test-model"
+    check capturedRequest.model == "claude-sonnet-4-6"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
     check capturedRequest.workingDir == assignment.worktree
@@ -1450,7 +1450,7 @@ suite "orchestrator coding agent execution":
     )
     check ticketRc == 0
     check "## Agent Run" in ticketContent
-    check "- Model: codex-fake-unit-test-model" in ticketContent
+    check "- Model: claude-sonnet-4-6" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
     let commits = latestPlanCommits(tmp, 4)
@@ -1994,7 +1994,7 @@ suite "orchestrator final v1 flow":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "architect-areas"
-    check capturedRequest.model == "codex-fake-unit-test-model"
+    check capturedRequest.model == "claude-opus-4-6"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect-areas"
     check tmp in capturedRequest.prompt
@@ -2051,7 +2051,7 @@ suite "orchestrator final v1 flow":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "manager-batch"
-    check capturedRequest.model == "codex-fake-unit-test-model"
+    check capturedRequest.model == "claude-sonnet-4-6"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "manager" / "batch"
     check capturedPromptRepoPath == tmp
@@ -2922,7 +2922,7 @@ suite "orchestrator agent enqueue with fakes":
       proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
         ## Return one deterministic area document from spec input.
         inc architectCalls
-        check model == "codex-fake-unit-test-model"
+        check model == "claude-opus-4-6"
         check "scriptorium plan" in spec
         result = @[
           AreaDocument(
@@ -2938,7 +2938,7 @@ suite "orchestrator agent enqueue with fakes":
       proc managerGenerator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
         ## Return one deterministic ticket for the generated area.
         inc managerCalls
-        check model == "codex-fake-unit-test-model"
+        check model == "claude-sonnet-4-6"
         check areaPath == "areas/01-e2e.md"
         check "Validate V1 happy path." in areaContent
         result = @[

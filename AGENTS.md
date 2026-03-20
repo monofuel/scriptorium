@@ -36,14 +36,15 @@ make docker-build
 ## Dependencies
 
 - Nim >= 2.0.0
-- {PRIMARY_DEPENDENCY_DESCRIPTION}
-- {ADDITIONAL_DEPENDENCIES}
+- nimby for dependency management (not nimble)
+- jsony, mummy, mcport
 
 ## Tests
 
 - Run `make test` to run local unit tests (`tests/test_*.nim`)
 - Run `make integration-test` to run integration tests (`tests/integration_*.nim`) that may call real external services/tools (for example Codex)
 - Individual test files can be run with `nim r tests/test_scriptorium.nim`
+- `tests/config.nims` contains `--path:"../src"` so tests can import project modules directly
 
 ### Unit tests vs integration tests
 
@@ -145,15 +146,22 @@ echo &"Hello, {name}! You have {scoreString} points."
 
 ### Nim Imports
 
-- std imports should be first, then libraries, and then local imports
-- use [] brackets to group when possible
-- split imports on newlines
-for example,
+One `import` block. Use bracket syntax. Order: std/ then libraries then local. No quotes on paths.
+
+WRONG:
+```nim
+import std/os
+import std/strutils
+import jsony
+import ./models
 ```
+
+RIGHT:
+```nim
 import
-  std/[strformat, strutils],
-  debby/[pools, postgres],
-  ./[models, logs, llm] 
+  std/[os, strutils],
+  jsony,
+  ./[models, logs]
 ```
 
 ### Nim Procs
@@ -186,19 +194,24 @@ proc sumOfMultiples(limit: int): int =
 
 ### Variables
 
-- please group const, let, and var variables together.
-- please prefer const over let, and let over var.
-- please use capitalized camelCase for consts
-- use regular camelcase for var and let
-- do not place 'magic variables' in the code, instead make them a const and pull them up to the top of the file
-- for example:
+Group `const`, `let`, and `var` declarations into blocks. Prefer `const` over `let`, and `let` over `var`. Pull magic values into named constants at the top of the file.
 
+Constants use PascalCase. Variables use camelCase.
+
+WRONG:
+```nim
+const MAX_RETRIES = 5
+const GRAVITY = 9.81
+let api_url = "https://example.com"
 ```
+
+RIGHT:
+```nim
 const
-  Version = "0.1.0"
-  Model = "llama3.2:1b"
+  MaxRetries = 5
+  Gravity = 9.81
 let
-  embeddingModel = "nomic-embed-text"
+  apiUrl = "https://example.com"
 ```
 
 ## Programming

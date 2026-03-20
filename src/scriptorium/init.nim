@@ -10,6 +10,8 @@ const
   AgentsTemplate = staticRead("prompts/agents_example.md")
   MakefileName = "Makefile"
   MakefileTemplate = ".PHONY: test build\n\ntest:\n\t@echo \"no tests configured\"\n\nbuild:\n\t@echo \"no build configured\"\n"
+  TestConfigNimsName = "tests" / "config.nims"
+  TestConfigNimsContent = "--path:\"../src\"\n"
   ConfigFileName = "scriptorium.json"
   PlanDirs = [
     "areas",
@@ -95,6 +97,14 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(target, "add", MakefileName)
     gitRun(target, "commit", "-m", "scriptorium: add starter Makefile")
 
+  let testConfigPath = target / TestConfigNimsName
+  let createdTestConfig = not fileExists(testConfigPath)
+  if createdTestConfig:
+    createDir(target / "tests")
+    writeFile(testConfigPath, TestConfigNimsContent)
+    gitRun(target, "add", TestConfigNimsName)
+    gitRun(target, "commit", "-m", "scriptorium: add tests/config.nims")
+
   let configPath = target / ConfigFileName
   let createdConfig = not fileExists(configPath)
   if createdConfig:
@@ -131,6 +141,8 @@ proc runInit*(path: string, quiet: bool = false) =
       echo &"  {AgentsFileName}"
     if createdMakefile:
       echo &"  {MakefileName}"
+    if createdTestConfig:
+      echo &"  {TestConfigNimsName}"
     if createdConfig:
       echo &"  {ConfigFileName}"
     echo ""

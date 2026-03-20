@@ -10,8 +10,11 @@ type
 
 const
   ConfigFile = "scriptorium.json"
-  DefaultModel = "codex-fake-unit-test-model"
-  DefaultHarness = harnessCodex
+  DefaultArchitectModel = "claude-opus-4-6"
+  DefaultCodingModel = "claude-sonnet-4-6"
+  DefaultManagerModel = "claude-sonnet-4-6"
+  DefaultReviewerModel = "claude-sonnet-4-6"
+  DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
   DefaultLocalEndpoint = "http://127.0.0.1:8097"
 
@@ -48,11 +51,11 @@ type
     logLevel*: string
     fileLogLevel*: string
 
-proc defaultAgentConfig(): AgentConfig =
-  ## Return an AgentConfig populated with default values.
+proc defaultAgentConfig(model: string): AgentConfig =
+  ## Return an AgentConfig populated with default values for a given model.
   AgentConfig(
     harness: DefaultHarness,
-    model: DefaultModel,
+    model: model,
     reasoningEffort: DefaultReasoningEffort,
   )
 
@@ -60,10 +63,10 @@ proc defaultConfig*(): Config =
   ## Return a Config populated with default values.
   Config(
     agents: AgentConfigs(
-      architect: defaultAgentConfig(),
-      coding: defaultAgentConfig(),
-      manager: defaultAgentConfig(),
-      reviewer: defaultAgentConfig(),
+      architect: defaultAgentConfig(DefaultArchitectModel),
+      coding: defaultAgentConfig(DefaultCodingModel),
+      manager: defaultAgentConfig(DefaultManagerModel),
+      reviewer: defaultAgentConfig(DefaultReviewerModel),
     ),
     endpoints: Endpoints(
       local: DefaultLocalEndpoint,

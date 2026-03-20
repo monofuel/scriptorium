@@ -13,25 +13,105 @@ This repository uses Nim and keeps dependencies minimal.
 - Prefer deterministic behavior and idempotent operations.
 - Do not reference, clean, or manage `.nimcache` directories. The build system handles them.
 
-## Nim
+## Dependencies
 
-- Use Nim for source code and tests unless the task clearly requires something else.
-- Prefer `const` over `let`, and `let` over `var`.
-- Group `const`, `let`, and `var` declarations together.
-- Avoid magic values in code. Pull important values up into named constants.
+- MUST use nimby (not nimble) for dependency management.
+- Recommended libraries by category:
+  - JSON: jsony
+  - HTTP server: mummy
+  - Database: debby
+  - WebSocket: ws
+  - Collision/geometry: bumpy
+  - Image: pixie
+  - Vector math: vmath
+
+## Variables
+
+Group `const`, `let`, and `var` declarations into blocks. Prefer `const` over `let`, and `let` over `var`. Pull magic values into named constants at the top of the file.
+
+Constants use PascalCase. Variables use camelCase.
+
+WRONG:
+```nim
+const MAX_RETRIES = 5
+const GRAVITY = 9.81
+let api_url = "https://example.com"
+var retry_count = 0
+```
+
+RIGHT:
+```nim
+const
+  MaxRetries = 5
+  Gravity = 9.81
+let
+  apiUrl = "https://example.com"
+var
+  retryCount = 0
+```
+
 - Prefer `&` string interpolation over `fmt`.
 - Do not call functions directly inside interpolated strings when a named variable would be clearer.
 
 ## Imports
 
-- Put standard library imports first, then third-party libraries, then local imports.
-- Group imports with bracket syntax when it improves readability.
+One `import` block. Use bracket syntax. Order: std/ then libraries then local. No quotes on paths.
+
+WRONG:
+```nim
+import std/os
+import std/strutils
+import jsony
+import ./models
+import ./logs
+```
+
+RIGHT:
+```nim
+import
+  std/[os, strutils],
+  jsony,
+  ./[models, logs]
+```
 
 ## Procedures
 
-- Every proc should have a Nim doc comment.
-- Nim doc comments should use `##` and be complete sentences with punctuation.
-- Prefer readable names over extra comments.
+Doc comments go INSIDE the proc, not above it. Use `##`. All comments are complete sentences: capital first letter, period at end.
+
+WRONG:
+```nim
+# Calculate the sum of multiples.
+proc sumOfMultiples(limit: int): int =
+  var total = 0
+  for i in 1..<limit:
+    if i mod 3 == 0 or i mod 5 == 0:
+      total += i
+  return total
+```
+
+RIGHT:
+```nim
+proc sumOfMultiples(limit: int): int =
+  ## Calculate the sum of all multiples of 3 or 5 below the limit.
+  var total = 0
+  for i in 1..<limit:
+    if i mod 3 == 0 or i mod 5 == 0:
+      total += i
+  return total
+```
+
+## Object Types
+
+- Prefer `ref object` for types that will be passed around.
+- Backtick-wrap fields that collide with Nim keywords.
+
+```nim
+type
+  DeleteModelResponse* = ref object
+    id*: string
+    `object`*: string
+    deleted*: bool
+```
 
 ## Error Handling
 
@@ -44,6 +124,7 @@ This repository uses Nim and keeps dependencies minimal.
 - Keep tests focused on observable behavior.
 - Prefer assertions on files, return values, and command success over loose stdout scanning.
 - If a task changes runtime behavior, update or add tests to cover it.
+- Add a `tests/config.nims` file with `--path:"../src"` so tests can import project modules without ugly relative paths.
 
 ## Coding Tasks
 

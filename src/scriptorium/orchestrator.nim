@@ -384,7 +384,34 @@ proc preflightValidation*(repoPath: string) =
   if findExe(binaryName).len == 0:
     errors.add("Agent binary `" & binaryName & "` not found in PATH. Install it or update scriptorium.json.")
 
-  # 6. Agent auth is configured (warning only).
+  # 6. nimby is available.
+  if findExe("nimby").len == 0:
+    errors.add("`nimby` not found in PATH. Install nimby for dependency management.")
+
+  # 7. nim is available and version >= 2.
+  let nimPath = findExe("nim")
+  if nimPath.len == 0:
+    errors.add("`nim` not found in PATH. Install Nim >= 2.0.")
+  else:
+    let (nimVerOut, nimVerRc) = execCmdEx(nimPath & " --version")
+    if nimVerRc != 0:
+      errors.add("Failed to determine Nim version.")
+    else:
+      let firstLine = nimVerOut.strip().splitLines()[0]
+      let versionStart = firstLine.find("Version ")
+      if versionStart >= 0:
+        let versionStr = firstLine[versionStart + 8 .. ^1].strip()
+        let majorStr = versionStr.split('.')[0]
+        try:
+          let major = parseInt(majorStr)
+          if major < 2:
+            errors.add("Nim version " & versionStr & " is too old. Nim >= 2.0 is required.")
+        except ValueError:
+          errors.add("Could not parse Nim version from: " & firstLine)
+      else:
+        errors.add("Could not parse Nim version from: " & firstLine)
+
+  # 8. Agent auth is configured (warning only).
   var hasAuth = false
   case cfg.agents.coding.harness
   of harnessClaudeCode:
