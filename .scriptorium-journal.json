@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0058-init-generates-scriptorium-json",
+  "timestamp": "2026-03-20T01:19:20Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0058-init-generates-scriptorium-json.md",
+      "destination": "tickets/in-progress/0058-init-generates-scriptorium-json.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0058-init-generates-scriptorium-json.md",
+      "content": "# Init Generates scriptorium.json\n\n**Area:** cli-init\n\n## Problem\n\n`scriptorium init` does not generate a `scriptorium.json` config file. Users\nmust create one manually or rely on in-memory defaults.\n\n## Requirements\n\n- During init, check if `scriptorium.json` exists in the target repo root.\n- If missing, generate it using `defaultConfig()` from `config.nim`, serialized\n  to JSON.\n- Leave the file uncommitted for user customization.\n- Log that the file was created.\n\n## Files To Change\n\n- `src/scriptorium/init.nim` — add scriptorium.json generation step.\n- `tests/integration_cli.nim` — verify scriptorium.json is created when missing.\n\n## Acceptance Criteria\n\n- Running `scriptorium init` on a repo without scriptorium.json creates one\n  with default config values.\n- Running `scriptorium init` on a repo that already has scriptorium.json skips this step.\n- The generated JSON is valid and parseable by the config loader.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0058-init-generates-scriptorium-json\n",
+      "contentHash": "0E48E8D09BF4FE34D1ABA6473D4862772EF9F08D"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0058-init-generates-scriptorium-json"
+}
