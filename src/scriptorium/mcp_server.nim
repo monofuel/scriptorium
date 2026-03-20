@@ -11,7 +11,6 @@ const
     let fromEnv = staticExec("echo $BUILD_COMMIT").strip()
     if fromEnv.len > 0: fromEnv
     else: staticExec("git rev-parse --short HEAD 2>/dev/null").strip()
-  SubmitPrTestOutputMaxChars = 2000
   ServerReadyTimeoutMs* = 5000
   ServerReadyPollIntervalMs = 50
 
@@ -68,27 +67,11 @@ proc createOrchestratorServer*(): HttpMcpServer =
     let active = getActiveTicketWorktree(reqTicketId)
     let ticketLabel = if active.ticketId.len > 0: active.ticketId else: "unknown"
 
-    if active.worktreePath.len == 0:
-      {.cast(gcsafe).}:
-        logInfo(&"ticket {ticketLabel}: submit_pr pre-check: SKIP (no active worktree)")
-      recordSubmitPrSummary(summary, active.ticketId)
-      return %*"Merge request enqueued."
-
-    let testStartTime = epochTime()
-    let testResult = runRequiredQualityChecks(active.worktreePath)
-    let testWallTime = epochTime() - testStartTime
-    let testExitCode = testResult.exitCode
+    # Record summary immediately so the orchestrator can consume it as soon as
+    # the agent exits.  Quality checks run later in the merge queue — if they
+    # fail the ticket is reopened and a new agent session handles it.
     {.cast(gcsafe).}:
-      let testWallDuration = formatDuration(testWallTime)
-      let testStatus = if testExitCode == 0: "PASS" else: "FAIL"
-      let failInfo = if testResult.failedTarget.len > 0: &", failed={testResult.failedTarget}" else: ""
-      logInfo(&"ticket {ticketLabel}: submit_pr pre-check: {testStatus} (exit={testExitCode}, wall={testWallDuration}{failInfo})")
-
-    if testExitCode != 0:
-      let outputTail = truncateTail(testResult.output.strip(), SubmitPrTestOutputMaxChars)
-      let failedOn = if testResult.failedTarget.len > 0: &" on '{testResult.failedTarget}'" else: ""
-      return %*(&"Pre-submit quality gate failed{failedOn} (exit={testExitCode}). Fix the failing tests and call submit_pr again.\n\n{outputTail}")
-
+      logInfo(&"ticket {ticketLabel}: submit_pr accepted (quality checks run in merge queue)")
     recordSubmitPrSummary(summary, active.ticketId)
     %*"Merge request enqueued."
   server.registerTool(submitPrTool, submitPrHandler)

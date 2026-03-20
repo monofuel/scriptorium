@@ -1363,7 +1363,7 @@ suite "orchestrator mcp tools":
     check "Invalid action" in response.getStr()
     check consumeReviewDecision().action == ""
 
-  test "submit_pr runs make test and enqueues on pass":
+  test "submit_pr enqueues immediately with active worktree":
     discard consumeSubmitPrSummary()
     let tmp = getTempDir() / "scriptorium_test_submit_pr_pass"
     createDir(tmp)
@@ -1378,7 +1378,7 @@ suite "orchestrator mcp tools":
     check toolResponse.getStr() == "Merge request enqueued."
     check consumeSubmitPrSummary() == "tests pass"
 
-  test "submit_pr runs make test and rejects on failure":
+  test "submit_pr enqueues even when tests would fail (merge queue is the gate)":
     discard consumeSubmitPrSummary()
     let tmp = getTempDir() / "scriptorium_test_submit_pr_fail"
     createDir(tmp)
@@ -1390,24 +1390,8 @@ suite "orchestrator mcp tools":
     let httpServer = createOrchestratorServer()
     let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
     let toolResponse = submitPrHandler(%*{"summary": "tests fail"})
-    check "Pre-submit quality gate failed" in toolResponse.getStr()
-    check "Fix the failing tests" in toolResponse.getStr()
-    check consumeSubmitPrSummary() == ""
-
-  test "submit_pr rejects when integration-test fails":
-    discard consumeSubmitPrSummary()
-    let tmp = getTempDir() / "scriptorium_test_submit_pr_integ_fail"
-    createDir(tmp)
-    defer: removeDir(tmp)
-    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\nintegration-test:\n\t@echo FAIL integration-test\n\t@false\n")
-    setActiveTicketWorktree(tmp, "0099")
-    defer: clearActiveTicketWorktree()
-
-    let httpServer = createOrchestratorServer()
-    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
-    let toolResponse = submitPrHandler(%*{"summary": "integ fails"})
-    check "Pre-submit quality gate failed on 'integration-test'" in toolResponse.getStr()
-    check consumeSubmitPrSummary() == ""
+    check toolResponse.getStr() == "Merge request enqueued."
+    check consumeSubmitPrSummary() == "tests fail"
 
 suite "orchestrator coding agent execution":
   test "executeAssignedTicket runs agent and appends run summary":
