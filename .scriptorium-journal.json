@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0058",
+  "timestamp": "2026-03-20T01:35:41Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0058.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0058-init-generates-scriptorium-json.md\n**Ticket ID:** 0058\n**Branch:** scriptorium/ticket-0058\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0058-init-generates-scriptorium-json\n**Summary:** scriptorium init now generates scriptorium.json with defaultConfig() when the file is missing, skips if already present, and logs the action. Integration tests verify both create and skip behaviors.\n",
+      "contentHash": "26411F64A426D4D943B1C098CB8CCF08FF9A3F59"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0058"
+}
