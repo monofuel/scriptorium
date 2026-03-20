@@ -13,6 +13,7 @@ const
   DefaultModel = "codex-fake-unit-test-model"
   DefaultHarness = harnessCodex
   DefaultReasoningEffort = ""
+  DefaultLocalEndpoint = "http://127.0.0.1:8097"
 
 type
   AgentConfig* = object
@@ -65,7 +66,7 @@ proc defaultConfig*(): Config =
       reviewer: defaultAgentConfig(),
     ),
     endpoints: Endpoints(
-      local: "",
+      local: DefaultLocalEndpoint,
     ),
     concurrency: ConcurrencyConfig(
       maxAgents: 1,

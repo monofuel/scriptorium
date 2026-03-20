@@ -411,6 +411,25 @@ suite "config":
     check cfg.timeouts.codingAgentProgressTimeoutMs == 900_000
     check cfg.timeouts.codingAgentMaxAttempts == 3
 
+  test "default endpoint populated when not in scriptorium.json":
+    let tmp = getTempDir() / "scriptorium_test_config_endpoint_default"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    var writtenCfg = defaultConfig()
+    writtenCfg.endpoints.local = ""
+    writeScriptoriumConfig(tmp, writtenCfg)
+
+    let cfg = loadConfig(tmp)
+    check cfg.endpoints.local == "http://127.0.0.1:8097"
+
+  test "missing file returns default endpoint":
+    let tmp = getTempDir() / "scriptorium_test_config_endpoint_missing"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    let cfg = loadConfig(tmp)
+    check cfg.endpoints.local == "http://127.0.0.1:8097"
+
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
     let endpoint = parseEndpoint("")
