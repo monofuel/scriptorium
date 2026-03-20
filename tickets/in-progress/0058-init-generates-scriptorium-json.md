@@ -26,3 +26,5 @@ must create one manually or rely on in-memory defaults.
   with default config values.
 - Running `scriptorium init` on a repo that already has scriptorium.json skips this step.
 - The generated JSON is valid and parseable by the config loader.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0058-init-generates-scriptorium-json
