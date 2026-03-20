@@ -3,7 +3,7 @@
 import
   std/[algorithm, os, osproc, posix, sequtils, strutils, tempfiles, times],
   jsony,
-  scriptorium/[config, init]
+  scriptorium/config
 
 const
   LiveIntegrationRoot* = "/tmp/scriptorium/integration"
@@ -19,7 +19,6 @@ const
   EulerExpectedAnswer* = "233168"
   EulerDebugBinary = "./multiples-test-bin"
   EulerReleaseBinary = "./multiples-release-bin"
-  AgentsExamplePath = "src/scriptorium/prompts/agents_example.md"
 
 let
   ProjectRoot = getCurrentDir()
@@ -110,14 +109,6 @@ proc makeTestRepo(path: string) =
   runCmdOrDie("git -C " & quoteShell(path) & " config user.name Test")
   runCmdOrDie("git -C " & quoteShell(path) & " commit --allow-empty -m initial")
 
-proc writeFixtureAgentsFile(repoPath: string) =
-  ## Write a generic AGENTS.md file into one generated live fixture repository.
-  let sourcePath = ProjectRoot / AgentsExamplePath
-  let agentsContent = readFile(sourcePath)
-  writeFile(repoPath / "AGENTS.md", agentsContent)
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add AGENTS.md")
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-live-add-agents")
-
 proc withTempLiveRepo*(prefix: string, action: proc(repoPath: string)) =
   ## Create one temporary live integration repository and clean it up afterwards.
   createDir("/tmp/scriptorium")
@@ -126,7 +117,6 @@ proc withTempLiveRepo*(prefix: string, action: proc(repoPath: string)) =
   defer:
     removeDir(repoPath)
   makeTestRepo(repoPath)
-  writeFixtureAgentsFile(repoPath)
   action(repoPath)
 
 proc withPlanWorktree*(repoPath: string, suffix: string, action: proc(planPath: string)) =
@@ -312,5 +302,7 @@ proc startOrchestrator*(repoPath: string): Process =
   )
 
 proc initLiveRepo*(repoPath: string) =
-  ## Initialize one repository for live orchestrator integration tests.
-  runInit(repoPath, quiet = true)
+  ## Initialize one repository via the scriptorium init CLI subcommand.
+  let bin = ensureCliBinary()
+  let cmd = quoteShell(bin) & " init " & quoteShell(repoPath)
+  runCmdOrDie(cmd)
