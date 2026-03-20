@@ -57,3 +57,10 @@ Done. Changes:
 ```text
 g the plan branch, its directories, spec.md, and any generated files (AGENTS.md, Makefile, scriptorium.json). Added per-file next-step guidance. Updated `SpecPlaceholder` to reference AGENTS.md.\n- **`tests/integration_cli.nim`** — Added two tests: one verifying the expanded CLI output contains all expected file listings and next steps, and one verifying spec.md references AGENTS.md.","stop_reason":"end_turn","session_id":"b6b5dd5a-ebb0-46c2-a1dd-1de59aa0071e","total_cost_usd":0.34910399999999997,"usage":{"input_tokens":4137,"cache_creation_input_tokens":28410,"cache_read_input_tokens":179413,"output_tokens":2446,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":28410},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":4137,"outputTokens":2446,"cacheReadInputTokens":179413,"cacheCreationInputTokens":28410,"webSearchRequests":0,"costUSD":0.34910399999999997,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"ae4a6a1a-ed4c-45d7-a9e3-1664f8e6260a"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 19s
