@@ -1039,13 +1039,11 @@ suite "orchestrator ticket assignment":
 
     let assignment = assignOldestOpenTicket(tmp)
     let normalizedWorktreePath = normalizedPathForTest(assignment.worktree)
-    let normalizedManagedRoot = normalizedPathForTest(getTempDir() / "scriptorium")
-    let normalizedRepoPath = normalizedPathForTest(tmp)
+    let normalizedManagedRoot = normalizedPathForTest(tmp / ".scriptorium")
     check assignment.worktree.len > 0
     check assignment.branch == "scriptorium/ticket-0001"
     check assignment.worktree in gitWorktreePaths(tmp)
     check normalizedWorktreePath.startsWith(normalizedManagedRoot & "/")
-    check not normalizedWorktreePath.startsWith(normalizedRepoPath & "/")
 
     let (ticketContent, rc) = execCmdEx(
       "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/in-progress/0001-first.md"
@@ -1995,7 +1993,7 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "architect-areas"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "architect-areas"
+    check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect-areas"
     check tmp in capturedRequest.prompt
     check "AGENTS.md" in capturedRequest.prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
@@ -2052,7 +2050,7 @@ suite "orchestrator final v1 flow":
     check capturedRequest.ticketId == "manager-batch"
     check capturedRequest.model == "codex-fake-unit-test-model"
     check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.logRoot == getTempDir() / "scriptorium-plan-logs" / "manager" / "batch"
+    check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "manager" / "batch"
     check capturedPromptRepoPath == tmp
     check "AGENTS.md" in capturedRequest.prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
@@ -3079,7 +3077,7 @@ suite "logging":
     defer: closeLog()
     check logFilePath.len > 0
     check fileExists(logFilePath)
-    check "/tmp/scriptorium/myproject/" in logFilePath
+    check ".scriptorium/logs/orchestrator/" in logFilePath
     check "run_" in logFilePath
 
   test "logInfo writes timestamped line to file":

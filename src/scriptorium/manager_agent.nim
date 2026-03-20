@@ -116,7 +116,7 @@ proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool 
           ticketId: ManagerTicketIdPrefix & "batch",
           attempt: DefaultAgentAttempt,
           skipGitRepoCheck: true,
-          logRoot: planAgentLogRoot(ManagerLogDirName / "batch"),
+          logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / "batch"),
           maxAttempts: DefaultAgentMaxAttempts,
           onEvent: proc(event: AgentStreamEvent) =
             if event.kind == agentEventTool:

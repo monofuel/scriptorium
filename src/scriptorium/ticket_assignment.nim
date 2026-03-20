@@ -24,7 +24,6 @@ proc ensureWorktreeCreated*(repoPath: string, ticketRelPath: string): tuple[bran
   ## Ensure the code worktree exists for the ticket and return branch/path.
   let branch = branchNameForTicket(ticketRelPath)
   let path = worktreePathForTicket(repoPath, ticketRelPath)
-  discard cleanupLegacyManagedTicketWorktrees(repoPath)
   createDir(parentDir(path))
 
   discard gitCheck(repoPath, "worktree", "remove", "--force", path)
@@ -305,9 +304,6 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
 proc cleanupStaleTicketWorktrees*(repoPath: string): seq[string] =
   ## Remove managed code worktrees that no longer correspond to in-progress tickets.
   let managedRoot = normalizeAbsolutePath(managedTicketWorktreeRootPath(repoPath))
-  for path in cleanupLegacyManagedTicketWorktrees(repoPath):
-    result.add(path)
-
   let activeWorktrees = withLockedPlanWorktree(repoPath, proc(planPath: string): HashSet[string] =
     result = initHashSet[string]()
     for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):

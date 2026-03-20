@@ -350,6 +350,7 @@ proc applyLogLevelFromConfig(repoPath: string) =
 
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
+  ensureScriptoriumIgnored(repoPath)
   initLog(repoPath)
   applyLogLevelFromConfig(repoPath)
   let endpoint = loadOrchestratorEndpoint(repoPath)

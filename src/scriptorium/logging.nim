@@ -9,7 +9,6 @@ type
 
 const
   LogLevelLabels: array[LogLevel, string] = ["DEBUG", "INFO", "WARN", "ERROR"]
-  LogDirBase = "/tmp/scriptorium"
 
 var
   logFile: File
@@ -28,8 +27,7 @@ proc formatFileTimestamp(): string =
 
 proc initLog*(repoPath: string) =
   ## Create the session log file and open it for writing.
-  let projectName = lastPathPart(repoPath)
-  let logDir = LogDirBase / projectName
+  let logDir = repoPath / ".scriptorium" / "logs" / "orchestrator"
   createDir(logDir)
   logFilePath = logDir / fmt"run_{formatFileTimestamp()}.log"
   logFile = open(logFilePath, fmWrite)

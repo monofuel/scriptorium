@@ -1,10 +1,10 @@
 import
-  std/[os, osproc, streams, strformat, strutils]
+  std/[locks, os, osproc, streams, strformat, strutils]
 
 const
   GitCommandTimeoutMs* = 60_000
   PlanBranch* = "scriptorium/plan"
-  ManagedStateRootDirName* = "scriptorium"
+  ManagedStateDirName* = ".scriptorium"
   ManagedWorktreeDirName* = "worktrees"
   ManagedPlanWorktreeName* = "plan"
   ManagedMasterWorktreeName* = "master"
@@ -12,38 +12,65 @@ const
   ManagedLockDirName* = "locks"
   ManagedRepoLockName* = "repo.lock"
   ManagedRepoLockPidFileName* = "pid"
-  LegacyManagedWorktreeRoot* = ".scriptorium/worktrees"
   TicketBranchPrefix* = "scriptorium/ticket-"
+
+var
+  processLock: Lock
+  processLockInitialized = false
+
+proc ensureProcessLockInitialized*() =
+  ## Initialize the global process creation lock once.
+  if not processLockInitialized:
+    initLock(processLock)
+    processLockInitialized = true
+
+proc acquireProcessLock() =
+  ## Acquire the global process lock, initializing if needed.
+  ensureProcessLockInitialized()
+  {.cast(gcsafe).}:
+    acquire(processLock)
+
+proc releaseProcessLock() =
+  ## Release the global process lock.
+  {.cast(gcsafe).}:
+    release(processLock)
 
 proc gitRun*(dir: string, args: varargs[string]) =
   ## Run a git subcommand in dir and raise an IOError on non-zero exit.
   let argsSeq = @args
   let allArgs = @["-C", dir] & argsSeq
+  # Nim's osproc double-closes the stdout fd when poStdErrToStdOut is used
+  # (errHandle == outHandle). Serialize startProcess/close to prevent a
+  # race where one thread's double-close kills another thread's pipe fd.
+  acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
   let rc = process.waitForExit(GitCommandTimeoutMs)
   if rc == -1 and running(process):
     process.kill()
-    process.close()
-    let argsStr = argsSeq.join(" ")
-    raise newException(IOError, fmt"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
   process.close()
+  releaseProcessLock()
+  if rc == -1:
+    let argsStr = argsSeq.join(" ")
+    raise newException(IOError, &"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
   if rc != 0:
     let argsStr = argsSeq.join(" ")
-    raise newException(IOError, fmt"git {argsStr} failed: {output.strip()}")
+    raise newException(IOError, &"git {argsStr} failed: {output.strip()}")
 
 proc gitCheck*(dir: string, args: varargs[string]): int =
   ## Run a git subcommand in dir and return its exit code.
   let allArgs = @["-C", dir] & @args
+  acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   discard process.outputStream.readAll()
   result = process.waitForExit(GitCommandTimeoutMs)
   if result == -1 and running(process):
     process.kill()
-    process.close()
-    let argsStr = (@args).join(" ")
-    raise newException(IOError, fmt"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
   process.close()
+  releaseProcessLock()
+  if result == -1:
+    let argsStr = (@args).join(" ")
+    raise newException(IOError, &"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
 
 proc parseWorktreeConflictPath*(output: string): string =
   ## Extract a conflicting worktree path from git worktree add stderr output.
@@ -69,45 +96,32 @@ proc normalizeAbsolutePath*(path: string): string =
   ## Return a normalized absolute path that always uses forward slashes.
   result = absolutePath(path).replace('\\', '/')
 
-proc repoStateKey*(repoPath: string): string =
-  ## Build a deterministic state key from one repository absolute path.
-  let canonicalRepoPath = normalizeAbsolutePath(repoPath)
-  let rawRepoName = extractFilename(canonicalRepoPath)
-  let repoName = if rawRepoName.len > 0: rawRepoName else: "repo"
-
-  var hashValue = 1469598103934665603'u64
-  for ch in canonicalRepoPath:
-    hashValue = (hashValue xor uint64(ord(ch))) * 1099511628211'u64
-  let hashText = toLowerAscii(toHex(hashValue, 16))
-  result = repoName.toLowerAscii() & "-" & hashText
-
 proc managedRepoRootPath*(repoPath: string): string =
-  ## Return the deterministic managed state root path in /tmp for one repository.
-  let repoKey = repoStateKey(repoPath)
-  result = absolutePath(getTempDir() / ManagedStateRootDirName / repoKey)
+  ## Return the managed state root path inside the target repository.
+  result = absolutePath(repoPath / ManagedStateDirName)
 
 proc managedWorktreeRootPath*(repoPath: string): string =
-  ## Return the deterministic managed worktree root path in /tmp for one repository.
+  ## Return the managed worktree root path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedWorktreeDirName
 
 proc managedPlanWorktreePath*(repoPath: string): string =
-  ## Return the deterministic plan worktree path in /tmp for one repository.
+  ## Return the managed plan worktree path for one repository.
   result = managedWorktreeRootPath(repoPath) / ManagedPlanWorktreeName
 
 proc managedMasterWorktreePath*(repoPath: string): string =
-  ## Return the deterministic master worktree path in /tmp for one repository.
+  ## Return the managed master worktree path for one repository.
   result = managedWorktreeRootPath(repoPath) / ManagedMasterWorktreeName
 
 proc managedTicketWorktreeRootPath*(repoPath: string): string =
-  ## Return the deterministic ticket worktree root path in /tmp for one repository.
+  ## Return the managed ticket worktree root path for one repository.
   result = managedWorktreeRootPath(repoPath) / ManagedTicketWorktreeDirName
 
 proc managedRepoLockPath*(repoPath: string): string =
-  ## Return the deterministic repository lock path in /tmp for one repository.
+  ## Return the managed repository lock path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedRepoLockName
 
 proc isManagedWorktreePath*(repoPath: string, path: string): bool =
-  ## Return true when path is under this repository's managed /tmp worktree root.
+  ## Return true when path is under this repository's managed worktree root.
   let managedRoot = normalizeAbsolutePath(managedWorktreeRootPath(repoPath))
   let normalizedPath = normalizeAbsolutePath(path)
   result = normalizedPath.startsWith(managedRoot & "/")
@@ -137,6 +151,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
 
   var recoveredConflict = false
   while true:
+    acquireProcessLock()
     let addProcess = startProcess(
       "git",
       args = @["-C", repoPath, "worktree", "add", worktreePath, branch],
@@ -145,6 +160,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
     let addOutput = addProcess.outputStream.readAll()
     let addRc = addProcess.waitForExit()
     addProcess.close()
+    releaseProcessLock()
 
     if addRc == 0:
       break
@@ -166,6 +182,7 @@ proc hasPlanBranch*(repoPath: string): bool =
 proc resolveDefaultBranch*(repoPath: string): string =
   ## Dynamically detect the default branch for the repository.
   ## Checks refs/remotes/origin/HEAD first, then probes for master, main, develop.
+  acquireProcessLock()
   let symrefProcess = startProcess(
     "git",
     args = @["-C", repoPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
@@ -174,6 +191,7 @@ proc resolveDefaultBranch*(repoPath: string): string =
   let symrefOutput = symrefProcess.outputStream.readAll()
   let symrefRc = symrefProcess.waitForExit()
   symrefProcess.close()
+  releaseProcessLock()
   if symrefRc == 0:
     let symref = symrefOutput.strip()
     let prefix = "refs/remotes/origin/"
@@ -192,6 +210,7 @@ proc resolveDefaultBranch*(repoPath: string): string =
 proc defaultBranchHeadCommit*(repoPath: string): string =
   ## Return the current default branch commit SHA.
   let branch = resolveDefaultBranch(repoPath)
+  acquireProcessLock()
   let process = startProcess(
     "git",
     args = @["-C", repoPath, "rev-parse", branch],
@@ -200,6 +219,7 @@ proc defaultBranchHeadCommit*(repoPath: string): string =
   let output = process.outputStream.readAll()
   let rc = process.waitForExit()
   process.close()
+  releaseProcessLock()
   if rc != 0:
     let errMsg = output.strip()
     raise newException(IOError, &"git rev-parse {branch} failed: {errMsg}")
@@ -208,12 +228,14 @@ proc defaultBranchHeadCommit*(repoPath: string): string =
 proc listGitWorktreePaths*(repoPath: string): seq[string] =
   ## Return absolute worktree paths from git worktree list.
   let allArgs = @["-C", repoPath, "worktree", "list", "--porcelain"]
+  acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
   let rc = process.waitForExit()
   process.close()
+  releaseProcessLock()
   if rc != 0:
-    raise newException(IOError, fmt"git worktree list failed: {output.strip()}")
+    raise newException(IOError, &"git worktree list failed: {output.strip()}")
 
   for line in output.splitLines():
     if line.startsWith("worktree "):
@@ -221,32 +243,44 @@ proc listGitWorktreePaths*(repoPath: string): seq[string] =
 
 proc runCommandCapture*(workingDir: string, command: string, args: seq[string], timeoutMs: int = 300_000): tuple[exitCode: int, output: string] =
   ## Run a process and return combined stdout/stderr with its exit code.
+  # Lock around startProcess and close, but not during readAll/waitForExit
+  # since this is used for long-running commands like make test.
+  acquireProcessLock()
   let process = startProcess(
     command,
     workingDir = workingDir,
     args = args,
     options = {poUsePath, poStdErrToStdOut},
   )
+  discard process.outputStream
+  releaseProcessLock()
   let output = process.outputStream.readAll()
   let exitCode = process.waitForExit(timeoutMs)
   if exitCode == -1 and running(process):
     process.kill()
-    process.close()
-    let cmdStr = command & " " & args.join(" ")
-    raise newException(IOError, fmt"{cmdStr} timed out after {timeoutMs div 1000}s")
+  acquireProcessLock()
   process.close()
+  releaseProcessLock()
+  if exitCode == -1:
+    let cmdStr = command & " " & args.join(" ")
+    raise newException(IOError, &"{cmdStr} timed out after {timeoutMs div 1000}s")
   result = (exitCode: exitCode, output: output)
 
-proc cleanupLegacyManagedTicketWorktrees*(repoPath: string): seq[string] =
-  ## Remove legacy repo-local managed ticket worktrees from older versions.
-  let legacyRoot = normalizeAbsolutePath(repoPath / LegacyManagedWorktreeRoot)
-  for path in listGitWorktreePaths(repoPath):
-    let normalizedPath = normalizeAbsolutePath(path)
-    if normalizedPath.startsWith(legacyRoot & "/"):
-      discard gitCheck(repoPath, "worktree", "remove", "--force", path)
-      if dirExists(path):
-        removeDir(path)
-      result.add(path)
-
-  if dirExists(legacyRoot):
-    removeDir(legacyRoot)
+proc ensureScriptoriumIgnored*(repoPath: string) =
+  ## Ensure .scriptorium/ is gitignored in the target repository.
+  let managedDir = repoPath / ManagedStateDirName
+  createDir(managedDir)
+  let gitignorePath = repoPath / ".gitignore"
+  if fileExists(gitignorePath):
+    let content = readFile(gitignorePath)
+    for line in content.splitLines():
+      let trimmed = line.strip()
+      if trimmed == ".scriptorium/" or trimmed == ".scriptorium" or trimmed == ".*":
+        return
+    var newContent = content
+    if newContent.len > 0 and not newContent.endsWith("\n"):
+      newContent.add("\n")
+    newContent.add(".scriptorium/\n")
+    writeFile(gitignorePath, newContent)
+  else:
+    writeFile(gitignorePath, ".scriptorium/\n")

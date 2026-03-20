@@ -1,4 +1,5 @@
 import std/[os, osproc, streams, strformat, strutils]
+from ./git_ops import ensureScriptoriumIgnored
 
 const
   PlanBranch = "scriptorium/plan"
@@ -73,6 +74,8 @@ proc runInit*(path: string, quiet: bool = false) =
   let defaultBranch = resolveDefaultBranch(target)
   discard execCmdEx("git -C " & quoteShell(target) & " remote set-head origin " & quoteShell(defaultBranch))
 
+  ensureScriptoriumIgnored(target)
+
   let agentsPath = target / AgentsFileName
   let createdAgents = not fileExists(agentsPath)
   if createdAgents:
@@ -80,7 +83,7 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(target, "add", AgentsFileName)
     gitRun(target, "commit", "-m", "scriptorium: add AGENTS.md from template")
 
-  let tmpPlan = getTempDir() / "scriptorium_plan_init"
+  let tmpPlan = target / ".scriptorium" / "plan_init"
   if dirExists(tmpPlan):
     removeDir(tmpPlan)
 

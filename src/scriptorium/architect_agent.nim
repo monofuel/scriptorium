@@ -7,7 +7,7 @@ const
   AreaCommitMessage* = "scriptorium: update areas from spec"
   PlanSpecCommitMessage* = "scriptorium: update spec from architect"
   PlanSpecTicketId = "plan-spec"
-  PlanLogRoot* = "scriptorium-plan-logs"
+  PlanLogDirName* = "logs"
   PlanWriteScopeName* = "scriptorium plan"
   ArchitectAreasLogDirName = "architect-areas"
   ArchitectAreasTicketId = "architect-areas"
@@ -29,6 +29,7 @@ proc loadSpecFromPlanPath*(planPath: string): string =
 
 proc runPlanArchitectRequest*(
   runner: AgentRunner,
+  repoPath: string,
   planPath: string,
   agentCfg: AgentConfig,
   prompt: string,
@@ -48,7 +49,7 @@ proc runPlanArchitectRequest*(
     ticketId: ticketId,
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
-    logRoot: getTempDir() / PlanLogRoot,
+    logRoot: repoPath / ManagedStateDirName / PlanLogDirName,
     noOutputTimeoutMs: PlanNoOutputTimeoutMs,
     hardTimeoutMs: PlanHardTimeoutMs,
     heartbeatIntervalMs: heartbeatIntervalMs,
@@ -56,13 +57,13 @@ proc runPlanArchitectRequest*(
     onEvent: onEvent,
   ))
 
-proc planAgentLogRoot*(ticketId: string): string =
-  ## Return a temp log root for one plan-branch agent run.
+proc planAgentLogRoot*(repoPath: string, ticketId: string): string =
+  ## Return the log root for one plan-branch agent run.
   let cleanTicketId = ticketId.strip()
   if cleanTicketId.len > 0:
-    result = getTempDir() / PlanLogRoot / cleanTicketId
+    result = repoPath / ManagedStateDirName / PlanLogDirName / cleanTicketId
   else:
-    result = getTempDir() / PlanLogRoot
+    result = repoPath / ManagedStateDirName / PlanLogDirName
 
 proc normalizeRelativeWritePath*(rawPath: string): string =
   ## Validate and normalize one relative path for write guard checks.
@@ -464,7 +465,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
       ticketId: ArchitectAreasTicketId,
       attempt: DefaultAgentAttempt,
       skipGitRepoCheck: true,
-      logRoot: planAgentLogRoot(ArchitectAreasLogDirName),
+      logRoot: planAgentLogRoot(repoPath, ArchitectAreasLogDirName),
       maxAttempts: DefaultAgentMaxAttempts,
       onEvent: proc(event: AgentStreamEvent) =
         if event.kind == agentEventTool:
@@ -499,6 +500,7 @@ proc updateSpecFromArchitect*(
     let existingSpec = loadSpecFromPlanPath(planPath)
     discard runPlanArchitectRequest(
       runner,
+      repoPath,
       planPath,
       cfg.agents.architect,
       buildArchitectPlanPrompt(repoPath, planPath, prompt, existingSpec),

@@ -110,6 +110,7 @@ proc runInteractivePlanSession*(
           lastStreamLine = rendered
       let agentResult = runPlanArchitectRequest(
         runner,
+        repoPath,
         planPath,
         cfg.agents.architect,
         prompt,
@@ -226,6 +227,7 @@ proc runInteractiveAskSession*(
           lastStreamLine = rendered
       let agentResult = runPlanArchitectRequest(
         runner,
+        repoPath,
         planPath,
         cfg.agents.architect,
         prompt,
