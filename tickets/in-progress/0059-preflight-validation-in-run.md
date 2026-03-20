@@ -38,3 +38,8 @@ missing, the orchestrator silently waits or fails with unclear errors.
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Adding 6 sequential validation checks in one module with clear error messages is straightforward logic, but requires touching orchestrator code and writing integration tests to cover each failure case, fitting a single-attempt multi-file change.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Six sequential validation checks in the orchestrator with clear error messages plus integration tests covering each failure case — straightforward logic but multi-file with moderate test surface.
