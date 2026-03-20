@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0059",
+  "timestamp": "2026-03-20T03:14:42Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0059.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0059-preflight-validation-in-run.md\n**Ticket ID:** 0059\n**Branch:** scriptorium/ticket-0059\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0059-preflight-validation-in-run\n**Summary:** Add preflight validation to `scriptorium run`: checks plan branch, AGENTS.md, Makefile with test target, agent binary in PATH, and API credentials before starting the orchestrator. Hard errors exit non-zero with clear messages; missing auth is a warning. Four integration tests cover each failure case.\n",
+      "contentHash": "505CC2FF0F20C75DD9CCAFDDBE051EF57715BAB8"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0059"
+}
