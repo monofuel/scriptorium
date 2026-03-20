@@ -35,3 +35,5 @@ guidance on configuring the generated files.
 - Post-init output lists every created file.
 - Post-init output includes actionable next steps for each generated file.
 - spec.md placeholder references AGENTS.md.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0060-improved-post-init-output
