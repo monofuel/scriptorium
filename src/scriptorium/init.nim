@@ -1,5 +1,7 @@
 import std/[os, osproc, streams, strformat, strutils]
+import jsony
 from ./git_ops import ensureScriptoriumIgnored
+from ./config import defaultConfig
 
 const
   PlanBranch = "scriptorium/plan"
@@ -8,6 +10,7 @@ const
   AgentsTemplate = staticRead("prompts/agents_example.md")
   MakefileName = "Makefile"
   MakefileTemplate = ".PHONY: test build\n\ntest:\n\t@echo \"no tests configured\"\n\nbuild:\n\t@echo \"no build configured\"\n"
+  ConfigFileName = "scriptorium.json"
   PlanDirs = [
     "areas",
     "tickets/open",
@@ -92,6 +95,12 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(target, "add", MakefileName)
     gitRun(target, "commit", "-m", "scriptorium: add starter Makefile")
 
+  let configPath = target / ConfigFileName
+  let createdConfig = not fileExists(configPath)
+  if createdConfig:
+    let configJson = defaultConfig().toJson()
+    writeFile(configPath, configJson & "\n")
+
   let tmpPlan = target / ".scriptorium" / "plan_init"
   if dirExists(tmpPlan):
     removeDir(tmpPlan)
@@ -117,6 +126,8 @@ proc runInit*(path: string, quiet: bool = false) =
       echo &"  Created: {AgentsFileName}"
     if createdMakefile:
       echo &"  Created: {MakefileName}"
+    if createdConfig:
+      echo &"  Created: {ConfigFileName}"
     echo ""
     echo "Next steps:"
     echo "  scriptorium plan   — build your spec with the Architect"

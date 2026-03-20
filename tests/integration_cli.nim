@@ -2,7 +2,7 @@
 
 import
   std/[os, osproc, strutils, unittest],
-  scriptorium/init
+  scriptorium/[config, init]
 
 const
   AgentsExampleContent = staticRead("../src/scriptorium/prompts/agents_example.md")
@@ -170,3 +170,29 @@ suite "scriptorium CLI":
     runInit(tmp, quiet = true)
 
     check readFile(agentsPath) == existingContent
+
+  test "init creates scriptorium.json with default config when missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_config_create"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    let configPath = tmp / "scriptorium.json"
+    check fileExists(configPath)
+    let loaded = loadConfig(tmp)
+    let defaults = defaultConfig()
+    check loaded.concurrency.maxAgents == defaults.concurrency.maxAgents
+    check loaded.timeouts.codingAgentHardTimeoutMs == defaults.timeouts.codingAgentHardTimeoutMs
+
+  test "init skips scriptorium.json when it already exists":
+    let tmp = getTempDir() / "scriptorium_test_cli_config_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let configPath = tmp / "scriptorium.json"
+    let existingContent = "{\"concurrency\":{\"maxAgents\":42,\"tokenBudgetMB\":0}}\n"
+    writeFile(configPath, existingContent)
+
+    runInit(tmp, quiet = true)
+
+    check readFile(configPath) == existingContent
