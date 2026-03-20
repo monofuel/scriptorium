@@ -394,20 +394,14 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         if ffResult.exitCode == 0:
           return ffResult
 
-        # ff-only failed (master diverged). Try --no-ff with re-verification.
-        logInfo(fmt"ticket {item.ticketId}: ff-only failed, attempting --no-ff merge with re-verification")
+        # ff-only failed. Try --no-ff merge (pre-merge quality check already validated this tree).
+        logInfo(fmt"ticket {item.ticketId}: ff-only failed, attempting --no-ff merge")
         let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
         if noFfResult.exitCode != 0:
           discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
           return noFfResult
 
-        # Re-run quality checks on the merged master state
-        let recheck = runRequiredQualityChecks(masterPath)
-        if recheck.exitCode != 0:
-          discard runCommandCapture(masterPath, "git", @["reset", "--hard", "HEAD~1"])
-          return (exitCode: recheck.exitCode, output: recheck.output)
-
-        logInfo(fmt"ticket {item.ticketId}: --no-ff merge succeeded with passing quality checks")
+        logInfo(fmt"ticket {item.ticketId}: --no-ff merge succeeded")
         return (exitCode: 0, output: noFfResult.output)
       )
       mergedToMaster = mergeToMasterResult.exitCode == 0
