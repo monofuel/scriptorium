@@ -33,3 +33,8 @@ missing, the orchestrator silently waits or fails with unclear errors.
 - `scriptorium run` warns or errors if agent binary/auth is not found.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0059-preflight-validation-in-run
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Adding 6 sequential validation checks in one module with clear error messages is straightforward logic, but requires touching orchestrator code and writing integration tests to cover each failure case, fitting a single-attempt multi-file change.
