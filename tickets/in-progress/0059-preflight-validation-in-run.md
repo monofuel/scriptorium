@@ -122,3 +122,10 @@ On failure, prints clear error messages to stderr and exits with non-zero status
 ```text
  repo root\n4. Makefile contains a `test:` target\n5. Agent binary (claude/codex/typoi based on config) is in PATH\n6. API credentials are set (warning only, not a hard error)\n\nOn failure, prints clear error messages to stderr and exits with non-zero status.\n\n**`tests/integration_cli.nim`** — Added 4 integration tests verifying each hard-failure case via the compiled CLI binary. All 12 tests pass.","stop_reason":"end_turn","session_id":"1a4bbecb-3824-4a68-a9ef-c41b8f1a100a","total_cost_usd":0.79954375,"usage":{"input_tokens":3120,"cache_creation_input_tokens":44527,"cache_read_input_tokens":694050,"output_tokens":6345,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":44527},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":3120,"outputTokens":6345,"cacheReadInputTokens":694050,"cacheCreationInputTokens":44527,"webSearchRequests":0,"costUSD":0.79954375,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"630faa25-b017-4028-96c9-e5ec05fb6e2a"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 36s
