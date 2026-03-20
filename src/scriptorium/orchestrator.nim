@@ -1,5 +1,5 @@
 import
-  std/[os, posix, strformat, strutils, tables, times],
+  std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
   ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
@@ -348,8 +348,67 @@ proc applyLogLevelFromConfig(repoPath: string) =
     except ValueError:
       logWarn(fmt"unknown file log level '{cfg.fileLogLevel}', using default")
 
+proc harnessBinaryName(h: Harness): string =
+  ## Return the expected binary name for a harness.
+  case h
+  of harnessClaudeCode: "claude"
+  of harnessCodex: "codex"
+  of harnessTypoi: "typoi"
+
+proc preflightValidation*(repoPath: string) =
+  ## Validate that the repo is ready for the orchestrator to run.
+  ## Exits with a clear error message if any required precondition is missing.
+  var errors: seq[string]
+
+  # 1. scriptorium/plan branch exists.
+  if not hasPlanBranch(repoPath):
+    errors.add("scriptorium/plan branch is missing. Run `scriptorium init` first.")
+
+  # 2. AGENTS.md exists in repo root.
+  if not fileExists(repoPath / "AGENTS.md"):
+    errors.add("AGENTS.md is missing from the repo root. Run `scriptorium init` first.")
+
+  # 3. Makefile exists in repo root.
+  let makefilePath = repoPath / "Makefile"
+  if not fileExists(makefilePath):
+    errors.add("Makefile is missing from the repo root. Run `scriptorium init` first.")
+  else:
+    # 4. Required make targets exist (at minimum `test`).
+    let makefileContent = readFile(makefilePath)
+    if not makefileContent.contains("test:"):
+      errors.add("Makefile is missing a `test:` target. Add a `test` target to your Makefile.")
+
+  # 5. Agent binary is available.
+  let cfg = loadConfig(repoPath)
+  let binaryName = harnessBinaryName(cfg.agents.coding.harness)
+  if findExe(binaryName).len == 0:
+    errors.add("Agent binary `" & binaryName & "` not found in PATH. Install it or update scriptorium.json.")
+
+  # 6. Agent auth is configured (warning only).
+  var hasAuth = false
+  case cfg.agents.coding.harness
+  of harnessClaudeCode:
+    hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
+              dirExists(getHomeDir() / ".claude")
+  of harnessCodex:
+    hasAuth = getEnv("OPENAI_API_KEY").len > 0 or
+              getEnv("CODEX_API_KEY").len > 0 or
+              dirExists(getHomeDir() / ".codex")
+  of harnessTypoi:
+    hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
+              getEnv("OPENAI_API_KEY").len > 0
+
+  if not hasAuth:
+    stderr.writeLine("WARNING: No API credentials detected for " & binaryName & ". Set the appropriate API key environment variable.")
+
+  if errors.len > 0:
+    for err in errors:
+      stderr.writeLine("ERROR: " & err)
+    quit(1)
+
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
+  preflightValidation(repoPath)
   ensureScriptoriumIgnored(repoPath)
   initLog(repoPath)
   applyLogLevelFromConfig(repoPath)

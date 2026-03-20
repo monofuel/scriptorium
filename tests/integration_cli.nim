@@ -196,3 +196,64 @@ suite "scriptorium CLI":
     runInit(tmp, quiet = true)
 
     check readFile(configPath) == existingContent
+
+  test "run exits with error when plan branch is missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_preflight_plan"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    # Create AGENTS.md and Makefile but no plan branch.
+    writeFile(tmp / "AGENTS.md", "# Agents\n")
+    writeFile(tmp / "Makefile", "test:\n\t@echo ok\n")
+    runCmdOrDie("git -C " & tmp & " add -A")
+    runCmdOrDie("git -C " & tmp & " commit -m setup")
+
+    let (output, rc) = runCliInRepo(tmp, "run")
+    check rc != 0
+    check output.contains("scriptorium/plan branch is missing")
+
+  test "run exits with error when AGENTS.md is missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_preflight_agents"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    # Create plan branch and Makefile but no AGENTS.md.
+    writeFile(tmp / "Makefile", "test:\n\t@echo ok\n")
+    runCmdOrDie("git -C " & tmp & " add -A")
+    runCmdOrDie("git -C " & tmp & " commit -m setup")
+    runCmdOrDie("git -C " & tmp & " branch scriptorium/plan")
+
+    let (output, rc) = runCliInRepo(tmp, "run")
+    check rc != 0
+    check output.contains("AGENTS.md is missing")
+
+  test "run exits with error when Makefile is missing":
+    let tmp = getTempDir() / "scriptorium_test_cli_preflight_makefile"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    # Create plan branch and AGENTS.md but no Makefile.
+    writeFile(tmp / "AGENTS.md", "# Agents\n")
+    runCmdOrDie("git -C " & tmp & " add -A")
+    runCmdOrDie("git -C " & tmp & " commit -m setup")
+    runCmdOrDie("git -C " & tmp & " branch scriptorium/plan")
+
+    let (output, rc) = runCliInRepo(tmp, "run")
+    check rc != 0
+    check output.contains("Makefile is missing")
+
+  test "run exits with error when Makefile lacks test target":
+    let tmp = getTempDir() / "scriptorium_test_cli_preflight_target"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    # Create plan branch, AGENTS.md, Makefile without test target.
+    writeFile(tmp / "AGENTS.md", "# Agents\n")
+    writeFile(tmp / "Makefile", "build:\n\t@echo ok\n")
+    runCmdOrDie("git -C " & tmp & " add -A")
+    runCmdOrDie("git -C " & tmp & " commit -m setup")
+    runCmdOrDie("git -C " & tmp & " branch scriptorium/plan")
+
+    let (output, rc) = runCliInRepo(tmp, "run")
+    check rc != 0
+    check output.contains("missing a `test:` target")
