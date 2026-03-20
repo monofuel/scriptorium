@@ -31,3 +31,5 @@ missing, the orchestrator silently waits or fails with unclear errors.
 - `scriptorium run` exits with a clear error if AGENTS.md is missing.
 - `scriptorium run` exits with a clear error if Makefile or required targets are missing.
 - `scriptorium run` warns or errors if agent binary/auth is not found.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0059-preflight-validation-in-run
