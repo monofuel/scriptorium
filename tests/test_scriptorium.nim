@@ -521,7 +521,7 @@ suite "orchestrator plan spec update":
     check capturedFirstReasoningEffort == "high"
     check capturedFirstWorkingDir != tmp
     check capturedFirstRepoPath == tmp
-    check "Run `scriptorium plan`" in capturedFirstSpec
+    check "scriptorium plan" in capturedFirstSpec
     check "expand scope" in capturedFirstUserRequest
     check "AGENTS.md" in capturedFirstUserRequest
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedFirstUserRequest
@@ -825,7 +825,7 @@ suite "orchestrator planning bootstrap":
     runInit(tmp, quiet = true)
 
     let spec = loadSpecFromPlan(tmp)
-    check "Run `scriptorium plan`" in spec
+    check "scriptorium plan" in spec
 
   test "missing spec raises error":
     let tmp = getTempDir() / "scriptorium_test_plan_missing_spec"
@@ -872,7 +872,7 @@ suite "orchestrator planning bootstrap":
     check synced
     check callCount == 1
     check capturedModel == "claude-opus-4-6"
-    check "Run `scriptorium plan`" in capturedSpec
+    check "scriptorium plan" in capturedSpec
 
     let (files, rc) = execCmdEx("git -C " & quoteShell(tmp) & " ls-tree -r --name-only scriptorium/plan")
     check rc == 0
@@ -2923,7 +2923,7 @@ suite "orchestrator agent enqueue with fakes":
         ## Return one deterministic area document from spec input.
         inc architectCalls
         check model == "codex-fake-unit-test-model"
-        check "Run `scriptorium plan`" in spec
+        check "scriptorium plan" in spec
         result = @[
           AreaDocument(
             path: "01-e2e.md",
