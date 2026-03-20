@@ -34,3 +34,8 @@ tested end-to-end.
 - All e2e and integration tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0061-e2e-test-uses-init-subcommand
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file test refactor across 3 files replacing manual seeding with CLI invocation, moderate integration risk from ensuring existing e2e tests still pass with the new init flow.
