@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0060-improved-post-init-output",
+  "timestamp": "2026-03-20T03:26:53Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0060-improved-post-init-output.md",
+      "destination": "tickets/in-progress/0060-improved-post-init-output.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0060-improved-post-init-output.md",
+      "content": "# Improved Post-Init Output\n\n**Area:** cli-init\n**Depends:** 0054, 0056, 0057, 0058\n\n## Problem\n\nCurrent post-init output is minimal — it only shows the plan branch name and\ntwo next-step commands. It does not list the files that were created or provide\nguidance on configuring the generated files.\n\n## Requirements\n\n- After init completes, list all files and branches that were created:\n  - Plan branch and its directory structure.\n  - AGENTS.md (if generated).\n  - Makefile (if generated).\n  - scriptorium.json (if generated).\n  - spec.md placeholder.\n- Provide next-step guidance:\n  - Edit AGENTS.md to describe your project.\n  - Edit scriptorium.json to configure models and harness.\n  - Edit Makefile to set up real test/build targets.\n  - Run `scriptorium plan` to build your spec.\n  - Run `scriptorium run` to start the orchestrator.\n- Update the spec.md placeholder text to reference AGENTS.md.\n\n## Files To Change\n\n- `src/scriptorium/init.nim` — expand post-init output, update spec.md placeholder.\n- `tests/integration_cli.nim` — verify expanded output.\n\n## Acceptance Criteria\n\n- Post-init output lists every created file.\n- Post-init output includes actionable next steps for each generated file.\n- spec.md placeholder references AGENTS.md.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0060-improved-post-init-output\n",
+      "contentHash": "AA17BB05FB726A6FE74A9D6615E75F407D74DEA9"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0060-improved-post-init-output"
+}
