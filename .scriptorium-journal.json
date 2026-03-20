@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0060",
+  "timestamp": "2026-03-20T03:28:07Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0060.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0060-improved-post-init-output.md\n**Ticket ID:** 0060\n**Branch:** scriptorium/ticket-0060\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0060-improved-post-init-output\n**Summary:** Expanded post-init output to list all created files (plan branch directories, spec.md, AGENTS.md, Makefile, scriptorium.json) and provide actionable next-step guidance for each. Updated spec.md placeholder to reference AGENTS.md. Added integration tests verifying the expanded output and spec content.\n",
+      "contentHash": "0845543F9F9D82E96158437219BD2FF518ABC74B"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0060"
+}
