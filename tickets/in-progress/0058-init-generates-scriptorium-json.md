@@ -61,3 +61,16 @@ All 8 integration tests pass. The commit is ready on branch `scriptorium/ticket-
 ```text
  `init creates scriptorium.json with default config when missing` — verifies the file is created and loadable with correct defaults\n   - `init skips scriptorium.json when it already exists` — verifies existing config is preserved\n\nAll 8 integration tests pass. The commit is ready on branch `scriptorium/ticket-0058`. The `submit_pr` MCP tool needs to be called by the orchestrator to enqueue for merge.","stop_reason":"end_turn","session_id":"890158ee-7700-4ab7-a589-6fb2a3a61ca2","total_cost_usd":0.867085,"usage":{"input_tokens":2243,"cache_creation_input_tokens":38386,"cache_read_input_tokens":939065,"output_tokens":5857,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":38386},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":2243,"outputTokens":5857,"cacheReadInputTokens":939065,"cacheCreationInputTokens":38386,"webSearchRequests":0,"costUSD":0.867085,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"85ed0b64-c2e6-42d8-9f3e-9cc8a6f26347"}
 ```
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 2\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/worktrees/tickets/0058-init-generates-scriptorium-json/.scriptorium/logs/0058/attempt-02.jsonl\n- Last Message File: /workspace/.scriptorium/worktrees/tickets/0058-init-generates-scriptorium-json/.scriptorium/logs/0058/attempt-02.last_message.txt\n
+### Agent Last Message
+```text
+The earlier background task also completed successfully. The ticket is done — merge request has been enqueued.
+```
+
+### Agent Stdout Tail
+```text
+tput_tokens":1},"context_management":null},"parent_tool_use_id":null,"session_id":"86d8453f-34b3-40b1-b6bc-53104055c42c","uuid":"6c7234b6-3b80-48c5-a2bf-d01eb401286c"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":3268,"duration_api_ms":138267,"num_turns":1,"result":"The earlier background task also completed successfully. The ticket is done — merge request has been enqueued.","stop_reason":"end_turn","session_id":"86d8453f-34b3-40b1-b6bc-53104055c42c","total_cost_usd":0.5850767499999999,"usage":{"input_tokens":3,"cache_creation_input_tokens":386,"cache_read_input_tokens":25843,"output_tokens":24,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":386},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":45,"outputTokens":4477,"cacheReadInputTokens":617991,"cacheCreationInputTokens":26229,"webSearchRequests":0,"costUSD":0.5850767499999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"486a2b96-b0dd-4b09-b3a9-709ad6701611"}
+```
