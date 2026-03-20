@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0061",
+  "timestamp": "2026-03-20T03:44:55Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0061.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0061-e2e-test-uses-init-subcommand.md\n**Ticket ID:** 0061\n**Branch:** scriptorium/ticket-0061\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0061-e2e-test-uses-init-subcommand\n**Summary:** Updated e2e test setup to use `scriptorium init` CLI subcommand instead of calling `runInit()` directly. Removed manual AGENTS.md seeding from `withTempLiveRepo` since init now handles it. Cleaned up unused `writeFixtureAgentsFile` proc, `AgentsExamplePath` const, and `init` import.\n",
+      "contentHash": "6C141EB2CB784992B507890C19E3225EFEB0F460"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0061"
+}
