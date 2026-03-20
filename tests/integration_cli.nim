@@ -197,6 +197,39 @@ suite "scriptorium CLI":
 
     check readFile(configPath) == existingContent
 
+  test "init output lists created files and next steps":
+    let tmp = getTempDir() / "scriptorium_test_cli_init_output"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "init")
+    check rc == 0
+    check output.contains("Initialized scriptorium workspace.")
+    # Created files section.
+    check output.contains("Branch: scriptorium/plan")
+    check output.contains("spec.md")
+    check output.contains("AGENTS.md")
+    check output.contains("Makefile")
+    check output.contains("scriptorium.json")
+    # Next steps section.
+    check output.contains("Edit AGENTS.md to describe your project.")
+    check output.contains("Edit scriptorium.json to configure models and harness.")
+    check output.contains("Edit Makefile to set up real test/build targets.")
+    check output.contains("Run `scriptorium plan` to build your spec.")
+    check output.contains("Run `scriptorium run` to start the orchestrator.")
+
+  test "init spec.md references AGENTS.md":
+    let tmp = getTempDir() / "scriptorium_test_cli_spec_ref"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var specContent = ""
+    withPlanWorktree(tmp, "spec_ref", proc(planPath: string) =
+      specContent = readFile(planPath / "spec.md")
+    )
+    check specContent.contains("AGENTS.md")
+
   test "run exits with error when plan branch is missing":
     let tmp = getTempDir() / "scriptorium_test_cli_preflight_plan"
     makeTestRepo(tmp)
