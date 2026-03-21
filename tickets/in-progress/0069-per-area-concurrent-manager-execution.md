@@ -64,3 +64,8 @@ l_use_id":null,"session_id":"4c593b01-f610-49d0-a897-ee2f537f8fc2","uuid":"64068
 6. Missing unit tests for prompt building and ticket document parsing
 
 The coding agent summary ("Implement assign command") does not match this ticket's requirements at all, suggesting the agent may have been confused about its task. A fresh attempt needs to implement all six requirements from scratch.
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 35
+- reasoning: Cross-module implementation spanning prompt_builders, manager_agent, agent_pool integration, and orchestrator wiring with new unit tests — high integration complexity with concurrency primitives, and 5 prior failed attempts (all killed) suggest significant difficulty requiring multiple attempts.
