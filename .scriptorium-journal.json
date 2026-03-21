@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0064",
+  "timestamp": "2026-03-21T07:23:27Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0064.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0064-default-maxagents-to-four.md\n**Ticket ID:** 0064\n**Branch:** scriptorium/ticket-0064\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0064-default-maxagents-to-four\n**Summary:** Processed merge queue for ticket-0001: merged branch into master, moved ticket to done, cleared merge queue state, and removed worktree\n",
+      "contentHash": "B5EED53E46F8CD0DB50AD9DB0506BF3CE63333D1"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0064"
+}
