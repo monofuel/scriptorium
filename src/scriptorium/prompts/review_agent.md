@@ -27,3 +27,8 @@ Review the diff above against the ticket requirements and area context.
 - If the changes have issues that need to be fixed, call the `submit_review` MCP tool with action `request_changes` and provide clear, actionable feedback describing what needs to change.
 
 You MUST call `submit_review` exactly once. Do not skip this step.
+
+CRITICAL: Before starting your review, verify that the `submit_review` MCP tool
+is available. If it is not listed in your available tools, stop immediately and
+report the error — do NOT proceed with the review, as there is no way to submit
+your verdict without this tool.

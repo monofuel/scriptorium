@@ -22,3 +22,8 @@ When your work is complete and all changes are committed, call the `submit_pr`
 MCP tool with a short summary of what you did and include the `ticket_id`
 argument with your ticket ID (from the ticket path above). This signals the
 orchestrator to enqueue your changes for merge. Do not skip this step.
+
+CRITICAL: Before starting any work, verify that the `submit_pr` MCP tool is
+available. If it is not listed in your available tools, stop immediately and
+report the error — do NOT proceed with coding work, as there is no way to
+submit your changes without this tool.
