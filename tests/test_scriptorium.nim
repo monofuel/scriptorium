@@ -355,7 +355,7 @@ suite "config":
     defer: removeDir(tmp)
 
     let cfg = loadConfig(tmp)
-    check cfg.concurrency.maxAgents == 1
+    check cfg.concurrency.maxAgents == 4
     check cfg.concurrency.tokenBudgetMB == 0
 
   test "concurrency parses both keys":
