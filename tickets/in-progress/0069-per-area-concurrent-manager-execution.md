@@ -28,3 +28,8 @@ V13 §29 requires each eligible area to spawn an independent manager agent using
 - Managers are prioritized over coders when slots are scarce (implemented in tick restructuring, ticket 0071).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0069-per-area-concurrent-manager-execution
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Cross-module changes spanning prompt_builders, manager_agent, agent_pool integration, and orchestrator wiring, plus new unit tests for prompt building and ticket parsing — high integration risk with concurrency primitives likely requiring 2+ attempts.
