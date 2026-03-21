@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0068",
+  "timestamp": "2026-03-21T10:53:17Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0068.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0068-extract-agent-pool-module.md\n**Ticket ID:** 0068\n**Branch:** scriptorium/ticket-0068\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0068-extract-agent-pool-module\n**Summary:** Extract agent_pool module from coding_agent.nim with AgentRole enum (arCoder/arManager), generic startAgentAsync accepting role and worker proc, checkCompletedAgents with role-tagged completions, joinAllAgentThreads, and shared slot arithmetic. Includes unit tests for slot counting and completion dispatch.\n",
+      "contentHash": "F6D12A756F150170AADDA135262632102B0EDC0D"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0068"
+}
