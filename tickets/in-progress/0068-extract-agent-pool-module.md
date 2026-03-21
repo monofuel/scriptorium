@@ -60,3 +60,8 @@ _tokens":0},"output_tokens":9},"context_management":null},"parent_tool_use_id":n
 3. **`checkCompletedAgents()` not in agent_pool** (Req 6): Move this into `agent_pool.nim`. The thread-joining logic within it should work against pool-level thread tracking rather than the coding-specific `codingAgentThreads` table.
 
 The goal is for `agent_pool.nim` to be the actual pool manager (start, check, join), not just a types+counting module. Ticket 0069 (manager agents) should be able to import `agent_pool` and call `startAgentAsync(arManager, executeManagerForArea)` without touching `coding_agent.nim`.
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Cross-module extraction creating a new agent_pool module, defining multiple new types (AgentRole, extended AgentSlot, AgentCompletionResult), implementing generic startAgentAsync/checkCompletedAgents, moving thread management procs, and updating imports across coding_agent.nim and orchestrator.nim — review feedback confirms incomplete extraction needed multiple attempts.
