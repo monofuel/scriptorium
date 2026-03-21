@@ -141,7 +141,7 @@ This spec describes behavior that is present in the code and covered by current 
   - when `tickets/.area-hashes` exists, areas whose content hash differs from the stored hash are eligible for re-ticketing, even if previous tickets for that area are done,
   - when `tickets/.area-hashes` does not exist (legacy fallback), areas with any ticket in any state are suppressed,
   - after ticket generation, the orchestrator computes and writes hashes for all current areas and commits the hash file separately.
-- Manager execution is batched: all eligible areas are included in a single agent prompt and session.
+- Manager execution is per-area and concurrent: each eligible area is handled by an independent manager agent invocation using `manager_tickets.md` (supersedes the batched single-prompt model — see v13, section 27).
 - Manager writes are constrained by a write-prefix allowlist to `tickets/open/`.
 - Manager execution must preserve the dirty state of the main repository outside the plan worktree.
 - Manager-generated ticket filenames must be assigned by the orchestrator, not by the agent prompt output.
@@ -624,9 +624,9 @@ This spec describes behavior that is present in the code and covered by current 
   - Check for newly completable agents (exited processes).
   - Start new agents for newly assigned tickets.
   - Continue processing other tick phases (architect, manager, merge queue) while agents run.
-- The concurrency limit is configurable via `scriptorium.json` under `concurrency.maxAgents` (integer, default 1).
-  - A value of 1 preserves the existing serial behavior.
-  - Recommended starting value for parallel operation is 2-3.
+- The concurrency limit is configurable via `scriptorium.json` under `concurrency.maxAgents` (integer, default 4 — changed from 1 in v13).
+  - A value of 1 restores serial behavior.
+  - The default of 4 gives new projects parallel execution out of the box.
 - The orchestrator must log when an agent slot opens or fills: `agent slots: <running>/<max> (ticket <id> started|finished)`.
 
 ### 25. Merge Queue Ordering With Parallel Agents
@@ -675,3 +675,102 @@ This spec describes behavior that is present in the code and covered by current 
 - Failed merges do not affect other in-flight agents.
 - Token budget and rate limit backpressure prevent resource exhaustion.
 - Orchestrator logs show agent slot utilization.
+
+## V13 Features — Parallel Managers And Improved Default Concurrency
+
+### 27. Default maxAgents Changed To 4
+
+- The default value of `concurrency.maxAgents` is changed from 1 to 4.
+- This gives new projects parallel execution out of the box without requiring configuration.
+- Users can still set `maxAgents: 1` in `scriptorium.json` to restore serial mode.
+- All existing behavior is preserved when `maxAgents` is 1 — the change only affects the default.
+
+### 28. Shared Agent Pool With AgentRole Enum
+
+- Managers and coding agents share a single `maxAgents` slot pool, tracked in a shared `agent_pool` module extracted from `coding_agent.nim`.
+- An `AgentRole` enum (`arCoder`, `arManager`) tags each agent slot so the orchestrator can distinguish completions.
+- `AgentSlot` gains a `role` field. Manager slots use `areaId` as their identifier and have no branch or worktree — they produce ticket content in memory. Coder slots retain the existing `ticketId`, `branch`, and `worktree` fields.
+- `AgentCompletionResult` gains a `role` field and an optional `managerResult` (list of generated ticket documents) alongside existing coding result fields.
+- `startAgentAsync()` accepts a role and a generic worker proc. Coding agents pass their existing `executeAssignedTicket` wrapper; manager agents pass a new `executeManagerForArea` wrapper.
+- `checkCompletedAgents()` returns completions tagged with role so the orchestrator dispatches accordingly.
+- If `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coding agents (and vice versa). This keeps total resource usage bounded without needing separate limits for each role.
+- Architect and review/merge remain strictly sequential and do not consume pool slots.
+
+### 29. Per-Area Concurrent Manager Invocations
+
+- The batched manager execution model (single agent prompt containing all areas) is retired. Manager execution is now per-area and concurrent.
+- Each eligible area spawns an independent manager agent thread using the `manager_tickets.md` single-area prompt template.
+- Manager agents generate ticket content in memory — they do not write to the plan worktree. Only the orchestrator main thread writes to the plan worktree.
+- New per-area manager flow:
+  1. Orchestrator briefly acquires the plan lock to snapshot area content for all areas needing tickets, then releases the lock.
+  2. For each area, if a slot is available in the shared pool, spawn a manager agent thread.
+  3. The manager thread generates ticket documents in memory and sends results back through the shared agent result channel.
+  4. On the next tick, `checkCompletedAgents()` picks up manager completions.
+  5. The orchestrator main thread acquires the plan lock, calls `writeTicketsForArea()` to persist tickets for one completed manager, commits, and releases the lock. Each completed manager's write is a separate short lock acquisition.
+- This eliminates concurrent write conflicts entirely — agent threads never touch the plan worktree.
+
+### 30. Restructured Orchestrator Tick For Interleaved Manager/Coder Execution
+
+- The orchestrator tick is restructured so managers and coders are interleaved rather than strictly sequential.
+- New tick order:
+  1. Poll completed agents (managers + coders) via `checkCompletedAgents()`.
+     - For completed managers: acquire plan lock, write tickets, commit, release. Log results.
+     - For completed coders: handle as before (move ticket, queue merge, etc).
+  2. Check backoff / health.
+  3. Run architect (sequential, if spec changed). Must complete before managers are spawned.
+  4. Read areas needing tickets (brief plan lock).
+  5. For each area needing tickets, if slots available, start a manager agent.
+  6. For each assignable ticket, if slots available, start a coding agent.
+  7. Process at most one merge-queue item.
+  8. Sleep.
+- Managers are prioritized over coders when slots are scarce, since manager completions unblock future coding work.
+- If area A's manager finishes and produces tickets while area B's manager is still running, those tickets can be assigned to coding agents on the next tick — there is no barrier between manager and coder phases.
+- This supersedes the strictly sequential tick order in section 3. When `maxAgents` is 1, behavior collapses to sequential execution as before.
+
+### 31. Narrow Plan Branch Locking
+
+- With parallel managers, the plan worktree lock strategy is refined to minimize lock hold times:
+  - **Reading areas:** Brief lock to snapshot area content at the start of the tick. Done once for all areas, not per-manager.
+  - **Agent execution:** No lock needed. Manager agents run in threads and produce ticket content in memory.
+  - **Writing tickets:** Main thread acquires lock, writes tickets for one completed manager, commits, releases. Each completed manager's write is a separate lock acquisition — short and non-blocking.
+- The architect still holds the lock for its full duration (it reads spec and writes area files). This is acceptable because the architect is sequential and runs before managers are spawned.
+- This replaces the previous model where the lock was held for the entire manager batch execution.
+
+### 32. Retirement Of Batched Manager Path
+
+- The following are retired and removed:
+  - `runManagerTickets()` — the production batch manager path that collected all areas into one prompt.
+  - `syncTicketsFromAreas()` — the older per-area sequential callback path.
+  - `manager_tickets_batch.md` — the batch prompt template.
+  - `ManagerTicketsBatchTemplate` export from `prompt_catalog.nim`.
+  - `buildManagerTicketsBatchPrompt` from `prompt_builders.nim`.
+- The production manager path is now the per-area concurrent model described in section 29, using `manager_tickets.md`.
+- Tests referencing the removed functions and templates must be updated or removed.
+
+### 33. Concurrency Model Documentation
+
+- The concurrency model must be documented, covering:
+  - **Strictly sequential agents:** Architect (reads spec, writes areas, runs at most once per tick, protected by plan lock, must complete before managers) and Review/Merge (one merge queue item at a time, sequential to guarantee default branch health).
+  - **Parallel agents (shared slot pool):** Manager (one area per invocation, multiple can run in parallel) and Coding agent (one ticket per invocation, multiple can run in parallel in independent areas). Both share the `maxAgents` slot pool.
+  - **Interleaved execution:** Managers and coders are interleaved across ticks — the orchestrator does not wait for all managers to finish before starting coders.
+  - **Merge conflict handling:** Parallel coding agents may produce merge conflicts on shared files. The sequential merge process catches conflicts by merging the default branch into the ticket branch before testing. Conflicting tickets are sent back for another coding attempt with conflict context. Area-based separation makes conflicts less likely but the system handles them gracefully.
+  - **Slot arithmetic:** If `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coders (and vice versa).
+
+## V13 Known Limitations
+
+- Manager parallelism is bounded by `maxAgents` — if all slots are occupied by coding agents, managers must wait for a slot to free up.
+- The shared slot pool does not distinguish between lightweight manager invocations and heavyweight coding agent sessions — a future version could weight slots by expected resource usage.
+- Area-level conflict detection remains the only conflict prevention mechanism — two tickets in different areas that touch the same file will not be detected as conflicting until merge time (same as v5).
+
+## V13 Acceptance Criteria
+
+- All v1 through v5 acceptance criteria remain.
+- Default `maxAgents` is 4; setting it to 1 restores serial behavior.
+- `AgentRole` enum distinguishes manager and coder slots in the shared agent pool.
+- Manager slots count against `maxAgents` alongside coding agent slots.
+- Each eligible area spawns an independent concurrent manager invocation using `manager_tickets.md`.
+- Manager agents produce ticket content in memory; only the main thread writes to the plan worktree.
+- The orchestrator tick interleaves manager and coder execution — managers completing mid-tick unblock coding work on the next tick.
+- Plan lock is held narrowly: brief snapshot reads, short per-completion writes, no lock during agent execution.
+- `runManagerTickets`, `syncTicketsFromAreas`, and `manager_tickets_batch.md` are removed.
+- Concurrency model is documented covering sequential agents, parallel agents, interleaved execution, conflict handling, and slot arithmetic.
