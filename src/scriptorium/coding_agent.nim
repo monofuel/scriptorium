@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_runner, config, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_pool, agent_runner, config, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -11,29 +11,7 @@ const
   SubmitPrTestOutputMaxChars = 2000
   PartialWorkCommitPrefix* = "scriptorium: save partial agent work (attempt "
 
-type
-  AgentThreadArgs* = tuple[
-    repoPath: string,
-    assignment: TicketAssignment,
-    ticketId: string,
-  ]
-
-  AgentCompletionResult* = tuple[
-    ticketId: string,
-    result: AgentRunResult,
-  ]
-
-var
-  agentResultChan: Channel[AgentCompletionResult]
-  agentResultChanOpen = false
-  runningAgentSlots: seq[AgentSlot]
-  runningAgentThreadPtrs: seq[ptr Thread[AgentThreadArgs]]
-
-proc ensureAgentResultChanOpen() =
-  ## Open the agent result channel once.
-  if not agentResultChanOpen:
-    agentResultChan.open()
-    agentResultChanOpen = true
+export agent_pool
 
 proc detectPriorWork*(worktreePath: string, ticketId: string): int =
   ## Detect commits ahead of the default branch on the ticket branch.
@@ -354,66 +332,13 @@ proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent):
     result = executeAssignedTicket(repoPath, assignment, runner)
     result.ticketId = ticketId
 
-proc agentWorkerThread(args: AgentThreadArgs) {.thread.} =
-  ## Run executeAssignedTicket in a background thread and send the result to the channel.
+proc codingAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
+  ## Run executeAssignedTicket in a background thread and send the result to the pool channel.
   {.cast(gcsafe).}:
     let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
     let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runner)
-    agentResultChan.send((ticketId: args.ticketId, result: agentResult))
-
-proc runningAgentCount*(): int =
-  ## Return the number of currently running agent slots.
-  result = runningAgentSlots.len
-
-proc emptySlotCount*(maxAgents: int): int =
-  ## Return the number of available agent slots.
-  result = maxAgents - runningAgentSlots.len
-
-proc startAgentAsync*(repoPath: string, assignment: TicketAssignment, maxAgents: int) =
-  ## Start a coding agent in a background thread for the given assignment.
-  ensureAgentResultChanOpen()
-  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
-  let slot = AgentSlot(
-    ticketId: ticketId,
-    branch: assignment.branch,
-    worktree: assignment.worktree,
-    startTime: epochTime(),
-  )
-  runningAgentSlots.add(slot)
-  let threadPtr = create(Thread[AgentThreadArgs])
-  let args: AgentThreadArgs = (
-    repoPath: repoPath,
-    assignment: assignment,
-    ticketId: ticketId,
-  )
-  createThread(threadPtr[], agentWorkerThread, args)
-  runningAgentThreadPtrs.add(threadPtr)
-  let running = runningAgentSlots.len
-  logInfo(&"agent slots: {running}/{maxAgents} (ticket {ticketId} started)")
-
-proc checkCompletedAgents*(): seq[AgentCompletionResult] =
-  ## Poll the result channel for completed agents and clean up their slots and threads.
-  ensureAgentResultChanOpen()
-  while true:
-    let (hasData, completion) = agentResultChan.tryRecv()
-    if not hasData:
-      break
-    result.add(completion)
-    var slotIdx = -1
-    for i, slot in runningAgentSlots:
-      if slot.ticketId == completion.ticketId:
-        slotIdx = i
-        break
-    if slotIdx >= 0:
-      runningAgentSlots.delete(slotIdx)
-      joinThread(runningAgentThreadPtrs[slotIdx][])
-      dealloc(runningAgentThreadPtrs[slotIdx])
-      runningAgentThreadPtrs.delete(slotIdx)
-
-proc joinAllAgentThreads*() =
-  ## Block until all running agent threads complete and clean up.
-  for i in 0..<runningAgentThreadPtrs.len:
-    joinThread(runningAgentThreadPtrs[i][])
-    dealloc(runningAgentThreadPtrs[i])
-  runningAgentSlots.setLen(0)
-  runningAgentThreadPtrs.setLen(0)
+    sendPoolResult(AgentPoolCompletionResult(
+      role: arCoder,
+      ticketId: args.ticketId,
+      result: agentResult,
+    ))

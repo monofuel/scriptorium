@@ -3959,17 +3959,30 @@ suite "per-ticket submit_pr state":
     check getActiveTicketWorktree("0031").worktreePath == ""
 
 suite "agent slot types":
-  test "AgentSlot stores ticket metadata":
+  test "AgentSlot stores ticket metadata with role":
     let slot = AgentSlot(
+      role: arCoder,
       ticketId: "0042",
       branch: "scriptorium/ticket-0042",
       worktree: "/tmp/worktrees/0042",
       startTime: 1234567890.0,
     )
+    check slot.role == arCoder
     check slot.ticketId == "0042"
     check slot.branch == "scriptorium/ticket-0042"
     check slot.worktree == "/tmp/worktrees/0042"
     check slot.startTime == 1234567890.0
+
+  test "AgentSlot manager uses areaId with empty branch and worktree":
+    let slot = AgentSlot(
+      role: arManager,
+      areaId: "backend-api",
+      startTime: 1234567890.0,
+    )
+    check slot.role == arManager
+    check slot.areaId == "backend-api"
+    check slot.branch == ""
+    check slot.worktree == ""
 
   test "runningAgentCount returns zero initially":
     check runningAgentCount() == 0

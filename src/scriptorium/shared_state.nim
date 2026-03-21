@@ -122,11 +122,23 @@ type
     completedCodingWalls*: seq[float]
     completedTestWalls*: seq[float]
 
+  AgentRole* = enum
+    arCoder
+    arManager
+
   AgentSlot* = object
+    role*: AgentRole
     ticketId*: string
+    areaId*: string
     branch*: string
     worktree*: string
     startTime*: float
+
+  AgentThreadArgs* = tuple[
+    repoPath: string,
+    assignment: TicketAssignment,
+    ticketId: string,
+  ]
 
   TicketPrediction* = object
     difficulty*: string
