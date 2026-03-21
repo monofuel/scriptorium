@@ -1,7 +1,7 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
   architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery
@@ -436,6 +436,9 @@ proc preflightValidation*(repoPath: string) =
 proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
   preflightValidation(repoPath)
+  let cfg = loadConfig(repoPath)
+  if cfg.syncAgentsMd:
+    syncAgentsMd(repoPath)
   ensureScriptoriumIgnored(repoPath)
   initLog(repoPath)
   applyLogLevelFromConfig(repoPath)

@@ -68,6 +68,21 @@ proc resolveDefaultBranch(repoPath: string): string =
 
   raise newException(IOError, "cannot determine default branch: refs/remotes/origin/HEAD is not set and none of master, main, develop exist")
 
+proc syncAgentsMd*(repoPath: string) =
+  ## Overwrite AGENTS.md with the built-in template if it differs.
+  ## Commits the change when an update is made.
+  let agentsPath = repoPath / AgentsFileName
+  if not fileExists(agentsPath):
+    writeFile(agentsPath, AgentsTemplate)
+    gitRun(repoPath, "add", AgentsFileName)
+    gitRun(repoPath, "commit", "-m", "scriptorium: sync AGENTS.md from template")
+    return
+  let current = readFile(agentsPath)
+  if current != AgentsTemplate:
+    writeFile(agentsPath, AgentsTemplate)
+    gitRun(repoPath, "add", AgentsFileName)
+    gitRun(repoPath, "commit", "-m", "scriptorium: sync AGENTS.md from template")
+
 proc runInit*(path: string, quiet: bool = false) =
   ## Initialize a new scriptorium workspace in the given git repository.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()

@@ -430,6 +430,28 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.endpoints.local == "http://127.0.0.1:8097"
 
+  test "defaultConfig has syncAgentsMd true":
+    let cfg = defaultConfig()
+    check cfg.syncAgentsMd == true
+
+  test "loadConfig with syncAgentsMd false returns false":
+    let tmp = getTempDir() / "scriptorium_test_config_sync_false"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "scriptorium.json", """{"syncAgentsMd": false}""")
+
+    let cfg = loadConfig(tmp)
+    check cfg.syncAgentsMd == false
+
+  test "loadConfig without syncAgentsMd key returns true":
+    let tmp = getTempDir() / "scriptorium_test_config_sync_missing"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "scriptorium.json", """{}""")
+
+    let cfg = loadConfig(tmp)
+    check cfg.syncAgentsMd == true
+
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
     let endpoint = parseEndpoint("")

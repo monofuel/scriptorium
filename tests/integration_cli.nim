@@ -2,6 +2,7 @@
 
 import
   std/[os, osproc, strutils, unittest],
+  jsony,
   scriptorium/[config, init]
 
 const
@@ -316,3 +317,55 @@ suite "scriptorium CLI":
     let (output, rc) = runCliInRepo(tmp, "run")
     check rc != 0
     check output.contains("missing a `test:` target")
+
+  test "syncAgentsMd restores modified AGENTS.md to template":
+    let tmp = getTempDir() / "scriptorium_test_cli_sync_restore"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    # Modify AGENTS.md to differ from template.
+    writeFile(tmp / "AGENTS.md", "# Custom content\n")
+    runCmdOrDie("git -C " & tmp & " add AGENTS.md")
+    runCmdOrDie("git -C " & tmp & " commit -m modify-agents")
+
+    syncAgentsMd(tmp)
+
+    check readFile(tmp / "AGENTS.md") == AgentsExampleContent
+
+  test "syncAgentsMd is a no-op when AGENTS.md matches template":
+    let tmp = getTempDir() / "scriptorium_test_cli_sync_noop"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    # Capture HEAD before sync.
+    let (headBefore, _) = execCmdEx("git -C " & tmp & " rev-parse HEAD")
+    syncAgentsMd(tmp)
+    let (headAfter, _) = execCmdEx("git -C " & tmp & " rev-parse HEAD")
+
+    check headBefore.strip() == headAfter.strip()
+
+  test "syncAgentsMd respects syncAgentsMd false in config":
+    let tmp = getTempDir() / "scriptorium_test_cli_sync_disabled"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    # Write config with syncAgentsMd: false.
+    var cfg = defaultConfig()
+    cfg.syncAgentsMd = false
+    writeFile(tmp / "scriptorium.json", cfg.toJson())
+
+    # Modify AGENTS.md.
+    let customContent = "# Custom agents\n"
+    writeFile(tmp / "AGENTS.md", customContent)
+    runCmdOrDie("git -C " & tmp & " add AGENTS.md")
+    runCmdOrDie("git -C " & tmp & " commit -m modify-agents")
+
+    # Only sync if config says so (mimics orchestrator logic).
+    let loadedCfg = loadConfig(tmp)
+    if loadedCfg.syncAgentsMd:
+      syncAgentsMd(tmp)
+
+    check readFile(tmp / "AGENTS.md") == customContent

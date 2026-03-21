@@ -48,6 +48,7 @@ type
     endpoints*: Endpoints
     concurrency*: ConcurrencyConfig
     timeouts*: TimeoutConfig
+    syncAgentsMd*: bool
     logLevel*: string
     fileLogLevel*: string
 
@@ -81,6 +82,7 @@ proc defaultConfig*(): Config =
       codingAgentProgressTimeoutMs: 600_000,
       codingAgentMaxAttempts: 5,
     ),
+    syncAgentsMd: true,
   )
 
 proc resolveModel*(model: string): string =
@@ -141,6 +143,8 @@ proc loadConfig*(repoPath: string): Config =
     result.timeouts.codingAgentProgressTimeoutMs = parsed.timeouts.codingAgentProgressTimeoutMs
   if parsed.timeouts.codingAgentMaxAttempts > 0:
     result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
+  if raw.contains("\"syncAgentsMd\""):
+    result.syncAgentsMd = parsed.syncAgentsMd
   if parsed.logLevel.len > 0:
     result.logLevel = parsed.logLevel
   if parsed.fileLogLevel.len > 0:

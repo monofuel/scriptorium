@@ -102,15 +102,36 @@ proc sumOfMultiples(limit: int): int =
 
 ## Object Types
 
-- Prefer `ref object` for types that will be passed around.
-- Backtick-wrap fields that collide with Nim keywords.
+`ref object` and `object` have different tradeoffs. Pick based on how the type will be used.
+
+`ref object` — passed by reference, cheap to pass around, mutations are shared.
+- Use for: types stored in collections, types passed through multiple procs, types with many fields, long-lived state.
+- Watch out for: nil values, aliasing (mutating in one place affects all references).
+
+`object` — passed by value, copies are independent, cannot be nil.
+- Use for: small immutable data (coordinates, colors, config records), types where independent copies are desirable.
+- Watch out for: forgetting `var` when a proc needs to mutate, expensive copies for large types.
+
+```nim
+# ref object — shared state, stored in collections, passed through layers.
+type
+  Player* = ref object
+    name*: string
+    inventory*: seq[Item]
+
+# object — small, often immutable, value semantics are natural.
+type
+  Vec2* = object
+    x*, y*: float
+```
+
+Backtick-wrap fields that collide with Nim keywords.
 
 ```nim
 type
-  DeleteModelResponse* = ref object
+  ApiResponse* = ref object
     id*: string
-    `object`*: string
-    deleted*: bool
+    `type`*: string
 ```
 
 ## Error Handling
