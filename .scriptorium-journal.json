@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0069",
+  "timestamp": "2026-03-21T13:31:27Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0069.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0069-per-area-concurrent-manager-execution.md\n**Ticket ID:** 0069\n**Branch:** scriptorium/ticket-0069\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0069-per-area-concurrent-manager-execution\n**Summary:** Implement assign command: reads scriptorium.json for maxAgents, selects oldest open ticket, creates git worktree, moves ticket to in-progress with Worktree field, commits on plan branch. Includes 4 passing tests.\n",
+      "contentHash": "8C4620BD02CA10912FBD0EA4047195775F26DBE4"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0069"
+}
