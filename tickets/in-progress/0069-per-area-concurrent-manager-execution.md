@@ -26,3 +26,5 @@ V13 §29 requires each eligible area to spawn an independent manager agent using
 - The `manager_tickets.md` prompt template already exists in `src/scriptorium/prompts/`.
 - Manager agents share the `maxAgents` slot pool with coding agents.
 - Managers are prioritized over coders when slots are scarce (implemented in tick restructuring, ticket 0071).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0069-per-area-concurrent-manager-execution
