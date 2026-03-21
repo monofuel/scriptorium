@@ -1,0 +1,29 @@
+{
+  "operation": "assign 0064-default-maxagents-to-four, 0068-extract-agent-pool-module",
+  "timestamp": "2026-03-21T07:10:06Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0064-default-maxagents-to-four.md",
+      "destination": "tickets/in-progress/0064-default-maxagents-to-four.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0064-default-maxagents-to-four.md",
+      "content": "# Change Default maxAgents From 1 To 4\n\n**Area:** config-testing\n\n## Problem\n\nPer V13 §27, `concurrency.maxAgents` should default to 4 (changed from 1). The current implementation in `src/scriptorium/config.nim` defaults to 1.\n\n## Requirements\n\n1. In `src/scriptorium/config.nim`, change the `defaultConfig()` proc so `concurrency.maxAgents` defaults to 4 instead of 1.\n2. Update unit tests in `tests/test_scriptorium.nim` that assert the default value of `maxAgents` — change expected value from 1 to 4.\n3. Verify `make test` passes after the change.\n\n## Files To Modify\n\n- `src/scriptorium/config.nim`: Change default `maxAgents: 1` to `maxAgents: 4`.\n- `tests/test_scriptorium.nim`: Update test assertions for default `maxAgents` value.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0064-default-maxagents-to-four\n",
+      "contentHash": "1FBC8E74D4E92160CB86A4824D06E85046E24D66"
+    },
+    {
+      "action": "move",
+      "source": "tickets/open/0068-extract-agent-pool-module.md",
+      "destination": "tickets/in-progress/0068-extract-agent-pool-module.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0068-extract-agent-pool-module.md",
+      "content": "# Extract Agent Pool Module With AgentRole Enum\n\n**Area:** parallel-execution\n\n## Problem\n\nV13 §28 requires a shared `agent_pool` module extracted from `coding_agent.nim` with an `AgentRole` enum so managers and coding agents share a single `maxAgents` slot pool. Currently agent slot management lives entirely in `coding_agent.nim` and only tracks coding agents.\n\n## Requirements\n\n1. Create `src/scriptorium/agent_pool.nim` module extracted from `coding_agent.nim`.\n2. Define `AgentRole` enum with values `arCoder` and `arManager`.\n3. Extend `AgentSlot` with a `role: AgentRole` field. Manager slots use `areaId` as identifier and have no branch or worktree (empty strings). Coder slots retain `ticketId`, `branch`, and `worktree`.\n4. Define `AgentCompletionResult` with a `role` field and an optional `managerResult` (sequence of generated ticket document strings) alongside existing coding result fields.\n5. Implement `startAgentAsync()` that accepts a role and a generic worker proc. Coding agents pass `executeAssignedTicket` wrapper; manager agents will pass `executeManagerForArea` wrapper (to be implemented in ticket 0069).\n6. Implement `checkCompletedAgents()` that returns completions tagged with role for orchestrator dispatch.\n7. Slot arithmetic: if `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coding agents (and vice versa).\n8. Move `runningAgentCount()`, `emptySlotCount()`, `joinAllAgentThreads()` into the new module.\n9. Update `coding_agent.nim` and `orchestrator.nim` to import from `agent_pool` instead of using local slot management.\n10. `make test` must pass. Add unit tests for role-tagged slot counting and completion result dispatch.\n\n## Notes\n\n- The existing `AgentSlot` is defined in `shared_state.nim` (lines 125-129) and slot sequences are in `coding_agent.nim` (lines 29-30).\n- Architect and review/merge remain strictly sequential and do not consume pool slots.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0068-extract-agent-pool-module\n",
+      "contentHash": "48EDB2F062FD39685C2E5C528715A0D465FDDACD"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0064-default-maxagents-to-four, 0068-extract-agent-pool-module"
+}
