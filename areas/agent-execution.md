@@ -14,14 +14,16 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
   - Writes area files directly under `areas/`.
 - Manager ticket generation (continuous, content-hash driven):
   - Orchestrator stores per-area SHA-1 hashes in `tickets/.area-hashes` (tab/colon-separated `area-id:hash`, one per line, sorted).
-  - Areas with open or in-progress tickets are always suppressed.
+  - Areas with open or in-progress tickets are always suppressed (blocks concurrent work on the same area).
   - When `tickets/.area-hashes` exists, areas whose content hash differs from stored hash are eligible for re-ticketing, even if previous tickets for that area are done.
   - When `tickets/.area-hashes` does not exist (legacy fallback), areas with any ticket in any state are suppressed.
   - After ticket generation, orchestrator computes and writes hashes for all current areas and commits the hash file separately.
-  - Batched execution: all eligible areas in a single agent prompt and session.
-  - Writes constrained by write-prefix allowlist to `tickets/open/`.
+  - Per-area concurrent execution (V13, §29): each eligible area spawns an independent manager agent using `manager_tickets.md`. Replaces the retired batched single-prompt model (V13, §32).
+  - Manager agents generate ticket content in memory — only the orchestrator main thread writes to the plan worktree.
+  - Manager writes constrained by write-prefix allowlist to `tickets/open/`.
   - Must preserve dirty state of the main repository outside the plan worktree.
   - Ticket filenames assigned by the orchestrator, not by agent prompt output.
+  - Managers share the `maxAgents` slot pool with coding agents via `AgentRole` enum (V13, §28, detail in parallel-execution area).
 - Coding agent execution:
   - Runs in the assigned ticket worktree.
   - Prompt includes ticket path, ticket content, repo path, and worktree path.
@@ -55,3 +57,6 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
 - Section 20: Pre-Submit Test Gate (V4, detail in merge-queue area).
 - Section 21: Review Agent (V4, detail in review-agent area).
 - Section 24: Concurrent Agent Execution (V5, detail in parallel-execution area).
+- Section 28: Shared Agent Pool With AgentRole Enum (V13, detail in parallel-execution area).
+- Section 29: Per-Area Concurrent Manager Invocations (V13, detail in parallel-execution area).
+- Section 32: Retirement Of Batched Manager Path (V13, detail in parallel-execution area).

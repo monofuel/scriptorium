@@ -12,7 +12,7 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `agents.reviewer.{harness, model, reasoningEffort}`
   - `endpoints.local`
   - `logLevel`
-  - `concurrency.maxAgents` (V5, integer, default 1)
+  - `concurrency.maxAgents` (V5/V13, integer, default 4 — changed from 1 in V13)
   - `concurrency.tokenBudgetMB` (V5, optional integer megabytes)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.
 - Repository test commands:
@@ -29,3 +29,4 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
 - Section 9: Config, Logging, Tests, And CI Baseline.
 - Section 24: Concurrent Agent Execution (V5, concurrency config).
 - Section 26: Resource Management (V5, token budget config).
+- Section 27: Default maxAgents Changed To 4 (V13).
