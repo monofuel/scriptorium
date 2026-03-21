@@ -31,6 +31,10 @@ check for existing tests, and verify implementation status.
 If an area is fully implemented and tested, create a single summary ticket in tickets/done/
 describing what already exists. Do not create open tickets for completed work.
 
+## Dependency guidance
+
+When a ticket involves a common task (HTTP server, JSON parsing, database access, etc.), mention the recommended library from AGENTS.md in the ticket description so the coding agent uses it. Do not assume the coding agent will discover the right library on its own.
+
 Process each area below sequentially:
 
 {{AREAS_BLOCK}}

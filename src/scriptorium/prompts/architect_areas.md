@@ -10,5 +10,9 @@ Treat `{{WORKTREE_PATH}}/spec.md` as the authoritative planning file.
 Use file tools to create only areas/*.md files.
 Do not edit `tickets/`, `queue/`, or `spec.md` in this task.
 
+## Dependency guidance
+
+When designing areas or plans that involve common tasks (HTTP, JSON, databases, graphics, etc.), prefer the project's recommended libraries listed in AGENTS.md. Do not introduce new dependencies when a recommended library already covers the need.
+
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}

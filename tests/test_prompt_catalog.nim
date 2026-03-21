@@ -55,3 +55,18 @@ suite "prompt catalog":
     check CodexRetryContinuationTemplate.contains("{{TIMEOUT_KIND}}")
     check CodexRetryDefaultContinuationText.contains("Continue from the previous attempt")
     check CodexRetryDefaultContinuationText.contains("submit_pr")
+
+  test "agents example template contains expanded library catalog":
+    check AgentsExampleTemplate.contains("nimby")
+    check AgentsExampleTemplate.contains("jsony")
+    check AgentsExampleTemplate.contains("mummy")
+    check AgentsExampleTemplate.contains("curly")
+    check AgentsExampleTemplate.contains("debby")
+    check AgentsExampleTemplate.contains("pixie")
+
+  test "architect and manager prompts contain dependency guidance":
+    check ArchitectAreasTemplate.contains("Dependency guidance")
+    check ArchitectPlanOneShotTemplate.contains("Dependency guidance")
+    check ArchitectPlanInteractiveTemplate.contains("Dependency guidance")
+    check ManagerTicketsTemplate.contains("Dependency guidance")
+    check ManagerTicketsBatchTemplate.contains("Dependency guidance")

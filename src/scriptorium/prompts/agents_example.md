@@ -16,14 +16,41 @@ This repository uses Nim and keeps dependencies minimal.
 ## Dependencies
 
 - MUST use nimby (not nimble) for dependency management.
-- Recommended libraries by category:
-  - JSON: jsony
-  - HTTP server: mummy
-  - Database: debby
-  - WebSocket: ws
-  - Collision/geometry: bumpy
-  - Image: pixie
-  - Vector math: vmath
+- When adding dependencies, prefer packages from monofuel, treeform, and guzba.
+
+### Recommended libraries by category
+
+| Category | Library | Description |
+|----------|---------|-------------|
+| JSON | jsony | Fast JSON serialization with hooks for custom types. |
+| HTTP server | mummy | Multi-threaded HTTP 1.1 + WebSocket server. Requires `--threads:on`. |
+| HTTP client | curly | HTTP client built on libcurl. Pairs with mummy. |
+| Database | debby | ORM for SQLite, PostgreSQL, MySQL. Type-safe filters. |
+| WebSocket | ws | Async WebSocket client and server. |
+| URL parsing | urlly | URL parsing and construction. |
+| JWT | jwtea | JSON Web Token signing and verification. |
+| 2D geometry | bumpy | Point, circle, rect, polygon intersection tests. |
+| 2D graphics | pixie | PNG/JPEG/SVG/fonts, path drawing, SIMD-accelerated. |
+| Vector math | vmath | GLSL-style Vec2–Vec4, Mat3–Mat4, quaternions. |
+| Color | chroma | Color spaces, parsing, conversion. |
+| Windowing | windy | Cross-platform window and input management. |
+| GPU rendering | boxy | 2D GPU rendering engine built on pixie. |
+| GPU compute | shady | Compute shaders for graphical GPU work. |
+| GPU compute (CUDA/HIP) | hippo | Low-level CUDA/HIP for serious GPU compute (LLM inference, etc). |
+| Compression | zippy | Zlib, gzip, zip archive support. SIMD-accelerated. |
+| Hashing | crunchy | Fast hashing and checksums. |
+| SIMD | nimsimd | SIMD intrinsics for SSE/AVX/NEON. |
+| Bit manipulation | bitty | Bit arrays and operations. |
+| Serialization | flatty | Flat binary serialization. |
+| Time | chrono | Timestamps, calendars, formatting. |
+| Benchmarking | benchy | Simple benchmark harness. |
+| Random | noisy | Noise generation (Perlin, Simplex, etc). |
+| Thread pool | ready | Thread pool for parallel work. |
+| Web types | webby | HTTP headers, query strings, multipart. Used by mummy/curly. |
+| UUID | uuids | UUID generation and parsing (pragmagic/uuids). |
+| OpenAI API | openai_leap | OpenAI-compatible API client. |
+| MCP | mcport | MCP client/server (HTTP and stdio). |
+| Discord | guildy | Discord bot API integration. |
 
 ## Variables
 

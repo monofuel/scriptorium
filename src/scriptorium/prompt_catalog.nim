@@ -15,6 +15,7 @@ const
   ArchitectAskInteractiveTemplate* = staticRead(PromptDirectory & "architect_ask_interactive.md")
   TicketPredictionTemplate* = staticRead(PromptDirectory & "ticket_prediction.md")
   ReviewAgentTemplate* = staticRead(PromptDirectory & "review_agent.md")
+  AgentsExampleTemplate* = staticRead(PromptDirectory & "agents_example.md")
 
 type
   PromptBinding* = tuple[name: string, value: string]
