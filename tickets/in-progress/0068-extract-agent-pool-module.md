@@ -25,3 +25,8 @@ V13 §28 requires a shared `agent_pool` module extracted from `coding_agent.nim`
 - Architect and review/merge remain strictly sequential and do not consume pool slots.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0068-extract-agent-pool-module
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Extracting a new module from existing code, defining new types (AgentRole enum, extended AgentSlot, AgentCompletionResult), implementing generic startAgentAsync/checkCompletedAgents, updating imports across coding_agent.nim and orchestrator.nim, plus adding unit tests — significant cross-module refactor with integration risk likely requiring 2+ attempts.
