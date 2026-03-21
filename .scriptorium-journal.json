@@ -1,0 +1,13 @@
+{
+  "operation": "clear active",
+  "timestamp": "2026-03-21T08:19:43Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "",
+      "contentHash": "DA39A3EE5E6B4B0D3255BFEF95601890AFD80709"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue"
+}
