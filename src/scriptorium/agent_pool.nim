@@ -2,6 +2,9 @@ import
   std/[strformat, times],
   ./[agent_runner, logging, shared_state, ticket_metadata]
 
+const
+  ManagerTicketIdPrefix = "manager-"
+
 type
   AgentPoolCompletionResult* = object
     role*: AgentRole
@@ -66,6 +69,10 @@ proc startAgentAsync*(
     repoPath: repoPath,
     assignment: assignment,
     ticketId: ticketId,
+    areaId: areaId,
+    areaContent: "",
+    planPath: "",
+    nextId: 0,
   )
   createThread(threadPtr[], workerThread, args)
   runningPoolThreadPtrs.add(threadPtr)
@@ -77,6 +84,36 @@ proc startCodingAgentAsync*(repoPath: string, assignment: TicketAssignment, maxA
   ## Start a coding agent in a background thread for the given assignment.
   let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
   startAgentAsync(arCoder, repoPath, assignment, ticketId, "", maxAgents, workerThread)
+
+proc startManagerAgentAsync*(repoPath: string, areaId: string, areaContent: string,
+    planPath: string, nextId: int, maxAgents: int,
+    workerThread: proc(args: AgentThreadArgs) {.thread.}) =
+  ## Start a manager agent in a background thread for a single area.
+  ensurePoolResultChanOpen()
+  let ticketId = ManagerTicketIdPrefix & areaId
+  let slot = AgentSlot(
+    role: arManager,
+    ticketId: ticketId,
+    areaId: areaId,
+    branch: "",
+    worktree: "",
+    startTime: epochTime(),
+  )
+  runningPoolSlots.add(slot)
+  let threadPtr = create(Thread[AgentThreadArgs])
+  let args: AgentThreadArgs = (
+    repoPath: repoPath,
+    assignment: TicketAssignment(),
+    ticketId: ticketId,
+    areaId: areaId,
+    areaContent: areaContent,
+    planPath: planPath,
+    nextId: nextId,
+  )
+  createThread(threadPtr[], workerThread, args)
+  runningPoolThreadPtrs.add(threadPtr)
+  let running = runningPoolSlots.len
+  logInfo(&"agent slots: {running}/{maxAgents} (arManager {areaId} started)")
 
 proc checkCompletedAgents*(): seq[AgentPoolCompletionResult] =
   ## Poll the result channel for completed agents and clean up their slots and threads.

@@ -154,7 +154,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         let completions = checkCompletedAgents()
         for completion in completions:
           let running = runningAgentCount()
-          logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
+          if completion.role == arManager:
+            let areaId = completion.areaId
+            let ticketDocs = completion.managerResult
+            logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
+            if ticketDocs.len > 0:
+              discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+                let nextId = nextTicketId(planPath)
+                writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
+                gitRun(planPath, "add", PlanTicketsOpenDir)
+                if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+                  gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
+                true
+              )
+          else:
+            logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
           if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
             recordRateLimit(completion.ticketId)
 

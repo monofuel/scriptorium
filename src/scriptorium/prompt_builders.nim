@@ -104,6 +104,23 @@ proc buildArchitectAreasPrompt*(repoPath: string, planPath: string, spec: string
     ],
   )
 
+proc buildManagerTicketsPrompt*(repoPath: string, planPath: string,
+    areaId: string, areaRelPath: string, areaContent: string, nextId: int): string =
+  ## Build a single-area manager prompt using the ManagerTicketsTemplate.
+  let startIdText = &"{nextId:04d}"
+  result = renderPromptTemplate(
+    ManagerTicketsTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
+      (name: "NEXT_ID", value: startIdText),
+      (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
+      (name: "AREA_ID", value: areaId),
+      (name: "AREA_PATH", value: areaRelPath),
+      (name: "AREA_CONTENT", value: areaContent.strip()),
+    ],
+  )
+
 proc buildManagerTicketsBatchPrompt*(repoPath: string, planPath: string,
     areas: seq[tuple[relPath: string, content: string]], nextId: int): string =
   ## Build a batch manager prompt covering all areas in a single session.

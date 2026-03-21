@@ -138,6 +138,10 @@ type
     repoPath: string,
     assignment: TicketAssignment,
     ticketId: string,
+    areaId: string,
+    areaContent: string,
+    planPath: string,
+    nextId: int,
   ]
 
   TicketPrediction* = object
