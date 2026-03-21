@@ -85,3 +85,50 @@ The background `make test` task completed (exit code 0) — consistent with what
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 33s
+
+## Merge Queue Success
+- Summary: Extract agent_pool module from coding_agent.nim with AgentRole enum (arCoder/arManager), generic startAgentAsync accepting role and worker proc, checkCompletedAgents with role-tagged completions, joinAllAgentThreads, and shared slot arithmetic. Includes unit tests for slot counting and completion dispatch.\n
+### Quality Check Output
+```text
+2026-03-21T11:35:18Z] [INFO] ticket 0002: saved uncommitted agent work before retry
+[2026-03-21T11:35:18Z] [INFO] ticket 0002: coding agent started (model=claude-sonnet-4-6, attempt 5/5)
+[2026-03-21T11:35:57Z] [INFO] ticket 0002: coding agent finished (exit=0, wall=38s, stall=true)
+[2026-03-21T11:35:57Z] [INFO] ticket 0002: in-progress -> open (reopened, reason=no submit_pr, attempts=5, total wall=11m32s)
+[2026-03-21T11:35:57Z] [INFO] ticket 0002: post-analysis: predicted=medium actual=complex accuracy=underestimated wall=11m32s
+[2026-03-21T11:35:57Z] [INFO] journal: began transition — reopen 0002
+[2026-03-21T11:35:57Z] [INFO] journal: executed steps — reopen 0002
+[2026-03-21T11:35:57Z] [INFO] journal: transition complete
+[2026-03-21T11:35:57Z] [INFO] session summary: uptime=13m9s ticks=1 tickets_completed=3 tickets_reopened=4 tickets_parked=0 merge_queue_processed=3
+[2026-03-21T11:35:57Z] [INFO] session summary: avg_ticket_wall=48s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-21T11:35:57Z] [INFO] recovery: clean startup, no recovery needed
+[2026-03-21T11:35:57Z] [INFO] agent slots: 0/4 (ticket 0002 finished)
+[2026-03-21T11:35:58Z] [WARN] master is unhealthy — skipping tick
+[2026-03-21T11:36:28Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=4 tickets_parked=0 merge_queue_processed=3
+[2026-03-21T11:36:28Z] [INFO] session summary: avg_ticket_wall=48s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+--- tests/integration_typoi_harness.nim ---
+
+[Suite] integration typoi harness
+  [SKIPPED] real typoi one-shot smoke test
+  [SKIPPED] real typoi MCP tool call against live server
+```
+
+## Metrics
+- wall_time_seconds: 7545
+- coding_wall_seconds: 4936
+- test_wall_seconds: 2568
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 230994
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: accurate
+- brief_summary: Predicted hard, actual was hard with 2 attempt(s) in 2h5m.
