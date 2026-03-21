@@ -23,3 +23,5 @@ V13 §28 requires a shared `agent_pool` module extracted from `coding_agent.nim`
 
 - The existing `AgentSlot` is defined in `shared_state.nim` (lines 125-129) and slot sequences are in `coding_agent.nim` (lines 29-30).
 - Architect and review/merge remain strictly sequential and do not consume pool slots.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0068-extract-agent-pool-module

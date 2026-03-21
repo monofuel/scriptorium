@@ -16,3 +16,5 @@ Per V13 §27, `concurrency.maxAgents` should default to 4 (changed from 1). The 
 
 - `src/scriptorium/config.nim`: Change default `maxAgents: 1` to `maxAgents: 4`.
 - `tests/test_scriptorium.nim`: Update test assertions for default `maxAgents` value.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0064-default-maxagents-to-four
