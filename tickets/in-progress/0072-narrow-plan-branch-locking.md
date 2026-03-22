@@ -54,3 +54,10 @@ Done. Here's a summary of the changes:
 ```text
 mpt`.\n\n3. **`src/scriptorium/prompts/manager_tickets.md`** — Updated prompt to instruct agents to output tickets as fenced markdown blocks instead of writing files to the plan worktree.\n\n4. **`tests/test_manager_agent.nim`** — Updated test calls to match new `buildManagerTicketsPrompt` signature.\n\n5. **`tests/test_prompt_catalog.nim`** — Removed check for `WORKTREE_PATH` in manager template.","stop_reason":"end_turn","session_id":"2e20f3f9-762d-44f4-b346-55933f59a757","total_cost_usd":2.032117,"usage":{"input_tokens":9669,"cache_creation_input_tokens":77306,"cache_read_input_tokens":2244269,"output_tokens":15139,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":77306},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":9669,"outputTokens":15139,"cacheReadInputTokens":2244269,"cacheCreationInputTokens":77306,"webSearchRequests":0,"costUSD":2.032117,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b0c40528-8c61-4fe0-b2b0-61d960d38539"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m38s
