@@ -132,7 +132,8 @@ proc logSessionSummary*() =
   logInfo(averagesLine)
 
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
-  ## Execute the orchestrator polling loop for an optional bounded number of ticks.
+  ## Execute the orchestrator polling loop with interleaved manager/coder execution.
+  ## Tick order: poll completions → backoff/health → architect → managers → coders → merge → sleep.
   discard recoverFromCrash(repoPath)
   agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
@@ -149,30 +150,29 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       idle = false
       logDebug(fmt"tick {ticks}")
 
-      # Check for completed agents at the start of every tick (parallel mode).
-      if maxAgents > 1:
-        let completions = checkCompletedAgents()
-        for completion in completions:
-          let running = runningAgentCount()
-          if completion.role == arManager:
-            let areaId = completion.areaId
-            let ticketDocs = completion.managerResult
-            logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
-            if ticketDocs.len > 0:
-              discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-                let nextId = nextTicketId(planPath)
-                writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
-                gitRun(planPath, "add", PlanTicketsOpenDir)
-                if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-                  gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
-                true
-              )
-          else:
-            logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
-          if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
-            recordRateLimit(completion.ticketId)
+      # Step 1: Poll completed agents (managers + coders).
+      let completions = checkCompletedAgents()
+      for completion in completions:
+        let running = runningAgentCount()
+        if completion.role == arManager:
+          let areaId = completion.areaId
+          let ticketDocs = completion.managerResult
+          logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
+          if ticketDocs.len > 0:
+            discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+              let nextId = nextTicketId(planPath)
+              writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
+              gitRun(planPath, "add", PlanTicketsOpenDir)
+              if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+                gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
+              true
+            )
+        else:
+          logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
+        if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
+          recordRateLimit(completion.ticketId)
 
-      # Restore concurrency when backoff expires.
+      # Step 2: Check backoff / health.
       discard isRateLimitBackoffActive()
 
       if not hasPlanBranch(repoPath):
@@ -200,11 +200,14 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           var codingStatus = "idle"
           var mergeStatus = "idle"
           var codingDidWork = false
+          var architectChanged = false
+          var managerChanged = false
 
           if hasRunnableSpec(repoPath):
+            # Step 3: Run architect (sequential, must complete before managers).
             logInfo("architect: generating areas from spec")
             t0 = epochTime()
-            let architectChanged = runArchitectAreas(repoPath, runner)
+            architectChanged = runArchitectAreas(repoPath, runner)
             logDebug(fmt"tick {ticks}: architect took {epochTime() - t0:.1f}s, changed={architectChanged}")
             if architectChanged:
               logInfo("architect: areas updated")
@@ -214,13 +217,25 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
 
+            # Step 4+5: Read areas needing tickets and start managers.
+            # Managers are prioritized over coders: they run first to fill slots.
             logInfo("manager: generating tickets")
             t0 = epochTime()
-            var managerChanged = false
             if maxAgents <= 1:
               managerChanged = runManagerForAreas(repoPath, runner)
             else:
-              launchManagerAreasAsync(repoPath, maxAgents)
+              let effectiveMax = effectiveMaxAgents(maxAgents)
+              discard withPlanWorktree(repoPath, proc(planPath: string): int =
+                if not hasRunnableSpecInPlanPath(planPath): return 0
+                let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
+                for areaRelPath in areasToProcess:
+                  if emptySlotCount(effectiveMax) <= 0: break
+                  let areaId = areaIdFromAreaPath(areaRelPath)
+                  let areaContent = readFile(planPath / areaRelPath)
+                  let nextId = nextTicketId(planPath)
+                  startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, effectiveMax, managerAgentWorkerThread)
+                0
+              )
             logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
             if managerChanged:
               logInfo("manager: tickets created")
@@ -233,14 +248,18 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               managerStatus = "no-op"
 
             if not shouldRun: break
+          else:
+            logDebug(WaitingNoSpecMessage)
+            idle = true
 
-            let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
-            if isTokenBudgetExceeded(tokenBudgetMB):
-              codingStatus = "budget-exceeded"
-            elif isRateLimitBackoffActive():
-              codingStatus = "rate-limited"
-            elif maxAgents <= 1:
-              # Serial mode: blocking execution of one ticket per tick.
+          # Step 6: Start coding agents (use remaining slots after managers).
+          let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
+          if isTokenBudgetExceeded(tokenBudgetMB):
+            codingStatus = "budget-exceeded"
+          elif isRateLimitBackoffActive():
+            codingStatus = "rate-limited"
+          elif maxAgents <= 1:
+            if hasRunnableSpec(repoPath):
               t0 = epochTime()
               let agentResult = executeOldestOpenTicket(repoPath, runner)
               let codingWallTime = epochTime() - t0
@@ -255,41 +274,38 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                   codingStatus = fmt"{agentResult.ticketId}(submitted, {codingDuration})"
                 else:
                   codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
-            else:
-              # Parallel mode: assign tickets to empty slots and start non-blocking.
-              let effectiveMax = effectiveMaxAgents(maxAgents)
-              let slotsAvailable = emptySlotCount(effectiveMax)
-              if slotsAvailable > 0:
-                let assignments = assignOpenTickets(repoPath, slotsAvailable)
-                for assignment in assignments:
-                  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
-                  runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
-                  startCodingAgentAsync(repoPath, assignment, maxAgents, codingAgentWorkerThread)
-                  codingDidWork = true
-                let running = runningAgentCount()
-                codingStatus = &"{running}/{maxAgents} agents"
-
-            if not shouldRun: break
-
-            logInfo("merge queue: processing")
-            t0 = epochTime()
-            let mergeProcessed = processMergeQueue(repoPath)
-            logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
-            if mergeProcessed:
-              logInfo("merge queue: item processed")
-              mergeStatus = "processing"
-
-            if maxAgents <= 1:
-              if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
-                logDebug(fmt"tick {ticks}: idle")
-                idle = true
-            else:
-              if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed and runningAgentCount() == 0:
-                logDebug(fmt"tick {ticks}: idle")
-                idle = true
           else:
-            logDebug(WaitingNoSpecMessage)
-            idle = true
+            let effectiveMax = effectiveMaxAgents(maxAgents)
+            let slotsAvailable = emptySlotCount(effectiveMax)
+            if slotsAvailable > 0:
+              let assignments = assignOpenTickets(repoPath, slotsAvailable)
+              for assignment in assignments:
+                let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+                runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
+                startCodingAgentAsync(repoPath, assignment, maxAgents, codingAgentWorkerThread)
+                codingDidWork = true
+              let running = runningAgentCount()
+              codingStatus = &"{running}/{maxAgents} agents"
+
+          if not shouldRun: break
+
+          # Step 7: Process at most one merge-queue item.
+          logInfo("merge queue: processing")
+          t0 = epochTime()
+          let mergeProcessed = processMergeQueue(repoPath)
+          logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
+          if mergeProcessed:
+            logInfo("merge queue: item processed")
+            mergeStatus = "processing"
+
+          if maxAgents <= 1:
+            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
+              logDebug(fmt"tick {ticks}: idle")
+              idle = true
+          else:
+            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed and runningAgentCount() == 0:
+              logDebug(fmt"tick {ticks}: idle")
+              idle = true
 
           discard withPlanWorktree(repoPath, proc(planPath: string): int =
             scanForCycleBlockedTickets(planPath)
@@ -308,7 +324,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       sleep(IdleSleepMs)
     inc ticks
   # On shutdown, wait for running agents to complete.
-  if maxAgents > 1 and runningAgentCount() > 0:
+  if runningAgentCount() > 0:
     logInfo(&"shutdown: waiting for {runningAgentCount()} running agent(s)")
     joinAllAgentThreads()
   sessionStats.totalTicks = ticks
