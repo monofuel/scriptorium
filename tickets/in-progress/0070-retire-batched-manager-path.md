@@ -23,3 +23,5 @@ V13 §32 requires removing the batched manager execution model now that per-area
 
 - The production manager path after this ticket is the per-area concurrent model from ticket 0069.
 - The single-area `manager_tickets.md` template and `ManagerTicketsTemplate` must be preserved.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path
