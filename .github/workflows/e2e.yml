@@ -32,7 +32,7 @@ jobs:
           fi
 
       - name: Install codex and claude CLIs
-        run: npm install -g @openai/codex @anthropic-ai/claude-code
+        run: npm install -g @openai/codex@0.116.0 @anthropic-ai/claude-code@2.1.80
 
       - name: Verify codex binary and features
         run: |
