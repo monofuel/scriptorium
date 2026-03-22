@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0081-include-agentsmd-and-specmd-content-in-review-agent-prompt",
+  "timestamp": "2026-03-22T20:30:05Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt.md",
+      "destination": "tickets/in-progress/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt.md",
+      "content": "<!-- ticket: 0075-review-prompt-agents-spec-content.md -->\n# Include AGENTS.md and spec.md content in review agent prompt\n\n**Area:** review-agent\n**Difficulty:** medium\n\n## Problem\n\nThe review agent prompt (in `src/scriptorium/prompts/review_agent.md`) currently includes ticket content, diff, area content, and submit summary. Per the spec (Section 9), it must also include:\n- The project's `AGENTS.md` content (conventions, naming, error handling, file organization).\n- Relevant `spec.md` sections (at minimum the section related to the ticket's area).\n\nWithout this context, the review agent cannot enforce project conventions or spec compliance.\n\n## Requirements\n\n1. **Prompt template** (`src/scriptorium/prompts/review_agent.md`):\n   - Add a new section `## Project Conventions (AGENTS.md)` with placeholder `{{AGENTS_CONTENT}}`.\n   - Add a new section `## Spec Context` with placeholder `{{SPEC_CONTENT}}`.\n   - Place these sections after `## Area Context` and before `## Instructions`.\n\n2. **Prompt builder** (`src/scriptorium/prompt_builders.nim`):\n   - Update `buildReviewAgentPrompt` signature to accept `agentsContent: string` and `specContent: string` parameters.\n   - Add the two new bindings to the `renderPromptTemplate` call.\n\n3. **Review agent caller** (`src/scriptorium/merge_queue.nim:183-268`, `runReviewAgent`):\n   - Read `AGENTS.md` from the repo root (`repoPath / \"AGENTS.md\"`). If missing, use `\"(AGENTS.md not found)\"`.\n   - Read the relevant spec section from the plan branch. The area ID is already parsed. Extract the spec section whose heading matches the area's `## Spec References` entry. If extraction is too complex, include the full `spec.md` content (it's read from `planPath / \"spec.md\"`). If missing, use `\"(spec not available)\"`.\n   - Pass both to `buildReviewAgentPrompt`.\n\n4. **Tests**:\n   - Update existing `buildReviewAgentPrompt` unit tests to pass the new parameters.\n   - Add a test verifying that AGENTS.md and spec content appear in the rendered prompt.\n\n## Key files\n- `src/scriptorium/prompts/review_agent.md` — prompt template\n- `src/scriptorium/prompt_builders.nim:84-94` — `buildReviewAgentPrompt`\n- `src/scriptorium/merge_queue.nim:183-268` — `runReviewAgent`\n- `tests/test_scriptorium.nim` — prompt builder tests\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt\n",
+      "contentHash": "BADE463AF77CFA5444A1C17FFBC61BEEDE8DB6CE"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0081-include-agentsmd-and-specmd-content-in-review-agent-prompt"
+}
