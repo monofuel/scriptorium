@@ -81,6 +81,7 @@ proc predictTicketDifficulty*(
     harness: cfg.agents.coding.harness,
     model: resolveModel(cfg.agents.coding.model),
     reasoningEffort: cfg.agents.coding.reasoningEffort,
+    logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "prediction",
     ticketId: ticketId & "-prediction",
     attempt: 1,
     skipGitRepoCheck: true,
