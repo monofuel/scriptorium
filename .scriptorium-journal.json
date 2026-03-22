@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0070",
+  "timestamp": "2026-03-22T05:05:30Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0070.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0070-retire-batched-manager-path.md\n**Ticket ID:** 0070\n**Branch:** scriptorium/ticket-0070\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path\n**Summary:** Retire batched manager path: removed runManagerTickets, syncTicketsFromAreas, buildManagerTicketsBatchPrompt, ManagerTicketsBatchTemplate, and manager_tickets_batch.md template. Replaced orchestrator tick loop manager call with per-area execution (serial: synchronous executeManagerForArea, parallel: startManagerAgentAsync). Fixed managerAgentWorkerThread to create its own plan worktree. Updated tests.\n",
+      "contentHash": "7FFBD996ECCD89C4046D0199F6FA356451FB1564"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0070"
+}
