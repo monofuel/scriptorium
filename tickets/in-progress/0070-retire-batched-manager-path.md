@@ -153,3 +153,8 @@ make: *** [Makefile:35: integration-test] Error 1
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 29m18s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: While the removals are well-enumerated, the post-mortem shows non-trivial orchestrator integration work (replacing batched call with per-area serial/parallel paths, fixing latent bugs, updating multiple test files) — more than simple deletions, but completed in one attempt.
