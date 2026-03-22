@@ -26,3 +26,5 @@ The spec (Section 9, Review Lifecycle Logging) requires: "Review reasoning (not 
 - `src/scriptorium/merge_queue.nim:183-268` — `runReviewAgent` proc
 - `src/scriptorium/agent_runner.nim` — `AgentStreamEvent` type definition
 - `tests/test_scriptorium.nim` — existing review agent tests
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-log-review-reasoning-from-review-agent-sessions
