@@ -57,3 +57,27 @@ ewReasoningMaxChars` constant (2000), accumulate `agentEventMessage` events in `
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 38s
+
+## Merge Queue Failure
+- Summary: Capture review agent reasoning from agentEventMessage events and include it in ticket review notes. Added ReviewReasoningMaxChars constant (2000), accumulate message events in onEvent callback, log reasoning at DEBUG level, and append **Review Reasoning:** field to ticket markdown for all review outcomes. Includes two unit tests for reasoning capture and truncation.\n
+### Merge Output
+```text
+Auto-merging src/scriptorium/merge_queue.nim
+CONFLICT (content): Merge conflict in src/scriptorium/merge_queue.nim
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+## Metrics
+- wall_time_seconds: 2114
+- coding_wall_seconds: 2069
+- test_wall_seconds: 0
+- attempt_count: 3
+- outcome: reopened
+- failure_reason: merge_conflict
+- model: claude-opus-4-6
+- stdout_bytes: 518087
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was complex with 3 attempt(s) in 35m14s.
