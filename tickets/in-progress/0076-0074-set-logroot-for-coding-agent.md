@@ -12,3 +12,5 @@ In `src/scriptorium/coding_agent.nim`, in the `executeAssignedTicket` function (
 
 ```nim
 logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "coder",
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0076-0074-set-logroot-for-coding-agent
