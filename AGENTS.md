@@ -100,6 +100,32 @@ git show scriptorium/plan:spec.md | grep -i "keyword"
 - include a short `summary` argument describing the completed changes.
 - orchestrator merge-queue enqueueing must use MCP tool state, not stdout parsing.
 
+## Concurrency Model
+
+### Strictly sequential agents
+
+- **Architect**: Reads the spec, writes areas, runs at most once per tick. Protected by the plan lock and must complete before managers start.
+- **Review/Merge**: Processes one merge queue item at a time, strictly sequential to guarantee default branch health.
+
+### Parallel agents (shared slot pool)
+
+- **Manager**: One area per invocation. Multiple managers can run in parallel across different areas.
+- **Coding agent**: One ticket per invocation. Multiple coders can run in parallel in independent areas.
+
+Both managers and coders share the `maxAgents` slot pool.
+
+### Interleaved execution
+
+Managers and coders are interleaved across ticks. The orchestrator does not wait for all managers to finish before starting coders. As soon as a manager completes and frees a slot, a coder (or another manager) can fill it.
+
+### Slot arithmetic
+
+Managers and coders draw from the same pool. If `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coders (and vice versa).
+
+### Merge conflict handling
+
+Parallel coding agents may produce merge conflicts on shared files. The sequential merge process catches these by merging the default branch into the ticket branch before testing. Conflicting tickets are sent back for another coding attempt with conflict context. Area-based separation makes conflicts less likely, but the system handles them gracefully when they occur.
+
 ## Nim
 
 ## Nim best practices
