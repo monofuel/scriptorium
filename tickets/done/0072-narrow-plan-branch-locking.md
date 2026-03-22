@@ -61,3 +61,51 @@ mpt`.\n\n3. **`src/scriptorium/prompts/manager_tickets.md`** — Updated prompt 
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 1m38s
+
+## Merge Queue Success
+- Summary: Narrow plan branch locking for manager execution: restructured lock acquisition so areas are read with a brief lock, managers execute without holding the lock, and tickets are written with brief per-manager locks. Manager agents no longer touch the plan worktree directly — they run in the project repo and produce tickets via stdout.\n
+### Quality Check Output
+```text
+Z] [INFO] ticket 0001: merge succeeded (test wall=0s)
+[2026-03-22T07:46:40Z] [INFO] ticket 0001: in-progress -> done (total wall=1m34s, attempts=0)
+[2026-03-22T07:46:40Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[2026-03-22T07:46:40Z] [INFO] journal: began transition — complete 0001
+[2026-03-22T07:46:40Z] [INFO] journal: executed steps — complete 0001
+[2026-03-22T07:46:40Z] [INFO] journal: transition complete
+[2026-03-22T07:46:40Z] [INFO] merge queue: item processed
+[2026-03-22T07:46:40Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing open=0 in-progress=0 done=1
+[2026-03-22T07:46:41Z] [INFO] shutdown: waiting for 1 running agent(s)
+[2026-03-22T07:47:12Z] [INFO] session summary: uptime=1m35s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-22T07:47:12Z] [INFO] session summary: avg_ticket_wall=31s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-10 global halt while red resumes after master health is restored
+[2026-03-22T07:47:12Z] [INFO] recovery: clean startup, no recovery needed
+[2026-03-22T07:47:12Z] [INFO] agent slots: 0/4 (manager queue-processing finished, 4 tickets)
+[2026-03-22T07:47:12Z] [WARN] master is unhealthy — skipping tick
+[2026-03-22T07:47:42Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[2026-03-22T07:47:42Z] [INFO] session summary: avg_ticket_wall=31s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+  [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+--- tests/integration_review_agent_live.nim ---
+
+[Suite] integration review agent live
+  [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+--- tests/integration_typoi_harness.nim ---
+
+[Suite] integration typoi harness
+  [SKIPPED] real typoi one-shot smoke test
+  [SKIPPED] real typoi MCP tool call against live server
+```
+
+## Metrics
+- wall_time_seconds: 952
+- coding_wall_seconds: 429
+- test_wall_seconds: 410
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 511407
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 15m52s.
