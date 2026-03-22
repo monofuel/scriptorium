@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0070-retire-batched-manager-path",
+  "timestamp": "2026-03-22T04:38:27Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0070-retire-batched-manager-path.md",
+      "destination": "tickets/in-progress/0070-retire-batched-manager-path.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0070-retire-batched-manager-path.md",
+      "content": "# Retire Batched Manager Path\n\n**Area:** parallel-execution\n\n**Depends:** 0069\n\n## Problem\n\nV13 §32 requires removing the batched manager execution model now that per-area concurrent managers are implemented.\n\n## Requirements\n\n1. Remove `proc runManagerTickets*()` from `manager_agent.nim`.\n2. Remove `proc syncTicketsFromAreas*()` from `manager_agent.nim` (if it exists).\n3. Remove `ManagerTicketsBatchTemplate` export from `prompt_catalog.nim`.\n4. Remove `proc buildManagerTicketsBatchPrompt*()` from `prompt_builders.nim`.\n5. Delete the `src/scriptorium/prompts/manager_tickets_batch.md` prompt template file.\n6. Update `orchestrator.nim` to remove calls to the batched manager path (the `runManagerTickets` call in the tick loop).\n7. Update or remove unit tests that reference removed functions and templates.\n8. `make test` must pass after all removals.\n\n## Notes\n\n- The production manager path after this ticket is the per-area concurrent model from ticket 0069.\n- The single-area `manager_tickets.md` template and `ManagerTicketsTemplate` must be preserved.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path\n\n## Prediction\n- predicted_difficulty: easy\n- predicted_duration_minutes: 12\n- reasoning: Straightforward deletion of well-enumerated functions, a template file, and their references across ~5 files with no new logic to write — just removals and test cleanup, one attempt expected.\n",
+      "contentHash": "033BD81CED19663893A32643C825057D999BFE10"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0070-retire-batched-manager-path"
+}
