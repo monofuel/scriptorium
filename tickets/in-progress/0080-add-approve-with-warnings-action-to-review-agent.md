@@ -19,3 +19,5 @@ The `submit_review` MCP tool in `src/scriptorium/mcp_server.nim` only supports t
    - In `runReviewAgent`, handle `approve_with_warnings` as a successful review (merge proceeds).
    - Log at INFO level: `ticket <id>: review approved with warnings`.
    - Append a structured review note to the ticket markdown that includes the warnings text from `feedback`. Use a format like:
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-add-approve-with-warnings-action-to-review-agent
