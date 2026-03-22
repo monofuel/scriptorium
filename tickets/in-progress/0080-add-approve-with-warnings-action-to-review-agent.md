@@ -109,3 +109,10 @@ Done. Changes in two files:
 ```text
 n- **`src/scriptorium/merge_queue.nim`**: Added `approve_with_warnings` branch — logs `ticket <id>: review approved with warnings` at INFO level (line 239), generates a review note with `**Review:** approved with warnings` and optional `**Warnings:**` section from feedback (lines 257–266). The action falls through to merge since `processMergeQueue` only blocks on `request_changes`.","stop_reason":"end_turn","session_id":"50bfa324-7632-4c34-9064-018cdf881ab6","total_cost_usd":0.8868892500000001,"usage":{"input_tokens":21291,"cache_creation_input_tokens":52815,"cache_read_input_tokens":693581,"output_tokens":4142,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":52815},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":21291,"outputTokens":4142,"cacheReadInputTokens":693581,"cacheCreationInputTokens":52815,"webSearchRequests":0,"costUSD":0.8868892500000001,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f1981c59-81db-4649-b1b9-ead8ef3e1fb7"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 19s
