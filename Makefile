@@ -14,7 +14,8 @@ scriptorium: src/scriptorium.nim
 NIM_TEST_FLAGS ?= --hints:off --warnings:off
 
 test: nim.cfg
-	@files=$$(ls tests/test_*.nim 2>/dev/null); \
+	@export CLAUDE_CODE_USE_BEDROCK=; \
+	files=$$(ls tests/test_*.nim 2>/dev/null); \
 	if [ -z "$$files" ]; then \
 		echo "No unit tests found in tests/test_*.nim"; \
 		exit 0; \
