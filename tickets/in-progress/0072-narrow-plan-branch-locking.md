@@ -23,3 +23,5 @@ V13 §31 requires narrow plan branch locking instead of holding the lock for the
 - The `planWorktreeLock` already exists in `src/scriptorium/orchestrator.nim`.
 - This replaces the model where the lock was held for the entire manager batch execution.
 - The lock management module is at `src/scriptorium/lock_management.nim`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0072-narrow-plan-branch-locking
