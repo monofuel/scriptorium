@@ -75,3 +75,8 @@ make: *** [Makefile:35: integration-test] Error 1
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted trivial, actual was hard with 1 attempt(s) in 11m42s.
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 5
+- reasoning: Single-line addition of a logRoot field to an existing record literal with exact code provided; the merge queue failure was due to an unrelated OpenAI API key issue in integration tests, not a code defect.
