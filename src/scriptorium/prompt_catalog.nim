@@ -41,16 +41,26 @@ proc unresolvedPlaceholder(value: string): string =
 
 proc renderPromptTemplate*(templateText: string, bindings: openArray[PromptBinding]): string =
   ## Render one prompt template with required placeholder bindings.
+  ## Binding values may contain literal ``{{`` sequences (e.g. code diffs)
+  ## so we validate unresolved placeholders *before* substitution, not after.
   if templateText.strip().len == 0:
     raise newException(ValueError, "prompt template cannot be empty")
 
+  # First pass: verify all expected placeholders exist in the template.
+  var remainingTemplate = templateText
+  for binding in bindings:
+    let marker = markerForPlaceholder(binding.name)
+    if remainingTemplate.find(marker) < 0:
+      raise newException(ValueError, &"prompt template is missing placeholder: {marker}")
+    remainingTemplate = remainingTemplate.replace(marker, "")
+
+  # Check for unresolved placeholders in the template (with values stripped out).
+  let unresolved = unresolvedPlaceholder(remainingTemplate)
+  if unresolved.len > 0:
+    raise newException(ValueError, &"prompt template has unresolved placeholder: {unresolved}")
+
+  # Second pass: actually substitute the values.
   result = templateText
   for binding in bindings:
     let marker = markerForPlaceholder(binding.name)
-    if result.find(marker) < 0:
-      raise newException(ValueError, &"prompt template is missing placeholder: {marker}")
     result = result.replace(marker, binding.value)
-
-  let unresolved = unresolvedPlaceholder(result)
-  if unresolved.len > 0:
-    raise newException(ValueError, &"prompt template has unresolved placeholder: {unresolved}")

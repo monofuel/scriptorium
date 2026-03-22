@@ -15,7 +15,7 @@ services:
     environment:
       - OPENAI_API_KEY
       - CODEX_API_KEY
-      - ANTHROPIC_API_KEY
+      - ANTHROPIC_API_KEY=disabled
       - CLAUDE_CODE_USE_BEDROCK
       - ANTHROPIC_MODEL
       - ANTHROPIC_SMALL_FAST_MODEL
