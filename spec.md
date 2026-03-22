@@ -10,7 +10,7 @@
 
 ## 1. CLI Surface And Initialization
 
-- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `worktrees`, `--version`, `--help`.
+- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `audit`, `worktrees`, `--version`, `--help`.
 - `scriptorium --init [path]` must:
   - fail if target is not a git repository,
   - fail if `scriptorium/plan` already exists,
@@ -189,9 +189,24 @@
      - The diff of changes against `master`.
      - The relevant area content.
      - The submit summary from the coding agent.
-  3. The review agent has access to a `submit_review` MCP tool with two actions:
+     - The project's `AGENTS.md` content (conventions, naming, error handling, file organization).
+     - Relevant `spec.md` sections (at minimum the section related to the ticket's area).
+  3. The review agent has access to a `submit_review` MCP tool with three actions:
      - `approve`: accepts the changes, merge proceeds.
+     - `approve_with_warnings`: accepts with logged warnings for minor style issues.
      - `request_changes`: rejects the changes with a `feedback` string explaining what needs to change.
+
+### Review Enforcement
+
+- The review agent must enforce `AGENTS.md` conventions: check the diff against project naming, logging, error handling, and file organization rules. Flag violations.
+- The review agent must enforce `spec.md` compliance: check that the implementation matches the spec and flag contradictions.
+- The review agent must flag code quality issues in the diff:
+  - Unreachable code or unused imports introduced by the PR.
+  - Leftover artifacts from abandoned approaches (commented-out code, TODO comments referencing completed work, variables assigned but never read).
+  - Changes unrelated to the ticket's stated goal (without being overly aggressive about legitimate incidental fixes).
+- Graduated severity:
+  - Minor style issues and small convention deviations: approve with warnings logged in review notes.
+  - Substantive violations (wrong behavior, spec contradictions, convention violations affecting correctness, dead code, unrelated changes): request changes.
 
 ### Review Outcomes
 
@@ -201,8 +216,9 @@
 
 ### Review Lifecycle Logging
 
-- Review start, approved, changes requested, and stall events are all logged at INFO level with ticket ID.
+- Review start, approved, approved-with-warnings, changes requested, and stall events are all logged at INFO level with ticket ID.
 - Review outcomes are appended to ticket markdown as structured review notes.
+- Review reasoning (not just the decision) must be logged so violations are traceable in the review logs.
 
 ## 10. Merge Queue Safety Contract
 
@@ -251,6 +267,7 @@
   - `agents.coding`
   - `agents.manager`
   - `agents.reviewer`
+  - `agents.audit`
 - Each role config supports: `harness`, `model`, `reasoningEffort`.
 - Model-prefix harness inference:
   - `claude-*` -> `claude-code`
@@ -334,6 +351,7 @@
   - `agents.coding.{harness, model, reasoningEffort}`
   - `agents.manager.{harness, model, reasoningEffort}`
   - `agents.reviewer.{harness, model, reasoningEffort}`
+  - `agents.audit.{harness, model, reasoningEffort}`
   - `endpoints.local`
   - `logLevel`
   - `concurrency.maxAgents` (integer, default 4)
@@ -364,3 +382,50 @@
 - **Interleaved execution:** Managers and coders are interleaved across ticks — the orchestrator does not wait for all managers to finish before starting coders.
 - **Merge conflict handling:** Parallel coding agents may produce merge conflicts on shared files. The sequential merge process catches conflicts by merging the default branch into the ticket branch before testing. Conflicting tickets are sent back for another coding attempt with conflict context.
 - **Slot arithmetic:** If `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coders (and vice versa).
+
+## 19. Audit Agent
+
+- A read-only audit agent runs when the merge queue fully drains (goes idle after processing one or more items). It does not block the merge queue or modify any code — it only produces a report.
+- The audit checks two things:
+  1. **Spec compliance**: Read `spec.md` and sample the codebase. Report divergences — features the spec describes that the code doesn't implement, code behaviors not reflected in the spec, contradictions between spec requirements and actual behavior.
+  2. **AGENTS.md compliance**: Read `AGENTS.md` and the cumulative diff since the last audit. Report violations of project conventions.
+- The orchestrator tracks a "last audited commit" hash. When the merge queue drains, it compares the current default branch HEAD against the last audited commit. If they differ, it spawns the audit agent. If nothing merged, no audit runs.
+- Secondary trigger: spec change. If the architect rewrites `spec.md`, an audit runs to catch "spec says X but code still does old-Y".
+- The audit agent runs as a background agent using a shared pool slot (like managers/coders).
+- The audit agent should be cheap: use a smaller/faster model (default Haiku), limit scope to the cumulative diff since the last audit plus `spec.md` and `AGENTS.md`.
+- Output: markdown report written to `.scriptorium/logs/audit/` with a timestamp. Sections for spec drift and AGENTS.md violations, each item citing the relevant rule and the offending code location.
+- The audit agent is configured under `agents.audit` in `scriptorium.json`, supporting `harness`, `model`, and `reasoningEffort`. Default model is `claude-haiku-4-5-20251001`.
+- `scriptorium audit` CLI command runs the audit agent on demand.
+
+## 20. Compaction-Resilient Agent Context
+
+- When scriptorium builds a continuation prompt for a retry or timeout recovery, re-inject the project's `AGENTS.md` rules (or a condensed version) into the continuation text. The continuation prompt builder has access to the working directory and can read `AGENTS.md`.
+- The `continuationPromptBuilder` must be forwarded to `ClaudeCodeRunRequest` in `agent_runner.nim` (currently only forwarded for codex/typoi harnesses).
+- Critical `AGENTS.md` rules should be present in `CLAUDE.md` (or `.claude/` config files) for compaction resilience, since Claude Code reloads `CLAUDE.md` after compaction.
+
+## 21. Per-Role Log Persistence
+
+- Agent logs must persist in the repo root under `.scriptorium/logs/` organized by role, not in worktrees that are cleaned up after merge.
+- Log directory structure:
+  ```
+  .scriptorium/logs/
+    orchestrator/              # run_*.log (existing, unchanged)
+    architect/
+      spec/                    # architect spec runs
+      areas/                   # architect area generation
+    manager/
+      <areaId>/                # per-area manager runs
+    coder/
+      <ticketId>/              # coding agent execution
+        attempt-01.jsonl
+        attempt-02.jsonl
+    prediction/
+      <ticketId>/              # difficulty predictions
+    review/
+      <ticketId>/              # review agent runs
+        attempt-01.jsonl
+    audit/                     # audit agent reports
+  ```
+- Review agent: set `logRoot` in `AgentRunRequest` to `repoPath/.scriptorium/logs/review` so JSONL logs persist after worktree cleanup.
+- Coding agent: set `logRoot` to `repoPath/.scriptorium/logs/coder` so execution logs persist after worktree cleanup.
+- Rename existing log directories to match the consistent per-role structure: `plan-spec/` -> `architect/spec/`, `architect-areas/` -> `architect/areas/`, `<ticketId>-prediction/` -> `prediction/<ticketId>/`.
