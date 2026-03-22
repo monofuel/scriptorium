@@ -109,3 +109,44 @@ soning` variable during `runReviewAgent`, log reasoning at DEBUG level, and appe
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 18s
+
+## Merge Queue Success
+- Summary: Capture review agent reasoning from agentEventMessage events and include it in ticket review notes. Added ReviewReasoningMaxChars constant (2000), accumulate message events in onEvent callback, log reasoning at DEBUG level, and append **Review Reasoning:** field to ticket markdown for all review outcomes (approve, approve_with_warnings, request_changes). Includes two unit tests for reasoning capture and truncation. Rebased on master to resolve prior merge conflict.\n
+### Quality Check Output
+```text
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: began transition — assign 0082-progress-cfg
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: executed steps — assign 0082-progress-cfg
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: open -> in-progress (assigned, worktree=/tmp/scriptorium_test_progress_config/.scriptorium/worktrees/tickets/0082-progress-cfg)
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: coding agent started (model=claude-sonnet-4-6, attempt 1/2)
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: submit_pr accepted (quality checks run in merge queue)
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: submit_pr called (summary="progress config check done")
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] executeAssignedTicket: auto-committing uncommitted changes
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: began transition — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: executed steps — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T22:08:33Z] [INFO] ticket 0082: merge queue entered (position=1)
+[tests/test_scriptorium.nim]   [OK] progressTimeoutMs is passed through to agent request
+[tests/test_scriptorium.nim] 
+[tests/test_scriptorium.nim] [Suite] resolveDefaultBranch
+[tests/test_scriptorium.nim]   [OK] detects master when it exists
+[tests/test_scriptorium.nim]   [OK] detects main when master does not exist
+[tests/test_scriptorium.nim]   [OK] errors when no known default branch exists
+[tests/test_scriptorium.nim]   [OK] prefers origin/HEAD when set
+```
+
+## Metrics
+- wall_time_seconds: 1473
+- coding_wall_seconds: 1357
+- test_wall_seconds: 91
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 146413
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 2 attempt(s) in 24m33s.
