@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0078-0076-set-logroot-for-prediction-agent",
+  "timestamp": "2026-03-22T20:33:20Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0078-0076-set-logroot-for-prediction-agent.md",
+      "destination": "tickets/in-progress/0078-0076-set-logroot-for-prediction-agent.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0078-0076-set-logroot-for-prediction-agent.md",
+      "content": "# 0076 — Set logRoot for prediction agent\n\n**Area:** log-persistence\n\n## Problem\n\nThe prediction agent's `AgentRunRequest` in `src/scriptorium/coding_agent.nim` (around line 78) does not set `logRoot`. Currently it uses ticketId `\"{ticketId}-prediction\"` which causes logs to land at `<repoPath>/.scriptorium/logs/{ticketId}-prediction/` (the default fallback). The area spec requires `prediction/<ticketId>/` structure instead.\n\n## Task\n\nIn `src/scriptorium/coding_agent.nim`, in `predictTicketDifficulty` (around line 78):\n\n1. Add the `logRoot` field to the `AgentRunRequest`:\n   ```nim\n   logRoot: repoPath / ManagedStateDirName / PlanLogDirName / \"prediction\",\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0076-set-logroot-for-prediction-agent\n",
+      "contentHash": "327CD699FCBA0FDCD91FB8E621285D59B7D556C5"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0078-0076-set-logroot-for-prediction-agent"
+}
