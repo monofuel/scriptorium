@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_pool, agent_runner, config, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_pool, agent_runner, architect_agent, config, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -182,6 +182,7 @@ proc executeAssignedTicket*(
       mcpEndpoint: cfg.endpoints.local,
       ticketId: ticketId,
       attempt: currentAttemptBase,
+      logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "coder",
       skipGitRepoCheck: true,
       noOutputTimeoutMs: cfg.timeouts.codingAgentNoOutputTimeoutMs,
       hardTimeoutMs: cfg.timeouts.codingAgentHardTimeoutMs,
