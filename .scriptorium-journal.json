@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0076",
+  "timestamp": "2026-03-22T20:15:38Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0076.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0076-0074-set-logroot-for-coding-agent.md\n**Ticket ID:** 0076\n**Branch:** scriptorium/ticket-0076\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0076-0074-set-logroot-for-coding-agent\n**Summary:** Set logRoot on the coding agent's AgentRunRequest to `repoPath / ManagedStateDirName / PlanLogDirName / \"coder\"`, so JSONL logs persist in `<repo>/.scriptorium/logs/coder/` instead of inside the ticket worktree. Added architect_agent import for PlanLogDirName constant.\n",
+      "contentHash": "41855C3BFBC185CBE42F6BCDEB99C259929D91B6"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0076"
+}
