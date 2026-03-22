@@ -44,6 +44,12 @@ proc emptySlotCount*(maxAgents: int): int =
   ## Return the number of available agent slots.
   result = maxAgents - runningPoolSlots.len
 
+proc isManagerRunningForArea*(areaId: string): bool =
+  ## Check if a manager agent is already running for the given area.
+  for slot in runningPoolSlots:
+    if slot.role == arManager and slot.areaId == areaId:
+      return true
+
 proc startAgentAsync*(
   role: AgentRole,
   repoPath: string,

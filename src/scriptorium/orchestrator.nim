@@ -158,15 +158,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           let areaId = completion.areaId
           let ticketDocs = completion.managerResult
           logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
-          if ticketDocs.len > 0:
-            discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+          discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+            if ticketDocs.len > 0:
               let nextId = nextTicketId(planPath)
               writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
               gitRun(planPath, "add", PlanTicketsOpenDir)
               if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
                 gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
-              true
-            )
+            # Always update area hashes so this area is not re-ticketed next tick.
+            let currentHashes = computeAllAreaHashes(planPath)
+            writeAreaHashes(planPath, currentHashes)
+            gitRun(planPath, "add", AreaHashesPath)
+            if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+              gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
+            true
+          )
         else:
           logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
         if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
@@ -231,6 +237,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 for areaRelPath in areasToProcess:
                   if emptySlotCount(effectiveMax) <= 0: break
                   let areaId = areaIdFromAreaPath(areaRelPath)
+                  if isManagerRunningForArea(areaId): continue
                   let areaContent = readFile(planPath / areaRelPath)
                   let nextId = nextTicketId(planPath)
                   startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, effectiveMax, managerAgentWorkerThread)
