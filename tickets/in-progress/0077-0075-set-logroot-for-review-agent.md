@@ -14,3 +14,8 @@ In `src/scriptorium/merge_queue.nim`, in the `runReviewAgent` function, add the 
 logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "review",
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0077-0075-set-logroot-for-review-agent
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 5
+- reasoning: Single-line addition of a logRoot field to an existing AgentRunRequest struct in one file, with the exact code provided in the ticket.
