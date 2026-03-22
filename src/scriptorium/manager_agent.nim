@@ -107,7 +107,7 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
     let ticketsDir = planPath / PlanTicketsOpenDir
     if dirExists(ticketsDir):
       for ticketPath in listMarkdownFiles(ticketsDir):
-        let content = readFile(planPath / ticketPath).strip()
+        let content = readFile(ticketPath).strip()
         if content.len > 0:
           result.add(content)
 
@@ -138,90 +138,37 @@ proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     writeFile(ticketPath, ticketContent)
     inc currentId
 
-proc syncTicketsFromAreas*(repoPath: string, generateTickets: ManagerTicketGenerator): bool =
-  ## Generate and persist tickets for areas without active work.
-  if generateTickets.isNil:
-    raise newException(ValueError, "manager ticket generator is required")
-
-  let cfg = loadConfig(repoPath)
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-    let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
-    if areasToProcess.len == 0:
-      false
-    else:
-      var nextId = nextTicketId(planPath)
-      var hasChanges = false
-      for areaRelPath in areasToProcess:
-        let areaContent = readFile(planPath / areaRelPath)
-        let docs = generateTickets(cfg.agents.manager.model, areaRelPath, areaContent)
-        if writeTicketsForArea(planPath, areaRelPath, docs, nextId):
-          hasChanges = true
-
-      if hasChanges:
-        gitRun(planPath, "add", PlanTicketsOpenDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", TicketCommitMessage)
-
-      # Update area hashes after ticket generation
-      let currentHashes = computeAllAreaHashes(planPath)
-      writeAreaHashes(planPath, currentHashes)
-      gitRun(planPath, "add", AreaHashesPath)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
-
-      hasChanges
-  )
-
-proc runManagerTickets*(repoPath: string, runner: AgentRunner = runAgent): bool =
-  ## Run a single batched manager pass that writes ticket files for all areas.
-  if runner.isNil:
-    raise newException(ValueError, "agent runner is required")
-
-  let cfg = loadConfig(repoPath)
-  let repoDirtyStateBefore = snapshotDirtyStateInGitPath(repoPath)
+proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
+  ## Run per-area manager agents serially and commit generated tickets.
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     if not hasRunnableSpecInPlanPath(planPath):
-      false
-    else:
-      let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
-      if areasToProcess.len == 0:
-        false
-      else:
-        var areas: seq[tuple[relPath: string, content: string]]
-        for areaRelPath in areasToProcess:
-          areas.add((relPath: areaRelPath, content: readFile(planPath / areaRelPath)))
-        let nextId = nextTicketId(planPath)
-        discard runner(AgentRunRequest(
-          prompt: buildManagerTicketsBatchPrompt(repoPath, planPath, areas, nextId),
-          workingDir: planPath,
-          harness: cfg.agents.manager.harness,
-          model: resolveModel(cfg.agents.manager.model),
-          reasoningEffort: cfg.agents.manager.reasoningEffort,
-          ticketId: ManagerTicketIdPrefix & "batch",
-          attempt: DefaultAgentAttempt,
-          skipGitRepoCheck: true,
-          logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / "batch"),
-          maxAttempts: DefaultAgentMaxAttempts,
-          onEvent: proc(event: AgentStreamEvent) =
-            if event.kind == agentEventTool:
-              logDebug(fmt"manager[batch]: {event.text}"),
-        ))
-        enforceWritePrefixAllowlist(planPath, [PlanTicketsOpenDir, PlanTicketsDoneDir], ManagerWriteScopeName)
-        enforceGitPathUnchanged(repoPath, repoDirtyStateBefore, ManagerWriteScopeName)
+      return false
+    let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
+    if areasToProcess.len == 0:
+      return false
 
-        gitRun(planPath, "add", PlanTicketsOpenDir)
-        gitRun(planPath, "add", PlanTicketsDoneDir)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", TicketCommitMessage)
+    var hasChanges = false
+    for areaRelPath in areasToProcess:
+      let areaId = areaIdFromAreaPath(areaRelPath)
+      let areaContent = readFile(planPath / areaRelPath)
+      let nextId = nextTicketId(planPath)
+      let ticketDocs = executeManagerForArea(areaId, areaContent, repoPath, planPath, nextId, runner)
+      if ticketDocs.len > 0:
+        writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
+        hasChanges = true
 
-        # Update area hashes after ticket generation
-        let currentHashes = computeAllAreaHashes(planPath)
-        writeAreaHashes(planPath, currentHashes)
-        gitRun(planPath, "add", AreaHashesPath)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
+    if hasChanges:
+      gitRun(planPath, "add", PlanTicketsOpenDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", TicketCommitMessage)
 
-        true
+    let currentHashes = computeAllAreaHashes(planPath)
+    writeAreaHashes(planPath, currentHashes)
+    gitRun(planPath, "add", AreaHashesPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
+
+    hasChanges
   )
 
 proc managerAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
@@ -236,3 +183,17 @@ proc managerAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
       result: AgentRunResult(),
       managerResult: ticketDocs,
     ))
+
+proc launchManagerAreasAsync*(repoPath: string, maxAgents: int) =
+  ## Launch per-area manager agents asynchronously for parallel execution.
+  discard withPlanWorktree(repoPath, proc(planPath: string): int =
+    if not hasRunnableSpecInPlanPath(planPath):
+      return 0
+    let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
+    for areaRelPath in areasToProcess:
+      let areaId = areaIdFromAreaPath(areaRelPath)
+      let areaContent = readFile(planPath / areaRelPath)
+      let nextId = nextTicketId(planPath)
+      startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, maxAgents, managerAgentWorkerThread)
+    0
+  )

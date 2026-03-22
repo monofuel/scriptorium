@@ -121,25 +121,6 @@ proc buildManagerTicketsPrompt*(repoPath: string, planPath: string,
     ],
   )
 
-proc buildManagerTicketsBatchPrompt*(repoPath: string, planPath: string,
-    areas: seq[tuple[relPath: string, content: string]], nextId: int): string =
-  ## Build a batch manager prompt covering all areas in a single session.
-  var areasBlock = ""
-  for area in areas:
-    let areaId = areaIdFromAreaPath(area.relPath)
-    areasBlock.add(&"### Area: {areaId}\nPath: {area.relPath}\nContent:\n{area.content.strip()}\n\n")
-  let startIdText = &"{nextId:04d}"
-  result = renderPromptTemplate(
-    ManagerTicketsBatchTemplate,
-    [
-      (name: "PROJECT_REPO_PATH", value: repoPath),
-      (name: "WORKTREE_PATH", value: planPath),
-      (name: "START_ID", value: startIdText),
-      (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
-      (name: "AREAS_BLOCK", value: areasBlock.strip()),
-    ],
-  )
-
 proc buildPredictionPrompt*(ticketContent: string, areaContent: string, specSummary: string): string =
   ## Build the prediction prompt from ticket, area, and spec context.
   result = renderPromptTemplate(

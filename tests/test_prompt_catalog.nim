@@ -69,4 +69,4 @@ suite "prompt catalog":
     check ArchitectPlanOneShotTemplate.contains("Dependency guidance")
     check ArchitectPlanInteractiveTemplate.contains("Dependency guidance")
     check ManagerTicketsTemplate.contains("Dependency guidance")
-    check ManagerTicketsBatchTemplate.contains("Dependency guidance")
+

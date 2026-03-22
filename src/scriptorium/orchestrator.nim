@@ -216,7 +216,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             logInfo("manager: generating tickets")
             t0 = epochTime()
-            let managerChanged = runManagerTickets(repoPath, runner)
+            var managerChanged = false
+            if maxAgents <= 1:
+              managerChanged = runManagerForAreas(repoPath, runner)
+            else:
+              launchManagerAreasAsync(repoPath, maxAgents)
             logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
             if managerChanged:
               logInfo("manager: tickets created")

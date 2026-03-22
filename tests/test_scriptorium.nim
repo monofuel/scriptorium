@@ -942,105 +942,6 @@ suite "orchestrator manager ticket bootstrap":
     check "areas/02-core.md" in needed
     check "areas/01-cli.md" notin needed
 
-  test "sync tickets calls manager with configured manager model":
-    let tmp = getTempDir() / "scriptorium_test_sync_tickets_call"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n\n## Scope\n- CLI\n")
-    var writtenCfg = defaultConfig()
-    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1")
-    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.1-codex-mini")
-    writeScriptoriumConfig(tmp, writtenCfg)
-
-    var callCount = 0
-    var capturedModel = ""
-    var capturedAreaPath = ""
-    var capturedAreaContent = ""
-    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
-      ## Capture manager invocation arguments and return one ticket.
-      inc callCount
-      capturedModel = model
-      capturedAreaPath = areaPath
-      capturedAreaContent = areaContent
-      result = @[
-        TicketDocument(slug: "cli-bootstrap", content: "# Ticket 1\n")
-      ]
-
-    let before = planCommitCount(tmp)
-    let synced = syncTicketsFromAreas(tmp, generator)
-    let after = planCommitCount(tmp)
-
-    check synced
-    check callCount == 1
-    check capturedModel == "gpt-5.1-codex-mini"
-    check capturedAreaPath == "areas/01-cli.md"
-    check "## Scope" in capturedAreaContent
-    check after == before + 2  # tickets commit + area hashes commit
-
-    let files = planTreeFiles(tmp)
-    check "tickets/open/0001-cli-bootstrap.md" in files
-
-    let (logOutput, rc) = execCmdEx(
-      "git -C " & quoteShell(tmp) & " log --oneline -2 scriptorium/plan"
-    )
-    check rc == 0
-    check "scriptorium: create tickets from areas" in logOutput
-
-  test "ticket IDs are monotonic based on existing highest ID":
-    let tmp = getTempDir() / "scriptorium_test_ticket_id_monotonic"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
-    addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
-    addTicketToPlan(tmp, "done", "0042-already-done.md", "# Done Ticket\n\n**Area:** old\n")
-
-    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
-      ## Return one ticket per area for monotonic ID checks.
-      discard model
-      discard areaPath
-      discard areaContent
-      result = @[
-        TicketDocument(slug: "next-task", content: "# New Ticket\n")
-      ]
-
-    discard syncTicketsFromAreas(tmp, generator)
-
-    let files = planTreeFiles(tmp)
-    check "tickets/open/0043-next-task.md" in files
-    check "tickets/open/0044-next-task.md" in files
-
-  test "sync tickets is idempotent on second run":
-    let tmp = getTempDir() / "scriptorium_test_sync_tickets_idempotent"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
-
-    var callCount = 0
-    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
-      ## Return stable ticket output for idempotence checks.
-      inc callCount
-      discard model
-      discard areaPath
-      discard areaContent
-      result = @[
-        TicketDocument(slug: "stable-task", content: "# Stable Ticket\n")
-      ]
-
-    let before = planCommitCount(tmp)
-    let firstSync = syncTicketsFromAreas(tmp, generator)
-    let afterFirst = planCommitCount(tmp)
-    let secondSync = syncTicketsFromAreas(tmp, generator)
-    let afterSecond = planCommitCount(tmp)
-
-    check firstSync
-    check not secondSync
-    check callCount == 1
-    check afterFirst == before + 2  # tickets commit + area hashes commit
-    check afterSecond == afterFirst
-
 suite "orchestrator ticket assignment":
   test "oldest open ticket picks the lowest numeric ID":
     let tmp = getTempDir() / "scriptorium_test_oldest_open_ticket"
@@ -2026,176 +1927,6 @@ suite "orchestrator final v1 flow":
     check "areas/01-arch.md" in files
     check after == before + 2  # areas commit + spec hash marker commit
 
-  test "runManagerTickets commits ticket files written by mocked manager runner":
-    let tmp = getTempDir() / "scriptorium_test_v1_38_run_manager_tickets"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
-    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
-    var writtenCfg = defaultConfig()
-    writtenCfg.agents.coding.reasoningEffort = "low"
-    writtenCfg.agents.manager.reasoningEffort = "high"
-    writeScriptoriumConfig(tmp, writtenCfg)
-
-    var callCount = 0
-    var capturedRequest = AgentRunRequest()
-    var capturedPromptRepoPath = ""
-    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Write one ticket file directly into tickets/open/ for the target area.
-      inc callCount
-      capturedRequest = request
-      let repoPathMarker = "Project repository root path (read project source files and instructions from here):\n"
-      let markerIndex = request.prompt.find(repoPathMarker)
-      doAssert markerIndex >= 0
-      let repoPathStart = markerIndex + repoPathMarker.len
-      let repoPathEnd = request.prompt.find('\n', repoPathStart)
-      doAssert repoPathEnd > repoPathStart
-      capturedPromptRepoPath = request.prompt[repoPathStart..<repoPathEnd].strip()
-      writeFile(
-        request.workingDir / "tickets/open/0001-core-task.md",
-        "# Ticket 1\n\n**Area:** 01-core\n",
-      )
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "tickets written",
-        timeoutKind: "none",
-      )
-
-    let before = planCommitCount(tmp)
-    let changed = runManagerTickets(tmp, fakeRunner)
-    let after = planCommitCount(tmp)
-    let files = planTreeFiles(tmp)
-
-    check changed
-    check callCount == 1
-    check capturedRequest.ticketId == "manager-batch"
-    check capturedRequest.model == "claude-sonnet-4-6"
-    check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "manager" / "batch"
-    check capturedPromptRepoPath == tmp
-    check "AGENTS.md" in capturedRequest.prompt
-    check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
-    check "Read `areas/`, `tickets/`, and `spec.md` from this working directory." in capturedRequest.prompt
-    check "Only edit files under tickets/open/ and tickets/done/ in this working directory." in capturedRequest.prompt
-    check "tickets/open/0001-core-task.md" in files
-    check after == before + 2  # tickets commit + area hashes commit
-
-  test "runManagerTickets rejects writes outside tickets/open":
-    let tmp = getTempDir() / "scriptorium_test_manager_write_guard"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
-    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
-
-    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Write an out-of-scope plan file to trigger the manager write guard.
-      writeFile(
-        request.workingDir / "tickets/open/0001-core-task.md",
-        "# Ticket 1\n\n**Area:** 01-core\n",
-      )
-      writeFile(request.workingDir / "areas/99-out-of-scope.md", "# Bad write\n")
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "tickets written",
-        timeoutKind: "none",
-      )
-
-    let before = planCommitCount(tmp)
-    expect ValueError:
-      discard runManagerTickets(tmp, fakeRunner)
-    let after = planCommitCount(tmp)
-    let files = planTreeFiles(tmp)
-
-    check after == before
-    check "tickets/open/0001-core-task.md" notin files
-    check "areas/99-out-of-scope.md" notin files
-
-  test "runManagerTickets rejects repository root mutations":
-    let tmp = getTempDir() / "scriptorium_test_manager_repo_guard"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    writeSpecInPlan(tmp, "# Spec\n\nCreate tickets from areas.\n")
-    addAreaToPlan(tmp, "01-core.md", "# Area 01\n\n## Scope\n- Core\n")
-
-    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Write one repo-root file to trigger the manager repo mutation guard.
-      writeFile(
-        request.workingDir / "tickets/open/0001-core-task.md",
-        "# Ticket 1\n\n**Area:** 01-core\n",
-      )
-      writeFile(tmp / "manager-out-of-scope.txt", "bad write\n")
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "tickets written",
-        timeoutKind: "none",
-      )
-
-    let before = planCommitCount(tmp)
-    expect ValueError:
-      discard runManagerTickets(tmp, fakeRunner)
-    let after = planCommitCount(tmp)
-    let files = planTreeFiles(tmp)
-
-    check after == before
-    check "tickets/open/0001-core-task.md" notin files
-    check fileExists(tmp / "manager-out-of-scope.txt")
-
-  test "runManagerTickets batches multiple areas into a single runner call":
-    let tmp = getTempDir() / "scriptorium_test_manager_batch_multi_area"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    writeSpecInPlan(tmp, "# Spec\n\nMulti-area batch test.\n")
-    addAreaToPlan(tmp, "01-alpha.md", "# Area 01\n\n## Scope\n- Alpha\n")
-    addAreaToPlan(tmp, "02-beta.md", "# Area 02\n\n## Scope\n- Beta\n")
-    addAreaToPlan(tmp, "03-gamma.md", "# Area 03\n\n## Scope\n- Gamma\n")
-
-    var callCount = 0
-    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Write ticket files for all three areas in one call.
-      inc callCount
-      writeFile(
-        request.workingDir / "tickets/open/0001-alpha-task.md",
-        "# Ticket 1\n\n**Area:** 01-alpha\n",
-      )
-      writeFile(
-        request.workingDir / "tickets/open/0002-beta-task.md",
-        "# Ticket 2\n\n**Area:** 02-beta\n",
-      )
-      writeFile(
-        request.workingDir / "tickets/open/0003-gamma-task.md",
-        "# Ticket 3\n\n**Area:** 03-gamma\n",
-      )
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "batch tickets written",
-        timeoutKind: "none",
-      )
-
-    let changed = runManagerTickets(tmp, fakeRunner)
-    let files = planTreeFiles(tmp)
-
-    check changed
-    check callCount == 1
-    check "tickets/open/0001-alpha-task.md" in files
-    check "tickets/open/0002-beta-task.md" in files
-    check "tickets/open/0003-gamma-task.md" in files
-
   test "done tickets suppress areas from areasNeedingTickets":
     let tmp = getTempDir() / "scriptorium_test_done_ticket_suppression"
     makeTestRepo(tmp)
@@ -2344,52 +2075,6 @@ suite "orchestrator final v1 flow":
     let hashContent = readPlanFile(tmp, "areas/.spec-hash").strip()
     check hashContent == $secureHash(specContent)
 
-  test "manager writes area hashes after ticket generation":
-    let tmp = getTempDir() / "scriptorium_test_manager_writes_area_hashes"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
-
-    proc generator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
-      result = @[TicketDocument(slug: "cli-task", content: "# Task\n")]
-
-    discard syncTicketsFromAreas(tmp, generator)
-
-    let files = planTreeFiles(tmp)
-    check "tickets/.area-hashes" in files
-    let hashContent = readPlanFile(tmp, "tickets/.area-hashes").strip()
-    check "01-cli:" & $secureHash("# CLI Area\n") in hashContent
-
-  test "runManagerTickets write guard accepts tickets/done writes":
-    let tmp = getTempDir() / "scriptorium_test_manager_done_write_guard"
-    makeTestRepo(tmp)
-    defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
-    writeSpecInPlan(tmp, "# Spec\n\nDone write guard test.\n")
-    addAreaToPlan(tmp, "01-impl.md", "# Area 01\n\n## Scope\n- Impl\n")
-
-    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
-      ## Write a done ticket to verify the write guard accepts tickets/done/.
-      writeFile(
-        request.workingDir / "tickets/done/0001-impl-done.md",
-        "# Done\n\n**Area:** 01-impl\n",
-      )
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "done ticket written",
-        timeoutKind: "none",
-      )
-
-    let changed = runManagerTickets(tmp, fakeRunner)
-    let files = planTreeFiles(tmp)
-
-    check changed
-    check "tickets/done/0001-impl-done.md" in files
-
   test "runOrchestratorForTicks drives spec to done in one bounded tick with mocked runners":
     let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"
     makeTestRepo(tmp)
@@ -2398,6 +2083,9 @@ suite "orchestrator final v1 flow":
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nDeliver one full-flow ticket.\n")
     writeOrchestratorEndpointConfig(tmp, 22)
+    var cfg = loadConfig(tmp)
+    cfg.concurrency.maxAgents = 1
+    writeScriptoriumConfig(tmp, cfg)
 
     var callOrder: seq[string] = @[]
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
@@ -2417,17 +2105,13 @@ suite "orchestrator final v1 flow":
           lastMessage: "areas done",
           timeoutKind: "none",
         )
-      of "manager-batch":
-        writeFile(
-          request.workingDir / "tickets/open/0001-full-flow.md",
-          "# Ticket 1\n\n**Area:** 01-full-flow\n",
-        )
+      of "manager-01-full-flow":
         result = AgentRunResult(
           backend: harnessCodex,
           exitCode: 0,
           attempt: 1,
           attemptCount: 1,
-          lastMessage: "tickets done",
+          lastMessage: "```markdown\n# Full Flow\n\n**Area:** 01-full-flow\n```",
           timeoutKind: "none",
         )
       of "0001-prediction":
@@ -2458,7 +2142,7 @@ suite "orchestrator final v1 flow":
     runOrchestratorForTicks(tmp, 1, fakeRunner)
 
     let files = planTreeFiles(tmp)
-    check callOrder == @["architect-areas", "manager-batch", "0001-prediction", "0001"]
+    check callOrder == @["architect-areas", "manager-01-full-flow", "0001-prediction", "0001"]
     check "areas/01-full-flow.md" in files
     check "tickets/done/0001-full-flow.md" in files
     check "tickets/open/0001-full-flow.md" notin files
@@ -2940,7 +2624,6 @@ suite "orchestrator agent enqueue with fakes":
       addPassingMakefile(repoPath)
 
       var architectCalls = 0
-      var managerCalls = 0
       proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
         ## Return one deterministic area document from spec input.
         inc architectCalls
@@ -2957,22 +2640,8 @@ suite "orchestrator agent enqueue with fakes":
       check syncedAreas
       check architectCalls == 1
 
-      proc managerGenerator(model: string, areaPath: string, areaContent: string): seq[TicketDocument] =
-        ## Return one deterministic ticket for the generated area.
-        inc managerCalls
-        check model == "claude-sonnet-4-6"
-        check areaPath == "areas/01-e2e.md"
-        check "Validate V1 happy path." in areaContent
-        result = @[
-          TicketDocument(
-            slug: "e2e-happy-path",
-            content: "# Ticket 1\n\nImplement end-to-end flow.\n",
-          )
-        ]
-
-      let syncedTickets = syncTicketsFromAreas(repoPath, managerGenerator)
-      check syncedTickets
-      check managerCalls == 1
+      addTicketToPlan(repoPath, "open", "0001-e2e-happy-path.md",
+        "# Ticket 1\n\nImplement end-to-end flow.\n\n**Area:** 01-e2e\n")
 
       let filesAfterPlanning = planTreeFiles(repoPath)
       check "areas/01-e2e.md" in filesAfterPlanning

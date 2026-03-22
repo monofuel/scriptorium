@@ -41,8 +41,6 @@ type
     slug*: string
     content*: string
 
-  ManagerTicketGenerator* = proc(model: string, areaPath: string, areaContent: string): seq[TicketDocument]
-
   PlanTurn* = object
     role*: string
     text*: string
