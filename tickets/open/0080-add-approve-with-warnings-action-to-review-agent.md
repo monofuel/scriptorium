@@ -48,3 +48,39 @@ m/merge_queue.nim`**: Added `approve_with_warnings` branch in `runReviewAgent` â
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 29s
+
+## Merge Queue Failure
+- Summary: Add approve_with_warnings action to review agent. Updated MCP tool schema enum and validation in mcp_server.nim, and added approve_with_warnings handling in merge_queue.nim (INFO log, structured review note with optional warnings text, merge proceeds as with approve).\n- Failed gate: make integration-test\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+g... 3/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07dd3b8a4df85d-ORD, request id: req_504f27b365f44823934464fb87a2d95f)"}
+{"type":"error","message":"Reconnecting... 4/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07dd41aedf13ec-ORD, request id: req_eae4eb81051244e0b15bc5d906f58468)"}
+{"type":"error","message":"Reconnecting... 5/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07dd4c8d98c0b2-ORD, request id: req_29fc00fcce9b4df4acc55f749fca35b2)"}
+{"type":"error","message":"unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07dd614fd7f851-ORD, request id: req_c6e529d6de064e2fb1149893518eea8e"}
+{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07dd614fd7f851-ORD, request id: req_c6e529d6de064e2fb1149893518eea8e"}}
+Warning: no last agent message; wrote empty content to /tmp/scriptorium_integration_codex_mcp_pUE5gHzb/logs/integration-codex-mcp/attempt-01.last_message.txt
+ [AssertionDefect]
+  [FAILED] real codex MCP tool call against live server
+Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_codex_harness_d/integration_codex_harness_6E5DE5E70494C66B2DDFEC3BF9DEB779C3571B3E'
+make: *** [Makefile:35: integration-test] Error 1
+```
+
+## Metrics
+- wall_time_seconds: 855
+- coding_wall_seconds: 486
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 291318
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 14m15s.
