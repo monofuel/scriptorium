@@ -61,3 +61,8 @@ Submitted. Here's a summary of the changes:
 ```text
 rovided (potentially stale) path\n- Fixed a latent bug in `executeManagerForArea`'s fallback path where `listMarkdownFiles` returned absolute paths but was incorrectly prepended with `planPath`\n- Updated 2 orchestrator tests to use `maxAgents=1` for single-tick determinism\n- Updated the e2e happy path test to write tickets directly instead of via the removed `syncTicketsFromAreas`","stop_reason":"end_turn","session_id":"8ba740a6-d5a4-47f2-bfbe-e52d937ca4e0","total_cost_usd":5.097461249999999,"usage":{"input_tokens":5292,"cache_creation_input_tokens":103101,"cache_read_input_tokens":7093990,"output_tokens":35185,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":103101},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":5292,"outputTokens":35185,"cacheReadInputTokens":7093990,"cacheCreationInputTokens":103101,"webSearchRequests":0,"costUSD":5.097461249999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"33ec47b2-7dde-4b37-b6d2-1048c084bbe9"}
 ```
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Straightforward deletion of well-enumerated functions, a template file, and their references across ~5 files with no new logic to write — just removals and test cleanup, one attempt expected.
