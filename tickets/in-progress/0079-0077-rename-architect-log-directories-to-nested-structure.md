@@ -29,3 +29,5 @@ In `src/scriptorium/architect_agent.nim`:
 - `make test` passes
 - Grep for old path names (`plan-spec`, `architect-areas`) to confirm they are fully removed
 ````
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0079-0077-rename-architect-log-directories-to-nested-structure
