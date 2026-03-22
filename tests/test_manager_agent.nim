@@ -8,14 +8,12 @@ suite "buildManagerTicketsPrompt":
   test "renders single-area prompt with all placeholders":
     let prompt = buildManagerTicketsPrompt(
       repoPath = "/repo",
-      planPath = "/plan",
       areaId = "backend-api",
       areaRelPath = "areas/backend-api.md",
       areaContent = "Build the REST API endpoints.",
       nextId = 42,
     )
     check prompt.contains("/repo")
-    check prompt.contains("/plan")
     check prompt.contains("backend-api")
     check prompt.contains("areas/backend-api.md")
     check prompt.contains("Build the REST API endpoints.")
@@ -25,7 +23,6 @@ suite "buildManagerTicketsPrompt":
   test "prompt contains no unresolved placeholders":
     let prompt = buildManagerTicketsPrompt(
       repoPath = "/repo",
-      planPath = "/plan",
       areaId = "frontend",
       areaRelPath = "areas/frontend.md",
       areaContent = "UI components.",
@@ -37,7 +34,6 @@ suite "buildManagerTicketsPrompt":
   test "nextId is zero-padded to four digits":
     let prompt = buildManagerTicketsPrompt(
       repoPath = "/r",
-      planPath = "/p",
       areaId = "a",
       areaRelPath = "areas/a.md",
       areaContent = "content",

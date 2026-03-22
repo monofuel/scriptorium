@@ -45,7 +45,6 @@ suite "prompt catalog":
     check ArchitectAreasTemplate.contains("{{WORKTREE_PATH}}")
     check ManagerTicketsTemplate.contains("{{AREA_CONTENT}}")
     check ManagerTicketsTemplate.contains("{{PROJECT_REPO_PATH}}")
-    check ManagerTicketsTemplate.contains("{{WORKTREE_PATH}}")
     check PlanScopeTemplate.contains("{{PROJECT_REPO_PATH}}")
     check PlanScopeTemplate.contains("{{WORKTREE_PATH}}")
     check ArchitectPlanOneShotTemplate.contains("{{USER_REQUEST}}")

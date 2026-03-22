@@ -3,21 +3,16 @@ Project repository root path (read project source files and instructions from he
 {{PROJECT_REPO_PATH}}
 Read and follow project instructions in `{{PROJECT_REPO_PATH}}/AGENTS.md`.
 
-Active working directory path (this is the scriptorium plan worktree):
-{{WORKTREE_PATH}}
-Read `areas/`, `tickets/`, and `spec.md` from this working directory.
-Only edit files under tickets/open/ in this working directory.
-Do not edit files in the project repository root path directly.
+Output each ticket as a fenced markdown block in your response.
+Do NOT write files to disk. The orchestrator will write tickets for you.
 
-Create ticket markdown files directly under tickets/open/.
-Each ticket filename must start with a zero-padded numeric ID, then a slug.
-Start IDs at {{NEXT_ID}} and increase monotonically for additional tickets.
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} {{AREA_ID}}`.
+Start IDs at {{NEXT_ID}} and increase monotonically for additional tickets.
+Each ticket filename should start with a zero-padded numeric ID, then a slug.
 Optionally include `**Depends:** <ticket-ids>` (comma-separated) if a ticket
 must wait for other tickets to complete before it can be started. Only add
 dependencies when there is a genuine build-on relationship. Most tickets
 should have no dependencies.
-Do not edit areas/, queue/, or spec.md in this task.
 
 Each ticket should be scoped so a coding agent can complete it in under one hour.
 Prefer smaller, focused tickets over large ones. If a task is too big, split it into

@@ -104,7 +104,7 @@ proc buildArchitectAreasPrompt*(repoPath: string, planPath: string, spec: string
     ],
   )
 
-proc buildManagerTicketsPrompt*(repoPath: string, planPath: string,
+proc buildManagerTicketsPrompt*(repoPath: string,
     areaId: string, areaRelPath: string, areaContent: string, nextId: int): string =
   ## Build a single-area manager prompt using the ManagerTicketsTemplate.
   let startIdText = &"{nextId:04d}"
@@ -112,7 +112,6 @@ proc buildManagerTicketsPrompt*(repoPath: string, planPath: string,
     ManagerTicketsTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
-      (name: "WORKTREE_PATH", value: planPath),
       (name: "NEXT_ID", value: startIdText),
       (name: "AREA_FIELD_PREFIX", value: AreaFieldPrefix),
       (name: "AREA_ID", value: areaId),
