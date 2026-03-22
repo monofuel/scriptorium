@@ -15,6 +15,14 @@ Your job is to review the changes made by the coding agent and decide whether to
 
 {{AREA_CONTENT}}
 
+## Project Conventions (AGENTS.md)
+
+{{AGENTS_CONTENT}}
+
+## Spec Context
+
+{{SPEC_CONTENT}}
+
 ## Coding Agent Summary
 
 {{SUBMIT_SUMMARY}}

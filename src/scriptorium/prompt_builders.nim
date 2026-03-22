@@ -81,14 +81,16 @@ proc buildStallContinuationPrompt*(initialPrompt: string, ticketContent: string,
     StallContinuationText & "\n\n" &
     testSection
 
-proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string): string =
-  ## Build the review agent prompt from ticket, diff, area, and summary context.
+proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string, agentsContent: string, specContent: string): string =
+  ## Build the review agent prompt from ticket, diff, area, summary, AGENTS.md, and spec context.
   result = renderPromptTemplate(
     ReviewAgentTemplate,
     [
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
       (name: "DIFF_CONTENT", value: diffContent.strip()),
       (name: "AREA_CONTENT", value: areaContent.strip()),
+      (name: "AGENTS_CONTENT", value: agentsContent.strip()),
+      (name: "SPEC_CONTENT", value: specContent.strip()),
       (name: "SUBMIT_SUMMARY", value: submitSummary.strip()),
     ],
   )

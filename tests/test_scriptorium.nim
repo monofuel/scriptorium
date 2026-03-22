@@ -3984,12 +3984,14 @@ suite "rate limit detection and backpressure":
 
 suite "buildReviewAgentPrompt":
   test "contains expected sections":
-    ## Verify the rendered prompt includes ticket, diff, area, and summary sections.
+    ## Verify the rendered prompt includes ticket, diff, area, summary, agents, and spec sections.
     let prompt = buildReviewAgentPrompt(
       "Fix the login bug",
       "--- a/login.nim\n+++ b/login.nim\n@@ -1 +1 @@\n-old\n+new",
       "area: auth\nResponsible for authentication flows.",
       "Fixed the login validation logic.",
+      "Use camelCase naming.",
+      "## Auth\nHandles login flows.",
     )
     check "Fix the login bug" in prompt
     check "old" in prompt
@@ -3999,30 +4001,42 @@ suite "buildReviewAgentPrompt":
 
   test "contains review instructions and submit_review tool":
     ## Verify the prompt includes review instructions and the submit_review MCP tool.
-    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary")
+    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary", "agents", "spec")
     check "submit_review" in prompt
     check "approve" in prompt
     check "request_changes" in prompt
 
   test "sections are delimited with markdown headers":
     ## Verify each section is labeled with a markdown header for parseability.
-    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary")
+    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary", "agents", "spec")
     check "## Ticket Content" in prompt
     check "## Changes" in prompt
     check "## Area Context" in prompt
+    check "## Project Conventions (AGENTS.md)" in prompt
+    check "## Spec Context" in prompt
     check "## Coding Agent Summary" in prompt
     check "## Instructions" in prompt
 
   test "empty diff does not crash":
     ## Verify the prompt builder handles an empty diff gracefully.
-    let prompt = buildReviewAgentPrompt("ticket", "", "area", "summary")
+    let prompt = buildReviewAgentPrompt("ticket", "", "area", "summary", "agents", "spec")
     check "## Changes" in prompt
     check "## Ticket Content" in prompt
 
   test "whitespace-only diff handled gracefully":
     ## Verify the prompt builder handles a whitespace-only diff.
-    let prompt = buildReviewAgentPrompt("ticket", "   \n  \n", "area", "summary")
+    let prompt = buildReviewAgentPrompt("ticket", "   \n  \n", "area", "summary", "agents", "spec")
     check "## Changes" in prompt
+
+  test "agents and spec content appear in rendered prompt":
+    ## Verify that AGENTS.md and spec content are included in the rendered prompt.
+    let prompt = buildReviewAgentPrompt(
+      "ticket", "diff", "area", "summary",
+      "Always use PascalCase for constants.",
+      "## Review Agent\nSection 9 compliance rules.",
+    )
+    check "Always use PascalCase for constants." in prompt
+    check "Section 9 compliance rules." in prompt
 
 suite "review feedback truncation":
   setup:

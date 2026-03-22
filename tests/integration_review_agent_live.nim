@@ -129,7 +129,7 @@ suite "integration review agent live":
     let areaContent = "(no area specified)"
     let submitSummary = "Updated hello.nim to print hello world."
 
-    let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary)
+    let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary, "(AGENTS.md not found)", "(spec not available)")
 
     let model = integrationModel()
     let harness = integrationHarness()

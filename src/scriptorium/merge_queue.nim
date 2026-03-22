@@ -204,7 +204,13 @@ proc runReviewAgent*(
   else:
     "(no area specified)"
 
-  let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary)
+  let agentsPath = repoPath / "AGENTS.md"
+  let agentsContent = if fileExists(agentsPath): readFile(agentsPath) else: "(AGENTS.md not found)"
+
+  let specPath = planPath / "spec.md"
+  let specContent = if fileExists(specPath): readFile(specPath) else: "(spec not available)"
+
+  let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary, agentsContent, specContent)
 
   discard consumeReviewDecision()
 
