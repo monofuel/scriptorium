@@ -34,3 +34,5 @@ Additional requirements:
 
 - This ticket restructures the orchestrator tick loop in `src/scriptorium/orchestrator.nim`.
 - Depends on the shared agent pool (0068) and per-area concurrent managers (0069) being in place.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0071-restructured-orchestrator-tick
