@@ -40,3 +40,44 @@ Done. Added `logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "predict
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 13s
+
+## Merge Queue Success
+- Summary: Added logRoot field to the prediction agent's AgentRunRequest so logs go to `<repoPath>/.scriptorium/logs/prediction/` instead of the default fallback path.\n
+### Quality Check Output
+```text
+cuted steps — assign 0082-progress-cfg
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: open -> in-progress (assigned, worktree=/tmp/scriptorium_test_progress_config/.scriptorium/worktrees/tickets/0082-progress-cfg)
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: coding agent started (model=claude-sonnet-4-6, attempt 1/2)
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: submit_pr accepted (quality checks run in merge queue)
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: submit_pr called (summary="progress config check done")
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] executeAssignedTicket: auto-committing uncommitted changes
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] journal: began transition — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] journal: executed steps — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T20:35:36Z] [INFO] ticket 0082: merge queue entered (position=1)
+[tests/test_scriptorium.nim]   [OK] progressTimeoutMs is passed through to agent request
+[tests/test_scriptorium.nim] 
+[tests/test_scriptorium.nim] [Suite] resolveDefaultBranch
+[tests/test_scriptorium.nim]   [OK] detects master when it exists
+[tests/test_scriptorium.nim]   [OK] detects main when master does not exist
+[tests/test_scriptorium.nim]   [OK] errors when no known default branch exists
+[tests/test_scriptorium.nim]   [OK] prefers origin/HEAD when set
+[tests/test_scriptorium.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/test_scriptorium_d/test_scriptorium_65471DBC3C45F65A6E75787365818383A9B833EA'
+```
+
+## Metrics
+- wall_time_seconds: 136
+- coding_wall_seconds: 32
+- test_wall_seconds: 84
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 34056
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: accurate
+- brief_summary: Predicted trivial, actual was trivial with 1 attempt(s) in 2m16s.
