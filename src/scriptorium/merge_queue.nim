@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, config, git_ops, journal, lock_management, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, architect_agent, config, git_ops, journal, lock_management, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -217,6 +217,7 @@ proc runReviewAgent*(
     model: resolveModel(cfg.agents.reviewer.model),
     reasoningEffort: cfg.agents.reviewer.reasoningEffort,
     mcpEndpoint: cfg.endpoints.local,
+    logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "review",
     ticketId: item.ticketId,
     attempt: 1,
     skipGitRepoCheck: true,
