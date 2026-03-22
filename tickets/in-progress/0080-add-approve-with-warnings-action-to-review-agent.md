@@ -89,3 +89,8 @@ make: *** [Makefile:35: integration-test] Error 1
 - predicted_difficulty: easy
 - predicted_duration_minutes: 12
 - reasoning: Two-file change adding a third enum variant and a simple conditional branch mirroring existing approve/request_changes paths — the integration test failure was an unrelated OpenAI API key issue, not a code defect.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Two-file change adding a third enum variant and a simple conditional branch mirroring existing approve/request_changes paths — the integration test failure was an unrelated OpenAI API key issue, not a code defect.
