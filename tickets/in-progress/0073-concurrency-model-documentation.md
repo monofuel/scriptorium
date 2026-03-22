@@ -21,3 +21,8 @@ Add a `## Concurrency Model` section to the project's `AGENTS.md` (or a dedicate
 Keep the documentation concise. `make test` must still pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0073-concurrency-model-documentation
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Documentation-only ticket adding a concurrency model section to AGENTS.md with no code logic changes, just clear prose matching the detailed requirements already specified in the ticket.
