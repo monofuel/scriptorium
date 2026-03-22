@@ -58,3 +58,44 @@ architect-areas\"` with `ArchitectLogDirName = \"architect\"`, `ArchitectSpecTic
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 30s
+
+## Merge Queue Success
+- Summary: Renamed architect log directories from flat paths (plan-spec, architect-areas) to nested structure (architect/spec, architect/areas). Updated constants, log root paths, and test assertions.\n
+### Quality Check Output
+```text
+cuted steps — assign 0082-progress-cfg
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: open -> in-progress (assigned, worktree=/tmp/scriptorium_test_progress_config/.scriptorium/worktrees/tickets/0082-progress-cfg)
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: coding agent started (model=claude-sonnet-4-6, attempt 1/2)
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: submit_pr accepted (quality checks run in merge queue)
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: submit_pr called (summary="progress config check done")
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] executeAssignedTicket: auto-committing uncommitted changes
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] journal: began transition — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] journal: executed steps — enqueue 0082
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] journal: transition complete
+[tests/test_scriptorium.nim] [2026-03-22T20:47:31Z] [INFO] ticket 0082: merge queue entered (position=1)
+[tests/test_scriptorium.nim]   [OK] progressTimeoutMs is passed through to agent request
+[tests/test_scriptorium.nim] 
+[tests/test_scriptorium.nim] [Suite] resolveDefaultBranch
+[tests/test_scriptorium.nim]   [OK] detects master when it exists
+[tests/test_scriptorium.nim]   [OK] detects main when master does not exist
+[tests/test_scriptorium.nim]   [OK] errors when no known default branch exists
+[tests/test_scriptorium.nim]   [OK] prefers origin/HEAD when set
+[tests/test_scriptorium.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/test_scriptorium_d/test_scriptorium_070ACE5690161077B0A81D4ABB33CAF1D6B805F2'
+```
+
+## Metrics
+- wall_time_seconds: 631
+- coding_wall_seconds: 523
+- test_wall_seconds: 71
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 1159380
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 10m31s.
