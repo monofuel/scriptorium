@@ -236,6 +236,8 @@ proc runReviewAgent*(
 
   if result.action == "approve":
     logInfo(fmt"ticket {item.ticketId}: review approved")
+  elif result.action == "approve_with_warnings":
+    logInfo(fmt"ticket {item.ticketId}: review approved with warnings")
   elif result.action == "request_changes":
     let feedbackSummary = truncateTail(result.feedback.strip(), 200)
     logInfo(&"ticket {item.ticketId}: review requested changes (feedback=\"{feedbackSummary}\")")
@@ -254,6 +256,18 @@ proc runReviewAgent*(
         fmt"- Backend: {agentResult.backend}" & "\n" &
         fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
         fmt"- Wall Time: {reviewWallDuration}" & "\n"
+    elif result.action == "approve_with_warnings":
+      let warningsText = result.feedback.strip()
+      let base = "## Review\n" &
+        "**Review:** approved with warnings\n" &
+        fmt"- Model: {model}" & "\n" &
+        fmt"- Backend: {agentResult.backend}" & "\n" &
+        fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
+        fmt"- Wall Time: {reviewWallDuration}" & "\n"
+      if warningsText.len > 0:
+        base & "\n**Warnings:** " & warningsText & "\n"
+      else:
+        base
     else:
       "## Review\n" &
         "**Review:** changes requested\n" &
