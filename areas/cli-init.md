@@ -4,7 +4,7 @@ Covers the top-level CLI commands and the `scriptorium --init` bootstrapping flo
 
 ## Scope
 
-- CLI entry points: `--init`, `run`, `status`, `plan`, `ask`, `worktrees`, `--version`, `--help`.
+- CLI entry points: `--init`, `run`, `status`, `plan`, `ask`, `audit`, `worktrees`, `--version`, `--help`.
 - `scriptorium --init [path]` must:
   - Fail if target is not a git repository.
   - Fail if `scriptorium/plan` already exists.

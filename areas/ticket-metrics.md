@@ -1,6 +1,6 @@
 # Per-Ticket Metrics
 
-V3 feature: structured per-ticket metrics persisted in agent run notes on the plan branch.
+Structured per-ticket metrics persisted in agent run notes on the plan branch.
 
 ## Scope
 
@@ -17,10 +17,6 @@ V3 feature: structured per-ticket metrics persisted in agent run notes on the pl
 - Every completed or reopened ticket must have structured metrics with all listed fields present.
 - Timing values are in seconds for machine readability.
 
-## V3 Known Limitations
-
-- `stdout_bytes` is a rough proxy for token usage; real token counts require harness-level API integration.
-
 ## Spec References
 
-- Section 15: Per-Ticket Metrics In Agent Run Notes (V3).
+- Section 14: Observability And Metrics (per-ticket metrics).

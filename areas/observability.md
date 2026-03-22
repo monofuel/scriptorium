@@ -1,10 +1,10 @@
 # Observability And Orchestrator Logging
 
-V3 feature: tick summary lines, ticket lifecycle logging, and session summary on shutdown.
+Tick summary lines, ticket lifecycle logging, and session summary on shutdown.
 
 ## Scope
 
-- Tick summary line (§13):
+- Tick summary line:
   - At the end of each orchestrator tick, log a single INFO-level summary line capturing full system state.
   - Required fields:
     - `architect`: `no-op`, `updated`, or `skipped`.
@@ -16,7 +16,7 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
   - Every tick produces exactly one summary line.
   - Wall times are human-readable (e.g., `3m12s`).
 
-- Ticket lifecycle logging (§14):
+- Ticket lifecycle logging:
   - INFO-level log line for every ticket state transition, with timing.
   - Required log points:
     - Assignment: `ticket <id>: open -> in-progress (assigned, worktree=<path>)`
@@ -33,20 +33,25 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
     - Stall detection: `ticket <id>: coding agent stalled (attempt <n>/<max>, no submit_pr)`
     - Pre-retry test: `ticket <id>: make test before retry: <PASS|FAIL> (exit=<code>, wall=<duration>)`
     - Continuation: `ticket <id>: continuation prompt sent (attempt <n>/<max>, test_status=<passing|failing>)`
-  - Review-related log points (V4, §21):
+  - Review-related log points:
     - Review start: `ticket <id>: review started (model=<model>)`
     - Review approved: `ticket <id>: review approved`
+    - Review approved with warnings: `ticket <id>: review approved with warnings`
     - Review changes requested: `ticket <id>: review requested changes (feedback="<summary>")`
     - Review stall: `ticket <id>: review agent stalled, defaulting to approve`
-  - Pre-submit test gate log point (V4, §20):
+  - Pre-submit test gate log point:
     - `ticket <id>: submit_pr pre-check: <PASS|FAIL> (exit=<code>, wall=<duration>)`
-  - Health cache log points (V4, §22):
+  - Health cache log points:
     - `master health: cached healthy for <commit-hash>`
     - `master health: cached unhealthy for <commit-hash>`
-  - All lines include ticket ID for correlation.
+  - Audit agent log points:
+    - `audit: started (model=<model>, since=<last-audited-commit>)`
+    - `audit: completed (report=<path>)`
+    - `audit: triggered by spec change`
+  - All lines include ticket ID for correlation (where applicable).
   - Durations are human-readable.
 
-- Session summary on shutdown (§16):
+- Session summary on shutdown:
   - On shutdown (signal or idle exit), log exactly two INFO-level summary lines.
   - Counts line: `uptime`, `ticks`, `tickets_completed`, `tickets_reopened`, `tickets_parked`, `merge_queue_processed`.
   - Averages line: `avg_ticket_wall`, `avg_coding_wall`, `avg_test_wall`, `first_attempt_success` (percentage).
@@ -55,16 +60,9 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
     - `session summary: avg_ticket_wall=5m12s avg_coding_wall=4m02s avg_test_wall=38s first_attempt_success=75%`
   - If no tickets completed, averages show `n/a` or `0`.
 
-## V3 Known Limitations
-
-- All metrics are stored in logs and plan-branch markdown only — no external dashboards or time-series storage.
-- Session summary averages are per-session only, not cumulative across sessions.
-
 ## Spec References
 
-- Section 13: Tick Summary Line (V3).
-- Section 14: Ticket Lifecycle Logging (V3).
-- Section 16: Session Summary On Shutdown (V3).
-- Section 20: Pre-Submit Test Gate (V4).
-- Section 21: Review Agent (V4, detail in review-agent area).
-- Section 22: Commit Health Cache (V4).
+- Section 14: Observability And Metrics.
+- Section 8: Pre-Submit Test Gate.
+- Section 9: Review Agent (review lifecycle logging).
+- Section 19: Audit Agent (audit log points).

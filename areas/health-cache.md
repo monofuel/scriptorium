@@ -1,8 +1,8 @@
-Commit Health Cache
+# Commit Health Cache
 
-V4 feature: persistent `master` health check cache on the plan branch that survives container restarts and session boundaries.
+Persistent `master` health check cache on the plan branch that survives container restarts and session boundaries.
 
-Scope:
+## Scope
 
 **Cache location and structure:**
 - Cache file: `health/cache.json` on the `scriptorium/plan` branch.
@@ -28,10 +28,11 @@ Scope:
 - Cache entries are keyed by commit hash and naturally immutable — no invalidation needed.
 
 **Pruning:**
-- Optional. The orchestrator may prune entries older than 30 days or keep the most recent N entries to prevent unbounded growth, but pruning is not required for v4.
+- Optional. The orchestrator may prune entries older than 30 days or keep the most recent N entries to prevent unbounded growth, but pruning is not required.
 
 **Plan branch layout addition:**
 - `health/cache.json` is added to the authoritative plan branch file layout.
 
-**V4 Known Limitations:**
-- Health cache pruning is optional and not enforced — cache files may grow over time in long-running projects.
+## Spec References
+
+- Section 3: Orchestrator Run Loop (health caching).

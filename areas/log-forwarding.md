@@ -1,6 +1,6 @@
 # Coding Agent Log Forwarding
 
-V2 feature: real-time forwarding of meaningful coding agent stream events to orchestrator logs.
+Real-time forwarding of meaningful coding agent stream events to orchestrator logs.
 
 ## Scope
 
@@ -15,4 +15,4 @@ V2 feature: real-time forwarding of meaningful coding agent stream events to orc
 
 ## Spec References
 
-- Section 10: Coding Agent Log Forwarding (V2).
+- Section 7: Coding Agent Execution (log forwarding).

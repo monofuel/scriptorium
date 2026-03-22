@@ -10,10 +10,11 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `agents.coding.{harness, model, reasoningEffort}`
   - `agents.manager.{harness, model, reasoningEffort}`
   - `agents.reviewer.{harness, model, reasoningEffort}`
+  - `agents.audit.{harness, model, reasoningEffort}`
   - `endpoints.local`
   - `logLevel`
-  - `concurrency.maxAgents` (V5/V13, integer, default 4 — changed from 1 in V13)
-  - `concurrency.tokenBudgetMB` (V5, optional integer megabytes)
+  - `concurrency.maxAgents` (integer, default 4)
+  - `concurrency.tokenBudgetMB` (integer, optional)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.
 - Repository test commands:
   - `make test` runs `tests/test_*.nim`.
@@ -26,7 +27,7 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
 
 ## Spec References
 
-- Section 9: Config, Logging, Tests, And CI Baseline.
-- Section 24: Concurrent Agent Execution (V5, concurrency config).
-- Section 26: Resource Management (V5, token budget config).
-- Section 27: Default maxAgents Changed To 4 (V13).
+- Section 16: Config, Logging, And CI.
+- Section 11: Parallel Ticket Assignment And Concurrency (concurrency config).
+- Section 12: Resource Management (token budget config).
+- Section 19: Audit Agent (audit role config).

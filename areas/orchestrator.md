@@ -11,8 +11,9 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
   - Existence of `scriptorium/plan` branch.
   - Healthy `master` (required quality targets `make test` and `make integration-test` pass in order on a `master` worktree).
   - Runnable `spec.md` (not blank, not the init placeholder).
+- Health check results cached on the plan branch in `health/cache.json` so they survive container restarts and session boundaries. Cache entries keyed by commit hash. On startup, cached results skip redundant health checks (detail in health-cache area).
 - Non-runnable spec logs: `WAITING: no spec — run 'scriptorium plan'`.
-- Restructured tick order (V13, §30 supersedes §3):
+- Tick order:
   1. Poll completed agents (managers + coders) via `checkCompletedAgents()`.
      - For completed managers: acquire plan lock, write tickets, commit, release. Log results.
      - For completed coders: handle as before (move ticket, queue merge, etc).
@@ -28,8 +29,7 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - When `maxAgents` is 1, behavior collapses to sequential execution as before.
 - Tick must not block on a single agent completing when running in parallel mode — check for completable agents, start new agents, and continue other tick phases (detail in parallel-execution area).
 - `master` health cached by `master` HEAD commit, recomputed only when `master` changes.
-- `master` health cache persisted to `health/cache.json` on the plan branch for cross-session persistence (V4, §22, see health-cache area).
-- Narrow plan branch locking (V13, §31):
+- Narrow plan branch locking:
   - Reading areas: brief lock to snapshot area content at start of tick.
   - Agent execution: no lock needed — managers produce ticket content in memory.
   - Writing tickets: main thread acquires lock per completed manager, writes, commits, releases.
@@ -41,9 +41,6 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 ## Spec References
 
 - Section 3: Orchestrator Run Loop.
-- Section 13: Tick Summary Line (V3, detail in observability area).
-- Section 16: Session Summary On Shutdown (V3, detail in observability area).
-- Section 22: Commit Health Cache (V4, detail in health-cache area).
-- Sections 23-24: Parallel Ticket Assignment and Concurrent Agent Execution (V5, detail in parallel-execution area).
-- Section 30: Restructured Orchestrator Tick (V13, detail in parallel-execution area).
-- Section 31: Narrow Plan Branch Locking (V13, detail in parallel-execution area).
+- Section 14: Observability And Metrics (tick summary, session summary; detail in observability area).
+- Section 17: Plan Branch Locking (detail in parallel-execution area).
+- Section 11: Parallel Ticket Assignment And Concurrency (detail in parallel-execution area).

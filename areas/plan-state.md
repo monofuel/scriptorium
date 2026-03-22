@@ -14,6 +14,7 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
 - Ticket state: exactly one state directory at a time, transitions via single orchestrator commits.
 - Ticket IDs: monotonic, zero-padded filenames.
 - Merge queue item IDs: monotonic, zero-padded filenames.
+- Areas are persistent ownership zones that evolve with the spec, not one-shot artifacts; the architect updates or creates area files whenever `spec.md` changes, and the manager re-tickets areas whose content has changed.
 - Area IDs derived from area markdown filenames.
 - Area-to-ticket linkage: `**Area:** <area-id>` in ticket markdown.
 - Ticket assignment:
@@ -21,11 +22,11 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
   - Deterministic ticket branch: `scriptorium/ticket-<id>`.
   - Deterministic managed code worktree path under `/tmp/scriptorium/.../worktrees/tickets/`.
   - Record `**Worktree:** <absolute-path>` in ticket markdown.
-  - Parallel assignment (V5): multiple tickets assigned per tick when they touch independent areas; same-area tickets serialized (detail in parallel-execution area).
+  - Parallel assignment: multiple tickets assigned per tick when they touch independent areas; same-area tickets serialized (detail in parallel-execution area).
 - Active merge queue metadata: ticket path, ticket id, branch, worktree, summary.
 
 ## Spec References
 
 - Section 4: Planning Artifacts And State Model.
-- Section 22: Commit Health Cache (V4, `health/cache.json` layout).
-- Section 23: Parallel Ticket Assignment (V5, detail in parallel-execution area).
+- Section 3: Orchestrator Run Loop (`health/cache.json` layout).
+- Section 11: Parallel Ticket Assignment And Concurrency (detail in parallel-execution area).
