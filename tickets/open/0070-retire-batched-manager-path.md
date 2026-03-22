@@ -98,3 +98,58 @@ per-area execution — serial mode (`maxAgents<=1`) uses `executeManagerForArea`
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 33s
+
+## Merge Queue Failure
+- Summary: Retired batched manager path: removed runManagerTickets, syncTicketsFromAreas, ManagerTicketsBatchTemplate, buildManagerTicketsBatchPrompt, ManagerTicketGenerator type, and manager_tickets_batch.md template. Replaced orchestrator tick loop manager call with per-area execution (serial mode uses executeManagerForArea synchronously, parallel mode launches startManagerAgentAsync). Removed 9 obsolete tests and updated 2 orchestrator tests to use maxAgents=1 for deterministic serial execution.\n- Failed gate: make integration-test\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+TS.md
+  [OK] run exits with error when plan branch is missing
+  [OK] run exits with error when AGENTS.md is missing
+  [OK] run exits with error when Makefile is missing
+  [OK] run exits with error when Makefile lacks test target
+  [OK] syncAgentsMd restores modified AGENTS.md to template
+  [OK] syncAgentsMd is a no-op when AGENTS.md matches template
+  [OK] syncAgentsMd respects syncAgentsMd false in config
+--- tests/integration_codex_harness.nim ---
+
+[Suite] integration codex harness
+/workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path/tests/integration_codex_harness.nim(75) integration_codex_harness
+/usr/lib/nim/lib/std/assertions.nim(41) failedAssertImpl
+/usr/lib/nim/lib/std/assertions.nim(36) raiseAssert
+/usr/lib/nim/lib/system/fatal.nim(53) sysFatal
+
+    Unhandled exception: /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path/tests/integration_codex_harness.nim(75, 7) `runResult.exitCode == 0` codex exec failed with non-zero exit code.
+Model: gpt-5.1-codex-mini
+Command: codex -c developer_instructions="" -c model_reasoning_effort="high" exec --json --output-last-message /tmp/scriptorium_integration_codex_evqTKAmv/logs/integration-smoke/attempt-01.last_message.txt --cd /tmp/scriptorium_integration_codex_evqTKAmv/worktree --model gpt-5.1-codex-mini --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -
+Stdout:
+{"type":"thread.started","thread_id":"019d1422-5804-7ae2-854a-c5657dcfa2d1"}
+{"type":"turn.started"}
+ [AssertionDefect]
+  [FAILED] real codex exec one-shot smoke test
+[2026-03-22T06:01:43Z] [INFO] MCP server ready on 127.0.0.1:22677
+[2026-03-22T06:01:46Z] [INFO] ticket unknown: submit_pr accepted (quality checks run in merge queue)
+  [OK] real codex MCP tool call against live server
+Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_codex_harness_d/integration_codex_harness_8D9090D3B9F187F57442B58C68EB64F56974C59A'
+make: *** [Makefile:35: integration-test] Error 1
+```
+
+## Metrics
+- wall_time_seconds: 1758
+- coding_wall_seconds: 1583
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 2886534
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 29m18s.
