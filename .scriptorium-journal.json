@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0072-narrow-plan-branch-locking",
+  "timestamp": "2026-03-22T07:32:00Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0072-narrow-plan-branch-locking.md",
+      "destination": "tickets/in-progress/0072-narrow-plan-branch-locking.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0072-narrow-plan-branch-locking.md",
+      "content": "# Narrow Plan Branch Locking\n\n**Area:** parallel-execution\n\n**Depends:** 0071\n\n## Problem\n\nV13 §31 requires narrow plan branch locking instead of holding the lock for the entire manager batch. With per-area concurrent managers, locking should be brief and targeted.\n\n## Requirements\n\n1. **Reading areas**: Brief lock to snapshot area content at start of tick. Done once for all areas, not per-manager. Lock acquired, area files read into memory, lock released.\n2. **Agent execution**: No lock needed. Manager agents run in threads and produce ticket content in memory.\n3. **Writing tickets**: Main thread acquires lock per completed manager, writes tickets for that manager, commits, releases. Each completed manager's write is a separate short lock acquisition.\n4. **Architect**: Still holds lock for full duration (reads spec and writes area files). Acceptable because architect is sequential and runs before managers.\n5. Ensure the existing `planWorktreeLock` (in `orchestrator.nim`) is used consistently for all plan branch access.\n6. Verify that no agent threads touch the plan worktree directly — only the orchestrator main thread writes.\n7. `make test` must pass.\n\n## Notes\n\n- The `planWorktreeLock` already exists in `src/scriptorium/orchestrator.nim`.\n- This replaces the model where the lock was held for the entire manager batch execution.\n- The lock management module is at `src/scriptorium/lock_management.nim`.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0072-narrow-plan-branch-locking\n",
+      "contentHash": "09461816DFF5BF3253D1DFC7A549FF7A4F87E1C9"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0072-narrow-plan-branch-locking"
+}
