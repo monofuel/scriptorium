@@ -1682,6 +1682,75 @@ suite "orchestrator merge queue":
     check ticketRc == 0
     check "**Review:** approved" in ticketContent
 
+  test "processMergeQueue review captures reasoning from message events":
+    let tmp = getTempDir() / "scriptorium_test_review_reasoning"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "reasoning test")
+
+    proc reasoningRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that emits message events and records an approve decision.
+      if not request.onEvent.isNil:
+        request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: "The code looks correct."))
+        request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: "All tests pass and naming is consistent."))
+        request.onEvent(AgentStreamEvent(kind: agentEventTool, text: "submit_review"))
+      recordReviewDecision("approve", "")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, reasoningRunner)
+    check processed
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/done/0001-first.md"
+    )
+    check ticketRc == 0
+    check "**Review:** approved" in ticketContent
+    check "**Review Reasoning:**" in ticketContent
+    check "The code looks correct." in ticketContent
+    check "All tests pass and naming is consistent." in ticketContent
+
+  test "processMergeQueue review truncates long reasoning":
+    let tmp = getTempDir() / "scriptorium_test_review_reasoning_truncate"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "truncate test")
+
+    let longText = "x".repeat(3000)
+    proc longReasoningRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that emits a very long message event.
+      if not request.onEvent.isNil:
+        request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: longText))
+      recordReviewDecision("approve", "")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, longReasoningRunner)
+    check processed
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/done/0001-first.md"
+    )
+    check ticketRc == 0
+    check "**Review Reasoning:**" in ticketContent
+    check longText notin ticketContent
+
   test "executeAssignedTicket auto-commits dirty worktree before enqueue":
     let tmp = getTempDir() / "scriptorium_test_autocommit_dirty_worktree"
     makeTestRepo(tmp)

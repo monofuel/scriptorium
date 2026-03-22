@@ -16,6 +16,7 @@ const
   ReviewAgentNoOutputTimeoutMs = 120_000
   ReviewAgentHardTimeoutMs = 300_000
   ReviewAgentCommitPrefix = "scriptorium: review ticket"
+  ReviewReasoningMaxChars* = 2000
 
 proc runWorktreeMakeTest*(worktreePath: string): tuple[exitCode: int, output: string] =
   ## Run `make test` in the agent worktree and return exit code and combined output.
@@ -216,6 +217,7 @@ proc runReviewAgent*(
 
   logInfo(fmt"ticket {item.ticketId}: review started (model={model})")
   let reviewStartTime = epochTime()
+  var reviewReasoning = ""
   let request = AgentRunRequest(
     prompt: prompt,
     workingDir: item.worktree,
@@ -232,9 +234,16 @@ proc runReviewAgent*(
     maxAttempts: 1,
     onEvent: proc(event: AgentStreamEvent) =
       if event.kind == agentEventTool:
-        logDebug(fmt"review[{item.ticketId}]: {event.text}"),
+        logDebug(fmt"review[{item.ticketId}]: {event.text}")
+      elif event.kind == agentEventMessage:
+        if reviewReasoning.len > 0:
+          reviewReasoning &= "\n"
+        reviewReasoning &= event.text,
   )
   let agentResult = runner(request)
+  let truncatedReasoning = truncateTail(reviewReasoning.strip(), ReviewReasoningMaxChars)
+  if truncatedReasoning.len > 0:
+    logDebug(&"review[{item.ticketId}]: reasoning: {truncatedReasoning}")
   let reviewWallTime = epochTime() - reviewStartTime
   let reviewWallDuration = formatDuration(reviewWallTime)
 
@@ -255,13 +264,18 @@ proc runReviewAgent*(
   let ticketPath = planPath / item.ticketPath
   if fileExists(ticketPath):
     let currentContent = readFile(ticketPath)
+    let reasoningSection = if truncatedReasoning.len > 0:
+      "\n**Review Reasoning:** " & truncatedReasoning & "\n"
+    else:
+      ""
     let reviewNote = if result.action == "approve":
       "## Review\n" &
         "**Review:** approved\n" &
         fmt"- Model: {model}" & "\n" &
         fmt"- Backend: {agentResult.backend}" & "\n" &
         fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
-        fmt"- Wall Time: {reviewWallDuration}" & "\n"
+        fmt"- Wall Time: {reviewWallDuration}" & "\n" &
+        reasoningSection
     elif result.action == "approve_with_warnings":
       let warningsText = result.feedback.strip()
       let base = "## Review\n" &
@@ -271,9 +285,9 @@ proc runReviewAgent*(
         fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
         fmt"- Wall Time: {reviewWallDuration}" & "\n"
       if warningsText.len > 0:
-        base & "\n**Warnings:** " & warningsText & "\n"
+        base & "\n**Warnings:** " & warningsText & "\n" & reasoningSection
       else:
-        base
+        base & reasoningSection
     else:
       "## Review\n" &
         "**Review:** changes requested\n" &
@@ -281,7 +295,8 @@ proc runReviewAgent*(
         fmt"- Backend: {agentResult.backend}" & "\n" &
         fmt"- Exit Code: {agentResult.exitCode}" & "\n" &
         fmt"- Wall Time: {reviewWallDuration}" & "\n" &
-        "\n**Review Feedback:** " & result.feedback.strip() & "\n"
+        "\n**Review Feedback:** " & result.feedback.strip() & "\n" &
+        reasoningSection
     let updatedContent = currentContent.strip() & "\n\n" & reviewNote
     writeFile(ticketPath, updatedContent)
     gitRun(planPath, "add", item.ticketPath)
