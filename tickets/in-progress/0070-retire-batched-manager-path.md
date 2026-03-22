@@ -25,3 +25,8 @@ V13 §32 requires removing the batched manager execution model now that per-area
 - The single-area `manager_tickets.md` template and `ManagerTicketsTemplate` must be preserved.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Straightforward deletion of well-enumerated functions, a template file, and their references across ~5 files with no new logic to write — just removals and test cleanup, one attempt expected.
