@@ -25,3 +25,8 @@ V13 §31 requires narrow plan branch locking instead of holding the lock for the
 - The lock management module is at `src/scriptorium/lock_management.nim`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0072-narrow-plan-branch-locking
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Refactors lock acquisition boundaries in orchestrator.nim around existing planWorktreeLock — primarily restructuring when locks are acquired/released rather than adding new mechanisms, but concurrency locking changes carry moderate integration risk requiring careful testing.
