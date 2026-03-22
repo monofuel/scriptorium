@@ -102,3 +102,10 @@ PR submitted. Summary of changes:
 ```text
 soning` variable during `runReviewAgent`, log reasoning at DEBUG level, and append `**Review Reasoning:**` to the ticket review note for all three outcomes.\n- **`tests/test_scriptorium.nim`**: Two new tests — one verifying reasoning capture and inclusion in review notes, another verifying truncation of long reasoning text.\n- Rebased on latest master to avoid the merge conflict from the previous attempt.","stop_reason":"end_turn","session_id":"a7c7567d-de8c-4144-bcea-258c60a0009c","total_cost_usd":0.504021,"usage":{"input_tokens":3607,"cache_creation_input_tokens":37198,"cache_read_input_tokens":392647,"output_tokens":2287,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":37198},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":3607,"outputTokens":2287,"cacheReadInputTokens":392647,"cacheCreationInputTokens":37198,"webSearchRequests":0,"costUSD":0.504021,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"0a06e90a-5855-44b0-8c4b-84a420d5492e"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 18s
