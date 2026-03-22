@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0080-add-approve-with-warnings-action-to-review-agent",
+  "timestamp": "2026-03-22T20:00:33Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0080-add-approve-with-warnings-action-to-review-agent.md",
+      "destination": "tickets/in-progress/0080-add-approve-with-warnings-action-to-review-agent.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0080-add-approve-with-warnings-action-to-review-agent.md",
+      "content": "<!-- ticket: 0074-approve-with-warnings-action.md -->\n# Add `approve_with_warnings` action to review agent\n\n**Area:** review-agent\n**Difficulty:** medium\n\n## Problem\n\nThe `submit_review` MCP tool in `src/scriptorium/mcp_server.nim` only supports two actions: `approve` and `request_changes`. The spec (Section 9) and area definition require a third action: `approve_with_warnings`, which accepts the changes but logs warnings for minor style issues.\n\n## Requirements\n\n1. **MCP tool update** (`src/scriptorium/mcp_server.nim`):\n   - Add `\"approve_with_warnings\"` to the `enum` array in the `submit_review` tool's `inputSchema`.\n   - Update the validation in `submitReviewHandler` to accept `approve_with_warnings` as a valid action.\n   - When `action` is `approve_with_warnings`, `feedback` should be accepted (warnings text) but not required.\n\n2. **Merge queue handling** (`src/scriptorium/merge_queue.nim`):\n   - In `runReviewAgent`, handle `approve_with_warnings` as a successful review (merge proceeds).\n   - Log at INFO level: `ticket <id>: review approved with warnings`.\n   - Append a structured review note to the ticket markdown that includes the warnings text from `feedback`. Use a format like:\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-add-approve-with-warnings-action-to-review-agent\n",
+      "contentHash": "66A648DD1D5D097C98E43F92C67AABE82DA56180"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0080-add-approve-with-warnings-action-to-review-agent"
+}
