@@ -84,3 +84,8 @@ make: *** [Makefile:35: integration-test] Error 1
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 14m15s.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Two-file change adding a third enum variant and a simple conditional branch mirroring existing approve/request_changes paths — the integration test failure was an unrelated OpenAI API key issue, not a code defect.
