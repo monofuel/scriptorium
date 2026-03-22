@@ -39,3 +39,39 @@ Done. Added `logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "coder"`
 - Backend: claude-code
 - Exit Code: 0
 - Wall Time: 14s
+
+## Merge Queue Failure
+- Summary: Set logRoot on the coding agent's AgentRunRequest so JSONL logs are written to `<repo>/.scriptorium/logs/coder/` instead of inside the ticket worktree. This prevents logs from being lost when the worktree is cleaned up after merge.\n- Failed gate: make integration-test\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+g... 3/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07d8b679a32309-ORD, request id: req_b67079261b8c4096acf06d087da4bc46)"}
+{"type":"error","message":"Reconnecting... 4/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07d8bc8e2f381e-ORD, request id: req_fce0496a36154d2f897016f353f2ba10)"}
+{"type":"error","message":"Reconnecting... 5/5 (unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07d8c7ce5561dc-ORD, request id: req_cb592773259d46fb9460069b38923772)"}
+{"type":"error","message":"unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07d8dd7bc8acae-ORD, request id: req_319e84d3cfbf4964b6bad762b4b20a39"}
+{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Incorrect API key provided: disabled. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, cf-ray: 9e07d8dd7bc8acae-ORD, request id: req_319e84d3cfbf4964b6bad762b4b20a39"}}
+Warning: no last agent message; wrote empty content to /tmp/scriptorium_integration_codex_mcp_FIZx9sgO/logs/integration-codex-mcp/attempt-01.last_message.txt
+ [AssertionDefect]
+  [FAILED] real codex MCP tool call against live server
+Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_codex_harness_d/integration_codex_harness_F38ED76A4C7B6968847B7C1F705BC71DEF66802F'
+make: *** [Makefile:35: integration-test] Error 1
+```
+
+## Metrics
+- wall_time_seconds: 702
+- coding_wall_seconds: 75
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 75296
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted trivial, actual was hard with 1 attempt(s) in 11m42s.
