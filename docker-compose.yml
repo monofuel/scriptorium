@@ -13,9 +13,12 @@ services:
       - ~/.aws:/home/scriptorium/.aws:ro
     working_dir: /workspace
     environment:
-      - OPENAI_API_KEY=disabled
-      - CODEX_API_KEY=disabled
-      - ANTHROPIC_API_KEY=disabled
+      # Unset direct API keys — Bedrock auth uses AWS credentials only.
+      # Do NOT set these to "disabled"; Claude Code would try to use the
+      # invalid key instead of falling through to Bedrock.
+      - OPENAI_API_KEY=
+      - CODEX_API_KEY=
+      - ANTHROPIC_API_KEY=
       - CLAUDE_CODE_USE_BEDROCK
       - ANTHROPIC_MODEL
       - ANTHROPIC_SMALL_FAST_MODEL

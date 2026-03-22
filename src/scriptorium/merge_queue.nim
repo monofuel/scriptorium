@@ -10,7 +10,7 @@ const
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   MergeQueueStuckCommitPrefix* = "scriptorium: park stuck ticket"
   MaxMergeFailures = 3
-  RequiredQualityTargets* = ["test"]
+  RequiredQualityTargets* = ["test", "integration-test"]
   QualityCheckTimeoutMs* = 300_000
   MakeTestTimeoutMs* = 300_000
   ReviewAgentNoOutputTimeoutMs = 120_000

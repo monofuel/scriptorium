@@ -107,25 +107,20 @@ dead processes. Options:
 gates, which failed with exit code 2. Every ticket that passed review was
 reopened after merge failure, creating an infinite retry loop.
 
-**Root cause**: The docker-compose sets `ANTHROPIC_API_KEY=disabled` and
-`OPENAI_API_KEY=disabled` to force Bedrock-only usage. However, the
-integration tests check `getEnv("ANTHROPIC_API_KEY").len > 0` — the string
-`"disabled"` has length > 0, so the test proceeds past the skip guard but
-then fails when the actual API call uses an invalid key.
+**Root cause**: The docker-compose (commit 64d668c) set
+`ANTHROPIC_API_KEY=disabled` intending to force Bedrock-only usage. But
+setting the key to a non-empty invalid string causes Claude Code to attempt
+direct API auth with the garbage key instead of falling through to Bedrock.
+The correct approach is to **unset** the keys entirely (`=`), not set them
+to `"disabled"`.
 
-Additionally, even with working credentials, running full integration tests
-(which make real API calls) on every merge is expensive and slow.
+**Initial workaround** (commit 512a62f): Removed `"integration-test"` from
+`RequiredQualityTargets` to unblock the orchestrator run.
 
-**Fix** (commit 512a62f): Remove `"integration-test"` from
-`RequiredQualityTargets` in `merge_queue.nim`. Unit tests (`make test`) are
-sufficient for merge queue validation. Integration tests remain available
-via `make integration-test` for manual/CI use.
+**Real fix**: Changed docker-compose to set `ANTHROPIC_API_KEY=` (empty)
+instead of `ANTHROPIC_API_KEY=disabled`. Same for `OPENAI_API_KEY` and
+`CODEX_API_KEY`. Restored `integration-test` to merge queue quality targets.
 
-**Future considerations**:
-- The integration test skip guard should check for `"disabled"` as an
-  invalid key value, not just check string length.
-- Consider a `scriptorium.json` config for merge queue quality targets so
-  projects can choose what to run.
-- The health check also uses `RequiredQualityTargets` — with integration
-  tests removed, the health cache entries will have 0 for
-  `integration_test_*` fields.
+**Lesson**: When disabling env-var-based auth, unset the var entirely.
+Setting it to a sentinel value can cause libraries to use it as a real
+credential.
