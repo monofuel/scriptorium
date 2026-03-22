@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0073-concurrency-model-documentation",
+  "timestamp": "2026-03-22T07:54:37Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0073-concurrency-model-documentation.md",
+      "destination": "tickets/in-progress/0073-concurrency-model-documentation.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0073-concurrency-model-documentation.md",
+      "content": "# Concurrency Model Documentation\n\n**Area:** parallel-execution\n\n**Depends:** 0071\n\n## Problem\n\nV13 §33 requires documenting the concurrency model to clarify which agents are sequential vs parallel, how the shared slot pool works, and how merge conflicts are handled.\n\n## Requirements\n\nAdd a `## Concurrency Model` section to the project's `AGENTS.md` (or a dedicated doc file if more appropriate) covering:\n\n1. **Strictly sequential agents**: Architect (reads spec, writes areas, runs at most once per tick, protected by plan lock, must complete before managers) and Review/Merge (one merge queue item at a time, sequential to guarantee default branch health).\n2. **Parallel agents (shared slot pool)**: Manager (one area per invocation, multiple can run in parallel) and Coding agent (one ticket per invocation, multiple can run in parallel in independent areas). Both share the `maxAgents` slot pool.\n3. **Interleaved execution**: Managers and coders interleaved across ticks — orchestrator does not wait for all managers to finish before starting coders.\n4. **Merge conflict handling**: Parallel coding agents may produce merge conflicts on shared files. Sequential merge process catches conflicts by merging default branch into ticket branch before testing. Conflicting tickets sent back for another coding attempt with conflict context. Area-based separation makes conflicts less likely but system handles them gracefully.\n5. **Slot arithmetic**: Example — if `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coders (and vice versa).\n\nKeep the documentation concise. `make test` must still pass.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0073-concurrency-model-documentation\n",
+      "contentHash": "3A29A0B63138B1A6CE28B1632E18A70517B4D892"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0073-concurrency-model-documentation"
+}
