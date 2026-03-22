@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0072",
+  "timestamp": "2026-03-22T07:39:23Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0072.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0072-narrow-plan-branch-locking.md\n**Ticket ID:** 0072\n**Branch:** scriptorium/ticket-0072\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0072-narrow-plan-branch-locking\n**Summary:** Narrow plan branch locking for manager execution: restructured lock acquisition so areas are read with a brief lock, managers execute without holding the lock, and tickets are written with brief per-manager locks. Manager agents no longer touch the plan worktree directly — they run in the project repo and produce tickets via stdout.\n",
+      "contentHash": "6BB4A9E5A801C39A9A4B449D6B3F314E8AF32CC6"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0072"
+}
