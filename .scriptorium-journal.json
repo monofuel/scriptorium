@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0078",
+  "timestamp": "2026-03-22T20:33:58Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0078.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0078-0076-set-logroot-for-prediction-agent.md\n**Ticket ID:** 0078\n**Branch:** scriptorium/ticket-0078\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0076-set-logroot-for-prediction-agent\n**Summary:** Added logRoot field to the prediction agent's AgentRunRequest so logs go to `<repoPath>/.scriptorium/logs/prediction/` instead of the default fallback path.\n",
+      "contentHash": "490C90C7C5807AA10FC154F7465F681168036574"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0078"
+}
