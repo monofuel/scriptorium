@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0076",
+  "timestamp": "2026-03-22T20:23:21Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0076.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0076-0074-set-logroot-for-coding-agent.md\n**Ticket ID:** 0076\n**Branch:** scriptorium/ticket-0076\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0076-0074-set-logroot-for-coding-agent\n**Summary:** Set logRoot on coding agent's AgentRunRequest to repoPath/.scriptorium/logs/coder/ so JSONL logs persist outside the ticket worktree.\n",
+      "contentHash": "7B49DA9D240463F8ECC76366D950010E679B3571"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0076"
+}
