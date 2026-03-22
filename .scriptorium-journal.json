@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0070",
+  "timestamp": "2026-03-22T06:17:42Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0070.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0070-retire-batched-manager-path.md\n**Ticket ID:** 0070\n**Branch:** scriptorium/ticket-0070\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path\n**Summary:** Retired batched manager path: removed runManagerTickets, syncTicketsFromAreas, ManagerTicketsBatchTemplate, buildManagerTicketsBatchPrompt, ManagerTicketGenerator, and manager_tickets_batch.md template. Replaced orchestrator tick loop manager call with per-area execution via runManagerForAreas (serial) and launchManagerAreasAsync (parallel). Fixed latent bug in executeManagerForArea fallback where absolute paths from listMarkdownFiles were incorrectly joined with planPath. Removed 9 obsolete tests, updated orchestrator e2e test for per-area manager ticketId format.\n",
+      "contentHash": "3A393949D837AF34D3B6DE5F0ADC2D60E6A5221F"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0070"
+}
