@@ -83,7 +83,7 @@ proc createOrchestratorServer*(): HttpMcpServer =
       "properties": {
         "action": {
           "type": "string",
-          "enum": ["approve", "request_changes"],
+          "enum": ["approve", "approve_with_warnings", "request_changes"],
           "description": "Review action to take"
         },
         "feedback": {
@@ -96,8 +96,8 @@ proc createOrchestratorServer*(): HttpMcpServer =
   )
   let submitReviewHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
     let action = arguments["action"].getStr()
-    if action != "approve" and action != "request_changes":
-      return %*"Invalid action. Must be \"approve\" or \"request_changes\"."
+    if action != "approve" and action != "approve_with_warnings" and action != "request_changes":
+      return %*"Invalid action. Must be \"approve\", \"approve_with_warnings\", or \"request_changes\"."
     let feedback = if arguments.hasKey("feedback"): arguments["feedback"].getStr() else: ""
     if action == "request_changes" and feedback.len == 0:
       return %*"Feedback is required when action is \"request_changes\"."
