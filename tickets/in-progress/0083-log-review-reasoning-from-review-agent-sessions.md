@@ -28,3 +28,8 @@ The spec (Section 9, Review Lifecycle Logging) requires: "Review reasoning (not 
 - `tests/test_scriptorium.nim` — existing review agent tests
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-log-review-reasoning-from-review-agent-sessions
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single-file change in merge_queue.nim to accumulate message events and append reasoning to review notes, plus a straightforward unit test — one attempt expected.
