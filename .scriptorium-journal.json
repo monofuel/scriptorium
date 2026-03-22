@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0077",
+  "timestamp": "2026-03-22T20:28:42Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0077.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0077-0075-set-logroot-for-review-agent.md\n**Ticket ID:** 0077\n**Branch:** scriptorium/ticket-0077\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0077-0075-set-logroot-for-review-agent\n**Summary:** Set logRoot for review agent's AgentRunRequest in merge_queue.nim so JSONL logs persist in .scriptorium/logs/review/ instead of being lost when the worktree is cleaned up.\n",
+      "contentHash": "23BA83997710BF0AF9B194558FC35FA80E1F1D9D"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0077"
+}
