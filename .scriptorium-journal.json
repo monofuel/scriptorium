@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0081",
+  "timestamp": "2026-03-22T21:05:05Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0081.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt.md\n**Ticket ID:** 0081\n**Branch:** scriptorium/ticket-0081\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt\n**Summary:** Added AGENTS.md and spec.md content to the review agent prompt. Updated the template with new sections and placeholders, extended buildReviewAgentPrompt with agentsContent and specContent parameters, added file reads in runReviewAgent, and updated tests to cover the new sections.\n",
+      "contentHash": "3FE8235E15FD9543B30103F2F7C1FD5B26CDF9AE"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0081"
+}
