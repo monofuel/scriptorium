@@ -33,3 +33,20 @@ The spec (Section 9, Review Lifecycle Logging) requires: "Review reasoning (not 
 - predicted_difficulty: easy
 - predicted_duration_minutes: 12
 - reasoning: Single-file change in merge_queue.nim to accumulate message events and append reasoning to review notes, plus a straightforward unit test — one attempt expected.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 3\n- Attempt Count: 3\n- Timeout: none\n- Log File: /workspace/.scriptorium/worktrees/tickets/0083-log-review-reasoning-from-review-agent-sessions/.scriptorium/logs/0083/attempt-03.jsonl\n- Last Message File: /workspace/.scriptorium/worktrees/tickets/0083-log-review-reasoning-from-review-agent-sessions/.scriptorium/logs/0083/attempt-03.last_message.txt\n
+### Agent Last Message
+```text
+Work is complete. The PR has been submitted for ticket 0083.
+
+**Summary of changes:**
+
+- **`src/scriptorium/merge_queue.nim`**: Added `ReviewReasoningMaxChars` constant (2000), accumulate `agentEventMessage` events in `reviewReasoning` variable during `runReviewAgent`, log reasoning at DEBUG level, and append `**Review Reasoning:**` to the ticket review note for all outcomes.
+- **`tests/test_scriptorium.nim`**: Two new tests — one verifying reasoning capture and inclusion in review notes, another verifying truncation of long reasoning text.
+```
+
+### Agent Stdout Tail
+```text
+ewReasoningMaxChars` constant (2000), accumulate `agentEventMessage` events in `reviewReasoning` variable during `runReviewAgent`, log reasoning at DEBUG level, and append `**Review Reasoning:**` to the ticket review note for all outcomes.\n- **`tests/test_scriptorium.nim`**: Two new tests — one verifying reasoning capture and inclusion in review notes, another verifying truncation of long reasoning text.","stop_reason":"end_turn","session_id":"e18ab8cd-2914-4ecd-91b7-e89684efca38","total_cost_usd":0.690163,"usage":{"input_tokens":3490,"cache_creation_input_tokens":33512,"cache_read_input_tokens":647576,"output_tokens":5579,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":33512},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":3490,"outputTokens":5579,"cacheReadInputTokens":647576,"cacheCreationInputTokens":33512,"webSearchRequests":0,"costUSD":0.690163,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"597f5067-c5c0-4098-908e-550972a08faa"}
+```
