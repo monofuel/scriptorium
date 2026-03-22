@@ -124,3 +124,28 @@ instead of `ANTHROPIC_API_KEY=disabled`. Same for `OPENAI_API_KEY` and
 **Lesson**: When disabling env-var-based auth, unset the var entirely.
 Setting it to a sentinel value can cause libraries to use it as a real
 credential.
+
+## Manager generates self-referential ticket dependencies
+
+**Problem**: Ticket 0075 was generated with `**Depends:** 0074, 0075, 0076`
+— it depends on itself. The cycle detector correctly flags this as a
+dependency cycle, permanently blocking the ticket. Two other tickets (0074,
+0082) that depend on 0075 are also permanently blocked.
+
+**Root cause**: The manager agent generated the dependency list and
+included the ticket's own ID. The manager prompt does not instruct the
+agent to avoid self-references, and the orchestrator does not validate
+dependency lists after ticket generation.
+
+**Impact**: 3 of 10 v14 tickets were permanently blocked and never
+executed. The blocked work (continuationPromptBuilder forwarding, audit
+agent config, review prompt enforcement) would need to be done manually
+or in a future orchestrator run.
+
+**Future fix options**:
+- Post-generation validation: the orchestrator should strip self-references
+  from dependency lists before committing tickets.
+- Manager prompt improvement: explicitly instruct the manager not to
+  generate self-referential dependencies.
+- Cycle detection could auto-repair by removing the self-reference edge
+  rather than permanently blocking the ticket.
