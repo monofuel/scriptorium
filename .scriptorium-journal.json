@@ -1,0 +1,17 @@
+{
+  "operation": "dequeue 0073",
+  "timestamp": "2026-03-22T07:57:15Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "queue/merge/pending/0001-0073.md\n",
+      "contentHash": "B3ADA94309CEF8C952A786E6A36E25196F2F9053"
+    },
+    {
+      "action": "remove",
+      "path": "queue/merge/pending/0001-0073.md"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue dequeue 0073"
+}
