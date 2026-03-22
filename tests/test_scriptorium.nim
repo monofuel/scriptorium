@@ -1916,10 +1916,10 @@ suite "orchestrator final v1 flow":
 
     check changed
     check callCount == 1
-    check capturedRequest.ticketId == "architect-areas"
+    check capturedRequest.ticketId == "run"
     check capturedRequest.model == "claude-opus-4-6"
     check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect-areas"
+    check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect" / "areas"
     check tmp in capturedRequest.prompt
     check "AGENTS.md" in capturedRequest.prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
@@ -2092,7 +2092,7 @@ suite "orchestrator final v1 flow":
       ## Emulate architect, manager, and coding agent by ticketId role markers.
       callOrder.add(request.ticketId)
       case request.ticketId
-      of "architect-areas":
+      of "run":
         writeFile(
           request.workingDir / "areas/01-full-flow.md",
           "# Area 01\n\n## Goal\n- Full flow.\n",
@@ -2142,7 +2142,7 @@ suite "orchestrator final v1 flow":
     runOrchestratorForTicks(tmp, 1, fakeRunner)
 
     let files = planTreeFiles(tmp)
-    check callOrder == @["architect-areas", "manager-01-full-flow", "0001-prediction", "0001"]
+    check callOrder == @["run", "manager-01-full-flow", "0001-prediction", "0001"]
     check "areas/01-full-flow.md" in files
     check "tickets/done/0001-full-flow.md" in files
     check "tickets/open/0001-full-flow.md" notin files
@@ -2731,8 +2731,8 @@ suite "orchestrator agent enqueue with fakes":
           attempt: 1,
           attemptCount: 1,
           stdout: "",
-          logFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.jsonl",
-          lastMessageFile: request.workingDir / ".scriptorium/logs/plan-spec/attempt-01.last_message.txt",
+          logFile: request.workingDir / ".scriptorium/logs/architect/spec/attempt-01.jsonl",
+          lastMessageFile: request.workingDir / ".scriptorium/logs/architect/spec/attempt-01.last_message.txt",
           lastMessage: "Updated spec",
           timeoutKind: "none",
         )
@@ -3671,7 +3671,7 @@ suite "non-blocking tick loop":
 
     var codingCalled = false
     let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
-      if request.ticketId == "architect-areas":
+      if request.ticketId == "run":
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.startsWith("manager"):
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
@@ -3717,7 +3717,7 @@ suite "concurrent agent execution":
     var seenTickets: seq[string] = @[]
 
     let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
-      if request.ticketId == "architect-areas":
+      if request.ticketId == "run":
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.startsWith("manager"):
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
