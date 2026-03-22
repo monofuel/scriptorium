@@ -39,3 +39,8 @@ Without this context, the review agent cannot enforce project conventions or spe
 - `tests/test_scriptorium.nim` — prompt builder tests
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Well-scoped template and parameter additions across three files with clear instructions—adding placeholders to a markdown template, two string parameters to a builder function, and two file reads in the caller, minimal integration risk.
