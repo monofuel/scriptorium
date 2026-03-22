@@ -36,3 +36,8 @@ Additional requirements:
 - Depends on the shared agent pool (0068) and per-area concurrent managers (0069) being in place.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0071-restructured-orchestrator-tick
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 32
+- reasoning: Major refactor of the orchestrator tick loop touching core control flow in orchestrator.nim, requiring reordering of manager/coder interleaving logic, unifying serial/parallel paths, and updating existing orchestrator tests — high integration risk with concurrency semantics likely requiring 2+ attempts.
