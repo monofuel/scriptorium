@@ -50,3 +50,10 @@ Work is complete. The PR has been submitted for ticket 0083.
 ```text
 ewReasoningMaxChars` constant (2000), accumulate `agentEventMessage` events in `reviewReasoning` variable during `runReviewAgent`, log reasoning at DEBUG level, and append `**Review Reasoning:**` to the ticket review note for all outcomes.\n- **`tests/test_scriptorium.nim`**: Two new tests — one verifying reasoning capture and inclusion in review notes, another verifying truncation of long reasoning text.","stop_reason":"end_turn","session_id":"e18ab8cd-2914-4ecd-91b7-e89684efca38","total_cost_usd":0.690163,"usage":{"input_tokens":3490,"cache_creation_input_tokens":33512,"cache_read_input_tokens":647576,"output_tokens":5579,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":33512},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":3490,"outputTokens":5579,"cacheReadInputTokens":647576,"cacheCreationInputTokens":33512,"webSearchRequests":0,"costUSD":0.690163,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"597f5067-c5c0-4098-908e-550972a08faa"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 38s
