@@ -158,3 +158,33 @@ make: *** [Makefile:35: integration-test] Error 1
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: While the removals are well-enumerated, the post-mortem shows non-trivial orchestrator integration work (replacing batched call with per-area serial/parallel paths, fixing latent bugs, updating multiple test files) — more than simple deletions, but completed in one attempt.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path/.scriptorium/logs/0070/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/worktrees/tickets/0070-retire-batched-manager-path/.scriptorium/logs/0070/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Submitted. Summary of changes:
+
+**Removed:**
+- `runManagerTickets*()` and `syncTicketsFromAreas*()` from `manager_agent.nim`
+- `ManagerTicketsBatchTemplate` from `prompt_catalog.nim`
+- `buildManagerTicketsBatchPrompt*()` from `prompt_builders.nim`
+- `ManagerTicketGenerator` type from `shared_state.nim`
+- `src/scriptorium/prompts/manager_tickets_batch.md` template file
+- 9 tests referencing removed functions
+
+**Added:**
+- `runManagerForAreas*()` — serial per-area manager execution with plan worktree locking
+- `launchManagerAreasAsync*()` — parallel per-area manager agent launching
+
+**Updated:**
+- **orchestrator.nim**: Replaced `runManagerTickets` call with `runManagerForAreas` (serial, `maxAgents<=1`) or `launchManagerAreasAsync` (parallel)
+- Fixed latent bug in `executeManagerForArea` fallback where `listMarkdownFiles` returned absolute paths but was incorrectly joined with `planPath`
+- Updated orchestrator e2e test to use `maxAgents=1` and per-area manager ticketId (`manager-01-full-flow`)
+- Updated e2e happy path test to write tickets directly via `addTicketToPlan`
+```
+
+### Agent Stdout Tail
+```text
+ents<=1`) or `launchManagerAreasAsync` (parallel)\n- Fixed latent bug in `executeManagerForArea` fallback where `listMarkdownFiles` returned absolute paths but was incorrectly joined with `planPath`\n- Updated orchestrator e2e test to use `maxAgents=1` and per-area manager ticketId (`manager-01-full-flow`)\n- Updated e2e happy path test to write tickets directly via `addTicketToPlan`","stop_reason":"end_turn","session_id":"d1b68584-8c17-46b2-9c57-a92786253b24","total_cost_usd":3.7863417499999996,"usage":{"input_tokens":3789,"cache_creation_input_tokens":93737,"cache_read_input_tokens":5115081,"output_tokens":24960,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":93737},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":3789,"outputTokens":24960,"cacheReadInputTokens":5115081,"cacheCreationInputTokens":93737,"webSearchRequests":0,"costUSD":3.7863417499999996,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"16954c7e-0d40-407c-9f51-a460d5eda266"}
+```
