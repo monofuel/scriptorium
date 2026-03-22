@@ -19,3 +19,5 @@ Add a `## Concurrency Model` section to the project's `AGENTS.md` (or a dedicate
 5. **Slot arithmetic**: Example — if `maxAgents` is 4 and 2 managers are running, only 2 slots remain for coders (and vice versa).
 
 Keep the documentation concise. `make test` must still pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0073-concurrency-model-documentation
