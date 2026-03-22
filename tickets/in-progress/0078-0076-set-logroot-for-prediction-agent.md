@@ -13,3 +13,5 @@ In `src/scriptorium/coding_agent.nim`, in `predictTicketDifficulty` (around line
 1. Add the `logRoot` field to the `AgentRunRequest`:
    ```nim
    logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "prediction",
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0076-set-logroot-for-prediction-agent
