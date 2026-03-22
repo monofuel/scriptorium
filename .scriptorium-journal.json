@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0071",
+  "timestamp": "2026-03-22T07:06:18Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0071.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0071-restructured-orchestrator-tick.md\n**Ticket ID:** 0071\n**Branch:** scriptorium/ticket-0071\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0071-restructured-orchestrator-tick\n**Summary:** Restructured orchestrator tick loop for interleaved manager/coder execution. Completion polling now runs unconditionally, managers check slot availability before launching (prioritized over coders), and coding/merge steps are structurally separated from the hasRunnableSpec gate. All existing tests pass.\n",
+      "contentHash": "516B024BA03B3F78D774A1AA6AF14767C2113A81"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0071"
+}
