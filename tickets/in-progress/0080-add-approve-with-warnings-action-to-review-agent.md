@@ -21,3 +21,8 @@ The `submit_review` MCP tool in `src/scriptorium/mcp_server.nim` only supports t
    - Append a structured review note to the ticket markdown that includes the warnings text from `feedback`. Use a format like:
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-add-approve-with-warnings-action-to-review-agent
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Two-file change adding a new enum variant and a simple branch in the review handler — the logic mirrors existing approve/request_changes paths with no complex integration risk.
