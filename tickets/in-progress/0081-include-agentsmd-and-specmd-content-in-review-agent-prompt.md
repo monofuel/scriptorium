@@ -37,3 +37,5 @@ Without this context, the review agent cannot enforce project conventions or spe
 - `src/scriptorium/prompt_builders.nim:84-94` — `buildReviewAgentPrompt`
 - `src/scriptorium/merge_queue.nim:183-268` — `runReviewAgent`
 - `tests/test_scriptorium.nim` — prompt builder tests
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-include-agentsmd-and-specmd-content-in-review-agent-prompt
