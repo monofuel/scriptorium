@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0083",
+  "timestamp": "2026-03-22T21:42:50Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0083.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0083-log-review-reasoning-from-review-agent-sessions.md\n**Ticket ID:** 0083\n**Branch:** scriptorium/ticket-0083\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-log-review-reasoning-from-review-agent-sessions\n**Summary:** Capture review agent reasoning from agentEventMessage events and include it in ticket review notes. Added ReviewReasoningMaxChars constant (2000), accumulate message events in onEvent callback, log reasoning at DEBUG level, and append **Review Reasoning:** field to ticket markdown for all review outcomes. Includes two unit tests for reasoning capture and truncation.\n",
+      "contentHash": "40560ABCFB53A4DED46A953F20E47C7B0EA7D027"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0083"
+}
