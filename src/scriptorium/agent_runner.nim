@@ -169,6 +169,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       heartbeatIntervalMs: request.heartbeatIntervalMs,
       maxAttempts: request.maxAttempts,
       continuationPrompt: request.continuationPrompt,
+      continuationPromptBuilder: request.continuationPromptBuilder,
       onEvent: proc(event: ClaudeCodeStreamEvent) =
         ## Forward Claude Code streaming events to the optional agent callback.
         if not request.onEvent.isNil:
