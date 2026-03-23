@@ -46,7 +46,7 @@ suite "orchestrator final v1 flow":
     writeSpecInPlan(tmp, "# Spec\n\nNeed assignment.\n")
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    runOrchestratorForTicks(tmp, 1)
+    runOrchestratorForTicks(tmp, 1, noopRunner)
 
     let files = planTreeFiles(tmp)
     check "tickets/open/0001-first.md" in files
@@ -751,32 +751,19 @@ suite "orchestrator agent enqueue with fakes":
       runCmdOrDie("git -C " & quoteShell(firstAssignment.worktree) & " commit -m ticket-output")
       discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
 
-      let fakeBinDir = createTempDir("scriptorium_test_fake_codex_", "", getTempDir())
-      defer:
-        removeDir(fakeBinDir)
-      let fakeCodexPath = fakeBinDir / "codex"
-      let fakeScript = "#!/usr/bin/env bash\n" &
-        "set -euo pipefail\n" &
-        "last_message=\"\"\n" &
-        "while [[ $# -gt 0 ]]; do\n" &
-        "  case \"$1\" in\n" &
-        "    --output-last-message) last_message=\"$2\"; shift 2 ;;\n" &
-        "    *) shift ;;\n" &
-        "  esac\n" &
-        "done\n" &
-        "cat >/dev/null\n" &
-        "printf '{\"type\":\"message\",\"text\":\"ok\"}\\n'\n" &
-        "printf 'done\\n' > \"$last_message\"\n"
-      writeFile(fakeCodexPath, fakeScript)
-      setFilePermissions(fakeCodexPath, {fpUserRead, fpUserWrite, fpUserExec})
-
-      let oldPath = getEnv("PATH", "")
-      putEnv("PATH", fakeBinDir & ":" & oldPath)
-      defer:
-        putEnv("PATH", oldPath)
+      proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+        ## Ticket 0002 returns without submit_pr so it gets reopened as stalled.
+        if request.ticketId == "run":
+          return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+        elif request.ticketId.startsWith("manager"):
+          return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+        elif request.ticketId.endsWith("-prediction"):
+          return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+        else:
+          return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", lastMessage: "ok", timeoutKind: "none")
 
       writeOrchestratorEndpointConfig(repoPath, 0)
-      runOrchestratorForTicks(repoPath, 1)
+      runOrchestratorForTicks(repoPath, 1, fakeRunner)
 
       let files = planTreeFiles(repoPath)
       check "tickets/done/0001-first.md" in files
