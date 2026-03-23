@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0090-add-unit-test-for-staggered-coding-agent-start",
+  "timestamp": "2026-03-23T21:39:52Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0090-add-unit-test-for-staggered-coding-agent-start.md",
+      "destination": "tickets/in-progress/0090-add-unit-test-for-staggered-coding-agent-start.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0090-add-unit-test-for-staggered-coding-agent-start.md",
+      "content": "# Add unit test for staggered coding agent start\n\n**Area:** parallel-execution\n**Depends:** 0089\n\n## Task\n\nAdd a test to `tests/test_orchestrator_flow.nim` in the\n`\"concurrent agent execution\"` suite that verifies the staggered start rule:\nonly 1 new coding agent starts per orchestrator tick.\n\n### Test design\n\n1. Create a test repo with 3 open tickets in different areas (area-a, area-b,\n   area-c) and set `maxAgents: 4`.\n2. Use a fake runner that:\n   - Handles architect and manager calls as no-ops.\n   - For coding agents: records the tick on which each ticket's coding call\n     occurs (use a shared counter incremented per tick by counting\n     `runOrchestratorForTicks` calls).\n   - Calls `recordSubmitPrSummary` immediately so tickets complete in one\n     coding call.\n3. Run `runOrchestratorForTicks(tmp, 5, fakeRunner)`.\n4. Assert that coding agents for the 3 tickets were started on 3 different\n   ticks (not all on the same tick).\n\nUse the existing `helpers` module and test patterns from the file. The test\nhelper `addTicketToPlan`, `addPassingMakefile`, and `writeScriptoriumConfig`\nare already available.\n\nRun `make test` to verify the new test passes.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-add-unit-test-for-staggered-coding-agent-start\n",
+      "contentHash": "C1FC6F806FC354730F618A418A777AC86040ADBE"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0090-add-unit-test-for-staggered-coding-agent-start"
+}
