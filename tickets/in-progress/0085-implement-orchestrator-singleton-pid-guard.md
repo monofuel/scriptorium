@@ -157,3 +157,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted medium, actual was hard with 1 attempt(s) in 54m49s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 15
+- reasoning: Merge conflict resolution in orchestrator.nim plus verifying existing PID guard implementation still works — single file conflict fix with test validation, one attempt expected.
