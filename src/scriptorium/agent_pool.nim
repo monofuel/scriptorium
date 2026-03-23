@@ -150,3 +150,9 @@ proc joinAllAgentThreads*() =
     dealloc(runningPoolThreadPtrs[i])
   runningPoolSlots.setLen(0)
   runningPoolThreadPtrs.setLen(0)
+  # Drain any pending results left on the channel after joining.
+  if agentPoolResultChanOpen:
+    while true:
+      let (hasData, _) = agentPoolResultChan.tryRecv()
+      if not hasData:
+        break
