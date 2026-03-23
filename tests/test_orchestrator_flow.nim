@@ -467,6 +467,42 @@ suite "interactive planning":
 
     check callCount == 0
 
+  test "unknown slash commands rejected without invoking runner":
+    let tmp = getTempDir() / "scriptorium_test_interactive_unknown_cmd"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Count invocations; should never be called for unknown slash commands.
+      inc callCount
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    let cmds = @["/foo", "/quit"]
+    var cmdIdx = 0
+    proc fakeInput(): string =
+      ## Yield unknown slash command then quit.
+      if cmdIdx >= cmds.len:
+        raise newException(EOFError, "done")
+      result = cmds[cmdIdx]
+      inc cmdIdx
+
+    let before = planCommitCount(tmp)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
+    let after = planCommitCount(tmp)
+
+    check callCount == 0
+    check after == before
+
   test "turn rejects writes outside spec.md":
     let tmp = getTempDir() / "scriptorium_test_interactive_out_of_scope"
     makeTestRepo(tmp)
@@ -661,6 +697,42 @@ suite "interactive ask session":
     expect ValueError:
       runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
+    check after == before
+
+  test "unknown slash commands rejected without invoking runner in ask mode":
+    let tmp = getTempDir() / "scriptorium_test_ask_unknown_cmd"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Count invocations; should never be called for unknown slash commands.
+      inc callCount
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    let cmds = @["/unknown", "/quit"]
+    var cmdIdx = 0
+    proc fakeInput(): string =
+      ## Yield unknown slash command then quit.
+      if cmdIdx >= cmds.len:
+        raise newException(EOFError, "done")
+      result = cmds[cmdIdx]
+      inc cmdIdx
+
+    let before = planCommitCount(tmp)
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+    let after = planCommitCount(tmp)
+
+    check callCount == 0
     check after == before
 
   test "/show, /help, /quit do not invoke runner in ask mode":
