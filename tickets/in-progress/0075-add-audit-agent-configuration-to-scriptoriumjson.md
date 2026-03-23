@@ -268,3 +268,21 @@ All done. Here's a summary of the changes:
 ```text
 `{{agents_md}}`, `{{diff}}`, and `{{last_audit_commit}}` placeholders instructing the agent to produce \"Spec Drift\" and \"AGENTS.md Violations\" sections.\n\n**`src/scriptorium/prompt_catalog.nim`**: Registered `AuditAgentTemplate*` via `staticRead`.\n\n**`tests/test_scriptorium.nim`**: Three new tests confirming default audit model/harness, JSON override, and graceful defaults when audit key is absent.","stop_reason":"end_turn","session_id":"f99f3abe-ce2b-4c6f-83b7-f0f2695ef362","total_cost_usd":1.03784875,"usage":{"input_tokens":31,"cache_creation_input_tokens":53773,"cache_read_input_tokens":1114425,"output_tokens":5776,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":53773},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":31,"outputTokens":5776,"cacheReadInputTokens":1114425,"cacheCreationInputTokens":53773,"webSearchRequests":0,"costUSD":1.03784875,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"61bdc605-c924-4372-a82a-b6ca285c2f32"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 31s
+
+**Review Reasoning:** The diff cleanly implements both ticket 0074 and 0075 requirements:
+
+- **Config**: `DefaultAuditModel*`, `audit*: AgentConfig`, `defaultConfig()` wiring, and `mergeAgentConfig` in `loadConfig()` all correct and follow existing patterns.
+- **Prompt template**: All four placeholders present (`{{spec}}`, `{{agents_md}}`, `{{diff}}`, `{{last_audit_commit}}`), proper "Spec Drift" and "AGENTS.md Violations" sections with "No issues found." fallback.
+- **Catalog**: `AuditAgentTemplate*` registered via `staticRead`.
+- **Tests**: Three tests covering default model/harness, JSON override, and absent-key defaults.
+- `scriptorium.json` is untouched as required.
+
+One minor note: `DefaultAuditModel` is exported (`*`) while the other default model constants are not, but this matches what the ticket explicitly requested and may be needed by downstream tickets (0076-0080).
+Review approved. All ticket requirements are satisfied, the code follows existing patterns, and tests provide good coverage.
