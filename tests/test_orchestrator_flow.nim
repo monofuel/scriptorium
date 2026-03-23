@@ -467,6 +467,38 @@ suite "interactive planning":
 
     check callCount == 0
 
+  test "/exit exits session without invoking runner":
+    let tmp = getTempDir() / "scriptorium_test_interactive_exit"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Count invocations; should never be called when /exit is used.
+      inc callCount
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    var cmdIdx = 0
+    proc fakeInput(): string =
+      ## Yield /exit then EOF.
+      if cmdIdx >= 1:
+        raise newException(EOFError, "done")
+      inc cmdIdx
+      result = "/exit"
+
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
+
+    check callCount == 0
+
   test "unknown slash commands rejected without invoking runner":
     let tmp = getTempDir() / "scriptorium_test_interactive_unknown_cmd"
     makeTestRepo(tmp)
@@ -734,6 +766,38 @@ suite "interactive ask session":
 
     check callCount == 0
     check after == before
+
+  test "/exit exits ask session without invoking runner":
+    let tmp = getTempDir() / "scriptorium_test_ask_exit"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Count invocations; should never be called when /exit is used.
+      inc callCount
+      discard req
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    var cmdIdx = 0
+    proc fakeInput(): string =
+      ## Yield /exit then EOF.
+      if cmdIdx >= 1:
+        raise newException(EOFError, "done")
+      inc cmdIdx
+      result = "/exit"
+
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+
+    check callCount == 0
 
   test "/show, /help, /quit do not invoke runner in ask mode":
     let tmp = getTempDir() / "scriptorium_test_ask_commands"
