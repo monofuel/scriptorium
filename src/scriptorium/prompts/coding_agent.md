@@ -9,6 +9,18 @@ Treat this working directory as the repository checkout for code edits, builds, 
 
 Implement the requested work and keep changes minimal and safe.
 
+## Crash severity
+
+Low-level crashes such as SIGSEGV (segmentation fault), SIGBUS, SIGABRT, nil
+pointer dereferences, and other signals indicating undefined behavior are
+**critical issues**. If you encounter one during a build or test run, diagnose
+and fix the root cause with high priority — do not work around it or move on.
+
+Normal Nim exceptions (IOError, OSError, ValueError, etc.) are ordinary errors
+that should be handled or fixed, but they are far less severe than a signal
+crash. A SIGSEGV means memory safety has been violated and the program state
+cannot be trusted.
+
 Ticket path:
 {{TICKET_PATH}}
 
