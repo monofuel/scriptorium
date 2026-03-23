@@ -33,3 +33,8 @@ The review agent prompt's `## Instructions` section is minimal — it only says 
 - `src/scriptorium/prompts/review_agent.md` — prompt template (only file to modify)
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0082-add-enforcement-and-graduated-severity-instructions-to-review-agent-prompt
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 5
+- reasoning: Prompt-only change to a single markdown template file, replacing one section of text with more detailed instructions, no code or logic changes needed.
