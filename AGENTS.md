@@ -4,6 +4,8 @@
 
 ## Running
 
+- when working with the architect, follow docs/plan_prompting.md and docs/version-runbook.md
+
 ### Development (Nim)
 
 Run any scriptorium command directly with Nim:
