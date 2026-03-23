@@ -32,3 +32,8 @@ In `tests/test_orchestrator_flow.nim`, add a test to the `"interactive planning"
 Follow the existing test patterns in the file. Use `planCommitCount` or `latestPlanCommits` helpers from `tests/helpers.nim` as needed.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0088-0086-test-multi-turn-plan-history-and-commitsmd
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-file test addition following existing patterns, but requires understanding multi-turn session mechanics, wiring up fakeRunner with prompt capture across two calls, and verifying git commit history — moderate complexity with some integration risk.
