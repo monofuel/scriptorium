@@ -84,11 +84,11 @@
   1. Poll completed agents (managers + coders) via `checkCompletedAgents()`.
      - For completed managers: acquire commit lock, write tickets, commit, release. Log results.
      - For completed coders: handle as before (move ticket, queue merge, etc).
-  2. Check backoff / health.
+  2. Check health.
   3. Run architect (sequential, if spec changed). Must complete before managers are spawned.
   4. Read areas needing tickets (brief commit lock).
-  5. For each area needing tickets, if slots available, start a manager agent.
-  6. For each assignable ticket, if slots available, start a coding agent.
+  5. For each area needing tickets, if slots available, start a manager agent (at most 1 new agent per tick — see staggered start rule).
+  6. For each assignable ticket, if slots available, start a coding agent (at most 1 new agent per tick — see staggered start rule).
   7. Process at most one merge-queue item.
   8. Sleep.
 - Managers are prioritized over coders when slots are scarce, since manager completions unblock future coding work.
@@ -251,15 +251,14 @@
 - `startAgentAsync()` accepts a role and a generic worker proc.
 - `checkCompletedAgents()` returns completions tagged with role.
 - Concurrency limit is configurable via `scriptorium.json` under `concurrency.maxAgents` (integer, default 4). A value of 1 restores serial behavior.
+- Staggered start rule: the orchestrator starts at most 1 new coding agent per tick to avoid burst-spawning. Managers are exempt from this limit (they are lightweight and produce no API load comparable to coders). If multiple open tickets are assignable, one is started this tick and the rest wait for subsequent ticks.
 - The orchestrator logs when an agent slot opens or fills.
 
 ## 12. Resource Management
 
-- The orchestrator must monitor and respect API rate limits and token budgets across all parallel agents.
-- Backpressure: when approaching rate limits, delay new agent starts rather than failing running agents.
 - Track aggregate `stdout_bytes` across all running agents as a proxy for token consumption.
 - If `concurrency.tokenBudgetMB` is set in `scriptorium.json`, pause new ticket assignment when cumulative session `stdout_bytes` exceeds the budget. Allow running agents to complete normally.
-- Rate limit detection: on HTTP 429, apply exponential backoff before starting new agents and temporarily reduce effective concurrency by 1.
+- The orchestrator does not perform its own rate limit detection or backpressure. The coding harness (Claude Code, Codex) handles HTTP 429 retries internally.
 
 ## 13. Harness Routing And Agent Backends
 
