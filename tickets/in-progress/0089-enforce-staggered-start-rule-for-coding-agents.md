@@ -29,3 +29,8 @@ to `1`.
 Verify `make test` passes after the change.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-enforce-staggered-start-rule-for-coding-agents
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 5
+- reasoning: Explicit one-line change replacing `slotsAvailable` with `1` in a single function call, with clear location and no integration risk.
