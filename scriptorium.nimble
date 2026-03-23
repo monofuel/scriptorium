@@ -1,4 +1,4 @@
-version     = "13.0.0"
+version     = "14.0.0"
 author      = "Andrew Brower"
 description = "Agent orchestration system for managing hierarchical AI coding agents."
 license     = "MIT"
