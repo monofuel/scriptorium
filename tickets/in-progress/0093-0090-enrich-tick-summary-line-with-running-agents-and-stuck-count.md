@@ -23,3 +23,8 @@ Read stuck count from `readOrchestratorStatus` (which already reads the plan wor
 Example output:
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0093-0090-enrich-tick-summary-line-with-running-agents-and-stuck-count
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Small additive change to a log line in orchestrator.nim plus possibly adding a field to shared_state.nim, minimal logic and low integration risk.
