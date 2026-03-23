@@ -24,3 +24,8 @@ The spec (Section 2) requires both `/quit` and `/exit` to leave the session. The
 Follow the existing slash-command test patterns (see the `/show, /help, /quit do not invoke runner` tests).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-0085-test-exit-command-plan-askmd
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file test addition following existing patterns, just duplicating /quit tests with /exit in two test suites.
