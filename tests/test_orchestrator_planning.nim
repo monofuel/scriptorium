@@ -143,12 +143,8 @@ suite "orchestrator plan spec update":
     check managedPlanPath.len > 0
     check "/worktrees/plan" in normalizedPathForTest(managedPlanPath)
 
-    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree add " & quoteShell(managedPlanPath) & " scriptorium/plan")
-    defer:
-      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree remove --force " & quoteShell(managedPlanPath))
-      discard execCmdEx("git -C " & quoteShell(tmp) & " worktree prune")
-      if dirExists(managedPlanPath):
-        removeDir(managedPlanPath)
+    # Simulate Docker crash: worktree directory is gone but .git/worktrees/plan
+    # metadata remains, causing a stale conflict on next access.
     removeDir(managedPlanPath)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -167,7 +163,8 @@ suite "orchestrator plan spec update":
     let worktrees = gitWorktreePaths(tmp)
 
     check changed
-    check managedPlanPath notin worktrees
+    # Plan worktree persists after the operation (persistent worktree pattern).
+    check managedPlanPath in worktrees
 
   test "updateSpecFromArchitect keeps non-managed plan worktree conflicts intact":
     let tmp = getTempDir() / "scriptorium_test_plan_manual_conflict"
@@ -233,10 +230,9 @@ suite "orchestrator plan spec update":
     discard updateSpecFromArchitect(tmp, "bootstrap", bootstrapRunner)
     check managedPlanPath.len > 0
 
-    # Simulate Docker scenario: worktree checkout dir is gone but .git/worktrees/plan metadata persists.
-    runCmdOrDie("git -C " & quoteShell(tmp) & " worktree add " & quoteShell(managedPlanPath) & " scriptorium/plan")
+    # Simulate Docker scenario: worktree checkout dir is gone but
+    # .git/worktrees/plan metadata persists, causing a stale conflict.
     removeDir(managedPlanPath)
-    # Metadata in .git/worktrees/plan now points to a nonexistent path.
 
     proc recoveryRunner(req: AgentRunRequest): AgentRunResult =
       ## Verify the worktree was created successfully after prune.
@@ -252,9 +248,9 @@ suite "orchestrator plan spec update":
 
     let changed = updateSpecFromArchitect(tmp, "recover after prune", recoveryRunner)
     check changed
-    # Worktree should be cleaned up after the operation.
+    # Plan worktree persists after the operation (persistent worktree pattern).
     let worktrees = gitWorktreePaths(tmp)
-    check managedPlanPath notin worktrees
+    check managedPlanPath in worktrees
 
   test "updateSpecFromArchitect fails fast when planner lock is held":
     let tmp = getTempDir() / "scriptorium_test_plan_lock_busy"
@@ -283,8 +279,9 @@ suite "orchestrator plan spec update":
     createDir(parentDir(lockPath))
     createDir(lockPath)
     let pidPath = lockPath / "pid"
-    let currentPid = getCurrentProcessId()
-    writeFile(pidPath, $currentPid & "\n")
+    # Use PID 1 (init/systemd) — always alive, never us. Cannot use our own PID
+    # because lockPathIsStale treats same-PID locks as stale (cross-container fix).
+    writeFile(pidPath, "1\n")
     defer:
       if fileExists(pidPath):
         removeFile(pidPath)

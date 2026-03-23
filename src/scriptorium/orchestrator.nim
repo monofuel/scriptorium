@@ -366,7 +366,9 @@ proc runOrchestratorLoop(
 proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent) =
   ## Run a bounded orchestrator loop without starting the MCP HTTP server.
   acquireOrchestratorPidGuard(repoPath)
-  defer: releaseOrchestratorPidGuard(repoPath)
+  defer:
+    teardownPlanWorktree(repoPath)
+    releaseOrchestratorPidGuard(repoPath)
   shouldRun = true
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
   shouldRun = false
@@ -484,7 +486,9 @@ proc runOrchestrator*(repoPath: string) =
   ## Start the orchestrator daemon with HTTP MCP and an idle event loop.
   preflightValidation(repoPath)
   acquireOrchestratorPidGuard(repoPath)
-  defer: releaseOrchestratorPidGuard(repoPath)
+  defer:
+    teardownPlanWorktree(repoPath)
+    releaseOrchestratorPidGuard(repoPath)
   let cfg = loadConfig(repoPath)
   if cfg.syncAgentsMd:
     syncAgentsMd(repoPath)

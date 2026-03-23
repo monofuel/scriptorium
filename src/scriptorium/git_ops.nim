@@ -160,7 +160,9 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
     removeDir(worktreePath)
 
   # Prune stale worktree entries pointing to nonexistent paths.
-  discard gitCheck(repoPath, "worktree", "prune")
+  let pruneRc = gitCheck(repoPath, "worktree", "prune")
+  if pruneRc != 0:
+    logWarn(&"worktree prune failed (rc={pruneRc})")
 
   var recoveredConflict = false
   while true:

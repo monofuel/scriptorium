@@ -44,7 +44,11 @@ make docker-build
 ## Tests
 
 - Run `make test` to run local unit tests (`tests/test_*.nim`)
+  - unit tests SHOULD NOT perform live AI calls or use the real harness.
+  - make sure to unset `CLAUDE_CODE_USE_BEDROCK` in the environment before running specific unit tests. make test does this automatically.
+    - we dynamically switch to aws models when using bedrock, but this was too difficult to handle nice in unit tests, so let's just not use it.
 - Run `make integration-test` to run integration tests (`tests/integration_*.nim`) that may call real external services/tools (for example Codex)
+  - important: if `CLAUDE_CODE_USE_BEDROCK` was set in the environment, DO NOT unset it for integration tests. in that case, we want to use bedrock to avoid eating up subscription. same for e2e tests.
 - Individual test files can be run with `nim r tests/test_scriptorium.nim`
 - `tests/config.nims` contains `--path:"../src"` so tests can import project modules directly
 

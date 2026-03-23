@@ -86,25 +86,67 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
 
   result = operation()
 
-proc withPlanWorktreeImpl*[T](repoPath: string, operation: proc(planPath: string): T): T =
-  ## Open a deterministic /tmp worktree for the plan branch, then remove it.
+proc ensurePlanWorktreeReady*(repoPath: string): string =
+  ## Ensure the persistent plan worktree exists and is on the latest plan branch state.
   ## Internal: callers must hold planWorktreeLock.
   if gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) != 0:
     raise newException(ValueError, "scriptorium/plan branch does not exist")
 
   let planWorktree = managedPlanWorktreePath(repoPath)
-  logDebug(&"plan worktree creating: {planWorktree}")
-  addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
-  logDebug(&"plan worktree ready: {planWorktree}")
-  defer:
+  let gitFile = planWorktree / ".git"
+
+  if dirExists(planWorktree) and fileExists(gitFile):
+    # Existing worktree — reset to latest plan branch tip.
+    let checkRc = gitCheck(planWorktree, "rev-parse", "--git-dir")
+    if checkRc != 0:
+      # Worktree exists but git metadata is corrupt — recreate.
+      logWarn(&"plan worktree corrupt, recreating: {planWorktree}")
+      if dirExists(planWorktree):
+        removeDir(planWorktree)
+      discard gitCheck(repoPath, "worktree", "prune")
+      addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
+      logDebug(&"plan worktree recreated: {planWorktree}")
+    else:
+      gitRun(planWorktree, "checkout", PlanBranch)
+      gitRun(planWorktree, "reset", "--hard", PlanBranch)
+      gitRun(planWorktree, "clean", "-fd")
+      logDebug(&"plan worktree refreshed: {planWorktree}")
+  else:
+    # First time or missing — create fresh.
+    logDebug(&"plan worktree creating: {planWorktree}")
+    if dirExists(planWorktree):
+      removeDir(planWorktree)
+    discard gitCheck(repoPath, "worktree", "prune")
+    try:
+      addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
+    except:
+      # Clean up partial state on failure.
+      if dirExists(planWorktree):
+        removeDir(planWorktree)
+      discard gitCheck(repoPath, "worktree", "prune")
+      raise
+    logDebug(&"plan worktree created: {planWorktree}")
+
+  result = planWorktree
+
+proc teardownPlanWorktree*(repoPath: string) =
+  ## Remove the persistent plan worktree on clean shutdown.
+  let planWorktree = managedPlanWorktreePath(repoPath)
+  if dirExists(planWorktree):
     let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
     if removeRc != 0:
-      logWarn(&"plan worktree remove failed (rc={removeRc}): {planWorktree}")
+      logWarn(&"plan worktree teardown remove failed (rc={removeRc}): {planWorktree}")
+      if dirExists(planWorktree):
+        removeDir(planWorktree)
     let pruneRc = gitCheck(repoPath, "worktree", "prune")
     if pruneRc != 0:
-      logWarn(&"git worktree prune failed (rc={pruneRc})")
-    logDebug(&"plan worktree removed: {planWorktree}")
+      logWarn(&"plan worktree teardown prune failed (rc={pruneRc})")
+    logDebug(&"plan worktree torn down: {planWorktree}")
 
+proc withPlanWorktreeImpl*[T](repoPath: string, operation: proc(planPath: string): T): T =
+  ## Provide the persistent plan worktree to the operation.
+  ## Internal: callers must hold planWorktreeLock.
+  let planWorktree = ensurePlanWorktreeReady(repoPath)
   result = operation(planWorktree)
 
 proc withPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T): T =

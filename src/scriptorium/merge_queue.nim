@@ -70,12 +70,22 @@ proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string
 
   let masterWorktree = managedMasterWorktreePath(repoPath)
   logDebug(&"master worktree creating: {masterWorktree}")
-  addWorktreeWithRecovery(repoPath, masterWorktree, defaultBranch)
+  try:
+    addWorktreeWithRecovery(repoPath, masterWorktree, defaultBranch)
+  except:
+    # Clean up partial state on failure.
+    if dirExists(masterWorktree):
+      removeDir(masterWorktree)
+    discard gitCheck(repoPath, "worktree", "prune")
+    raise
   logDebug(&"master worktree ready: {masterWorktree}")
   defer:
     let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", masterWorktree)
     if removeRc != 0:
       logWarn(&"master worktree remove failed (rc={removeRc}): {masterWorktree}")
+      if dirExists(masterWorktree):
+        removeDir(masterWorktree)
+      discard gitCheck(repoPath, "worktree", "prune")
     logDebug(&"master worktree removed: {masterWorktree}")
 
   result = operation(masterWorktree)

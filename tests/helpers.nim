@@ -3,11 +3,11 @@
 import
   std/[algorithm, json, os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest],
   jsony,
-  scriptorium/[agent_runner, config, init, orchestrator, ticket_metadata]
+  scriptorium/[agent_runner, config, init, lock_management, orchestrator, ticket_metadata]
 
 export os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest
 export json, jsony
-export agent_runner, config, init, orchestrator, ticket_metadata
+export agent_runner, config, init, lock_management, orchestrator, ticket_metadata
 
 const
   OrchestratorTestBasePort* = 19000
@@ -50,16 +50,12 @@ proc writeOrchestratorEndpointConfig*(repoPath: string, portOffset: int, maxAtte
   writeScriptoriumConfig(repoPath, cfg)
 
 proc withPlanWorktree*(repoPath: string, suffix: string, action: proc(planPath: string)) =
-  ## Open scriptorium/plan in a temporary worktree for direct test mutations.
-  let tmpPlan = getTempDir() / ("scriptorium_test_plan_" & suffix & "_" & $getCurrentProcessId())
-  if dirExists(tmpPlan):
-    removeDir(tmpPlan)
-
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " worktree add " & quoteShell(tmpPlan) & " scriptorium/plan")
-  defer:
-    discard execCmdEx("git -C " & quoteShell(repoPath) & " worktree remove --force " & quoteShell(tmpPlan))
-
-  action(tmpPlan)
+  ## Open scriptorium/plan via the persistent plan worktree for direct test mutations.
+  discard suffix
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    action(planPath)
+    result = true
+  )
 
 proc removeSpecFromPlan*(repoPath: string) =
   ## Remove spec.md from scriptorium/plan and commit the change.
