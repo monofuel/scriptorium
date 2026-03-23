@@ -30,3 +30,5 @@ In `tests/test_orchestrator_flow.nim`, add a test to the `"interactive planning"
    - Plan branch log contains both `"plan session turn 1"` and `"plan session turn 2"`
 
 Follow the existing test patterns in the file. Use `planCommitCount` or `latestPlanCommits` helpers from `tests/helpers.nim` as needed.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0088-0086-test-multi-turn-plan-history-and-commitsmd
