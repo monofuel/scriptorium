@@ -402,6 +402,51 @@ suite "interactive planning":
     check "AGENTS.md" in capturedPrompt
     check capturedWorkingDir in capturedPrompt
 
+  test "multi-turn plan session includes history and sequential commits":
+    let tmp = getTempDir() / "scriptorium_test_interactive_multiturn"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+
+    var callCount = 0
+    var capturedPrompts: seq[string] = @[]
+    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
+      ## Write different spec content on each call and capture the prompt.
+      inc callCount
+      capturedPrompts.add(req.prompt)
+      let turnNum = callCount
+      writeFile(req.workingDir / "spec.md", "# Spec v" & $turnNum & "\n")
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "Architect response turn " & $turnNum,
+        timeoutKind: "none",
+      )
+
+    var msgIdx = 0
+    let messages = @["first user message", "second user message"]
+    proc fakeInput(): string =
+      ## Yield two messages then raise EOFError.
+      if msgIdx >= messages.len:
+        raise newException(EOFError, "done")
+      result = messages[msgIdx]
+      inc msgIdx
+
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
+
+    check callCount == 2
+    # Second prompt should contain first turn's user message and architect response.
+    check "first user message" in capturedPrompts[1]
+    check "Architect response turn 1" in capturedPrompts[1]
+    # First prompt should not contain history from a prior turn.
+    check "Architect response turn" notin capturedPrompts[0]
+
+    let commits = latestPlanCommits(tmp, 10)
+    check commits.anyIt("plan session turn 1" in it)
+    check commits.anyIt("plan session turn 2" in it)
+
   test "turn makes no commit when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"
     makeTestRepo(tmp)
