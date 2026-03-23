@@ -102,3 +102,32 @@ Done. The test validates that managers (step 4+5) start before coders (step 6) b
 ion_id":"ac13c4fa-641b-4525-9cd0-c76b420d5789","uuid":"beecec38-6441-4bf0-9132-46c2a5b57fdd"}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":768033,"duration_api_ms":202730,"num_turns":41,"result":"Done. The test validates that managers (step 4+5) start before coders (step 6) by tracking invocation order in a shared `callOrder` seq and asserting `manager-area-b` appears before `0001`.","stop_reason":"end_turn","session_id":"ac13c4fa-641b-4525-9cd0-c76b420d5789","total_cost_usd":1.12840825,"usage":{"input_tokens":39,"cache_creation_input_tokens":51987,"cache_read_input_tokens":1212089,"output_tokens":7890,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":51987},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":39,"outputTokens":7890,"cacheReadInputTokens":1212089,"cacheCreationInputTokens":51987,"webSearchRequests":0,"costUSD":1.12840825,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"2e91783f-a24a-4e01-bc27-e22654861bd8"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 21s
+
+**Review Reasoning:** The diff looks clean. Let me verify the test design matches all ticket requirements:
+
+1. **maxAgents: 2** — Line 1307 ✓
+2. **Spec + 2 areas so architect produces them** — Lines 1301-1303 ✓
+3. **1 open ticket in area-a** — Line 1304 ✓
+4. **Fake runner tracks order by ticketId with lock** — Lines 1310-1334 ✓
+5. **runOrchestratorForTicks(tmp, 4, fakeRunner)** — Line 1336 ✓
+6. **Assert manager before coder** — Lines 1344-1348 ✓
+
+Convention checks:
+- **Doc comment** on the proc (line 1315 `##`) — ✓
+- **camelCase variables** (`callOrder`, `callOrderLock`, `finalOrder`, `managerIdx`, `coderIdx`) — ✓
+- **Lock discipline** (init, acquire/release pairs, deinit) — ✓
+- **No try/catch, no boolean success/error** — ✓
+- **No unused imports** — ✓
+- **No leftover artifacts** — ✓
+- **Format strings**: none used — ✓
+- **`{.cast(gcsafe).}`** matches existing patterns — ✓
+
+No issues found.
+**Approved.** The test is well-structured, follows all project conventions, and precisely validates the ticket requirement that managers are prioritized over coders when slots are scarce.
