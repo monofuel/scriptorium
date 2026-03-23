@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0091",
+  "timestamp": "2026-03-23T23:17:37Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0091.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0091-add-unit-test-for-manager-priority-over-coders.md\n**Ticket ID:** 0091\n**Branch:** scriptorium/ticket-0091\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0091-add-unit-test-for-manager-priority-over-coders\n**Summary:** Added unit test \"managers are prioritized over coding agents when slots are scarce\" to the concurrent agent execution suite. Test creates a repo with maxAgents=2, 2 areas, and 1 open ticket, then asserts the manager ticketId appears before the coder ticketId in call order.\n",
+      "contentHash": "94D8B60E4EDE528CCEBD064A64AC297249512470"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0091"
+}
