@@ -45,3 +45,5 @@ In `src/scriptorium/orchestrator.nim`:
 Example before:
 ```nim
 logDebug(fmt"tick {ticks}: master health check took {epochTime() - t0:.1f}s, healthy={healthy}")
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0094-0091-log-waiting-no-spec-message-at-info-with-deduplication
