@@ -1292,6 +1292,61 @@ suite "concurrent agent execution":
       tickValues.add(tick)
     check tickValues.deduplicate().len == 1
 
+  test "managers are prioritized over coding agents when slots are scarce":
+    let tmp = getTempDir() / "scriptorium_test_manager_priority"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nManager priority test.\n")
+    addAreaToPlan(tmp, "area-a.md", "# Area A\n")
+    addAreaToPlan(tmp, "area-b.md", "# Area B\n")
+    addTicketToPlan(tmp, "open", "0001-task.md", "# Task\n\n**Area:** area-a\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 2
+    writeScriptoriumConfig(tmp, cfg)
+
+    var callOrder: seq[string] = @[]
+    var callOrderLock: Lock
+    initLock(callOrderLock)
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Track invocation order by ticketId.
+      if request.ticketId == "run":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.startsWith("manager"):
+        {.cast(gcsafe).}:
+          acquire(callOrderLock)
+          callOrder.add(request.ticketId)
+          release(callOrderLock)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      elif request.ticketId == "0001":
+        {.cast(gcsafe).}:
+          acquire(callOrderLock)
+          callOrder.add(request.ticketId)
+          release(callOrderLock)
+        recordSubmitPrSummary("done 0001", "0001")
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    runOrchestratorForTicks(tmp, 4, fakeRunner)
+
+    acquire(callOrderLock)
+    let finalOrder = callOrder
+    release(callOrderLock)
+    deinitLock(callOrderLock)
+
+    # Manager for area-b must appear before the coding agent for ticket 0001.
+    let managerIdx = finalOrder.find("manager-area-b")
+    let coderIdx = finalOrder.find("0001")
+    check managerIdx >= 0
+    check coderIdx >= 0
+    check managerIdx < coderIdx
+
   test "stall detection works independently per agent":
     let tmp = getTempDir() / "scriptorium_test_concurrent_stall"
     makeTestRepo(tmp)
