@@ -27,3 +27,8 @@ The spec (Section 2) requires: "unknown slash commands without invoking the Arch
 Follow the existing test patterns in the file (use `makeTestRepo`, `runInit`, `fakeRunner`, `fakeInput`, `quiet = true`).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0086-0084-test-unknown-slash-commandsmd
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Adding two simple unit tests to an existing test file following established patterns, single file change with no logic complexity.
