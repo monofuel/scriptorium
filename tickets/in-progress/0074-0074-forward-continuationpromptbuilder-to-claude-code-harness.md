@@ -106,3 +106,5 @@ Add a note at the top: "This file is auto-loaded by Claude Code after context co
 - Content is under 80 lines and covers the critical rules listed above.
 - `make test` still passes (no code changes).
 ````
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-forward-continuationpromptbuilder-to-claude-code-harness
