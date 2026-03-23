@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, posix, sequtils, sets, strformat, strutils, tables, times, uri],
-  ./[config, cycle_detection, git_ops, journal, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_analysis, ticket_metadata]
+  ./[config, cycle_detection, git_ops, journal, lock_management, logging, merge_queue, output_formatting, shared_state, ticket_metadata]
 
 const
   TicketAssignCommitPrefix* = "scriptorium: assign ticket"
@@ -198,10 +198,13 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       return TicketAssignment()
 
     let doneIds = doneTicketIdsInPlanPath(planPath)
+    var repairedGraph = buildRepairedDependencyGraph(planPath)
     var openTicket = ""
     for ticket in openTickets:
-      let content = readFile(planPath / ticket.rel)
-      if dependenciesSatisfied(content, doneIds):
+      let ticketId = ticketIdFromTicketPath(ticket.rel)
+      let repairedDeps = repairedGraph.getOrDefault(ticketId, @[])
+      let allSatisfied = repairedDeps.allIt(it in doneIds)
+      if allSatisfied:
         openTicket = ticket.rel
         break
     if openTicket.len == 0:
@@ -250,6 +253,7 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
 
     var occupiedAreas = inProgressAreasInPlanPath(planPath)
     let doneIds = doneTicketIdsInPlanPath(planPath)
+    var repairedGraph = buildRepairedDependencyGraph(planPath)
     var assignments: seq[TicketAssignment]
     var journalSteps: seq[JournalStep]
 
@@ -263,7 +267,9 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       if areaId.len > 0 and areaId in occupiedAreas:
         continue
 
-      if not dependenciesSatisfied(content, doneIds):
+      let ticketId = ticketIdFromTicketPath(ticket.rel)
+      let repairedDeps = repairedGraph.getOrDefault(ticketId, @[])
+      if not repairedDeps.allIt(it in doneIds):
         continue
 
       let inProgressTicket = PlanTicketsInProgressDir / splitFile(ticket.rel).name & ".md"
@@ -275,7 +281,6 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       if areaId.len > 0:
         occupiedAreas.incl(areaId)
 
-      let ticketId = ticketIdFromTicketPath(inProgressTicket)
       logInfo(fmt"ticket {ticketId}: open -> in-progress (assigned, worktree={worktreeInfo.path})")
       ticketStartTimes[ticketId] = epochTime()
       ticketAttemptCounts[ticketId] = 0
@@ -410,32 +415,13 @@ proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
     result.firstAttemptSuccessCount = firstAttemptCount
     result.totalDoneWithAttempts = totalWithAttempts
 
-    let graph = buildDependencyGraph(planPath)
-    let cycles = detectCycles(graph)
-    var cycleTicketIds = initHashSet[string]()
-    var reportedCycleTickets = initHashSet[string]()
-    for cycle in cycles:
-      let members = cycle[0 ..< cycle.len - 1]
-      for member in members:
-        cycleTicketIds.incl(member)
-        if member in reportedCycleTickets:
-          continue
-        reportedCycleTickets.incl(member)
-        var others: seq[string]
-        for other in members:
-          if other != member:
-            others.add(other)
-        result.blockedTickets.add(BlockedTicket(ticketId: member, cycleIds: others))
-
+    var repairedGraph = buildRepairedDependencyGraph(planPath)
     let doneIds = doneTicketIdsInPlanPath(planPath)
     for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
       for ticketPath in listMarkdownFiles(planPath / stateDir):
         let rel = stateDir / extractFilename(ticketPath)
         let ticketId = ticketIdFromTicketPath(rel)
-        if ticketId in cycleTicketIds:
-          continue
-        let content = readFile(ticketPath)
-        let deps = parseDependsFromTicketContent(content)
+        let deps = repairedGraph.getOrDefault(ticketId, @[])
         if deps.len == 0:
           continue
         var unsatisfied: seq[string]

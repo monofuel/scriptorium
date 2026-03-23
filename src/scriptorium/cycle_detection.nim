@@ -7,6 +7,7 @@ type
 
 proc buildDependencyGraph*(planPath: string): DependencyGraph =
   ## Build a directed graph from open and in-progress tickets using Depends fields.
+  ## Self-references are silently stripped.
   result = initTable[string, seq[string]]()
   for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir]:
     let dirPath = planPath / stateDir
@@ -17,7 +18,13 @@ proc buildDependencyGraph*(planPath: string): DependencyGraph =
       let ticketId = ticketIdFromTicketPath(rel)
       let content = readFile(ticketPath)
       let deps = parseDependsFromTicketContent(content)
-      result[ticketId] = deps
+      var filtered: seq[string]
+      for dep in deps:
+        if dep != ticketId:
+          filtered.add(dep)
+        else:
+          logWarn(&"ticket {ticketId}: stripped self-reference from dependencies")
+      result[ticketId] = filtered
 
 proc detectCycles*(graph: DependencyGraph): seq[seq[string]] =
   ## Detect all cycles in a dependency graph using DFS-based cycle detection.
@@ -70,17 +77,39 @@ proc detectAndLogCycles*(planPath: string): seq[seq[string]] =
     logError(&"ticket {ticketId}: dependency cycle detected ({cyclePath})")
   result = cycles
 
+proc repairCycles*(graph: var DependencyGraph) =
+  ## Detect cycles and break them by removing the edge from the highest-numbered
+  ## (newest) ticket in each cycle. Repeats until no cycles remain.
+  while true:
+    let cycles = detectCycles(graph)
+    if cycles.len == 0:
+      break
+    for cycle in cycles:
+      # Find the newest ticket in the cycle (highest ID string).
+      let members = cycle[0 ..< cycle.len - 1]
+      if members.len == 0:
+        continue
+      var newest = members[0]
+      for member in members[1 .. ^1]:
+        if member > newest:
+          newest = member
+      # Remove all edges from `newest` that point to other cycle members.
+      if newest in graph:
+        var kept: seq[string]
+        let cycleSet = members.toHashSet()
+        for dep in graph[newest]:
+          if dep notin cycleSet:
+            kept.add(dep)
+          else:
+            logWarn(&"ticket {newest}: auto-repaired dependency cycle, removed edge to {dep}")
+        graph[newest] = kept
+
+proc buildRepairedDependencyGraph*(planPath: string): DependencyGraph =
+  ## Build a dependency graph with self-references stripped and cycles auto-repaired.
+  result = buildDependencyGraph(planPath)
+  repairCycles(result)
+
 proc scanForCycleBlockedTickets*(planPath: string) =
-  ## Scan open and in-progress tickets for dependency cycles and log warnings.
-  let graph = buildDependencyGraph(planPath)
-  let cycles = detectCycles(graph)
-  if cycles.len == 0:
-    return
-
-  var cycleTickets = initHashSet[string]()
-  for cycle in cycles:
-    for i in 0 ..< cycle.len - 1:
-      cycleTickets.incl(cycle[i])
-
-  for ticketId in cycleTickets:
-    logWarn(&"ticket {ticketId}: permanently blocked by dependency cycle")
+  ## Scan open and in-progress tickets for dependency cycles and log repairs.
+  var graph = buildDependencyGraph(planPath)
+  repairCycles(graph)

@@ -2,12 +2,15 @@ import
   std/[json, sets, strformat, strutils],
   ./[logging, output_formatting, shared_state, ticket_metadata]
 
-proc dependenciesSatisfied*(ticketContent: string, doneIds: HashSet[string]): bool =
+proc dependenciesSatisfied*(ticketContent: string, doneIds: HashSet[string], selfId: string = ""): bool =
   ## Check whether all declared dependencies are in the done set.
+  ## Self-references (dep == selfId) are silently skipped.
   let deps = parseDependsFromTicketContent(ticketContent)
   if deps.len == 0:
     return true
   for dep in deps:
+    if dep == selfId:
+      continue
     if dep notin doneIds:
       return false
   return true
