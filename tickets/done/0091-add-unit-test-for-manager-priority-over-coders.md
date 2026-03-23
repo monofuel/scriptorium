@@ -131,3 +131,38 @@ Convention checks:
 
 No issues found.
 **Approved.** The test is well-structured, follows all project conventions, and precisely validates the ticket requirement that managers are prioritized over coders when slots are scarce.
+
+## Merge Queue Success
+- Summary: Added unit test "managers are prioritized over coding agents when slots are scarce" to the concurrent agent execution suite. Test creates a repo with maxAgents=2, 2 areas, and 1 open ticket, then asserts the manager ticketId appears before the coder ticketId in call order.\n
+### Quality Check Output
+```text
+00Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] session summary: uptime=2m16s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] session summary: avg_ticket_wall=55s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] orchestrator PID guard acquired (PID 142738)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:00Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:30Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:26:30Z] [INFO] session summary: avg_ticket_wall=55s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+[tests/integration_orchestrator_queue.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_979287927C997F2786ED48242BBDDC896BA95CD3'
+```
+
+## Metrics
+- wall_time_seconds: 1308
+- coding_wall_seconds: 769
+- test_wall_seconds: 511
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 307692
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 21m48s.
