@@ -153,3 +153,8 @@ Remove unused legacy lock directory infrastructure after the switch to file-base
 ````
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0084-orchestrator-singleton-pid-guard
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Four interconnected tickets spanning lock_management.nim, git_ops.nim, and orchestrator.nim with POSIX process liveness checks, atomic file operations, retry/backoff logic, legacy code removal, and comprehensive test coverage — high integration risk across modules likely requiring 2+ attempts.
