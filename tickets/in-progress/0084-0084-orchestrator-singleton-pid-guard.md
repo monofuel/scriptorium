@@ -185,3 +185,26 @@ All done. Here's a summary of the changes:
 ```text
 rite if dead)\n- `releaseOrchestratorPidGuard` — deletes the PID file on shutdown\n\n**`src/scriptorium/orchestrator.nim`** — Called the guard from both `runOrchestrator` and `runOrchestratorForTicks` with `defer` cleanup.\n\n**`tests/test_lock_management.nim`** — 5 unit tests covering write, release/cleanup, stale PID overwrite, live PID rejection, and directory auto-creation.","stop_reason":"end_turn","session_id":"74423eb8-9239-4226-828f-a9649ac831cc","total_cost_usd":1.2131615000000002,"usage":{"input_tokens":12768,"cache_creation_input_tokens":54382,"cache_read_input_tokens":1193018,"output_tokens":8517,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":54382},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":12768,"outputTokens":8517,"cacheReadInputTokens":1193018,"cacheCreationInputTokens":54382,"webSearchRequests":0,"costUSD":1.2131615000000002,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"717b7259-6a82-4524-9aa4-23a78d71d7f8"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m15s
+
+**Review Reasoning:** Let me read the relevant source files to verify the implementation.
+Let me check where `managedRepoRootPath` resolves to — the ticket specifies `<repoPath>/.scriptorium/orchestrator.pid`.
+The implementation is correct and complete. Let me verify one detail about the orchestrator import.
+Good — `lock_management` is already imported. Review complete.
+
+**Summary of findings:**
+
+1. **All ticket requirements met:** PID file creation with JSON `{pid, timestamp}`, liveness check via `posix.kill(Pid(pid), 0)`, abort on live PID, warn+overwrite on dead PID, cleanup via `defer`.
+2. **Path correct:** `orchestratorPidPath` resolves to `<repoPath>/.scriptorium/orchestrator.pid` via `managedRepoRootPath`.
+3. **Integration correct:** Guard called in both `runOrchestrator` (before HTTP server) and `runOrchestratorForTicks`, with `defer` cleanup in both.
+4. **ESRCH handling consistent:** Matches existing `lockPathIsStale` pattern. EPERM is correctly treated as "alive" (process exists but we lack permission).
+5. **`stderr.writeLine` for warning is pragmatic:** The guard runs before `initLog()` in `runOrchestrator`, so the logging system isn't available yet.
+6. **All 5 required test cases covered:** write, release/cleanup, stale overwrite, live rejection, directory creation.
+7. **Uses jsony** as required by project conventions.
+Approved. The implementation is clean, correct, and fully satisfies all ticket requirements.
