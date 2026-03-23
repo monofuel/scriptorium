@@ -38,7 +38,7 @@
   - include repo-root path context so the Architect can read source files from the main project,
   - skip git repo checks inside the agent harness for plan worktrees,
   - enforce a post-run write allowlist of `spec.md` only,
-  - use an Architect-specific per-repository lock so concurrent planner or manager writes fail fast.
+  - use the transactional commit lock (§17) so concurrent planner or manager writes fail fast.
 - One-shot planning must:
   - require a non-blank prompt,
   - commit only when `spec.md` changes,
@@ -65,6 +65,7 @@
 ## 3. Orchestrator Run Loop
 
 - `scriptorium run` must start:
+  - the orchestrator singleton PID guard (see §17),
   - the orchestrator polling loop,
   - the local MCP HTTP server used by coding agents,
   - repository-backed logging with configurable log level.
@@ -81,11 +82,11 @@
 - If spec is not runnable, orchestrator must log: `WAITING: no spec — run 'scriptorium plan'`.
 - Tick order:
   1. Poll completed agents (managers + coders) via `checkCompletedAgents()`.
-     - For completed managers: acquire plan lock, write tickets, commit, release. Log results.
+     - For completed managers: acquire commit lock, write tickets, commit, release. Log results.
      - For completed coders: handle as before (move ticket, queue merge, etc).
   2. Check backoff / health.
   3. Run architect (sequential, if spec changed). Must complete before managers are spawned.
-  4. Read areas needing tickets (brief plan lock).
+  4. Read areas needing tickets (brief commit lock).
   5. For each area needing tickets, if slots available, start a manager agent.
   6. For each assignable ticket, if slots available, start a coding agent.
   7. Process at most one merge-queue item.
@@ -144,11 +145,11 @@
 - Manager execution must preserve the dirty state of the main repository outside the plan worktree.
 - Manager-generated ticket filenames must be assigned by the orchestrator, not by the agent prompt output.
 - Per-area manager flow:
-  1. Orchestrator briefly acquires the plan lock to snapshot area content for all areas needing tickets, then releases the lock.
+  1. Orchestrator briefly acquires the commit lock to snapshot area content for all areas needing tickets, then releases the lock.
   2. For each area, if a slot is available in the shared pool, spawn a manager agent thread.
   3. The manager thread generates ticket documents in memory and sends results back through the shared agent result channel.
   4. On the next tick, `checkCompletedAgents()` picks up manager completions.
-  5. The orchestrator main thread acquires the plan lock, calls `writeTicketsForArea()` to persist tickets for one completed manager, commits, and releases the lock. Each completed manager's write is a separate short lock acquisition.
+  5. The orchestrator main thread acquires the commit lock, calls `writeTicketsForArea()` to persist tickets for one completed manager, commits, and releases the lock. Each completed manager's write is a separate short lock acquisition.
 
 ## 7. Coding Agent Execution
 
@@ -369,15 +370,52 @@
 
 ## 17. Plan Branch Locking
 
-- Plan worktree lock strategy minimizes lock hold times:
-  - **Reading areas:** Brief lock to snapshot area content at the start of the tick. Done once for all areas.
-  - **Agent execution:** No lock needed. Manager agents run in threads and produce ticket content in memory.
-  - **Writing tickets:** Main thread acquires lock, writes tickets for one completed manager, commits, releases. Each completed manager's write is a separate lock acquisition.
-- The architect still holds the lock for its full duration (sequential, runs before managers).
+Two mechanisms protect plan branch state:
+
+### Orchestrator Singleton PID Guard
+
+- On `scriptorium run` startup, write `.scriptorium/orchestrator.pid` containing the process PID and a startup timestamp.
+- If the file already exists, read the PID and check liveness with `kill(pid, 0)`:
+  - If the PID is alive: abort with a clear error message.
+  - If the PID is dead: log a warning, overwrite the PID file, proceed.
+- On clean shutdown, delete the PID file.
+- This is a one-time startup check, not an acquired/released lock. It is not checked during operation.
+- The PID check does not work across container boundaries (different PID namespaces). The constraint is that scriptorium runs either always in a container or always on the host for a given repo, never both simultaneously.
+
+### Transactional Commit Lock
+
+A short-lived file lock held only for the duration of a read-modify-commit cycle on the plan branch.
+
+- **Contract:**
+  - Acquired immediately before a plan branch write operation.
+  - The lock holder reads state, modifies files, runs `git commit`, then releases.
+  - Never held during agent execution, API calls, test runs, or anything beyond a few seconds.
+  - Maximum expected hold time: < 2 seconds (a `git add` + `git commit`).
+- **Implementation:**
+  - Lock file: `.scriptorium/commit.lock` (a regular file, not a directory).
+  - On acquisition, write a JSON object: `{"pid": <pid>, "timestamp": <unix_epoch>}`.
+  - On release, delete the file.
+  - Staleness threshold: 30 seconds. If the lock file exists and the timestamp is older than 30 seconds, the lock is considered stale.
+- **Contention handling:**
+  - If the lock file exists and is fresh (< 30s old): wait 100ms and retry, up to 50 retries (5 seconds max wait).
+  - If the lock file exists and is stale (>= 30s old): log a warning ("stealing stale commit lock from PID <pid>, held for <duration>"), delete the lock file, and acquire.
+  - If all retries are exhausted: fail with a clear error.
+- **Callers:**
+  - Orchestrator: architect area writes, manager ticket writes, area hash updates, ticket state transitions, merge queue operations, health cache writes.
+  - `scriptorium plan`: spec.md commits at the end of each interactive turn or one-shot invocation.
+  - All callers are brief git commit operations. No caller holds the lock for more than the time it takes to stage and commit files.
+- **Worktree management is separate:** `ensurePlanWorktree()` runs without locking (idempotent, safe to call concurrently since git worktree operations are atomic). Only the subsequent commit operation acquires the commit lock.
+
+### Lock Hold Patterns
+
+- **Reading areas:** Brief commit lock to snapshot area content at the start of the tick. Done once for all areas.
+- **Agent execution:** No lock needed. Manager agents run in threads and produce ticket content in memory.
+- **Writing tickets:** Main thread acquires commit lock, writes tickets for one completed manager, commits, releases. Each completed manager's write is a separate lock acquisition.
+- The architect still holds the commit lock for its full duration (sequential, runs before managers).
 
 ## 18. Concurrency Model
 
-- **Strictly sequential agents:** Architect (reads spec, writes areas, at most once per tick, protected by plan lock, must complete before managers) and Review/Merge (one merge queue item at a time, sequential to guarantee default branch health).
+- **Strictly sequential agents:** Architect (reads spec, writes areas, at most once per tick, protected by commit lock, must complete before managers) and Review/Merge (one merge queue item at a time, sequential to guarantee default branch health).
 - **Parallel agents (shared slot pool):** Manager (one area per invocation, multiple can run in parallel) and Coding agent (one ticket per invocation, multiple can run in parallel in independent areas). Both share the `maxAgents` slot pool.
 - **Interleaved execution:** Managers and coders are interleaved across ticks — the orchestrator does not wait for all managers to finish before starting coders.
 - **Merge conflict handling:** Parallel coding agents may produce merge conflicts on shared files. The sequential merge process catches conflicts by merging the default branch into the ticket branch before testing. Conflicting tickets are sent back for another coding attempt with conflict context.
