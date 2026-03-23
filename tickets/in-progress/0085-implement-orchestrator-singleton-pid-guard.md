@@ -40,3 +40,8 @@ Implement the PID guard in `src/scriptorium/orchestrator.nim` (or a helper modul
 - `tests/test_orchestrator_flow.nim` — add PID guard tests.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-implement-orchestrator-singleton-pid-guard
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-module change with POSIX process checking, JSON file I/O, and cleanup logic plus 4 unit tests — moderate complexity but well-scoped with clear requirements, one attempt expected.
