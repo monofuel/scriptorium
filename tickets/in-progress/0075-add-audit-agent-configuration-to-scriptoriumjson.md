@@ -237,3 +237,5 @@ Add unit tests covering the audit agent's core logic: commit tracking, diff comp
 - `tests/config.nims` — test path configuration.
 - AGENTS.md: unit tests use mocks/fakes, no real external services.
 ````
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-add-audit-agent-configuration-to-scriptoriumjson
