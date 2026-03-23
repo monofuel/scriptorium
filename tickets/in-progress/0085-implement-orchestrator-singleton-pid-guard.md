@@ -38,3 +38,5 @@ Implement the PID guard in `src/scriptorium/orchestrator.nim` (or a helper modul
 ## Files likely affected
 - `src/scriptorium/orchestrator.nim` — add PID guard logic to `runOrchestrator` startup/shutdown.
 - `tests/test_orchestrator_flow.nim` — add PID guard tests.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-implement-orchestrator-singleton-pid-guard
