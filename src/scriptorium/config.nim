@@ -14,6 +14,7 @@ const
   DefaultCodingModel = "claude-sonnet-4-6"
   DefaultManagerModel = "claude-sonnet-4-6"
   DefaultReviewerModel = "claude-sonnet-4-6"
+  DefaultAuditModel* = "claude-haiku-4-5-20251001"
   DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
   DefaultLocalEndpoint = "http://127.0.0.1:8097"
@@ -29,6 +30,7 @@ type
     coding*: AgentConfig
     manager*: AgentConfig
     reviewer*: AgentConfig
+    audit*: AgentConfig
 
   Endpoints* = object
     local*: string
@@ -68,6 +70,7 @@ proc defaultConfig*(): Config =
       coding: defaultAgentConfig(DefaultCodingModel),
       manager: defaultAgentConfig(DefaultManagerModel),
       reviewer: defaultAgentConfig(DefaultReviewerModel),
+      audit: defaultAgentConfig(DefaultAuditModel),
     ),
     endpoints: Endpoints(
       local: DefaultLocalEndpoint,
@@ -129,6 +132,7 @@ proc loadConfig*(repoPath: string): Config =
   mergeAgentConfig(result.agents.coding, parsed.agents.coding)
   mergeAgentConfig(result.agents.manager, parsed.agents.manager)
   mergeAgentConfig(result.agents.reviewer, parsed.agents.reviewer)
+  mergeAgentConfig(result.agents.audit, parsed.agents.audit)
   if parsed.endpoints.local.len > 0:
     result.endpoints.local = parsed.endpoints.local
   if parsed.concurrency.maxAgents > 0:

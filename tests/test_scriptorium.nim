@@ -245,6 +245,31 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.syncAgentsMd == true
 
+  test "default audit model is claude-haiku-4-5-20251001":
+    let cfg = defaultConfig()
+    check cfg.agents.audit.model == "claude-haiku-4-5-20251001"
+    check cfg.agents.audit.harness == harnessClaudeCode
+
+  test "audit config overrides from JSON":
+    let tmp = getTempDir() / "scriptorium_test_config_audit_override"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "scriptorium.json", """{"agents": {"audit": {"model": "claude-sonnet-4-6"}}}""")
+
+    let cfg = loadConfig(tmp)
+    check cfg.agents.audit.model == "claude-sonnet-4-6"
+    check cfg.agents.audit.harness == harnessClaudeCode
+
+  test "audit config defaults when absent from JSON":
+    let tmp = getTempDir() / "scriptorium_test_config_audit_absent"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "scriptorium.json", """{"agents": {"coding": {"model": "claude-sonnet-4-6"}}}""")
+
+    let cfg = loadConfig(tmp)
+    check cfg.agents.audit.model == "claude-haiku-4-5-20251001"
+    check cfg.agents.audit.harness == harnessClaudeCode
+
 suite "orchestrator endpoint":
   test "empty endpoint falls back to default":
     let endpoint = parseEndpoint("")
