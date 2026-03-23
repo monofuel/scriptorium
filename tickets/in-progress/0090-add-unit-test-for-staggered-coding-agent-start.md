@@ -31,3 +31,8 @@ are already available.
 Run `make test` to verify the new test passes.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-add-unit-test-for-staggered-coding-agent-start
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-file test addition to an existing suite with clear design spec, but requires understanding orchestrator tick mechanics and fake runner patterns, moderate complexity in tracking per-tick agent starts.
