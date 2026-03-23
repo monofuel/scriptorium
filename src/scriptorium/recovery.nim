@@ -100,6 +100,7 @@ proc reconcileDirtyPlanBranch*(repoPath: string): string =
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
     # Check for journal first.
     if journalExists(planPath):
+      logInfo("recovery: journal file found, replaying or rolling back")
       replayOrRollbackJournal(planPath)
       # Determine what happened by checking the last commit.
       let (logOut, logRc) = execCmdEx("git -C " & planPath & " log -1 --format=%s")
@@ -157,10 +158,12 @@ proc validateMergeQueueVsMaster*(repoPath: string): int =
 
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       createDir(planPath / PlanTicketsDoneDir)
+      logDebug(&"recovery: moving ticket {item.ticketId} to done (already merged)")
       moveFile(ticketPath, planPath / doneRelPath)
 
       let queuePath = planPath / item.pendingPath
       if fileExists(queuePath):
+        logDebug(&"recovery: removing queue entry {item.pendingPath}")
         removeFile(queuePath)
 
       # Clear active marker if it points to this item.

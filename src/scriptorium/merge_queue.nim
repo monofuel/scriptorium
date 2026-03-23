@@ -69,9 +69,14 @@ proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string
       return operation(currentPath)
 
   let masterWorktree = managedMasterWorktreePath(repoPath)
+  logDebug(&"master worktree creating: {masterWorktree}")
   addWorktreeWithRecovery(repoPath, masterWorktree, defaultBranch)
+  logDebug(&"master worktree ready: {masterWorktree}")
   defer:
-    discard gitCheck(repoPath, "worktree", "remove", "--force", masterWorktree)
+    let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", masterWorktree)
+    if removeRc != 0:
+      logWarn(&"master worktree remove failed (rc={removeRc}): {masterWorktree}")
+    logDebug(&"master worktree removed: {masterWorktree}")
 
   result = operation(masterWorktree)
 
@@ -322,6 +327,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       return false
 
     let item = queueItems[0]
+    logDebug(&"merge queue: dequeuing {item.ticketId} (queue depth={queueItems.len})")
     let dequeueCommitMsg = MergeQueueCleanupCommitPrefix & " dequeue " & item.ticketId
     let dequeueSteps = @[
       newWriteStep(PlanMergeQueueActivePath, item.pendingPath & "\n"),

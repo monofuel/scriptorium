@@ -1,7 +1,7 @@
 import
   std/[locks, os, posix, strformat, strutils, times],
   jsony,
-  ./git_ops
+  ./[git_ops, logging]
 
 var
   planWorktreeLock*: Lock
@@ -55,6 +55,8 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
 
   var acquired = tryAcquireRepoLock(lockPath)
   if not acquired and lockPathIsStale(lockPath):
+    let stalePid = lockHolderPid(lockPath)
+    logWarn(&"stealing stale repo lock at {lockPath} from dead PID {stalePid}")
     if dirExists(lockPath):
       removeDir(lockPath)
     acquired = tryAcquireRepoLock(lockPath)
@@ -66,11 +68,13 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
   let pidPath = lockPath / ManagedRepoLockPidFileName
   let currentPid = getCurrentProcessId()
   writeFile(pidPath, &"{currentPid}\n")
+  logDebug(&"repo lock acquired: {lockPath}")
   defer:
     if fileExists(pidPath):
       removeFile(pidPath)
     if dirExists(lockPath):
       removeDir(lockPath)
+    logDebug(&"repo lock released: {lockPath}")
 
   result = operation()
 
@@ -81,10 +85,17 @@ proc withPlanWorktreeImpl*[T](repoPath: string, operation: proc(planPath: string
     raise newException(ValueError, "scriptorium/plan branch does not exist")
 
   let planWorktree = managedPlanWorktreePath(repoPath)
+  logDebug(&"plan worktree creating: {planWorktree}")
   addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
+  logDebug(&"plan worktree ready: {planWorktree}")
   defer:
-    discard gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
-    discard gitCheck(repoPath, "worktree", "prune")
+    let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
+    if removeRc != 0:
+      logWarn(&"plan worktree remove failed (rc={removeRc}): {planWorktree}")
+    let pruneRc = gitCheck(repoPath, "worktree", "prune")
+    if pruneRc != 0:
+      logWarn(&"git worktree prune failed (rc={pruneRc})")
+    logDebug(&"plan worktree removed: {planWorktree}")
 
   result = operation(planWorktree)
 
@@ -92,16 +103,24 @@ proc withPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T
   ## Thread-safe plan worktree access for read-only operations.
   ensurePlanWorktreeLockInitialized()
   {.cast(gcsafe).}:
+    logDebug("plan worktree lock acquiring (read-only)")
     acquire(planWorktreeLock)
-    defer: release(planWorktreeLock)
+    logDebug("plan worktree lock acquired (read-only)")
+    defer:
+      release(planWorktreeLock)
+      logDebug("plan worktree lock released (read-only)")
     result = withPlanWorktreeImpl(repoPath, operation)
 
 proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T): T =
   ## Thread-safe plan worktree access with file-based repo lock for write operations.
   ensurePlanWorktreeLockInitialized()
   {.cast(gcsafe).}:
+    logDebug("plan worktree lock acquiring (write)")
     acquire(planWorktreeLock)
-    defer: release(planWorktreeLock)
+    logDebug("plan worktree lock acquired (write)")
+    defer:
+      release(planWorktreeLock)
+      logDebug("plan worktree lock released (write)")
     result = withRepoLock(repoPath, proc(): T =
       withPlanWorktreeImpl(repoPath, operation)
     )
@@ -139,9 +158,11 @@ proc acquireOrchestratorPidGuard*(repoPath: string) =
   let now = epochTime()
   let pidFile = OrchestratorPidFile(pid: currentPid, timestamp: now)
   writeFile(pidPath, pidFile.toJson())
+  logInfo(&"orchestrator PID guard acquired (PID {currentPid})")
 
 proc releaseOrchestratorPidGuard*(repoPath: string) =
   ## Delete the orchestrator PID file on clean shutdown.
   let pidPath = orchestratorPidPath(repoPath)
   if fileExists(pidPath):
     removeFile(pidPath)
+    logDebug("orchestrator PID guard released")

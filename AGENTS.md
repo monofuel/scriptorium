@@ -46,6 +46,21 @@ make docker-build
 - Individual test files can be run with `nim r tests/test_scriptorium.nim`
 - `tests/config.nims` contains `--path:"../src"` so tests can import project modules directly
 
+### Running tests and trusting output
+
+Run tests **once**. Do not re-run tests to "verify the exit code" or "confirm
+they passed." The Bash tool reports non-zero exit codes as errors — if you do
+not see an error, the tests passed.
+
+- `make test` runs all unit tests in parallel. Each test prints `[OK]` or
+  `[FAIL]` per case. If the tool returns without an error exit code and all
+  cases show `[OK]`, the tests passed. Move on.
+- `make integration-test` runs all integration tests in parallel. Same rules.
+- Do not run `make test` followed by `make test` again. Tests are slow
+  (compilation + execution). Running them twice wastes minutes for no reason.
+- If a test fails, fix it and run tests once more. That is the only reason to
+  re-run.
+
 ### Unit tests vs integration tests
 
 **Unit tests** (`tests/test_*.nim`) test individual functions and modules in isolation.

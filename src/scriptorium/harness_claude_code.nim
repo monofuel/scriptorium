@@ -539,16 +539,22 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
 
     if hardTimeoutMs > 0 and elapsedMs(startTime) >= hardTimeoutMs.int64:
       result.timeoutKind = claudeCodeTimeoutHard
+      let elapsedSec = elapsedMs(startTime) div 1000
+      logWarn(&"agent {ticketValue}: killing process (hard timeout after {elapsedSec}s)")
       process.kill()
       stopRequested = true
     if noOutputTimeoutMs > 0 and elapsedMs(lastOutputTime) >= noOutputTimeoutMs.int64:
       result.timeoutKind = claudeCodeTimeoutNoOutput
+      let silentSec = elapsedMs(lastOutputTime) div 1000
+      logWarn(&"agent {ticketValue}: killing process (no output for {silentSec}s)")
       process.kill()
       stopRequested = true
     if progressTimeoutMs > 0 and elapsedMs(lastToolTime) >= progressTimeoutMs.int64:
       # Only fire if there has been output since the last tool call (agent is alive but not progressing).
       if elapsedMs(lastOutputTime) < elapsedMs(lastToolTime):
         result.timeoutKind = claudeCodeTimeoutProgress
+        let stallSec = elapsedMs(lastToolTime) div 1000
+        logWarn(&"agent {ticketValue}: killing process (no tool progress for {stallSec}s)")
         process.kill()
         stopRequested = true
 

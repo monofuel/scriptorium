@@ -128,6 +128,9 @@ proc checkCompletedAgents*(): seq[AgentPoolCompletionResult] =
     let (hasData, completion) = agentPoolResultChan.tryRecv()
     if not hasData:
       break
+    let roleStr = $completion.role
+    let idStr = if completion.role == arManager: completion.areaId else: completion.ticketId
+    logDebug(&"agent pool: received completion for {roleStr} {idStr}")
     result.add(completion)
     var slotIdx = -1
     for i, slot in runningPoolSlots:
@@ -145,6 +148,9 @@ proc checkCompletedAgents*(): seq[AgentPoolCompletionResult] =
 
 proc joinAllAgentThreads*() =
   ## Block until all running agent threads complete and clean up.
+  let threadCount = runningPoolThreadPtrs.len
+  if threadCount > 0:
+    logDebug(&"agent pool: joining {threadCount} threads")
   for i in 0..<runningPoolThreadPtrs.len:
     joinThread(runningPoolThreadPtrs[i][])
     dealloc(runningPoolThreadPtrs[i])
@@ -152,7 +158,11 @@ proc joinAllAgentThreads*() =
   runningPoolThreadPtrs.setLen(0)
   # Drain any pending results left on the channel after joining.
   if agentPoolResultChanOpen:
+    var drained = 0
     while true:
       let (hasData, _) = agentPoolResultChan.tryRecv()
       if not hasData:
         break
+      inc drained
+    if drained > 0:
+      logDebug(&"agent pool: drained {drained} pending results from channel")

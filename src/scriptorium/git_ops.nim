@@ -1,5 +1,6 @@
 import
-  std/[locks, os, osproc, streams, strformat, strutils]
+  std/[locks, os, osproc, streams, strformat, strutils],
+  ./logging
 
 const
   GitCommandTimeoutMs* = 60_000
@@ -139,16 +140,23 @@ proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool 
   elif not isManagedWorktreePath(repoPath, conflictPath):
     result = false
   else:
-    discard gitCheck(repoPath, "worktree", "remove", "--force", conflictPath)
-    discard gitCheck(repoPath, "worktree", "prune")
+    logWarn(&"recovering stale worktree conflict: {conflictPath}")
+    let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", conflictPath)
+    if removeRc != 0:
+      logWarn(&"worktree remove failed (rc={removeRc}): {conflictPath}")
+    let pruneRc = gitCheck(repoPath, "worktree", "prune")
+    if pruneRc != 0:
+      logWarn(&"worktree prune failed (rc={pruneRc})")
     if dirExists(conflictPath):
       removeDir(conflictPath)
     result = true
 
 proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string) =
   ## Add one git worktree path for one branch, recovering stale managed conflicts once.
+  logDebug(&"worktree add: {worktreePath} ({branch})")
   createDir(parentDir(worktreePath))
   if dirExists(worktreePath):
+    logDebug(&"worktree add: removing existing dir {worktreePath}")
     removeDir(worktreePath)
 
   # Prune stale worktree entries pointing to nonexistent paths.

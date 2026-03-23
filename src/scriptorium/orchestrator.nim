@@ -88,13 +88,17 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
       test_wall_seconds: healthResult.testWallSeconds,
       integration_test_wall_seconds: healthResult.integrationTestWallSeconds,
     )
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-      var cache = readHealthCache(planPath)
-      cache[currentHead] = newEntry
-      writeHealthCache(planPath, cache)
-      commitHealthCache(planPath)
-      result = true
-    )
+    logDebug(&"health cache: writing entry for {currentHead} (healthy={healthResult.healthy})")
+    try:
+      discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+        var cache = readHealthCache(planPath)
+        cache[currentHead] = newEntry
+        writeHealthCache(planPath, cache)
+        commitHealthCache(planPath)
+        result = true
+      )
+    except CatchableError as e:
+      logWarn(&"health cache: failed to write entry for {currentHead}: {e.msg}")
 
   result = state.healthy
 
