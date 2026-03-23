@@ -34,16 +34,21 @@ test: nim.cfg
 	exit $$fail
 
 integration-test: nim.cfg
-	@found=0; \
-	for f in tests/integration_*.nim; do \
-		[ -e "$$f" ] || continue; \
-		found=1; \
-		echo "--- $$f ---"; \
-		nim r $(NIM_TEST_FLAGS) "$$f" || exit 1; \
-	done; \
-	if [ $$found -eq 0 ]; then \
+	@files=$$(ls tests/integration_*.nim 2>/dev/null); \
+	if [ -z "$$files" ]; then \
 		echo "No integration tests found in tests/integration_*.nim"; \
-	fi
+		exit 0; \
+	fi; \
+	fail=0; \
+	pids=""; \
+	for f in $$files; do \
+		( nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
+		pids="$$pids $$!"; \
+	done; \
+	for pid in $$pids; do \
+		wait $$pid || fail=1; \
+	done; \
+	exit $$fail
 
 integration-test-claude:
 	SCRIPTORIUM_TEST_MODEL=claude-sonnet-4-6 \
