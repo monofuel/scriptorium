@@ -22,3 +22,5 @@ The spec (Section 2) requires both `/quit` and `/exit` to leave the session. The
 2. Add an equivalent test to the `"interactive ask session"` suite for `/exit`.
 
 Follow the existing slash-command test patterns (see the `/show, /help, /quit do not invoke runner` tests).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-0085-test-exit-command-plan-askmd
