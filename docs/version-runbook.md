@@ -5,6 +5,8 @@ updates, driven by `docs/v#.md` plan files.
 
 Helper scripts in `scripts/` wrap the docker-compose commands for convenience.
 
+Important: we should dogfood scriptorium as much as possible. do not try to handhold or make changes on the planning branch. scriptorium should be resiliant and handle it's own issues (eg: stale locks). we should always try to fix underlying issues and not just have one-off fixes. the architect should handle everything, we should be hands off.
+
 ## Prerequisites
 
 - Docker and docker-compose installed
