@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0087",
+  "timestamp": "2026-03-23T05:31:33Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0002-0087.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0087-0085-test-exit-command-plan-askmd.md\n**Ticket ID:** 0087\n**Branch:** scriptorium/ticket-0087\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-0085-test-exit-command-plan-askmd\n**Summary:** Added two tests verifying /exit exits plan and ask sessions without invoking the runner, mirroring existing /quit test patterns.\n",
+      "contentHash": "9BC30A1F59D661FE22C1A4454B77C35DDE78C9E9"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0087"
+}
