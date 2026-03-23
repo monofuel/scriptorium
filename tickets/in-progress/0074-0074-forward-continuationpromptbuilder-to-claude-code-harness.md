@@ -130,3 +130,48 @@ All four tickets implemented and submitted:
 ```text
 im` with `buildAgentsReinjectPrompt` that reads and re-injects AGENTS.md rules, plus unit tests in `tests/test_continuation_builder.nim`\n- **0076**: Imported `continuation_builder` in `coding_agent.nim` and wired `continuationPromptBuilder: buildAgentsReinjectPrompt` into the coding agent's `AgentRunRequest`\n- **0077**: Created `CLAUDE.md` (35 lines) with critical project rules for compaction resilience","stop_reason":"end_turn","session_id":"e74480f9-219e-4870-8167-e3c99818f49d","total_cost_usd":0.83525275,"usage":{"input_tokens":531,"cache_creation_input_tokens":44497,"cache_read_input_tokens":753583,"output_tokens":7108,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":44497},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":531,"outputTokens":7108,"cacheReadInputTokens":753583,"cacheCreationInputTokens":44497,"webSearchRequests":0,"costUSD":0.83525275,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"734b397f-9b59-4d12-9a69-1a27596353b6"}
 ```
+
+## Review
+**Review:** changes requested
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 2m49s
+
+**Review Feedback:** The core changes for all four tickets (0074-0077) are correct:
+
+1. **0074**: `continuationPromptBuilder` forwarding in `agent_runner.nim:172` — correct one-line fix.
+2. **0075**: `continuation_builder.nim` — correct implementation with proper fallback and truncation.
+3. **0076**: `coding_agent.nim` wiring — correctly imports and passes `buildAgentsReinjectPrompt`.
+4. **0077**: `CLAUDE.md` — 38 lines, covers all required sections.
+
+**Issues to fix:**
+
+1. **Revert test_orchestrator_flow.nim changes** — The diff includes significant unrelated changes to `tests/test_orchestrator_flow.nim`:
+   - Line 49: `noopRunner` was removed from `runOrchestratorForTicks(tmp, 1)`. This test ("integration-test failure on master blocks assignment of open tickets") should keep using `noopRunner` since it's a unit test verifying health-gate behavior, not agent execution. Without it, the test uses `runAgent` (the real runner) which could attempt to invoke actual binaries.
+   - Lines 751-782: The `fakeRunner` proc was replaced with a bash script + PATH manipulation approach. This is a major change unrelated to any of the four tickets, makes the unit test fragile (depends on shell scripting, environment mutation via `putEnv`), and contradicts project conventions (unit tests should use in-process mocks/fakes, not external scripts).
+   
+   These test changes are out of scope and should be reverted entirely. The four ticket changes do not require any modifications to `test_orchestrator_flow.nim`.
+
+2. **Minor: unused import in continuation_builder.nim** — `std/strutils` is imported but not used. Remove it from the import block.
+
+**Review Reasoning:** AUDE.md):** Correct. 38 lines, covers all required sections, has the required header note.
+
+**Test changes (test_orchestrator_flow.nim):** This is the concern. The agent made significant changes to test infrastructure:
+1. Removed `noopRunner` from one test call (line 49) — likely safe since health checks should prevent agent execution, but unnecessary.
+2. Completely rewrote the fake runner in the "enqueue with fakes" test to use a fake bash script + PATH manipulation instead of a proc-based mock. This is a massive change unrelated to the ticket scope.
+
+Let me check why these test changes were made — were they needed to make tests pass?
+Single commit. Let me check if the test changes are related to any compilation issues.
+The test changes are substantial and outside the scope of these tickets. The tickets only required:
+1. Adding one line to `agent_runner.nim`
+2. Creating `continuation_builder.nim`
+3. Wiring it in `coding_agent.nim`
+4. Creating `CLAUDE.md`
+
+The test_orchestrator_flow.nim changes replace mock-based unit tests with shell-script-based fakes and PATH manipulation, which is a different testing paradigm. This introduces complexity and fragility (shell scripts, environment manipulation with `putEnv`) into unit tests. The AGENTS.md conventions specifically say mocks and fakes belong in unit tests.
+
+However, the core changes for all four tickets are correct. The question is whether the test changes are harmful enough to request changes.
+
+The test rewrite replaces a clean proc-based mock with a bash script that manipulates PATH — this is worse, not better. It also removes `noopRunner` from a test that should use it. These are unrelated changes that make the test suite less maintainable.
+Review submitted with **request_changes**. The core implementation across all four tickets is correct, but the PR includes unrelated test rewrites in `test_orchestrator_flow.nim` that should be reverted, plus a minor unused `strutils` import in `continuation_builder.nim`.
