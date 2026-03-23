@@ -27,3 +27,5 @@ This validates the tick order guarantee: step 5 (managers) runs before step 6
 (coders).
 
 Run `make test` to verify the new test passes.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0091-add-unit-test-for-manager-priority-over-coders
