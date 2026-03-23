@@ -132,3 +132,28 @@ Implementation is clean and complete. Key observations:
 
 One minor note: the `errno` check on line 32 should technically only be checked when `killRc != 0` (i.e., `killRc == 0` means alive regardless of errno). The current logic `killRc == 0 or errno == EPERM` works correctly because when `killRc == 0`, the `errno == EPERM` part is short-circuited. And when `killRc != 0`, `errno` is valid. So it's functionally correct.
 Review submitted: **approved**. The implementation is correct, minimal, and covers all ticket requirements including the EPERM fix from the previous review's warning.
+
+## Merge Queue Failure
+- Summary: Implement orchestrator singleton PID guard per §17. Adds acquirePidGuard/releasePidGuard procs that write/check .scriptorium/orchestrator.pid with JSON {pid, timestamp} using jsony. Checks process liveness via posix.kill(Pid, 0) with correct EPERM handling (treats EPERM as alive, only ESRCH triggers stale takeover). Wired into both runOrchestrator and runOrchestratorForTicks with defer cleanup. Four tests: PID file lifecycle, existence during run, live PID conflict (via helper binary), and stale PID overwrite.\n
+### Merge Output
+```text
+Auto-merging src/scriptorium/orchestrator.nim
+CONFLICT (content): Merge conflict in src/scriptorium/orchestrator.nim
+Auto-merging tests/test_orchestrator_flow.nim
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+## Metrics
+- wall_time_seconds: 3289
+- coding_wall_seconds: 1873
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: merge_conflict
+- model: claude-opus-4-6
+- stdout_bytes: 757266
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted medium, actual was hard with 1 attempt(s) in 54m49s.
