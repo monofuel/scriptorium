@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0084",
+  "timestamp": "2026-03-23T05:12:23Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0084.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0084-0084-orchestrator-singleton-pid-guard.md\n**Ticket ID:** 0084\n**Branch:** scriptorium/ticket-0084\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0084-orchestrator-singleton-pid-guard\n**Summary:** Implement orchestrator singleton PID guard. On startup, writes .scriptorium/orchestrator.pid with JSON {pid, timestamp}. If file exists, checks PID liveness — aborts if alive, overwrites with warning if dead. Cleanup on shutdown via defer. Added OrchestratorPidFileName constant and orchestratorPidPath proc to git_ops.nim, acquireOrchestratorPidGuard/releaseOrchestratorPidGuard to lock_management.nim, integrated into both runOrchestrator and runOrchestratorForTicks, and added 5 unit tests.\n",
+      "contentHash": "B2C3A96F15BB5B700A45FF42941424DAB32E50DE"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0084"
+}
