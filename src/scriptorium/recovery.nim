@@ -133,41 +133,52 @@ proc reconcileDirtyPlanBranch*(repoPath: string): string =
     result = "clean"
   )
 
-proc validateMergeQueueVsMaster*(repoPath: string): int =
-  ## Step 4: Complete tickets whose branches are already merged into master.
+proc completeAlreadyMergedTickets*(repoPath: string): int =
+  ## Step 4: Complete in-progress tickets whose branches are already merged into master.
+  ## Scans both merge queue items and bare in-progress tickets.
   if not hasPlanBranch(repoPath):
     return 0
 
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
-    discard ensureMergeQueueInitializedInPlanPath(planPath)
-    let items = listMergeQueueItems(planPath)
+    let defaultBranch = resolveDefaultBranch(repoPath)
     var completed = 0
 
+    # Clean stale active merge queue marker pointing to nonexistent pending file.
+    let activePath = planPath / PlanMergeQueueActivePath
+    if fileExists(activePath):
+      let activeContent = readFile(activePath).strip()
+      if activeContent.len > 0:
+        let referencedPath = planPath / activeContent
+        if not fileExists(referencedPath):
+          logInfo(&"recovery: clearing stale active marker referencing missing {activeContent}")
+          writeFile(activePath, "")
+          gitRun(planPath, "add", PlanMergeQueueActivePath)
+          if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+            gitRun(planPath, "commit", "-m", "scriptorium: recovery — clear stale active marker")
+
+    # Complete merge queue items whose branches are already merged.
+    discard ensureMergeQueueInitializedInPlanPath(planPath)
+    let items = listMergeQueueItems(planPath)
     for item in items:
-      let defaultBranch = resolveDefaultBranch(repoPath)
       let checkResult = runCommandCapture(
         repoPath, "git", @["merge-base", "--is-ancestor", item.branch, defaultBranch],
       )
       if checkResult.exitCode != 0:
         continue
 
-      # Branch is already merged. Move ticket to done and remove queue entry.
       let ticketPath = planPath / item.ticketPath
       if not fileExists(ticketPath):
         continue
 
       let doneRelPath = PlanTicketsDoneDir / extractFilename(item.ticketPath)
       createDir(planPath / PlanTicketsDoneDir)
-      logDebug(&"recovery: moving ticket {item.ticketId} to done (already merged)")
+      logDebug(&"recovery: moving queued ticket {item.ticketId} to done (already merged)")
       moveFile(ticketPath, planPath / doneRelPath)
 
       let queuePath = planPath / item.pendingPath
       if fileExists(queuePath):
-        logDebug(&"recovery: removing queue entry {item.pendingPath}")
         removeFile(queuePath)
 
-      # Clear active marker if it points to this item.
-      let activePath = planPath / PlanMergeQueueActivePath
       if fileExists(activePath):
         let activeContent = readFile(activePath).strip()
         if activeContent == item.pendingPath:
@@ -181,6 +192,35 @@ proc validateMergeQueueVsMaster*(repoPath: string): int =
       logInfo(&"recovery: completed already-merged ticket {item.ticketId}")
       inc completed
 
+    # Complete bare in-progress tickets whose branches are already merged.
+    let inProgressDir = planPath / PlanTicketsInProgressDir
+    if dirExists(inProgressDir):
+      for ticketPath in listMarkdownFiles(inProgressDir):
+        let fileName = extractFilename(ticketPath)
+        let ticketId = ticketIdFromTicketPath(fileName)
+        let branch = TicketBranchPrefix & ticketId
+        let branchExists = gitCheck(repoPath, "rev-parse", "--verify", branch)
+        if branchExists != 0:
+          continue
+        let checkResult = runCommandCapture(
+          repoPath, "git", @["merge-base", "--is-ancestor", branch, defaultBranch],
+        )
+        if checkResult.exitCode != 0:
+          continue
+
+        let doneRelPath = PlanTicketsDoneDir / fileName
+        createDir(planPath / PlanTicketsDoneDir)
+        logDebug(&"recovery: moving in-progress ticket {ticketId} to done (already merged)")
+        moveFile(ticketPath, planPath / doneRelPath)
+
+        gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsDoneDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          let commitMsg = RecoveryMergedCommitPrefix & " " & ticketId
+          gitRun(planPath, "commit", "-m", commitMsg)
+
+        logInfo(&"recovery: completed already-merged ticket {ticketId}")
+        inc completed
+
     result = completed
   )
 
@@ -189,7 +229,7 @@ proc recoverFromCrash*(repoPath: string): RecoverySummary =
   result.worktreesCleaned = cleanOrphanedWorktrees(repoPath)
   result.staleMarkersCleared = detectStaleAgentProcesses(repoPath)
   result.planAction = reconcileDirtyPlanBranch(repoPath)
-  result.alreadyMergedCompleted = validateMergeQueueVsMaster(repoPath)
+  result.alreadyMergedCompleted = completeAlreadyMergedTickets(repoPath)
 
   # Step 5: Log recovery summary.
   if result.worktreesCleaned == 0 and result.staleMarkersCleared == 0 and result.planAction == "clean" and result.alreadyMergedCompleted == 0:

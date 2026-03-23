@@ -153,13 +153,13 @@ suite "reconcileDirtyPlanBranch":
     let action = reconcileDirtyPlanBranch(tmpDir)
     check action == "journal-rolled-back"
 
-suite "validateMergeQueueVsMaster":
+suite "completeAlreadyMergedTickets":
   test "returns 0 when no plan branch exists":
     let tmpDir = getTempDir() / "scriptorium_test_recovery_no_plan_mq"
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let completed = validateMergeQueueVsMaster(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir)
     check completed == 0
 
   test "returns 0 when merge queue is empty":
@@ -167,7 +167,7 @@ suite "validateMergeQueueVsMaster":
     makeTestRepoWithPlanBranch(tmpDir)
     defer: removeDir(tmpDir)
 
-    let completed = validateMergeQueueVsMaster(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir)
     check completed == 0
 
   test "completes already-merged ticket":
@@ -196,7 +196,7 @@ suite "validateMergeQueueVsMaster":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add test ticket and queue entry'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let completed = validateMergeQueueVsMaster(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir)
     check completed == 1
 
     # Verify ticket moved to done.
@@ -204,6 +204,60 @@ suite "validateMergeQueueVsMaster":
     check fileExists(planWorktree / "tickets" / "done" / "0099-fake-ticket.md")
     check not fileExists(planWorktree / "tickets" / "in-progress" / "0099-fake-ticket.md")
     check not fileExists(planWorktree / "queue" / "merge" / "pending" / "0001-0099.md")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+  test "completes bare in-progress ticket with no merge queue entry":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_bare_inprogress"
+    makeTestRepoWithPlanBranch(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create a ticket branch and merge it into master.
+    let ticketBranch = TicketBranchPrefix & "0077"
+    runCmdOrDie(&"git -C {tmpDir} checkout -b {ticketBranch}")
+    writeFile(tmpDir / "ticket-work.txt", "ticket work")
+    runCmdOrDie(&"git -C {tmpDir} add ticket-work.txt")
+    runCmdOrDie(&"git -C {tmpDir} commit -m 'ticket 0077 work'")
+    runCmdOrDie(&"git -C {tmpDir} checkout master")
+    runCmdOrDie(&"git -C {tmpDir} merge --no-ff {ticketBranch} -m 'merge ticket 0077'")
+
+    # Add an in-progress ticket on the plan branch with NO merge queue entry.
+    let planWorktree = managedPlanWorktreePath(tmpDir)
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    let ticketContent = "# Ticket 0077\nFake ticket for testing."
+    writeFile(planWorktree / "tickets" / "in-progress" / "0077-bare-ticket.md", ticketContent)
+    runCmdOrDie(&"git -C {planWorktree} add -A")
+    runCmdOrDie(&"git -C {planWorktree} commit -m 'add bare in-progress ticket'")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+    let completed = completeAlreadyMergedTickets(tmpDir)
+    check completed == 1
+
+    # Verify ticket moved to done.
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    check fileExists(planWorktree / "tickets" / "done" / "0077-bare-ticket.md")
+    check not fileExists(planWorktree / "tickets" / "in-progress" / "0077-bare-ticket.md")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+  test "clears stale active merge queue marker":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_stale_active"
+    makeTestRepoWithPlanBranch(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Write a stale active marker pointing to a nonexistent pending file.
+    let planWorktree = managedPlanWorktreePath(tmpDir)
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    writeFile(planWorktree / "queue" / "merge" / "active.md", "queue/merge/pending/0001-9999.md\n")
+    runCmdOrDie(&"git -C {planWorktree} add -A")
+    runCmdOrDie(&"git -C {planWorktree} commit -m 'add stale active marker'")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+    let completed = completeAlreadyMergedTickets(tmpDir)
+    check completed == 0
+
+    # Verify active marker was cleared.
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    let activeContent = readFile(planWorktree / "queue" / "merge" / "active.md").strip()
+    check activeContent == ""
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
 suite "recoverFromCrash":
