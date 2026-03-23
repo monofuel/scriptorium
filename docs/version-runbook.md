@@ -105,17 +105,17 @@ docker compose logs -f scriptorium
 
 ### Detailed logs inside the container
 
-The orchestrator writes DEBUG-level logs to `/tmp/scriptorium/` inside the
-container. To follow them:
+The orchestrator writes DEBUG-level logs to `<repo>/.scriptorium/logs/` (mounted
+into the container via the workspace volume). To follow them:
 
 ```bash
-docker compose exec scriptorium bash -c 'tail -f /tmp/scriptorium/*/run_*.log'
+tail -f .scriptorium/logs/orchestrator/run_*.log
 ```
 
-Or copy them out for inspection:
+Or from inside the container:
 
 ```bash
-docker compose cp scriptorium:/tmp/scriptorium ./scriptorium-logs
+docker compose exec scriptorium bash -c 'tail -f /workspace/.scriptorium/logs/orchestrator/run_*.log'
 ```
 
 ### Check status

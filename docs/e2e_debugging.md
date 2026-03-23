@@ -40,58 +40,59 @@ During the test, this path is the repo whose `master` branch is being orchestrat
 The orchestrator writes a human-readable session log under:
 
 ```text
-/tmp/scriptorium/<fixture-repo-name>/run_<timestamp>.log
+<repo>/.scriptorium/logs/orchestrator/run_<timestamp>.log
 ```
 
 Example:
 
 ```text
-/tmp/scriptorium/scriptorium_integration_live_euler_abcd1234/run_2026-03-06T01-54-50Z.log
+/tmp/scriptorium/integration/scriptorium_integration_live_euler_abcd1234/.scriptorium/logs/orchestrator/run_2026-03-06T01-54-50Z.log
 ```
 
 This is the best high-level place to watch end-to-end progress.
 
 ### Managed State Root
 
-Scriptorium creates managed worktrees and locks under:
+Scriptorium creates managed worktrees and locks under `<repo>/.scriptorium/`:
 
 ```text
-/tmp/scriptorium/<fixture-repo-name>-<repo-hash>/
-```
-
-Example:
-
-```text
-/tmp/scriptorium/scriptorium_integration_live_euler_abcd1234-7bbe8b7190c3b861/
+<repo>/.scriptorium/
 ```
 
 Typical contents:
 
 - `locks/repo.lock/`
 - `worktrees/plan/`
+- `worktrees/master/` (ephemeral, during merges)
 - `worktrees/tickets/<ticket-name>/`
+- `logs/orchestrator/run_*.log`
+- `logs/architect/`
+- `logs/manager/`
+- `logs/coder/`
+- `logs/review/`
 
-### Plan-Agent Codex Logs
+### Plan-Agent Logs
 
-Architect and Manager Codex runs write logs outside the plan worktree under:
+Architect and Manager agent runs write logs under:
 
 ```text
-/tmp/scriptorium-plan-logs/
+<repo>/.scriptorium/logs/architect/
+<repo>/.scriptorium/logs/manager/<area-id>/
 ```
 
 Examples:
 
 ```text
-/tmp/scriptorium-plan-logs/architect-areas/architect-areas/attempt-01.jsonl
-/tmp/scriptorium-plan-logs/manager/<area-id>/manager-<area-id>/attempt-01.jsonl
+<repo>/.scriptorium/logs/architect/architect-areas/attempt-01.jsonl
+<repo>/.scriptorium/logs/manager/<area-id>/manager-<area-id>/attempt-01.jsonl
 ```
 
-### Coding-Agent Codex Logs
+### Coding-Agent Logs
 
-The Coding agent writes logs inside the assigned ticket worktree:
+The Coding agent writes logs under the managed logs directory:
 
 ```text
-/tmp/scriptorium/<fixture-repo-name>-<repo-hash>/worktrees/tickets/<ticket-name>/.scriptorium/logs/<ticket-id>/
+<repo>/.scriptorium/logs/coder/
 ```
 
 Typical files:
@@ -106,7 +107,7 @@ Typical files:
 Tail the orchestrator log:
 
 ```bash
-tail -f /tmp/scriptorium/<fixture-repo-name>/run_*.log
+tail -f <repo>/.scriptorium/logs/orchestrator/run_*.log
 ```
 
 Key milestones to look for:
@@ -170,25 +171,25 @@ find /tmp/scriptorium/integration -maxdepth 1 -mindepth 1 -type d -name 'scripto
 ### Find The Latest Orchestrator Log For A Fixture
 
 ```bash
-find /tmp/scriptorium/<fixture-repo-name> -maxdepth 1 -type f -name 'run_*.log' | sort | tail -n 1
+ls -t <repo>/.scriptorium/logs/orchestrator/run_*.log | head -1
 ```
 
 ### Inspect Architect JSONL Output
 
 ```bash
-tail -n 120 /tmp/scriptorium-plan-logs/architect-areas/architect-areas/attempt-01.jsonl
+tail -n 120 <repo>/.scriptorium/logs/architect/architect-areas/attempt-01.jsonl
 ```
 
 ### Inspect Manager JSONL Output
 
 ```bash
-tail -n 120 /tmp/scriptorium-plan-logs/manager/<area-id>/manager-<area-id>/attempt-01.jsonl
+tail -n 120 <repo>/.scriptorium/logs/manager/<area-id>/manager-<area-id>/attempt-01.jsonl
 ```
 
 ### Inspect Coding-Agent JSONL Output
 
 ```bash
-tail -n 200 /tmp/scriptorium/<fixture-repo-name>-<repo-hash>/worktrees/tickets/<ticket-name>/.scriptorium/logs/<ticket-id>/attempt-01.jsonl
+tail -n 200 <repo>/.scriptorium/logs/coder/<ticket-id>/attempt-01.jsonl
 ```
 
 ## Expected Folder Progression
@@ -220,7 +221,7 @@ You should see at least one open ticket:
 You should see:
 
 - `tickets/in-progress/0001-<slug>.md`
-- a managed ticket worktree under `/tmp/scriptorium/<fixture-repo-name>-<repo-hash>/worktrees/tickets/`
+- a managed ticket worktree under `<repo>/.scriptorium/worktrees/tickets/`
 
 ### After Successful Merge
 
@@ -288,4 +289,4 @@ Primary places to inspect:
 
 - The fixture repo is usually removed automatically after the test process exits.
 - If you need to inspect a live run, do it while the test is still active.
-- The orchestrator log under `/tmp/scriptorium/<fixture-repo-name>/` usually survives long enough to inspect even if the fixture repo is later removed.
+- The orchestrator log under `<repo>/.scriptorium/logs/orchestrator/` lives inside the fixture repo, so it is removed when the fixture is cleaned up. Inspect it while the test is still running.
