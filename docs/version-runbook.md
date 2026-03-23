@@ -38,6 +38,10 @@ builds.
 
 ## 3. Update the spec via the architect
 
+- architect prompting instructions can be found at `./plan_prompting.md`
+  - essentially:  be spec forward, not implementation forward
+  - have the architect change the spec, not just append a list of changes to the end.
+
 Use `scripts/plan.sh` to one-shot the architect with the new version plan:
 
 ```bash
