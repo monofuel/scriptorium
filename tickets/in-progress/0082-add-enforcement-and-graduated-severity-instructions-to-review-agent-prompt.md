@@ -56,3 +56,21 @@ All existing tests pass. Single file changed, no new placeholders introduced.
 ```text
 mports, error handling, comments, variable grouping\n- **Spec compliance** — contradictions and missing required behavior\n- **Code quality** — dead code, unused imports, leftover artifacts, unrelated changes\n- **Graduated severity** — `approve_with_warnings` for minor issues, `request_changes` for substantive violations\n\nAll existing tests pass. Single file changed, no new placeholders introduced.","stop_reason":"end_turn","session_id":"6b1a70ab-41eb-452b-b551-4dac80a5e577","total_cost_usd":0.30944225,"usage":{"input_tokens":16,"cache_creation_input_tokens":20531,"cache_read_input_tokens":202937,"output_tokens":3183,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":20531},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":16,"outputTokens":3183,"cacheReadInputTokens":202937,"cacheCreationInputTokens":20531,"webSearchRequests":0,"costUSD":0.30944225,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"4f4ba896-5f98-42eb-a961-082055a066dc"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 29s
+
+**Review Reasoning:** The diff correctly implements all ticket requirements:
+
+- **Convention enforcement**: Covers naming, imports, error handling, comment style, variable grouping — all matching AGENTS.md rules.
+- **Spec compliance**: Flags contradictions and missing required behavior.
+- **Code quality**: Flags dead code, unused imports, leftover artifacts, unrelated changes with appropriate judgment caveat.
+- **Graduated severity**: Minor → `approve_with_warnings`, substantive → `request_changes`, clean → `approve`.
+- **CRITICAL instruction** preserved (moved to top, which is sensible — verify before reviewing).
+- **`submit_review` exactly once** instruction preserved at the bottom.
+- No new placeholders introduced; prompt-only change to a single file.
+Approved. The prompt update is complete, accurate, and faithful to the ticket requirements and spec §9.
