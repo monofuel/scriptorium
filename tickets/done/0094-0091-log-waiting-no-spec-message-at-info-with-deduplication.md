@@ -98,3 +98,38 @@ ent ticks at DEBUG, flag resets when spec becomes runnable. Also migrated all `f
 
 3. **Bundled fmt→& migration:** This is ticket 0092 work included alongside 0091. It's a mechanical change in the same file and doesn't affect correctness, so it's acceptable as an incidental fix.
 Review submitted: **approve with warnings**. The implementation is correct and meets the core ticket requirements. Flagged the test-only globals in production logging and the missing reset-path test coverage as minor concerns.
+
+## Merge Queue Success
+- Summary: Log WAITING no-spec message at INFO with deduplication: first non-runnable-spec tick logs at INFO, subsequent ticks at DEBUG, resets when spec becomes runnable. Added log capture mechanism for testing and unit test covering dedup behavior. Migrated fmt to & format strings per convention.\n
+### Quality Check Output
+```text
+:51Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:43:51Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:43:51Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:43:51Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:44:39Z] [INFO] session summary: uptime=2m1s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:44:39Z] [INFO] session summary: avg_ticket_wall=34s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:44:39Z] [INFO] orchestrator PID guard acquired (PID 190382)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:44:39Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:44:39Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:45:09Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T23:45:09Z] [INFO] session summary: avg_ticket_wall=34s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+[tests/integration_orchestrator_queue.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_F9D1A1BFC66E5335EC8584D09F9B8CFF37AAB8ED'
+```
+
+## Metrics
+- wall_time_seconds: 2427
+- coding_wall_seconds: 890
+- test_wall_seconds: 596
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 214354
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 2 attempt(s) in 40m27s.
