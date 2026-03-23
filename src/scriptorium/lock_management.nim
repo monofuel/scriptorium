@@ -23,9 +23,17 @@ proc lockHolderPid*(lockPath: string): int =
 
 proc lockPathIsStale*(lockPath: string): bool =
   ## Return true when lock path exists but holder PID is no longer alive.
+  ## Also detects cross-container staleness: if the lock holder PID equals
+  ## our own PID, the lock is from a previous container that reused the same
+  ## PID namespace slot.
   let holderPid = lockHolderPid(lockPath)
   if holderPid <= 0:
     result = false
+  elif holderPid == getCurrentProcessId():
+    # Same PID as us — this lock is from a previous process (e.g. previous
+    # container) that happened to get the same PID. We cannot be holding a
+    # lock we haven't acquired yet.
+    result = true
   else:
     let killRc = posix.kill(Pid(holderPid), 0)
     if killRc == 0:
