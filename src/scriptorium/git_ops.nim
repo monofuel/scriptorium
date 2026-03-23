@@ -12,6 +12,7 @@ const
   ManagedLockDirName* = "locks"
   ManagedRepoLockName* = "repo.lock"
   ManagedRepoLockPidFileName* = "pid"
+  OrchestratorPidFileName* = "orchestrator.pid"
   TicketBranchPrefix* = "scriptorium/ticket-"
 
 var
@@ -119,6 +120,10 @@ proc managedTicketWorktreeRootPath*(repoPath: string): string =
 proc managedRepoLockPath*(repoPath: string): string =
   ## Return the managed repository lock path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedRepoLockName
+
+proc orchestratorPidPath*(repoPath: string): string =
+  ## Return the orchestrator PID file path for one repository.
+  result = managedRepoRootPath(repoPath) / OrchestratorPidFileName
 
 proc isManagedWorktreePath*(repoPath: string, path: string): bool =
   ## Return true when path is under this repository's managed worktree root.
