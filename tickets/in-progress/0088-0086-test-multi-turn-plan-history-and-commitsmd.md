@@ -52,3 +52,26 @@ Done. The test verifies multi-turn plan session behavior:
 ```text
 :57164,"num_turns":11,"result":"Done. The test verifies multi-turn plan session behavior:\n- **Two-turn fakeRunner** captures prompts and writes different spec content per turn\n- **History assertion**: second prompt contains the first turn's user message and architect response\n- **Commit assertions**: plan branch log contains both `\"plan session turn 1\"` and `\"plan session turn 2\"`","stop_reason":"end_turn","session_id":"4c5ab125-243f-4959-b6b2-01c4618183f0","total_cost_usd":0.5289987500000001,"usage":{"input_tokens":4137,"cache_creation_input_tokens":47241,"cache_read_input_tokens":293915,"output_tokens":2644,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":47241},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":4137,"outputTokens":2644,"cacheReadInputTokens":293915,"cacheCreationInputTokens":47241,"webSearchRequests":0,"costUSD":0.5289987500000001,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"e39f838d-ed4c-4112-a61b-bdf4d30ebc5c"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 31s
+
+**Review Reasoning:** Let me check the existing test patterns and the relevant source code.
+The test looks well-structured and follows existing patterns. Let me verify the `anyIt` import and the ask session history test pattern for comparison.
+The test follows established patterns. The diff is clean and correct:
+
+1. **Test structure** matches the single-turn test above it — `makeTestRepo`, `runInit`, `fakeRunner`, `fakeInput`, `defer: removeDir`.
+2. **Two-turn fakeRunner** correctly captures prompts into a seq and writes different spec content per turn.
+3. **fakeInput** yields two messages then raises `EOFError` — same pattern as the ask history test.
+4. **History assertion**: checks `capturedPrompts[1]` contains the first user message and first architect response, and that `capturedPrompts[0]` does NOT contain prior history.
+5. **Commit assertions**: uses `latestPlanCommits` helper (existing pattern) with `anyIt` to verify both turn commits.
+6. All five ticket requirements are satisfied: `callCount == 2`, history in second prompt, sequential commit messages, `makeTestRepo`/`runInit` setup, `quiet = true`.
+
+No issues found.
+
+
+Review approved. The test correctly implements all ticket requirements, follows existing patterns in the file, and uses the appropriate helpers (`latestPlanCommits`, `anyIt`). The assertions cover history inclusion, history absence on the first turn, and sequential commit messages.
