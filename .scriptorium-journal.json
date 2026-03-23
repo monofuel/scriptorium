@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0089",
+  "timestamp": "2026-03-23T19:56:11Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0089.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0089-enforce-staggered-start-rule-for-coding-agents.md\n**Ticket ID:** 0089\n**Branch:** scriptorium/ticket-0089\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-enforce-staggered-start-rule-for-coding-agents\n**Summary:** Changed assignOpenTickets call in the parallel coding agent start block from slotsAvailable to 1, enforcing the staggered start rule of at most one new coding agent per orchestrator tick. All tests pass.\n",
+      "contentHash": "5A83A58750385862899895E8F283D4F789A18E5C"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0089"
+}
