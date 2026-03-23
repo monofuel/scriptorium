@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0074",
+  "timestamp": "2026-03-23T04:52:24Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0074.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0074-0074-forward-continuationpromptbuilder-to-claude-code-harness.md\n**Ticket ID:** 0074\n**Branch:** scriptorium/ticket-0074\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-forward-continuationpromptbuilder-to-claude-code-harness\n**Summary:** Implemented tickets 0074-0077: (1) Forward continuationPromptBuilder to ClaudeCodeRunRequest in agent_runner.nim, (2) Create continuation_builder.nim with buildAgentsReinjectPrompt that re-injects AGENTS.md rules on continuation, (3) Wire the builder into coding_agent.nim's AgentRunRequest, (4) Create CLAUDE.md with critical project rules for compaction resilience. All tests pass. No unrelated test changes.\n",
+      "contentHash": "0E82C2882475C941A206EC5117721309047C1ED9"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0074"
+}
