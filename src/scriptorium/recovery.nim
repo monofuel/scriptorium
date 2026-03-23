@@ -1,7 +1,7 @@
 ## Startup recovery sequence that runs before the first orchestrator tick.
 
 import
-  std/[os, osproc, posix, strformat, strutils],
+  std/[os, osproc, posix, sets, strformat, strutils],
   ./[git_ops, journal, lock_management, logging, merge_queue, shared_state, ticket_assignment, ticket_metadata]
 
 const
@@ -226,8 +226,8 @@ proc completeAlreadyMergedTickets*(repoPath: string): int =
   )
 
 proc reopenOrphanedInProgressTickets*(repoPath: string): int =
-  ## Step 5: Reopen in-progress tickets that have no worktree and are not merged.
-  ## These are tickets interrupted by a crash before the coding agent finished.
+  ## Step 5: Reopen in-progress tickets that are not merged and not in the merge queue.
+  ## At startup no agents are running, so any such ticket was interrupted by a crash.
   if not hasPlanBranch(repoPath):
     return 0
 
@@ -238,12 +238,19 @@ proc reopenOrphanedInProgressTickets*(repoPath: string): int =
     if not dirExists(inProgressDir):
       return 0
 
+    # Build set of ticket IDs in the merge queue (pending or active).
+    discard ensureMergeQueueInitializedInPlanPath(planPath)
+    let queueItems = listMergeQueueItems(planPath)
+    var queuedTicketIds: HashSet[string]
+    for item in queueItems:
+      queuedTicketIds.incl(item.ticketId)
+
     for ticketPath in listMarkdownFiles(inProgressDir):
       let fileName = extractFilename(ticketPath)
       let ticketId = ticketIdFromTicketPath(fileName)
       let branch = TicketBranchPrefix & ticketId
 
-      # Skip if branch is already merged to default (completeAlreadyMergedTickets handles this).
+      # Skip if branch is already merged (completeAlreadyMergedTickets handles this).
       let branchExists = gitCheck(repoPath, "rev-parse", "--verify", branch)
       if branchExists == 0:
         let checkResult = runCommandCapture(
@@ -252,16 +259,21 @@ proc reopenOrphanedInProgressTickets*(repoPath: string): int =
         if checkResult.exitCode == 0:
           continue
 
-      # Check if the ticket worktree exists.
+      # Skip if ticket is in the merge queue (waiting for merge, not orphaned).
+      if ticketId in queuedTicketIds:
+        continue
+
+      # Not merged and not queued — reopen by moving back to open.
+      let openRelPath = PlanTicketsOpenDir / fileName
+      logInfo(&"recovery: reopening orphaned in-progress ticket {ticketId}")
+      moveFile(ticketPath, planPath / openRelPath)
+
+      # Clean up the stale worktree if it exists.
       let inProgressRel = PlanTicketsInProgressDir / fileName
       let worktreePath = worktreePathForTicket(repoPath, inProgressRel)
       if dirExists(worktreePath):
-        continue
-
-      # No worktree and not merged — reopen by moving back to open.
-      let openRelPath = PlanTicketsOpenDir / fileName
-      logInfo(&"recovery: reopening orphaned in-progress ticket {ticketId} (no worktree)")
-      moveFile(ticketPath, planPath / openRelPath)
+        removeDir(worktreePath)
+        logDebug(&"recovery: removed stale worktree for {ticketId}")
 
       gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:

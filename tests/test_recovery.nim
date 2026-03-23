@@ -300,7 +300,7 @@ suite "reopenOrphanedInProgressTickets":
     check not fileExists(planWorktree / "tickets" / "in-progress" / "0055-orphaned-ticket.md")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-  test "does not reopen in-progress ticket that has a worktree":
+  test "reopens in-progress ticket even when worktree directory exists":
     let tmpDir = getTempDir() / "scriptorium_test_recovery_has_worktree"
     makeTestRepoWithPlanBranch(tmpDir)
     defer: removeDir(tmpDir)
@@ -314,12 +314,16 @@ suite "reopenOrphanedInProgressTickets":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add ticket with worktree'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    # Create the worktree directory so it looks like an agent could be running.
+    # Create the worktree directory — at startup no agents are running,
+    # so this ticket is orphaned regardless.
     let worktreeDir = tmpDir / ".scriptorium" / "worktrees" / "tickets" / "0066-has-worktree"
     createDir(worktreeDir)
 
     let reopened = reopenOrphanedInProgressTickets(tmpDir)
-    check reopened == 0
+    check reopened == 1
+
+    # Stale worktree directory should also be cleaned up.
+    check not dirExists(worktreeDir)
 
 suite "recoverFromCrash":
   test "clean startup produces no recovery needed":
