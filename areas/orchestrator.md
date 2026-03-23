@@ -15,13 +15,13 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - Non-runnable spec logs: `WAITING: no spec — run 'scriptorium plan'`.
 - Tick order:
   1. Poll completed agents (managers + coders) via `checkCompletedAgents()`.
-     - For completed managers: acquire plan lock, write tickets, commit, release. Log results.
+     - For completed managers: acquire commit lock, write tickets, commit, release. Log results.
      - For completed coders: handle as before (move ticket, queue merge, etc).
-  2. Check backoff / health.
+  2. Check health.
   3. Run architect (sequential, if spec changed). Must complete before managers are spawned.
-  4. Read areas needing tickets (brief plan lock).
-  5. For each area needing tickets, if slots available, start a manager agent.
-  6. For each assignable ticket, if slots available, start a coding agent.
+  4. Read areas needing tickets (brief commit lock).
+  5. For each area needing tickets, if slots available, start a manager agent (managers exempt from staggered start limit).
+  6. For each assignable ticket, if slots available, start a coding agent (at most 1 new coding agent per tick — staggered start rule).
   7. Process at most one merge-queue item.
   8. Sleep.
 - Managers prioritized over coders when slots are scarce, since manager completions unblock future coding work.
