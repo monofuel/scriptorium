@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0085-implement-orchestrator-singleton-pid-guard",
+  "timestamp": "2026-03-23T03:13:44Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0085-implement-orchestrator-singleton-pid-guard.md",
+      "destination": "tickets/in-progress/0085-implement-orchestrator-singleton-pid-guard.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0085-implement-orchestrator-singleton-pid-guard.md",
+      "content": "# Implement Orchestrator Singleton PID Guard\n\n**Area:** orchestrator\n\n## Problem\n\nThe spec (§17) requires an orchestrator singleton PID guard to prevent multiple `scriptorium run` instances from operating on the same repository simultaneously. The area doc references it as part of `scriptorium run` startup, but it is not implemented — there is no code referencing `.scriptorium/orchestrator.pid` anywhere in the source.\n\n## Requirements\n\nImplement the PID guard in `src/scriptorium/orchestrator.nim` (or a helper module) with the following behavior:\n\n### On startup (`runOrchestrator`), before the polling loop:\n1. Check for `.scriptorium/orchestrator.pid` in the repo root.\n2. If the file exists, read the PID from it and check liveness with `posix.kill(Pid(pid), 0)`:\n   - If the PID is alive (kill returns 0): abort with a clear error message like `\"ERROR: orchestrator already running (PID <pid>)\"` and `quit(1)`.\n   - If the PID is dead (kill fails with ESRCH): log a warning `\"orchestrator PID file exists but process <pid> is dead, taking over\"`, overwrite the file, and proceed.\n3. If the file does not exist, write it.\n4. The file content should be a JSON object: `{\"pid\": <current_pid>, \"timestamp\": <unix_epoch_float>}`.\n5. Use `jsony` for JSON serialization (project standard per AGENTS.md dependencies).\n\n### On clean shutdown:\n- Delete `.scriptorium/orchestrator.pid`. This should happen in `runOrchestrator` (or `runOrchestratorLoop`) after the loop exits, as part of cleanup.\n- Use a `defer` or ensure it runs even on signal-based shutdown.\n\n### Additional constraints (from spec):\n- This is a one-time startup check, not re-checked during operation.\n- Does not work across container boundaries (different PID namespaces) — this is a known limitation, no special handling needed.\n- The `preflightValidation` proc already runs before the loop and is a natural place for the guard, OR it can be a separate proc called from `runOrchestrator`.\n\n### Tests:\n- Add a unit test in the appropriate test file verifying:\n  - PID file is created on startup.\n  - PID file is deleted on clean shutdown.\n  - A second invocation with a live PID file aborts.\n  - A stale PID file (dead process) is overwritten with a warning.\n\n## Files likely affected\n- `src/scriptorium/orchestrator.nim` — add PID guard logic to `runOrchestrator` startup/shutdown.\n- `tests/test_orchestrator_flow.nim` — add PID guard tests.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-implement-orchestrator-singleton-pid-guard\n",
+      "contentHash": "A035D9E7D069F20105D2D57BFCB9BB4F0890572B"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0085-implement-orchestrator-singleton-pid-guard"
+}
