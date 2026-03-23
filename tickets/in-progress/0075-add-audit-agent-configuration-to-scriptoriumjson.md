@@ -239,3 +239,8 @@ Add unit tests covering the audit agent's core logic: commit tracking, diff comp
 ````
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-add-audit-agent-configuration-to-scriptoriumjson
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file changes across config, prompt catalog, and a new audit_agent module, but all follow well-established patterns from existing agents; moderate test coverage needed but low integration risk for this ticket subset.
