@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0085",
+  "timestamp": "2026-03-23T06:14:53Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0004-0085.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0085-implement-orchestrator-singleton-pid-guard.md\n**Ticket ID:** 0085\n**Branch:** scriptorium/ticket-0085\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-implement-orchestrator-singleton-pid-guard\n**Summary:** Resolve merge conflict by fast-forwarding branch to master. PID guard implementation (acquireOrchestratorPidGuard/releaseOrchestratorPidGuard in lock_management.nim with EPERM handling, defer cleanup in orchestrator.nim, 5 unit tests) was already merged into master from the previous attempt.\n",
+      "contentHash": "38CA1155DDBA66D9D11C6C781D7285CDF4742562"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0085"
+}
