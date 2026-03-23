@@ -47,3 +47,8 @@ Example before:
 logDebug(fmt"tick {ticks}: master health check took {epochTime() - t0:.1f}s, healthy={healthy}")
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0094-0091-log-waiting-no-spec-message-at-info-with-deduplication
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single-file change adding a boolean flag and conditional log level in orchestrator.nim, following an existing dedup pattern already in the same file, plus a straightforward unit test.
