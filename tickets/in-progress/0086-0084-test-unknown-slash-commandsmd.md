@@ -25,3 +25,5 @@ The spec (Section 2) requires: "unknown slash commands without invoking the Arch
    - Verifies no commits are created
 
 Follow the existing test patterns in the file (use `makeTestRepo`, `runInit`, `fakeRunner`, `fakeInput`, `quiet = true`).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0086-0084-test-unknown-slash-commandsmd
