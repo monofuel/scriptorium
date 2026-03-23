@@ -12,3 +12,5 @@ In `src/scriptorium/orchestrator.nim`, limit the number of new coding agents sta
 
 ```nim
 let assignments = assignOpenTickets(repoPath, 1)
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0092-0089-enforce-staggered-coding-agent-start-in-parallel-mode
