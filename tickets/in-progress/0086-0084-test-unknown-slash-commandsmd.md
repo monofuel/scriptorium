@@ -32,3 +32,8 @@ Follow the existing test patterns in the file (use `makeTestRepo`, `runInit`, `f
 - predicted_difficulty: easy
 - predicted_duration_minutes: 10
 - reasoning: Adding two simple unit tests to an existing test file following established patterns, single file change with no logic complexity.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Two simple unit tests added to an existing test file following established patterns with clear examples to copy from, single file change with no logic complexity.
