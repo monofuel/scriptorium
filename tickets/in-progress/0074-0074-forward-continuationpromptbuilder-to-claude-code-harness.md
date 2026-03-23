@@ -108,3 +108,8 @@ Add a note at the top: "This file is auto-loaded by Claude Code after context co
 ````
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-forward-continuationpromptbuilder-to-claude-code-harness
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Four tickets but mostly straightforward: 0074 is a trivial one-line fix, 0075 is a small new file with simple file-reading logic plus a test, 0076 is a one-line wiring change, and 0077 is a static markdown file creation; the multi-file scope and test writing push it to medium.
