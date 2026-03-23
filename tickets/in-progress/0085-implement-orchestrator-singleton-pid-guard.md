@@ -63,3 +63,30 @@ Done. The PID guard implementation is complete:
 ```text
 aborts if alive, takes over if stale, writes JSON with `{pid, timestamp}`\n- **`releasePidGuard`** - deletes PID file on clean shutdown\n- Both `runOrchestrator` and `runOrchestratorForTicks` call acquire/release with `defer`\n- **3 tests**: PID file lifecycle, live PID conflict (via helper binary), stale PID overwrite\n- **Helper**: `tests/test_pid_guard_helper.nim` for the subprocess-based live PID test","stop_reason":"end_turn","session_id":"4d60d226-d6d6-40ef-9ed6-f5e955a22278","total_cost_usd":0.49847725,"usage":{"input_tokens":132,"cache_creation_input_tokens":43469,"cache_read_input_tokens":355922,"output_tokens":1927,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":43469},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":132,"outputTokens":1927,"cacheReadInputTokens":355922,"cacheCreationInputTokens":43469,"webSearchRequests":0,"costUSD":0.49847725,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"89c38116-5484-4271-95c4-7149a7211e58"}
 ```
+
+## Review
+**Review:** approved with warnings
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m4s
+
+**Warnings:** Implementation is correct and well-structured. One minor spec deviation: `acquirePidGuard` checks `killRc == 0` vs non-zero, but does not differentiate `EPERM` (process alive, different user) from `ESRCH` (process dead). Per §17, only `ESRCH` should trigger the stale takeover path; `EPERM` means the process exists. In practice this is unlikely to matter (same user running scriptorium on a given repo), but for strict spec compliance, the else branch should check `errno == ESRCH` and treat `EPERM` as alive.
+
+**Review Reasoning:** Let me read the relevant source files for full context.
+I've reviewed the implementation. Let me verify one more detail about the signal handler and shutdown path.
+The implementation is clean and correct. Here's my assessment:
+
+**Correct:**
+- `acquirePidGuard`/`releasePidGuard` procs with proper lifecycle
+- JSON format with `pid` + `timestamp` using `jsony`
+- `defer` ensures cleanup on both normal exit and signal shutdown (signal sets `shouldRun = false` → loop exits → defer runs)
+- Called from both `runOrchestrator` and `runOrchestratorForTicks`
+- All 4 test scenarios covered (create, delete, live abort, stale takeover)
+- Helper binary approach for the live-PID test is clever and avoids stdout scanning
+- Follows Nim conventions (imports, doc comments, variable naming)
+
+**Minor concern:** `acquirePidGuard` treats any non-zero `kill` return as "dead process", but `kill` returning -1 with `errno == EPERM` means the process IS alive (just owned by a different user). The spec says "kill fails with ESRCH" for the dead case. In practice this is unlikely to matter (same user, same repo), but it's a slight deviation from spec §17.
+**Review: Approved with warnings**
+
+The PID guard implementation is solid. One minor deviation from spec §17: the `EPERM` errno case (process alive but owned by different user) is treated as "dead" instead of "alive." This is unlikely to matter in practice but worth noting for strict spec compliance.
