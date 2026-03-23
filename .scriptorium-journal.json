@@ -1,0 +1,17 @@
+{
+  "operation": "dequeue 0092",
+  "timestamp": "2026-03-23T19:49:47Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "queue/merge/pending/0001-0092.md\n",
+      "contentHash": "5A4C5BBA0DF5C7E24053242D9FD909AB70BFE632"
+    },
+    {
+      "action": "remove",
+      "path": "queue/merge/pending/0001-0092.md"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue dequeue 0092"
+}
