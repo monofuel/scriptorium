@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0090",
+  "timestamp": "2026-03-23T21:53:14Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0090.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0090-add-unit-test-for-staggered-coding-agent-start.md\n**Ticket ID:** 0090\n**Branch:** scriptorium/ticket-0090\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-add-unit-test-for-staggered-coding-agent-start\n**Summary:** Added unit test for staggered coding agent start in the \"concurrent agent execution\" suite. The test creates 3 tickets in different areas with maxAgents=4, uses a fake runner that tracks the tick on which each coding call occurs via a shared counter incremented on architect calls, and asserts all 3 tickets started on 3 different ticks (not batched on the same tick).\n",
+      "contentHash": "CF108D9763D3D1D09F5BA2AB4C88FA641321BE92"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0090"
+}
