@@ -13,7 +13,7 @@ const
 
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
-  logInfo(fmt"shutdown: signal {signalNumber} received")
+  logInfo(&"shutdown: signal {signalNumber} received")
   shouldRun = false
 
 proc installSignalHandlers() =
@@ -147,12 +147,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   var ticks = 0
   var idle = false
   var masterHealthState = MasterHealthState()
+  var specWaitingLogged = false
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
     try:
       idle = false
-      logDebug(fmt"tick {ticks}")
+      logDebug(&"tick {ticks}")
 
       # Step 1: Poll completed agents (managers + coders).
       let completions = checkCompletedAgents()
@@ -189,15 +190,16 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         logDebug("waiting: no plan branch")
         idle = true
       else:
-        logDebug(fmt"tick {ticks}: checking master health")
+        logDebug(&"tick {ticks}: checking master health")
         var t0 = epochTime()
         let healthy = isMasterHealthy(repoPath, masterHealthState)
-        logDebug(fmt"tick {ticks}: master health check took {epochTime() - t0:.1f}s, healthy={healthy}")
+        let healthElapsed = epochTime() - t0
+        logDebug(&"tick {ticks}: master health check took {healthElapsed:.1f}s, healthy={healthy}")
         if not healthy and not masterHealthState.lastHealthLogged:
           logWarn("master is unhealthy — skipping tick")
           masterHealthState.lastHealthLogged = true
         elif healthy and masterHealthState.lastHealthLogged:
-          logInfo(fmt"master is healthy again (commit {masterHealthState.head})")
+          logInfo(&"master is healthy again (commit {masterHealthState.head})")
           masterHealthState.lastHealthLogged = false
 
         if not healthy:
@@ -214,11 +216,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           var managerChanged = false
 
           if hasRunnableSpec(repoPath):
+            specWaitingLogged = false
             # Step 3: Run architect (sequential, must complete before managers).
             logInfo("architect: generating areas from spec")
             t0 = epochTime()
             architectChanged = runArchitectAreas(repoPath, runner)
-            logDebug(fmt"tick {ticks}: architect took {epochTime() - t0:.1f}s, changed={architectChanged}")
+            let architectElapsed = epochTime() - t0
+            logDebug(&"tick {ticks}: architect took {architectElapsed:.1f}s, changed={architectChanged}")
             if architectChanged:
               logInfo("architect: areas updated")
               architectStatus = "updated"
@@ -247,7 +251,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                   startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, effectiveMax, managerAgentWorkerThread)
                 0
               )
-            logDebug(fmt"tick {ticks}: manager took {epochTime() - t0:.1f}s, changed={managerChanged}")
+            let managerElapsed = epochTime() - t0
+            logDebug(&"tick {ticks}: manager took {managerElapsed:.1f}s, changed={managerChanged}")
             if managerChanged:
               logInfo("manager: tickets created")
               managerStatus = "updated"
@@ -260,7 +265,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             if not shouldRun: break
           else:
-            logDebug(WaitingNoSpecMessage)
+            if not specWaitingLogged:
+              logInfo(WaitingNoSpecMessage)
+              specWaitingLogged = true
+            else:
+              logDebug(WaitingNoSpecMessage)
             idle = true
 
           # Step 6: Start coding agents (use remaining slots after managers).
@@ -274,17 +283,17 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               t0 = epochTime()
               let agentResult = executeOldestOpenTicket(repoPath, runner)
               let codingWallTime = epochTime() - t0
-              logDebug(fmt"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
+              logDebug(&"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
 
               if agentResult.command.len > 0:
                 codingDidWork = true
                 let codingDuration = formatDuration(codingWallTime)
                 if agentResult.timeoutKind != "none":
-                  codingStatus = fmt"{agentResult.ticketId}(stalled, {codingDuration})"
+                  codingStatus = &"{agentResult.ticketId}(stalled, {codingDuration})"
                 elif agentResult.submitted:
-                  codingStatus = fmt"{agentResult.ticketId}(submitted, {codingDuration})"
+                  codingStatus = &"{agentResult.ticketId}(submitted, {codingDuration})"
                 else:
-                  codingStatus = fmt"{agentResult.ticketId}(failed, {codingDuration})"
+                  codingStatus = &"{agentResult.ticketId}(failed, {codingDuration})"
           else:
             let effectiveMax = effectiveMaxAgents(maxAgents)
             let slotsAvailable = emptySlotCount(effectiveMax)
@@ -304,18 +313,19 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo("merge queue: processing")
           t0 = epochTime()
           let mergeProcessed = processMergeQueue(repoPath)
-          logDebug(fmt"tick {ticks}: merge queue took {epochTime() - t0:.1f}s, processed={mergeProcessed}")
+          let mergeElapsed = epochTime() - t0
+          logDebug(&"tick {ticks}: merge queue took {mergeElapsed:.1f}s, processed={mergeProcessed}")
           if mergeProcessed:
             logInfo("merge queue: item processed")
             mergeStatus = "processing"
 
           if maxAgents <= 1:
             if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
-              logDebug(fmt"tick {ticks}: idle")
+              logDebug(&"tick {ticks}: idle")
               idle = true
           else:
             if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed and runningAgentCount() == 0:
-              logDebug(fmt"tick {ticks}: idle")
+              logDebug(&"tick {ticks}: idle")
               idle = true
 
           discard withPlanWorktree(repoPath, proc(planPath: string): int =
@@ -329,7 +339,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck}"
           logInfo(summary)
     except CatchableError as e:
-      logError(fmt"tick {ticks} failed: {e.msg}")
+      logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop
     if idle:
       sleep(IdleBackoffSleepMs)
@@ -383,7 +393,7 @@ proc parseLogLevel(value: string): LogLevel =
   of "warn", "warning": lvlWarn
   of "error": lvlError
   else:
-    raise newException(ValueError, fmt"unknown log level: {value}")
+    raise newException(ValueError, &"unknown log level: {value}")
 
 proc applyLogLevelFromConfig(repoPath: string) =
   ## Apply log level from config or environment variable.
@@ -392,12 +402,12 @@ proc applyLogLevelFromConfig(repoPath: string) =
     try:
       setLogLevel(parseLogLevel(cfg.logLevel))
     except ValueError:
-      logWarn(fmt"unknown log level '{cfg.logLevel}', using default")
+      logWarn(&"unknown log level '{cfg.logLevel}', using default")
   if cfg.fileLogLevel.len > 0:
     try:
       setFileLogLevel(parseLogLevel(cfg.fileLogLevel))
     except ValueError:
-      logWarn(fmt"unknown file log level '{cfg.fileLogLevel}', using default")
+      logWarn(&"unknown file log level '{cfg.fileLogLevel}', using default")
 
 proc harnessBinaryName(h: Harness): string =
   ## Return the expected binary name for a harness.
@@ -498,10 +508,10 @@ proc runOrchestrator*(repoPath: string) =
   initLog(repoPath)
   applyLogLevelFromConfig(repoPath)
   let endpoint = loadOrchestratorEndpoint(repoPath)
-  logInfo(fmt"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
-  logInfo(fmt"repo: {repoPath}")
-  logInfo(fmt"build: {BuildCommitHash}")
-  logInfo(fmt"log file: {logFilePath}")
+  logInfo(&"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
+  logInfo(&"repo: {repoPath}")
+  logInfo(&"build: {BuildCommitHash}")
+  logInfo(&"log file: {logFilePath}")
   let httpServer = createOrchestratorServer()
   defer: closeLog()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent)

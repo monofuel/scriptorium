@@ -37,6 +37,41 @@ suite "orchestrator final v1 flow":
 
     check callCount == 0
 
+  test "no-spec WAITING message logs INFO once then DEBUG on subsequent ticks":
+    let tmp = getTempDir() / "scriptorium_test_spec_waiting_dedup"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    writeOrchestratorEndpointConfig(tmp, 23)
+
+    proc fakeRunner(request: AgentRunRequest): AgentRunResult =
+      ## No-op runner; spec is blank so nothing should run.
+      discard request
+      result = AgentRunResult(
+        backend: harnessCodex,
+        exitCode: 0,
+        attempt: 1,
+        attemptCount: 1,
+        lastMessage: "",
+        timeoutKind: "none",
+      )
+
+    captureLogs = true
+    capturedLogs = @[]
+    defer: captureLogs = false
+
+    runOrchestratorForTicks(tmp, 3, fakeRunner)
+
+    let waitingInfoLogs = capturedLogs.filterIt(
+      it.level == lvlInfo and "WAITING: no spec" in it.msg
+    )
+    let waitingDebugLogs = capturedLogs.filterIt(
+      it.level == lvlDebug and "WAITING: no spec" in it.msg
+    )
+    check waitingInfoLogs.len == 1
+    check waitingDebugLogs.len == 2
+
   test "integration-test failure on master blocks assignment of open tickets":
     let tmp = getTempDir() / "scriptorium_test_master_red_integration"
     makeTestRepo(tmp)

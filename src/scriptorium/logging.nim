@@ -10,12 +10,17 @@ type
 const
   LogLevelLabels: array[LogLevel, string] = ["DEBUG", "INFO", "WARN", "ERROR"]
 
+type
+  CapturedLog* = tuple[level: LogLevel, msg: string]
+
 var
   logFile: File
   logFilePath*: string
   logInitialized: bool
   minLogLevel*: LogLevel = lvlInfo
   minFileLogLevel*: LogLevel = lvlDebug
+  capturedLogs*: seq[CapturedLog]
+  captureLogs*: bool
 
 proc formatTimestamp(): string =
   ## Return a UTC timestamp suitable for log line prefixes.
@@ -50,6 +55,8 @@ proc setFileLogLevel*(level: LogLevel) =
 
 proc log*(level: LogLevel, msg: string) =
   ## Write a timestamped log line to stdout (filtered) and the log file (always).
+  if captureLogs:
+    capturedLogs.add((level: level, msg: msg))
   let line = fmt"[{formatTimestamp()}] [{LogLevelLabels[level]}] {msg}"
   if level >= minLogLevel:
     echo line
