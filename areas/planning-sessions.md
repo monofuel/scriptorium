@@ -11,7 +11,7 @@ Covers the `scriptorium plan` and `scriptorium ask` interactive and one-shot wor
   - Repo-root path context included.
   - Post-run write allowlist enforced to `spec.md` only.
   - Commit only when `spec.md` changes, message: `scriptorium: update spec from architect`.
-  - Per-repository Architect lock for concurrency safety.
+  - Uses the transactional commit lock (detail in plan-locking area) so concurrent planner or manager writes fail fast.
 - Interactive planning (`scriptorium plan`):
   - Session slash commands: `/show`, `/help`, `/quit`, `/exit`.
   - Unknown slash commands rejected without invoking the Architect.

@@ -4,7 +4,7 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 
 ## Scope
 
-- `scriptorium run` starts the orchestrator polling loop, MCP HTTP server, and repository-backed logging.
+- `scriptorium run` starts the orchestrator singleton PID guard (detail in plan-locking area), the orchestrator polling loop, MCP HTTP server, and repository-backed logging with configurable log level.
 - MCP endpoint from `scriptorium.json` `endpoints.local`, defaulting to `http://127.0.0.1:8097`.
 - Continuous polling with idle sleep between ticks.
 - Work gated by:
