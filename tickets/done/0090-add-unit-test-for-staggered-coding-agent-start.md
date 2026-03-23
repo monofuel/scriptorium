@@ -78,3 +78,38 @@ Here's my review summary:
 
 **Minor issue**: Line 1294 (`check tickValues[0] != tickValues[1] or tickValues[1] != tickValues[2]`) is strictly weaker than line 1295 (`check tickValues.deduplicate().len == 3`). The first check allows 2-of-3 to match (e.g., `[1, 1, 2]` passes), while the second requires all 3 to be distinct. The redundant check adds no value — the `deduplicate().len == 3` assertion is sufficient on its own. Not a correctness issue, just unnecessary noise.
 Approved with a minor warning about the redundant assertion on line 1294. The test is well-structured, follows existing patterns, and correctly verifies the staggered start rule.
+
+## Merge Queue Success
+- Summary: Added unit test for staggered coding agent start in the "concurrent agent execution" suite. The test creates 3 tickets in different areas with maxAgents=4, uses a fake runner that tracks the tick on which each coding call occurs via a shared counter incremented on architect calls, and asserts all 3 tickets started on 3 different ticks (not batched on the same tick).\n
+### Quality Check Output
+```text
+] [2026-03-23T22:02:26Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:02:26Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:02:26Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing open=0 in-progress=0 done=1
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:02:27Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:02Z] [INFO] session summary: uptime=1m46s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:02Z] [INFO] session summary: avg_ticket_wall=33s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:02Z] [INFO] orchestrator PID guard acquired (PID 85616)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:02Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:03Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:33Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T22:03:33Z] [INFO] session summary: avg_ticket_wall=33s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+[tests/integration_orchestrator_queue.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_1E9F66947A2A25BC8B5DD54C960C46F4DBB719CD'
+```
+
+## Metrics
+- wall_time_seconds: 1420
+- coding_wall_seconds: 795
+- test_wall_seconds: 395
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 340788
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: accurate
+- brief_summary: Predicted medium, actual was medium with 1 attempt(s) in 23m40s.
