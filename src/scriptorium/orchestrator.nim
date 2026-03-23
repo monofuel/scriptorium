@@ -289,7 +289,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             let effectiveMax = effectiveMaxAgents(maxAgents)
             let slotsAvailable = emptySlotCount(effectiveMax)
             if slotsAvailable > 0:
-              let assignments = assignOpenTickets(repoPath, 1)
+              let assignments = assignOpenTickets(repoPath, slotsAvailable)
               for assignment in assignments:
                 let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
                 runTicketPrediction(repoPath, assignment.inProgressTicket, runner)

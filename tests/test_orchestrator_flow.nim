@@ -1231,13 +1231,13 @@ suite "concurrent agent execution":
     check summary1 == "done ticket 1"
     check summary2 == "done ticket 2"
 
-  test "staggered start: only 1 new coding agent starts per tick":
-    let tmp = getTempDir() / "scriptorium_test_staggered_start"
+  test "concurrent start: all open tickets fill available slots in one tick":
+    let tmp = getTempDir() / "scriptorium_test_concurrent_start"
     makeTestRepo(tmp)
     defer: removeDir(tmp)
     runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
-    writeSpecInPlan(tmp, "# Spec\n\nStaggered start test.\n")
+    writeSpecInPlan(tmp, "# Spec\n\nConcurrent start test.\n")
     addTicketToPlan(tmp, "open", "0001-alpha.md", "# Ticket Alpha\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-beta.md", "# Ticket Beta\n\n**Area:** area-b\n")
     addTicketToPlan(tmp, "open", "0003-gamma.md", "# Ticket Gamma\n\n**Area:** area-c\n")
@@ -1273,7 +1273,7 @@ suite "concurrent agent execution":
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 5, fakeRunner)
+    runOrchestratorForTicks(tmp, 3, fakeRunner)
 
     acquire(tickCounterLock)
     let finalTicks = codingStartTicks
@@ -1286,13 +1286,11 @@ suite "concurrent agent execution":
     check "0002" in finalTicks
     check "0003" in finalTicks
 
-    # Coding agents must have started on 3 different ticks (staggered, not batched).
+    # All 3 coding agents should start on the same tick (fill available slots).
     var tickValues: seq[int] = @[]
     for ticketId, tick in finalTicks:
       tickValues.add(tick)
-    tickValues.sort()
-    check tickValues[0] != tickValues[1] or tickValues[1] != tickValues[2]
-    check tickValues.deduplicate().len == 3
+    check tickValues.deduplicate().len == 1
 
   test "stall detection works independently per agent":
     let tmp = getTempDir() / "scriptorium_test_concurrent_stall"
