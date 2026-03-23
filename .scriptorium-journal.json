@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0075",
+  "timestamp": "2026-03-23T06:13:17Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0003-0075.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0075-add-audit-agent-configuration-to-scriptoriumjson.md\n**Ticket ID:** 0075\n**Branch:** scriptorium/ticket-0075\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-add-audit-agent-configuration-to-scriptoriumjson\n**Summary:** Add audit agent configuration to config.nim (DefaultAuditModel constant, audit field in AgentConfigs, mergeAgentConfig wiring in loadConfig), create audit_agent.md prompt template with spec/agents_md/diff/last_audit_commit placeholders, register AuditAgentTemplate in prompt_catalog.nim, and add unit tests verifying default audit model, harness, and JSON override behavior.\n",
+      "contentHash": "35C7309FE7452BFB55FCD80D2811A2EBD7563415"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0075"
+}
