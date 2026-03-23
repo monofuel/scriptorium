@@ -29,3 +29,5 @@ helper `addTicketToPlan`, `addPassingMakefile`, and `writeScriptoriumConfig`
 are already available.
 
 Run `make test` to verify the new test passes.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-add-unit-test-for-staggered-coding-agent-start
