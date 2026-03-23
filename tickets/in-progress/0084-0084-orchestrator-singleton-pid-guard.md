@@ -151,3 +151,5 @@ Remove unused legacy lock directory infrastructure after the switch to file-base
 - `make test` passes with no references to removed constants.
 - Existing lock management tests pass with new paths.
 ````
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0084-orchestrator-singleton-pid-guard
