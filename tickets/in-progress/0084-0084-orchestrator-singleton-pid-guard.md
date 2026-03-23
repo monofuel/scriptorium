@@ -158,3 +158,8 @@ Remove unused legacy lock directory infrastructure after the switch to file-base
 - predicted_difficulty: hard
 - predicted_duration_minutes: 30
 - reasoning: Four interconnected tickets spanning lock_management.nim, git_ops.nim, and orchestrator.nim with POSIX process liveness checks, atomic file operations, retry/backoff logic, legacy code removal, and comprehensive test coverage — high integration risk across modules likely requiring 2+ attempts.
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Four linked tickets touching lock_management.nim, git_ops.nim, and orchestrator.nim with POSIX liveness checks, atomic file ops, retry/backoff, legacy removal, and new test file — cross-module integration risk likely requires 2+ attempts.
