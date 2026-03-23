@@ -21,3 +21,5 @@ In `src/scriptorium/orchestrator.nim`, enrich the tick summary line (around line
 Read stuck count from `readOrchestratorStatus` (which already reads the plan worktree) or add stuck counting to the existing `ticketCounts` read. The `OrchestratorStatus` type in `shared_state.nim` may need a `stuckTickets` field if one doesn't exist.
 
 Example output:
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0093-0090-enrich-tick-summary-line-with-running-agents-and-stuck-count
