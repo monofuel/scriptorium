@@ -90,3 +90,8 @@ The implementation is clean and correct. Here's my assessment:
 **Review: Approved with warnings**
 
 The PID guard implementation is solid. One minor deviation from spec §17: the `EPERM` errno case (process alive but owned by different user) is treated as "dead" instead of "alive." This is unlikely to matter in practice but worth noting for strict spec compliance.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single-module POSIX PID guard with JSON file I/O, defer-based cleanup, and 3-4 unit tests including a helper binary — moderate complexity but well-scoped with clear requirements, one attempt expected.
