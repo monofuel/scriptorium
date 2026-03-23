@@ -42,3 +42,13 @@ The background task already completed successfully — I already read its output
 utput_tokens":1},"context_management":null},"parent_tool_use_id":null,"session_id":"6833bb42-2a95-458a-bd12-10107b4c7edf","uuid":"24179417-7ff4-4e95-bc75-837a171904f7"}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":3589,"duration_api_ms":56638,"num_turns":1,"result":"The background task already completed successfully — I already read its output and submitted the PR. All done!","stop_reason":"end_turn","session_id":"6833bb42-2a95-458a-bd12-10107b4c7edf","total_cost_usd":0.4271314999999999,"usage":{"input_tokens":3,"cache_creation_input_tokens":357,"cache_read_input_tokens":36373,"output_tokens":23,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":357},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":18,"outputTokens":1999,"cacheReadInputTokens":295008,"cacheCreationInputTokens":36730,"webSearchRequests":0,"costUSD":0.4271314999999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"70cf4ba8-7b88-4bfe-8a24-2cc6f76bbae0"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 17s
+
+**Review Reasoning:** The diff adds exactly what the ticket requests: two tests verifying `/exit` exits plan and ask sessions without invoking the runner. The tests follow the existing `/quit` test patterns with appropriate temp directory names, fake runner/input procs, and `check callCount == 0` assertions. Clean and minimal.
+Review approved. The changes are a straightforward, correct implementation of the ticket requirements.
