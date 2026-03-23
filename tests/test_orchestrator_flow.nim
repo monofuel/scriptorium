@@ -1231,6 +1231,69 @@ suite "concurrent agent execution":
     check summary1 == "done ticket 1"
     check summary2 == "done ticket 2"
 
+  test "staggered start: only 1 new coding agent starts per tick":
+    let tmp = getTempDir() / "scriptorium_test_staggered_start"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+    runInit(tmp, quiet = true)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nStaggered start test.\n")
+    addTicketToPlan(tmp, "open", "0001-alpha.md", "# Ticket Alpha\n\n**Area:** area-a\n")
+    addTicketToPlan(tmp, "open", "0002-beta.md", "# Ticket Beta\n\n**Area:** area-b\n")
+    addTicketToPlan(tmp, "open", "0003-gamma.md", "# Ticket Gamma\n\n**Area:** area-c\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 4
+    writeScriptoriumConfig(tmp, cfg)
+
+    var tickCounter = 0
+    var tickCounterLock: Lock
+    initLock(tickCounterLock)
+    var codingStartTicks: Table[string, int] = initTable[string, int]()
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Track which tick each coding agent starts on.
+      if request.ticketId == "run":
+        {.cast(gcsafe).}:
+          acquire(tickCounterLock)
+          inc tickCounter
+          release(tickCounterLock)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.startsWith("manager"):
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      elif request.ticketId in ["0001", "0002", "0003"]:
+        {.cast(gcsafe).}:
+          acquire(tickCounterLock)
+          codingStartTicks[request.ticketId] = tickCounter
+          release(tickCounterLock)
+        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    runOrchestratorForTicks(tmp, 5, fakeRunner)
+
+    acquire(tickCounterLock)
+    let finalTicks = codingStartTicks
+    release(tickCounterLock)
+    deinitLock(tickCounterLock)
+
+    # All 3 tickets must have been started.
+    check finalTicks.len == 3
+    check "0001" in finalTicks
+    check "0002" in finalTicks
+    check "0003" in finalTicks
+
+    # Coding agents must have started on 3 different ticks (staggered, not batched).
+    var tickValues: seq[int] = @[]
+    for ticketId, tick in finalTicks:
+      tickValues.add(tick)
+    tickValues.sort()
+    check tickValues[0] != tickValues[1] or tickValues[1] != tickValues[2]
+    check tickValues.deduplicate().len == 3
+
   test "stall detection works independently per agent":
     let tmp = getTempDir() / "scriptorium_test_concurrent_stall"
     makeTestRepo(tmp)
