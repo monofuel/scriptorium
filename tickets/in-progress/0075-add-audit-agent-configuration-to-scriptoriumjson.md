@@ -244,3 +244,27 @@ Add unit tests covering the audit agent's core logic: commit tracking, diff comp
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Multi-file changes across config, prompt catalog, and a new audit_agent module, but all follow well-established patterns from existing agents; moderate test coverage needed but low integration risk for this ticket subset.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0075/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0075/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+All done. Here's a summary of the changes:
+
+**`src/scriptorium/config.nim`**:
+- Added `DefaultAuditModel* = "claude-haiku-4-5-20251001"` constant
+- Added `audit*: AgentConfig` field to `AgentConfigs`
+- Set `audit: defaultAgentConfig(DefaultAuditModel)` in `defaultConfig()`
+- Added `mergeAgentConfig(result.agents.audit, parsed.agents.audit)` in `loadConfig()`
+
+**`src/scriptorium/prompts/audit_agent.md`**: New prompt template with `{{spec}}`, `{{agents_md}}`, `{{diff}}`, and `{{last_audit_commit}}` placeholders instructing the agent to produce "Spec Drift" and "AGENTS.md Violations" sections.
+
+**`src/scriptorium/prompt_catalog.nim`**: Registered `AuditAgentTemplate*` via `staticRead`.
+
+**`tests/test_scriptorium.nim`**: Three new tests confirming default audit model/harness, JSON override, and graceful defaults when audit key is absent.
+```
+
+### Agent Stdout Tail
+```text
+`{{agents_md}}`, `{{diff}}`, and `{{last_audit_commit}}` placeholders instructing the agent to produce \"Spec Drift\" and \"AGENTS.md Violations\" sections.\n\n**`src/scriptorium/prompt_catalog.nim`**: Registered `AuditAgentTemplate*` via `staticRead`.\n\n**`tests/test_scriptorium.nim`**: Three new tests confirming default audit model/harness, JSON override, and graceful defaults when audit key is absent.","stop_reason":"end_turn","session_id":"f99f3abe-ce2b-4c6f-83b7-f0f2695ef362","total_cost_usd":1.03784875,"usage":{"input_tokens":31,"cache_creation_input_tokens":53773,"cache_read_input_tokens":1114425,"output_tokens":5776,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":53773},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":31,"outputTokens":5776,"cacheReadInputTokens":1114425,"cacheCreationInputTokens":53773,"webSearchRequests":0,"costUSD":1.03784875,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"61bdc605-c924-4372-a82a-b6ca285c2f32"}
+```
