@@ -1,0 +1,17 @@
+{
+  "operation": "dequeue 0086",
+  "timestamp": "2026-03-23T05:06:31Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "queue/merge/pending/0001-0086.md\n",
+      "contentHash": "ADD86AB669C18C13D62EBA1401EFFECC60DC7002"
+    },
+    {
+      "action": "remove",
+      "path": "queue/merge/pending/0001-0086.md"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue dequeue 0086"
+}
