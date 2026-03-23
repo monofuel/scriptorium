@@ -61,3 +61,39 @@ rns":9,"result":"Done. Added two tests:\n- **\"unknown slash commands rejected w
 
 **Review Reasoning:** The diff adds exactly the two tests specified in the ticket, following existing patterns. Both tests send an unknown slash command followed by `/quit`, verify `callCount == 0`, and verify no commits are created. Clean and minimal.
 Review approved. The changes correctly implement both required tests per the ticket spec.
+
+## Merge Queue Success
+- Summary: Added two unit tests in tests/test_orchestrator_flow.nim verifying that unknown slash commands (/foo, /unknown) are rejected without invoking the agent runner and without creating commits, in both interactive plan and ask sessions.\n
+### Quality Check Output
+```text
+30Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing open=0 in-progress=0 done=1
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:30Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:52Z] [INFO] session summary: uptime=1m38s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:52Z] [INFO] session summary: avg_ticket_wall=35s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:53Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:11:53Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:12:23Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-23T05:12:23Z] [INFO] session summary: avg_ticket_wall=35s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 562
+- coding_wall_seconds: 189
+- test_wall_seconds: 335
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 248307
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 9m22s.
