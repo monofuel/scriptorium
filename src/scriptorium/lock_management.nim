@@ -1,5 +1,6 @@
 import
-  std/[locks, os, posix, strformat, strutils],
+  std/[locks, os, posix, strformat, strutils, times],
+  jsony,
   ./git_ops
 
 var
@@ -104,3 +105,43 @@ proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: stri
     result = withRepoLock(repoPath, proc(): T =
       withPlanWorktreeImpl(repoPath, operation)
     )
+
+type
+  OrchestratorPidFile* = object
+    pid*: int
+    timestamp*: float
+
+proc acquireOrchestratorPidGuard*(repoPath: string) =
+  ## Write the orchestrator PID file, aborting if another instance is alive.
+  let pidPath = orchestratorPidPath(repoPath)
+  createDir(parentDir(pidPath))
+
+  if fileExists(pidPath):
+    let raw = readFile(pidPath)
+    let existing = fromJson(raw, OrchestratorPidFile)
+    let killRc = posix.kill(Pid(existing.pid), 0)
+    if killRc == 0:
+      let startedAt = fromUnix(int64(existing.timestamp))
+      let startedStr = startedAt.utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+      raise newException(IOError,
+        &"Another orchestrator is already running (PID {existing.pid}, started {startedStr})")
+    else:
+      let errCode = int(osLastError())
+      if errCode != ESRCH:
+        let startedAt = fromUnix(int64(existing.timestamp))
+        let startedStr = startedAt.utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        raise newException(IOError,
+          &"Another orchestrator is already running (PID {existing.pid}, started {startedStr})")
+      # PID is dead — overwrite.
+      stderr.writeLine(&"WARNING: Stale orchestrator PID file found for dead PID {existing.pid}, overwriting")
+
+  let currentPid = getCurrentProcessId()
+  let now = epochTime()
+  let pidFile = OrchestratorPidFile(pid: currentPid, timestamp: now)
+  writeFile(pidPath, pidFile.toJson())
+
+proc releaseOrchestratorPidGuard*(repoPath: string) =
+  ## Delete the orchestrator PID file on clean shutdown.
+  let pidPath = orchestratorPidPath(repoPath)
+  if fileExists(pidPath):
+    removeFile(pidPath)
