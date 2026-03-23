@@ -14,6 +14,7 @@ type
     staleMarkersCleared*: int
     planAction*: string
     alreadyMergedCompleted*: int
+    orphanedReopened*: int
 
 proc isScriptoriumProcess(pid: int): bool =
   ## Check if a PID corresponds to a known scriptorium process.
@@ -224,16 +225,65 @@ proc completeAlreadyMergedTickets*(repoPath: string): int =
     result = completed
   )
 
+proc reopenOrphanedInProgressTickets*(repoPath: string): int =
+  ## Step 5: Reopen in-progress tickets that have no worktree and are not merged.
+  ## These are tickets interrupted by a crash before the coding agent finished.
+  if not hasPlanBranch(repoPath):
+    return 0
+
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    let defaultBranch = resolveDefaultBranch(repoPath)
+    var reopened = 0
+    let inProgressDir = planPath / PlanTicketsInProgressDir
+    if not dirExists(inProgressDir):
+      return 0
+
+    for ticketPath in listMarkdownFiles(inProgressDir):
+      let fileName = extractFilename(ticketPath)
+      let ticketId = ticketIdFromTicketPath(fileName)
+      let branch = TicketBranchPrefix & ticketId
+
+      # Skip if branch is already merged to default (completeAlreadyMergedTickets handles this).
+      let branchExists = gitCheck(repoPath, "rev-parse", "--verify", branch)
+      if branchExists == 0:
+        let checkResult = runCommandCapture(
+          repoPath, "git", @["merge-base", "--is-ancestor", branch, defaultBranch],
+        )
+        if checkResult.exitCode == 0:
+          continue
+
+      # Check if the ticket worktree exists.
+      let inProgressRel = PlanTicketsInProgressDir / fileName
+      let worktreePath = worktreePathForTicket(repoPath, inProgressRel)
+      if dirExists(worktreePath):
+        continue
+
+      # No worktree and not merged — reopen by moving back to open.
+      let openRelPath = PlanTicketsOpenDir / fileName
+      logInfo(&"recovery: reopening orphaned in-progress ticket {ticketId} (no worktree)")
+      moveFile(ticketPath, planPath / openRelPath)
+
+      gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        let commitMsg = "scriptorium: recovery — reopen orphaned ticket " & ticketId
+        gitRun(planPath, "commit", "-m", commitMsg)
+
+      inc reopened
+
+    result = reopened
+  )
+
 proc recoverFromCrash*(repoPath: string): RecoverySummary =
   ## Execute the full startup recovery sequence before the first orchestrator tick.
   result.worktreesCleaned = cleanOrphanedWorktrees(repoPath)
   result.staleMarkersCleared = detectStaleAgentProcesses(repoPath)
   result.planAction = reconcileDirtyPlanBranch(repoPath)
   result.alreadyMergedCompleted = completeAlreadyMergedTickets(repoPath)
+  result.orphanedReopened = reopenOrphanedInProgressTickets(repoPath)
 
-  # Step 5: Log recovery summary.
-  if result.worktreesCleaned == 0 and result.staleMarkersCleared == 0 and result.planAction == "clean" and result.alreadyMergedCompleted == 0:
+  # Step 6: Log recovery summary.
+  if result.worktreesCleaned == 0 and result.staleMarkersCleared == 0 and result.planAction == "clean" and result.alreadyMergedCompleted == 0 and result.orphanedReopened == 0:
     logInfo("recovery: clean startup, no recovery needed")
   else:
-    let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets"
+    let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets, reopened {result.orphanedReopened} orphaned tickets"
     logInfo(summaryLine)

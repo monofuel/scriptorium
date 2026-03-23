@@ -260,6 +260,67 @@ suite "completeAlreadyMergedTickets":
     check activeContent == ""
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
+suite "reopenOrphanedInProgressTickets":
+  test "returns 0 when no plan branch exists":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_no_plan_orphan"
+    makeTestRepo(tmpDir)
+    defer: removeDir(tmpDir)
+
+    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    check reopened == 0
+
+  test "reopens in-progress ticket with no worktree and unmerged branch":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_orphaned_reopen"
+    makeTestRepoWithPlanBranch(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create a ticket branch that is NOT merged to master.
+    let ticketBranch = TicketBranchPrefix & "0055"
+    runCmdOrDie(&"git -C {tmpDir} checkout -b {ticketBranch}")
+    writeFile(tmpDir / "wip.txt", "work in progress")
+    runCmdOrDie(&"git -C {tmpDir} add wip.txt")
+    runCmdOrDie(&"git -C {tmpDir} commit -m 'ticket 0055 wip'")
+    runCmdOrDie(&"git -C {tmpDir} checkout master")
+
+    # Place ticket in in-progress on plan branch, with no worktree.
+    let planWorktree = managedPlanWorktreePath(tmpDir)
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    let ticketContent = "# Ticket 0055\nFake ticket for testing."
+    writeFile(planWorktree / "tickets" / "in-progress" / "0055-orphaned-ticket.md", ticketContent)
+    runCmdOrDie(&"git -C {planWorktree} add -A")
+    runCmdOrDie(&"git -C {planWorktree} commit -m 'add orphaned in-progress ticket'")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    check reopened == 1
+
+    # Verify ticket moved back to open.
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    check fileExists(planWorktree / "tickets" / "open" / "0055-orphaned-ticket.md")
+    check not fileExists(planWorktree / "tickets" / "in-progress" / "0055-orphaned-ticket.md")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+  test "does not reopen in-progress ticket that has a worktree":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_has_worktree"
+    makeTestRepoWithPlanBranch(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Place ticket in in-progress on plan branch.
+    let planWorktree = managedPlanWorktreePath(tmpDir)
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    let ticketContent = "# Ticket 0066\nFake ticket.\n\n**Worktree:** " & tmpDir / ".scriptorium" / "worktrees" / "tickets" / "0066-has-worktree"
+    writeFile(planWorktree / "tickets" / "in-progress" / "0066-has-worktree.md", ticketContent)
+    runCmdOrDie(&"git -C {planWorktree} add -A")
+    runCmdOrDie(&"git -C {planWorktree} commit -m 'add ticket with worktree'")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+    # Create the worktree directory so it looks like an agent could be running.
+    let worktreeDir = tmpDir / ".scriptorium" / "worktrees" / "tickets" / "0066-has-worktree"
+    createDir(worktreeDir)
+
+    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    check reopened == 0
+
 suite "recoverFromCrash":
   test "clean startup produces no recovery needed":
     let tmpDir = getTempDir() / "scriptorium_test_recovery_clean"
@@ -271,6 +332,7 @@ suite "recoverFromCrash":
     check summary.staleMarkersCleared == 0
     check summary.planAction == "clean"
     check summary.alreadyMergedCompleted == 0
+    check summary.orphanedReopened == 0
 
   test "clean startup without plan branch":
     let tmpDir = getTempDir() / "scriptorium_test_recovery_no_plan_full"
@@ -282,3 +344,4 @@ suite "recoverFromCrash":
     check summary.staleMarkersCleared == 0
     check summary.planAction == "clean"
     check summary.alreadyMergedCompleted == 0
+    check summary.orphanedReopened == 0
