@@ -89,6 +89,7 @@ type
     recentDoneTickets*: seq[DoneTicketSummary]
     firstAttemptSuccessCount*: int
     totalDoneWithAttempts*: int
+    stuckTickets*: int
     blockedTickets*: seq[BlockedTicket]
     waitingTickets*: seq[WaitingTicket]
 

@@ -347,6 +347,7 @@ proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
       openTickets: listMarkdownFiles(planPath / PlanTicketsOpenDir).len,
       inProgressTickets: listMarkdownFiles(planPath / PlanTicketsInProgressDir).len,
       doneTickets: listMarkdownFiles(planPath / PlanTicketsDoneDir).len,
+      stuckTickets: listMarkdownFiles(planPath / PlanTicketsStuckDir).len,
     )
 
     let activeQueuePath = planPath / PlanMergeQueueActivePath

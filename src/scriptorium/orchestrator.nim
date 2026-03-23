@@ -324,7 +324,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           )
 
           let ticketCounts = readOrchestratorStatus(repoPath)
-          let summary = fmt"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets}"
+          let running = runningAgentCount()
+          let stuck = ticketCounts.stuckTickets
+          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck}"
           logInfo(summary)
     except CatchableError as e:
       logError(fmt"tick {ticks} failed: {e.msg}")
