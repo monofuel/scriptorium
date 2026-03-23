@@ -59,13 +59,19 @@ they passed." The Bash tool reports non-zero exit codes as errors — if you do
 not see an error, the tests passed.
 
 - `make test` runs all unit tests in parallel. Each test prints `[OK]` or
-  `[FAIL]` per case. If the tool returns without an error exit code and all
-  cases show `[OK]`, the tests passed. Move on.
+  `[FAILED]` per case. Exit code 0 means all tests passed.
 - `make integration-test` runs all integration tests in parallel. Same rules.
 - Do not run `make test` followed by `make test` again. Tests are slow
-  (compilation + execution). Running them twice wastes minutes for no reason.
+  (compilation + execution takes several minutes). Running them twice wastes
+  time and tokens for no reason.
 - If a test fails, fix it and run tests once more. That is the only reason to
   re-run.
+
+**Interpreting filtered output:** If you pipe test output through grep (e.g.
+`grep '\[FAILED\]'`) and get **no output**, that means zero failures — tests
+passed. Empty grep output is a positive signal, not a reason to re-run with
+different filters. Do not re-run `make test` with different grep patterns
+trying to find a summary line that doesn't exist.
 
 ### Unit tests vs integration tests
 
