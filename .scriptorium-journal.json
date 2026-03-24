@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0095",
+  "timestamp": "2026-03-24T00:30:31Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0095.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0095-0095-add-loop-config-fields-to-config-and-loadconfig.md\n**Ticket ID:** 0095\n**Branch:** scriptorium/ticket-0095\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0095-0095-add-loop-config-fields-to-config-and-loadconfig\n**Summary:** Added LoopConfig object type (enabled, feedback, goal, maxIterations) to Config, wired it into defaultConfig and loadConfig with raw-contains merging, and added unit tests for both absent and fully populated loop config.\n",
+      "contentHash": "C810C747C14E37DE900D26860359E707BC55E385"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0095"
+}
