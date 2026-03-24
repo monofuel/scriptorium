@@ -172,3 +172,8 @@ Merge with strategy ort failed.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 15m21s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: The code changes are easy (two small pattern additions), but this ticket has failed twice due to merge queue issues with uncommitted local changes — the agent needs to properly commit and ensure clean merge with master, adding operational complexity beyond the simple code fix.
