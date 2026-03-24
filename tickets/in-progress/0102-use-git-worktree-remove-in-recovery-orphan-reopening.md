@@ -21,3 +21,8 @@ Recovery Step 1 (`cleanOrphanedWorktrees`) runs before Step 5 but cannot catch t
 - `tests/test_recovery.nim` — new test case
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-use-git-worktree-remove-in-recovery-orphan-reopening
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single-file fix replacing removeDir with gitCheck+removeDir fallback pattern already established in the codebase, plus one new unit test in an existing test file.
