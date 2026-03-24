@@ -35,7 +35,6 @@ test: nim.cfg
 
 integration-test: nim.cfg
 	@export TMPDIR=/dev/shm; \
-	export CLAUDE_CODE_USE_BEDROCK=; \
 	files=$$(ls tests/integration_*.nim 2>/dev/null); \
 	if [ -z "$$files" ]; then \
 		echo "No integration tests found in tests/integration_*.nim"; \

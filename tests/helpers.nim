@@ -157,6 +157,14 @@ proc writeAreaHashesInPlan*(repoPath: string, hashes: Table[string, string]) =
     runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-write-area-hashes")
   )
 
+proc writeActiveQueueInPlan*(repoPath: string, activeValue: string) =
+  ## Write queue/merge/active.md on the plan branch and commit.
+  withPlanWorktree(repoPath, "write_active_queue", proc(planPath: string) =
+    writeFile(planPath / "queue/merge/active.md", activeValue)
+    runCmdOrDie("git -C " & quoteShell(planPath) & " add queue/merge/active.md")
+    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m test-write-active-queue")
+  )
+
 proc planCommitCount*(repoPath: string): int =
   ## Return the commit count reachable from the plan branch.
   let (output, rc) = execCmdEx("git -C " & quoteShell(repoPath) & " rev-list --count scriptorium/plan")

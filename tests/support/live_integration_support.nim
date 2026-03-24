@@ -30,7 +30,6 @@ proc integrationModel*(): string =
   result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
   if result.len == 0:
     result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
-  result = resolveModel(result)
 
 proc integrationCodingModel*(): string =
   ## Return the coding-role model override, falling back to integrationModel.

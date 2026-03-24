@@ -121,7 +121,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
 
     check callCount == 2
-    check capturedRequest.model == resolveModel("claude-sonnet-4-6")
+    check capturedRequest.model == "claude-sonnet-4-6"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
     check capturedRequest.workingDir == assignment.worktree

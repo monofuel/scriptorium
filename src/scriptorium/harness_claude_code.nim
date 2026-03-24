@@ -1,6 +1,6 @@
 import
   std/[envvars, json, monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, times],
-  ./[common, logging, prompt_catalog]
+  ./[common, config, logging, prompt_catalog]
 
 const
   DefaultClaudeCodeBinary = "claude"
@@ -195,15 +195,17 @@ proc buildMcpConfigJson*(endpoint: string): string =
 
 proc buildClaudeCodeExecArgs*(request: ClaudeCodeRunRequest): seq[string] =
   ## Build the Claude Code argument list for non-interactive execution.
+  ## Applies resolveModel() so Bedrock model IDs are used when CLAUDE_CODE_USE_BEDROCK is set.
   if request.model.len == 0:
     raise newException(ValueError, "model is required")
 
+  let resolvedModel = resolveModel(request.model)
   result = @[
     "--print",
     "--output-format", "stream-json",
     "--verbose",
     "--dangerously-skip-permissions",
-    "--model", request.model,
+    "--model", resolvedModel,
   ]
 
   let reasoningEffort = normalizeReasoningEffort(request.reasoningEffort)

@@ -44,7 +44,7 @@ proc runPlanArchitectRequest*(
     prompt: prompt,
     workingDir: planPath,
     harness: agentCfg.harness,
-    model: resolveModel(agentCfg.model),
+    model: agentCfg.model,
     reasoningEffort: agentCfg.reasoningEffort,
     ticketId: ticketId,
     attempt: DefaultAgentAttempt,
@@ -414,7 +414,7 @@ proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator)
     let missing = areasMissingInPlanPath(planPath)
     if missing:
       let spec = loadSpecFromPlanPath(planPath)
-      let docs = generateAreas(resolveModel(cfg.agents.architect.model), spec)
+      let docs = generateAreas(cfg.agents.architect.model, spec)
       discard writeAreasAndCommit(planPath, docs)
       writeSpecHashMarker(planPath)
       gitRun(planPath, "add", SpecHashMarkerPath)
@@ -460,7 +460,7 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
       prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
       workingDir: planPath,
       harness: cfg.agents.architect.harness,
-      model: resolveModel(cfg.agents.architect.model),
+      model: cfg.agents.architect.model,
       reasoningEffort: cfg.agents.architect.reasoningEffort,
       ticketId: ArchitectAreasRunId,
       attempt: DefaultAgentAttempt,

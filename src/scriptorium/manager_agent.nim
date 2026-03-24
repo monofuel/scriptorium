@@ -88,7 +88,7 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
     prompt: prompt,
     workingDir: repoPath,
     harness: cfg.agents.manager.harness,
-    model: resolveModel(cfg.agents.manager.model),
+    model: cfg.agents.manager.model,
     reasoningEffort: cfg.agents.manager.reasoningEffort,
     ticketId: ManagerTicketIdPrefix & areaId,
     attempt: DefaultAgentAttempt,

@@ -34,7 +34,6 @@ proc integrationModel(): string =
   result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
   if result.len == 0:
     result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
-  result = resolveModel(result)
 
 proc codexAuthPath(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.

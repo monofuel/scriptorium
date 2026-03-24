@@ -1,147 +1,12 @@
 ## Integration tests for orchestrator merge-queue flows on local fixture repositories.
 
 import
-  std/[algorithm, os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
-  jsony,
-  scriptorium/[agent_runner, config, init, orchestrator]
+  std/[os, osproc, sequtils, strformat, strutils, tempfiles, unittest],
+  scriptorium/[agent_runner, config, orchestrator],
+  helpers
 
 const
   OrchestratorBasePort = 18000
-
-proc noopRunner(request: AgentRunRequest): AgentRunResult =
-  ## Fake agent runner that returns immediately. Review agent stalls and defaults to approve.
-  discard request
-  AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
-
-proc runCmdOrDie(cmd: string) =
-  ## Run a shell command and fail immediately when it exits non-zero.
-  let (output, rc) = execCmdEx(cmd)
-  doAssert rc == 0, cmd & "\n" & output
-
-proc makeTestRepo(path: string) =
-  ## Create a minimal git repository at path suitable for integration tests.
-  if dirExists(path):
-    removeDir(path)
-  createDir(path)
-  runCmdOrDie("git -C " & quoteShell(path) & " init")
-  runCmdOrDie("git -C " & quoteShell(path) & " config user.email test@test.com")
-  runCmdOrDie("git -C " & quoteShell(path) & " config user.name Test")
-  runCmdOrDie("git -C " & quoteShell(path) & " commit --allow-empty -m initial")
-
-proc withTempRepo(prefix: string, action: proc(repoPath: string)) =
-  ## Create a temporary git repository, run action, and clean up afterwards.
-  let repoPath = createTempDir(prefix, "", getTempDir())
-  defer:
-    removeDir(repoPath)
-  makeTestRepo(repoPath)
-  action(repoPath)
-
-proc withInitializedTempRepo(prefix: string, action: proc(repoPath: string)) =
-  ## Create a temporary initialized git repository and clean up afterwards.
-  let repoPath = createTempDir(prefix, "", getTempDir())
-  defer:
-    removeDir(repoPath)
-  makeTestRepo(repoPath)
-  runInit(repoPath, quiet = true)
-  action(repoPath)
-
-proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
-  ## Open scriptorium/plan in a temporary worktree for direct fixture mutations.
-  let planPath = createTempDir("scriptorium_integration_plan_" & suffix & "_", "", getTempDir())
-  removeDir(planPath)
-  defer:
-    if dirExists(planPath):
-      removeDir(planPath)
-
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " worktree add " & quoteShell(planPath) & " scriptorium/plan")
-  defer:
-    discard execCmdEx("git -C " & quoteShell(repoPath) & " worktree remove --force " & quoteShell(planPath))
-
-  action(planPath)
-
-proc addTicketToPlan(repoPath: string, state: string, fileName: string, content: string) =
-  ## Add one ticket markdown file to a state directory and commit it.
-  withPlanWorktree(repoPath, "add_ticket", proc(planPath: string) =
-    let relPath = "tickets" / state / fileName
-    writeFile(planPath / relPath, content)
-    runCmdOrDie("git -C " & quoteShell(planPath) & " add " & quoteShell(relPath))
-    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m integration-add-ticket")
-  )
-
-proc addPassingMakefile(repoPath: string) =
-  ## Add passing quality-gate targets for queue-processing tests.
-  writeFile(
-    repoPath / "Makefile",
-    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo PASS integration-test\n",
-  )
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-passing-makefile")
-
-proc addFailingMakefile(repoPath: string) =
-  ## Add a failing `make test` target with a defined `make integration-test` target.
-  writeFile(
-    repoPath / "Makefile",
-    "test:\n\t@echo FAIL test\n\t@false\n\nintegration-test:\n\t@echo PASS integration-test\n",
-  )
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-failing-makefile")
-
-proc addIntegrationFailingMakefile(repoPath: string) =
-  ## Add a Makefile where `make test` passes and `make integration-test` fails.
-  writeFile(
-    repoPath / "Makefile",
-    "test:\n\t@echo PASS test\n\nintegration-test:\n\t@echo FAIL integration-test\n\t@false\n",
-  )
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-integration-failing-makefile")
-
-proc planTreeFiles(repoPath: string): seq[string] =
-  ## Return tracked file paths from the plan branch tree.
-  let (output, rc) = execCmdEx("git -C " & quoteShell(repoPath) & " ls-tree -r --name-only scriptorium/plan")
-  doAssert rc == 0
-  result = output.splitLines().filterIt(it.len > 0)
-
-proc pendingQueueFiles(repoPath: string): seq[string] =
-  ## Return pending merge-queue markdown entries sorted by file name.
-  let files = planTreeFiles(repoPath)
-  result = files.filterIt(it.startsWith("queue/merge/pending/") and it.endsWith(".md"))
-  result.sort()
-
-proc readPlanFile(repoPath: string, relPath: string): string =
-  ## Read one file from the plan branch tree.
-  let (output, rc) = execCmdEx(
-    "git -C " & quoteShell(repoPath) & " show scriptorium/plan:" & relPath
-  )
-  doAssert rc == 0, relPath
-  result = output
-
-proc moveTicketStateInPlan(repoPath: string, fromRelPath: string, toRelPath: string, commitMessage: string) =
-  ## Move one ticket between plan state directories and commit the fixture mutation.
-  withPlanWorktree(repoPath, "move_ticket_state", proc(planPath: string) =
-    moveFile(planPath / fromRelPath, planPath / toRelPath)
-    runCmdOrDie("git -C " & quoteShell(planPath) & " add -A tickets")
-    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
-  )
-
-proc writeActiveQueueInPlan(repoPath: string, activeValue: string, commitMessage: string) =
-  ## Write queue/merge/active.md and commit it on the plan branch.
-  withPlanWorktree(repoPath, "write_active_queue", proc(planPath: string) =
-    writeFile(planPath / "queue/merge/active.md", activeValue)
-    runCmdOrDie("git -C " & quoteShell(planPath) & " add queue/merge/active.md")
-    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
-  )
-
-proc writeSpecInPlan(repoPath: string, content: string, commitMessage: string) =
-  ## Replace spec.md on the plan branch and commit fixture content.
-  withPlanWorktree(repoPath, "write_spec", proc(planPath: string) =
-    writeFile(planPath / "spec.md", content)
-    runCmdOrDie("git -C " & quoteShell(planPath) & " add spec.md")
-    runCmdOrDie("git -C " & quoteShell(planPath) & " commit -m " & quoteShell(commitMessage))
-  )
-
-proc writeScriptoriumConfig(repoPath: string, cfg: Config) =
-  ## Write one typed scriptorium.json payload for integration test configuration.
-  writeFile(repoPath / "scriptorium.json", cfg.toJson())
 
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   ## Write a unique local orchestrator endpoint configuration for test isolation.
@@ -152,6 +17,12 @@ proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   writeScriptoriumConfig(repoPath, cfg)
 
 suite "integration orchestrator merge queue":
+  setup:
+    tickSleepOverrideMs = 0
+
+  teardown:
+    tickSleepOverrideMs = -1
+
   test "IT-02 queue success moves ticket to done and merges ticket commit to master":
     withInitializedTempRepo("scriptorium_integration_it02_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
@@ -294,17 +165,8 @@ suite "integration orchestrator merge queue":
 
       let assignment = assignOldestOpenTicket(repoPath)
       discard enqueueMergeRequest(repoPath, assignment, "recover me")
-      moveTicketStateInPlan(
-        repoPath,
-        assignment.inProgressTicket,
-        "tickets/done/0001-first.md",
-        "integration-partial-done-transition",
-      )
-      writeActiveQueueInPlan(
-        repoPath,
-        "queue/merge/pending/0001-0001.md\n",
-        "integration-partial-active-state",
-      )
+      moveTicketStateInPlan(repoPath, "in-progress", "done", "0001-first.md")
+      writeActiveQueueInPlan(repoPath, "queue/merge/pending/0001-0001.md\n")
 
       let firstProcessed = processMergeQueue(repoPath, noopRunner)
       let secondProcessed = processMergeQueue(repoPath, noopRunner)
@@ -324,7 +186,7 @@ suite "integration orchestrator merge queue":
   test "IT-09 red master blocks assignment of open tickets":
     withInitializedTempRepo("scriptorium_integration_it09_", proc(repoPath: string) =
       addFailingMakefile(repoPath)
-      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       writeOrchestratorEndpointConfig(repoPath, 1)
 
@@ -338,7 +200,7 @@ suite "integration orchestrator merge queue":
   test "IT-10 global halt while red resumes after master health is restored":
     withInitializedTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
-      writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n", "integration-write-spec")
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
       let assignment = assignOldestOpenTicket(repoPath)
@@ -368,7 +230,7 @@ suite "integration orchestrator merge queue":
   test "IT-11 integration-test failure on master blocks assignment of open tickets":
     withInitializedTempRepo("scriptorium_integration_it11_", proc(repoPath: string) =
       addIntegrationFailingMakefile(repoPath)
-      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
+      writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       writeOrchestratorEndpointConfig(repoPath, 3)
 

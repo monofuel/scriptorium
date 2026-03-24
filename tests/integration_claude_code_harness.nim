@@ -24,7 +24,7 @@ proc mcpPort(offset: int): int =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = resolveModel(getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel))
+  result = getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel)
 
 proc hasClaudeAuth(): bool =
   ## Return true when Claude Code OAuth or an Anthropic API key is available.

@@ -6,7 +6,7 @@ import
   scriptorium/[config, harness_typoi, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "claude-opus-4-6"
+  DefaultIntegrationModel = "gpt-5.4"
   LiveMcpBasePort = 22300
 
 type
@@ -24,13 +24,17 @@ proc mcpPort(offset: int): int =
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
-  result = resolveModel(getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel))
+  result = getEnv("SCRIPTORIUM_TEST_MODEL", DefaultIntegrationModel)
 
-proc hasTypoiAuth(): bool =
-  ## Return true when API keys are available for typoi.
-  let hasOpenAiKey = getEnv("OPENAI_API_KEY", "").len > 0
-  let hasAnthropicKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
-  result = hasOpenAiKey or hasAnthropicKey
+proc requireTypoiAuth() =
+  ## Raise when the API key matching the selected model is missing.
+  let model = integrationModel()
+  if model.startsWith("claude-"):
+    if getEnv("ANTHROPIC_API_KEY", "").len == 0:
+      raise newException(ValueError, "Missing required API key env var: ANTHROPIC_API_KEY")
+  else:
+    if getEnv("OPENAI_API_KEY", "").len == 0:
+      raise newException(ValueError, "Missing required API key env var: OPENAI_API_KEY")
 
 suite "integration typoi harness":
   test "real typoi one-shot smoke test":
@@ -39,9 +43,8 @@ suite "integration typoi harness":
       skip()
     elif findExe("typoi").len == 0:
       skip()
-    elif not hasTypoiAuth():
-      skip()
     else:
+      requireTypoiAuth()
       let tmpDir = createTempDir("scriptorium_integration_typoi_", "", getTempDir())
       defer:
         removeDir(tmpDir)
@@ -85,9 +88,8 @@ suite "integration typoi harness":
       skip()
     elif findExe("typoi").len == 0:
       skip()
-    elif not hasTypoiAuth():
-      skip()
     else:
+      requireTypoiAuth()
       discard consumeSubmitPrSummary()
       let port = mcpPort(1)
       let endpoint = &"http://127.0.0.1:{port}"

@@ -489,7 +489,7 @@ suite "orchestrator architect areas":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "run"
-    check capturedRequest.model == resolveModel("claude-opus-4-6")
+    check capturedRequest.model == "claude-opus-4-6"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect" / "areas"
     check tmp in capturedRequest.prompt

@@ -30,7 +30,6 @@ proc integrationModel(): string =
   result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
   if result.len == 0:
     result = getEnv("CODEX_INTEGRATION_MODEL", "gpt-5.4")
-  result = resolveModel(result)
 
 proc integrationHarness(): Harness =
   ## Return the test harness from env, or infer from model.
