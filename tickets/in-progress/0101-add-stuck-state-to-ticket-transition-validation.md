@@ -192,3 +192,29 @@ Done. Changes:
 ```text
 nes 76-77) and added `PlanTicketsStuckDir` to the `git diff` pathspec in `transitionCountInCommit()` (line 103).\n- **`tests/test_ticket_assignment.nim`**: Added `ticket_assignment` import and \"stuck state transition validation\" suite with a test that moves a ticket from in-progress to stuck with `MergeQueueStuckCommitPrefix` and verifies `validateTransitionCommitInvariant()` passes.","stop_reason":"end_turn","session_id":"a235b684-8fa4-47d7-80be-f449e6b6fa19","total_cost_usd":0.7231769999999998,"usage":{"input_tokens":14243,"cache_creation_input_tokens":43810,"cache_read_input_tokens":519699,"output_tokens":4732,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":43810},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":14243,"outputTokens":4732,"cacheReadInputTokens":519699,"cacheCreationInputTokens":43810,"webSearchRequests":0,"costUSD":0.7231769999999998,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"1d55d184-8883-4183-a02c-5e541335f2aa"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 42s
+
+**Review Reasoning:** Let me read the relevant source files to verify the changes in context.
+Let me also check the test file imports and verify `runCmdOrDie` and other helpers exist.
+The changes look correct. Let me verify the commit message prefix used in the test matches what `isOrchestratorTransitionSubject` expects.
+The test uses `"scriptorium: park stuck ticket 0001"` which matches `MergeQueueStuckCommitPrefix & " " & ticketId` — correct.
+
+Now let me verify `PlanTicketsStuckDir` is defined properly.
+Everything checks out. The review:
+
+1. **Ticket requirements**: All three items met — `ticketStateFromPath()` has the new branch, `transitionCountInCommit()` includes `PlanTicketsStuckDir`, and the unit test exercises the stuck-parking path.
+
+2. **Conventions**: Import block follows bracket syntax with correct ordering. No new procs added so no missing doc comments. Variables use `let` (camelCase). No try/catch, no boolean error returns.
+
+3. **Spec compliance**: The spec lists `tickets/stuck/` as an implicit state (used by merge queue stuck-parking in §10). The changes align with this.
+
+4. **Code quality**: No dead code, no unused imports, no unrelated changes. The `ticket_assignment` import added to the test file is necessary for `validateTransitionCommitInvariant`.
+
+5. **Note on line 107**: Uses `fmt` instead of `&` for the format string — but this is pre-existing code, not introduced by this PR.
+Approved. Both source changes follow the existing patterns exactly, and the test properly exercises the stuck-parking transition through `validateTransitionCommitInvariant()`.
