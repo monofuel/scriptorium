@@ -102,3 +102,8 @@ Merge with strategy ort failed.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 34m27s.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 13
+- reasoning: Two small pattern-matched additions in a single source file plus a unit test following existing conventions; the merge conflict from master is minor but adds a couple minutes of resolution overhead.
