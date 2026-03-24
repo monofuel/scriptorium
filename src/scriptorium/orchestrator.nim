@@ -11,6 +11,10 @@ const
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
 
+var tickSleepOverrideMs*: int = -1
+  ## When >= 0, overrides both idle and active sleep durations in the tick loop.
+  ## Set to 0 in tests to eliminate wall-clock sleep.
+
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
   logInfo(&"shutdown: signal {signalNumber} received")
@@ -341,7 +345,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
     except CatchableError as e:
       logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop
-    if idle:
+    if tickSleepOverrideMs >= 0:
+      sleep(tickSleepOverrideMs)
+    elif idle:
       sleep(IdleBackoffSleepMs)
     else:
       sleep(IdleSleepMs)
