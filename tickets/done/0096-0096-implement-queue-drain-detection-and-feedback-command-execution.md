@@ -94,3 +94,38 @@ Let me check the `strutils` import in tests — it's used for `strip()`. Good.
 
 One minor note: `strutils` is imported in the test file but not in the source — that's fine since it's only used in tests for `strip()`.
 **Approved.** Clean implementation that matches all ticket requirements and project conventions. Both procs are correct, imports are minimal and used, error handling follows the project pattern (raise on failure, no boolean returns), and all 6 required test cases are present.
+
+## Merge Queue Success
+- Summary: Add src/scriptorium/loop_system.nim with isQueueDrained (checks tickets/open, tickets/in-progress, queue/merge/pending are empty) and runFeedbackCommand (runs shell command via runCommandCapture with 300s timeout). Unit tests cover all cases.\n
+### Quality Check Output
+```text
+51Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:01:51Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:01:51Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:01:51Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:16Z] [INFO] session summary: uptime=1m27s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:16Z] [INFO] session summary: avg_ticket_wall=31s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:16Z] [INFO] orchestrator PID guard acquired (PID 157941)
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:16Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:16Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:46Z] [INFO] session summary: uptime=30s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-24T01:02:46Z] [INFO] session summary: avg_ticket_wall=31s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+[tests/integration_orchestrator_queue.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_4751816AEF27679562EE5DF1E5DF5FEB63917C8F'
+```
+
+## Metrics
+- wall_time_seconds: 807
+- coding_wall_seconds: 68
+- test_wall_seconds: 565
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 100074
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 13m27s.
