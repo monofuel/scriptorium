@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0098",
+  "timestamp": "2026-03-24T04:09:57Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0098.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0098-0098-build-architect-loop-prompt-and-invoke-architect-for-feedback-cycle.md\n**Ticket ID:** 0098\n**Branch:** scriptorium/ticket-0098\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0098-build-architect-loop-prompt-and-invoke-architect-for-feedback-cycle\n**Summary:** Add buildArchitectLoopPrompt to prompt_builders.nim and runArchitectLoopIteration to loop_system.nim. The prompt builder assembles goal, iteration log, feedback output, iteration number, and architect instructions. The iteration runner loads config, opens locked plan worktree, invokes architect via runPlanArchitectRequest with write prefix allowlist, handles fallback iteration log entry when architect doesn't write one, commits iteration log, and updates spec hash marker if spec changed. Unit tests verify prompt contents and mock runner integration.\n",
+      "contentHash": "7A8CB3B4095139BCE667139334D922825353C62C"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0098"
+}
