@@ -15,6 +15,10 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `logLevel`
   - `concurrency.maxAgents` (integer, default 4)
   - `concurrency.tokenBudgetMB` (integer, optional)
+  - `loop.enabled` (boolean, default false)
+  - `loop.goal` (string — free-text objective the architect reads every iteration)
+  - `loop.feedback` (string — shell command whose stdout becomes context for the next iteration)
+  - `loop.maxIterations` (integer, 0 means infinite)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.
 - Repository test commands:
   - `make test` runs `tests/test_*.nim`.
@@ -31,3 +35,4 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
 - Section 11: Parallel Ticket Assignment And Concurrency (concurrency config).
 - Section 12: Resource Management (token budget config).
 - Section 19: Audit Agent (audit role config).
+- Section 22: Loop System (loop config keys).

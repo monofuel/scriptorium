@@ -10,6 +10,7 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
   - `tickets/open/*.md`, `tickets/in-progress/*.md`, `tickets/done/*.md`
   - `queue/merge/pending/*.md`, `queue/merge/active.md`
   - `health/cache.json`
+  - `iteration_log.md` (created lazily when loop mode runs its first iteration)
 - `queue/merge/` created lazily by orchestrator, not by `--init`.
 - Ticket state: exactly one state directory at a time, transitions via single orchestrator commits.
 - Ticket IDs: monotonic, zero-padded filenames.
@@ -30,3 +31,4 @@ Covers the plan branch file layout, ticket lifecycle, and managed worktree paths
 - Section 4: Planning Artifacts And State Model.
 - Section 3: Orchestrator Run Loop (`health/cache.json` layout).
 - Section 11: Parallel Ticket Assignment And Concurrency (detail in parallel-execution area).
+- Section 22: Loop System (iteration_log.md in plan branch layout).

@@ -23,7 +23,8 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
   5. For each area needing tickets, if slots available, start a manager agent (managers exempt from staggered start limit).
   6. For each assignable ticket, if slots available, start a coding agent (at most 1 new coding agent per tick — staggered start rule).
   7. Process at most one merge-queue item.
-  8. Sleep.
+  8. Detect queue drain and run loop feedback cycle (detail in loop-system area).
+  9. Sleep.
 - Managers prioritized over coders when slots are scarce, since manager completions unblock future coding work.
 - Managers and coders interleaved across ticks — no barrier between phases. If a manager finishes and produces tickets while another manager is running, those tickets can be assigned to coding agents on the next tick.
 - When `maxAgents` is 1, behavior collapses to sequential execution as before.
@@ -44,3 +45,4 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - Section 14: Observability And Metrics (tick summary, session summary; detail in observability area).
 - Section 17: Plan Branch Locking (detail in parallel-execution area).
 - Section 11: Parallel Ticket Assignment And Concurrency (detail in parallel-execution area).
+- Section 22: Loop System (tick step 8, queue drain detection; detail in loop-system area).
