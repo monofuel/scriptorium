@@ -11,21 +11,56 @@ export agent_runner, config, init, lock_management, orchestrator, ticket_metadat
 
 const
   OrchestratorTestBasePort* = 19000
+  GitUserConfig = "\n[user]\n\temail = test@test.com\n\tname = Test\n"
 
 type
   StreamMessageJson* = object
     `type`*: string
     text*: string
 
+var
+  basicTemplateRepo: string
+  initializedTemplateRepo: string
+
+proc configTestUser(path: string) =
+  ## Set test git user by appending to .git/config directly (no subprocess).
+  let configPath = path / ".git" / "config"
+  let existing = readFile(configPath)
+  writeFile(configPath, existing & GitUserConfig)
+
+proc getBasicTemplate(): string =
+  ## Lazily create a template repo with one empty commit.
+  if basicTemplateRepo.len == 0:
+    basicTemplateRepo = createTempDir("tpl_basic_", "", getTempDir())
+    discard execCmdEx("git -C " & basicTemplateRepo & " init")
+    discard execCmdEx("git -C " & basicTemplateRepo & " config user.email test@test.com")
+    discard execCmdEx("git -C " & basicTemplateRepo & " config user.name Test")
+    discard execCmdEx("git -C " & basicTemplateRepo & " commit --allow-empty -m initial")
+  result = basicTemplateRepo
+
+proc getInitializedTemplate(): string =
+  ## Lazily create a template repo with runInit already completed.
+  if initializedTemplateRepo.len == 0:
+    initializedTemplateRepo = createTempDir("tpl_init_", "", getTempDir())
+    let tpl = getBasicTemplate()
+    copyDir(tpl, initializedTemplateRepo)
+    configTestUser(initializedTemplateRepo)
+    runInit(initializedTemplateRepo, quiet = true)
+  result = initializedTemplateRepo
+
 proc makeTestRepo*(path: string) =
-  ## Create a minimal git repository at path suitable for testing.
+  ## Create a minimal git repository by copying from a shared template.
   if dirExists(path):
     removeDir(path)
-  createDir(path)
-  discard execCmdEx("git -C " & path & " init")
-  discard execCmdEx("git -C " & path & " config user.email test@test.com")
-  discard execCmdEx("git -C " & path & " config user.name Test")
-  discard execCmdEx("git -C " & path & " commit --allow-empty -m initial")
+  copyDir(getBasicTemplate(), path)
+  configTestUser(path)
+
+proc makeInitializedTestRepo*(path: string) =
+  ## Create a test repo with runInit already done (plan branch, config, etc).
+  if dirExists(path):
+    removeDir(path)
+  copyDir(getInitializedTemplate(), path)
+  configTestUser(path)
 
 proc runCmdOrDie*(cmd: string) =
   ## Run a shell command and fail the test immediately if it exits non-zero.
@@ -175,6 +210,14 @@ proc withTempRepo*(prefix: string, action: proc(repoPath: string)) =
   defer:
     removeDir(repoPath)
   makeTestRepo(repoPath)
+  action(repoPath)
+
+proc withInitializedTempRepo*(prefix: string, action: proc(repoPath: string)) =
+  ## Create a temporary initialized git repository and clean up afterwards.
+  let repoPath = createTempDir(prefix, "", getTempDir())
+  defer:
+    removeDir(repoPath)
+  makeInitializedTestRepo(repoPath)
   action(repoPath)
 
 proc pendingQueueFiles*(repoPath: string): seq[string] =

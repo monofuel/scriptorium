@@ -9,9 +9,8 @@ import
 suite "orchestrator ticket assignment":
   test "oldest open ticket picks the lowest numeric ID":
     let tmp = getTempDir() / "scriptorium_test_oldest_open_ticket"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -20,9 +19,8 @@ suite "orchestrator ticket assignment":
 
   test "assign moves ticket to in-progress in one commit":
     let tmp = getTempDir() / "scriptorium_test_assign_transition"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let before = planCommitCount(tmp)
@@ -38,9 +36,8 @@ suite "orchestrator ticket assignment":
 
   test "assign creates worktree and writes worktree metadata":
     let tmp = getTempDir() / "scriptorium_test_assign_worktree"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -59,9 +56,8 @@ suite "orchestrator ticket assignment":
 
   test "cleanup removes stale ticket worktrees":
     let tmp = getTempDir() / "scriptorium_test_cleanup_worktree"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -74,9 +70,8 @@ suite "orchestrator ticket assignment":
 suite "parallel ticket assignment":
   test "two tickets with different areas are both assigned when maxAgents >= 2":
     let tmp = getTempDir() / "scriptorium_test_parallel_diff_areas"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
 
@@ -93,9 +88,8 @@ suite "parallel ticket assignment":
 
   test "two tickets with same area: only the oldest is assigned":
     let tmp = getTempDir() / "scriptorium_test_parallel_same_area"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** shared\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** shared\n")
 
@@ -106,9 +100,8 @@ suite "parallel ticket assignment":
 
   test "assignment respects maxAgents cap":
     let tmp = getTempDir() / "scriptorium_test_parallel_cap"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
     addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-c\n")
@@ -120,9 +113,8 @@ suite "parallel ticket assignment":
 
   test "maxAgents = 1 assigns only one ticket":
     let tmp = getTempDir() / "scriptorium_test_parallel_single"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
 
@@ -134,9 +126,8 @@ suite "parallel ticket assignment":
 
   test "assignOpenTickets skips area already in-progress":
     let tmp = getTempDir() / "scriptorium_test_parallel_skip_inprogress"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "in-progress", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-b\n")
@@ -147,9 +138,8 @@ suite "parallel ticket assignment":
 
   test "assignOpenTickets returns empty when no open tickets":
     let tmp = getTempDir() / "scriptorium_test_parallel_empty"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let assignments = assignOpenTickets(tmp, 3)
     check assignments.len == 0
@@ -178,9 +168,8 @@ suite "ticket dependency parsing":
 suite "ticket dependency assignment":
   test "assignOldestOpenTicket skips ticket with unsatisfied dependency":
     let tmp = getTempDir() / "scriptorium_test_dep_unsatisfied"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -188,9 +177,8 @@ suite "ticket dependency assignment":
 
   test "assignOldestOpenTicket assigns ticket with satisfied dependency":
     let tmp = getTempDir() / "scriptorium_test_dep_satisfied"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n**Depends:** 0001\n")
 
@@ -199,9 +187,8 @@ suite "ticket dependency assignment":
 
   test "assignOldestOpenTicket skips blocked ticket and assigns next":
     let tmp = getTempDir() / "scriptorium_test_dep_skip_blocked"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
@@ -210,9 +197,8 @@ suite "ticket dependency assignment":
 
   test "assignOpenTickets skips ticket with unsatisfied dependency":
     let tmp = getTempDir() / "scriptorium_test_dep_parallel_skip"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 9999\n")
 
@@ -222,9 +208,8 @@ suite "ticket dependency assignment":
 
   test "assignOpenTickets assigns ticket after dependency is done":
     let tmp = getTempDir() / "scriptorium_test_dep_parallel_done"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 0001\n")
 
@@ -235,9 +220,8 @@ suite "ticket dependency assignment":
 suite "status dependency visibility":
   test "readOrchestratorStatus auto-repairs cycle and reports waiting deps":
     let tmp = getTempDir() / "scriptorium_test_status_cycle_repaired"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0010-alpha.md", "# Alpha\n\n**Area:** a\n**Depends:** 0011\n")
     addTicketToPlan(tmp, "open", "0011-beta.md", "# Beta\n\n**Area:** b\n**Depends:** 0010\n")
 
@@ -251,9 +235,8 @@ suite "status dependency visibility":
 
   test "readOrchestratorStatus reports tickets with unsatisfied deps as waiting":
     let tmp = getTempDir() / "scriptorium_test_status_waiting"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0020-first.md", "# First\n\n**Area:** a\n**Depends:** 9999\n")
 
     let status = readOrchestratorStatus(tmp)
@@ -263,9 +246,8 @@ suite "status dependency visibility":
 
   test "readOrchestratorStatus does not report tickets with satisfied deps":
     let tmp = getTempDir() / "scriptorium_test_status_satisfied"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "done", "0030-prereq.md", "# Prereq\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0031-next.md", "# Next\n\n**Area:** b\n**Depends:** 0030\n")
 
@@ -275,9 +257,8 @@ suite "status dependency visibility":
 
   test "readOrchestratorStatus does not report tickets without dependencies":
     let tmp = getTempDir() / "scriptorium_test_status_no_deps"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0040-plain.md", "# Plain\n\n**Area:** a\n")
 
     let status = readOrchestratorStatus(tmp)
@@ -286,9 +267,8 @@ suite "status dependency visibility":
 
   test "readOrchestratorStatus auto-repairs three-node cycle":
     let tmp = getTempDir() / "scriptorium_test_status_cycle_three"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0050-a.md", "# A\n\n**Area:** a\n**Depends:** 0051\n")
     addTicketToPlan(tmp, "open", "0051-b.md", "# B\n\n**Area:** b\n**Depends:** 0052\n")
     addTicketToPlan(tmp, "open", "0052-c.md", "# C\n\n**Area:** c\n**Depends:** 0050\n")

@@ -1,36 +1,42 @@
-# Unit test timing
+# Test timing
 
 Measured with warm Nim compilation cache on host (16 cores, 54GB RAM).
+Execution time only (excludes compilation).
 
-| Test | Time | Notes |
-|------|------|-------|
-| test_agent_pool.nim | 0.33s | |
-| test_agent_runner.nim | 0.35s | |
-| test_continuation_builder.nim | 0.33s | |
-| test_cycle_detection.nim | 0.33s | |
-| test_harness_claude_code.nim | 1.05s | |
-| test_harness_codex.nim | 1.23s | |
-| test_harness_typoi.nim | 1.20s | |
-| test_journal.nim | 0.55s | |
-| test_lock_management.nim | 0.33s | |
-| **test_logging.nim** | **4.4s** | Slow |
-| test_loop_system.nim | 0.34s | |
-| test_manager_agent.nim | 0.33s | |
-| **test_merge_queue.nim** | **24.0s** | Very slow |
-| test_metrics.nim | 0.66s | |
-| **test_orchestrator_flow.nim** | **30.0+s** | Very slow (hit 30s timeout) |
-| test_orchestrator_planning.nim | 2.46s | |
-| test_prior_work.nim | 0.47s | |
-| test_prompt_catalog.nim | 0.33s | |
-| test_recovery.nim | 1.75s | |
-| test_review.nim | 1.46s | |
-| test_scriptorium.nim | 0.70s | |
-| **test_ticket_assignment.nim** | **3.8s** | Slow |
-| test_worktree_health.nim | 0.50s | |
+## Unit tests (`make test`)
 
-## Summary
+Total: ~1.4s wall time (11 files, all run in parallel).
 
-- 19 of 23 tests run in under 2.5 seconds.
-- `test_merge_queue.nim` and `test_orchestrator_flow.nim` account for nearly all the wall time.
-- These two tests block `make test` completion even though everything else finishes quickly.
-- In the container with cold compilation cache, total wall time is much worse — coding agents running `make test` get killed before it finishes.
+All unit tests run in under 1.3s individually. No git repos, no subprocesses.
+
+## Integration tests (`make integration-test`)
+
+| Test | Before | After | Notes |
+|------|--------|-------|-------|
+| integration_merge_queue.nim | 24.0s | 17.9s | Template repos + tmpfs |
+| integration_orchestrator_flow.nim | 30.0+s | 30.0+s | Dominated by 30s idle sleep per tick |
+| integration_ticket_assignment.nim | 3.8s | 1.9s | |
+| integration_logging.nim | 4.4s | 3.1s | |
+| integration_orchestrator_planning.nim | 2.5s | ~2s | |
+| integration_recovery.nim | 1.75s | 1.4s | |
+| integration_review.nim | 1.46s | 0.9s | |
+| integration_scriptorium.nim | 0.70s | 0.34s | |
+| integration_worktree_health.nim | 0.50s | ~0.3s | |
+| integration_prior_work.nim | 0.47s | ~0.3s | |
+| integration_journal.nim | 0.55s | ~0.3s | |
+| integration_metrics.nim | 0.66s | ~0.4s | |
+
+## Optimizations applied
+
+- **Template repos**: `makeTestRepo` copies from a pre-initialized template
+  instead of running `git init` + config + commit each time.
+- **`makeInitializedTestRepo`**: Copies from a template with `runInit` already
+  done (plan branch, AGENTS.md, Makefile, etc.), eliminating ~12 git spawns/test.
+- **tmpfs**: `TMPDIR=/dev/shm` for integration tests (zero disk I/O).
+- **Inline git config**: Write `.git/config` directly instead of `git config`.
+
+## Remaining bottleneck
+
+`integration_orchestrator_flow.nim` is dominated by `IdleBackoffSleepMs = 30_000`
+(30s sleep between idle orchestrator ticks). Tests with multiple ticks that go
+idle accumulate 30s+ of wall-clock sleep. This is architectural, not I/O-bound.

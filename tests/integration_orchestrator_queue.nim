@@ -36,6 +36,15 @@ proc withTempRepo(prefix: string, action: proc(repoPath: string)) =
   makeTestRepo(repoPath)
   action(repoPath)
 
+proc withInitializedTempRepo(prefix: string, action: proc(repoPath: string)) =
+  ## Create a temporary initialized git repository and clean up afterwards.
+  let repoPath = createTempDir(prefix, "", getTempDir())
+  defer:
+    removeDir(repoPath)
+  makeTestRepo(repoPath)
+  runInit(repoPath, quiet = true)
+  action(repoPath)
+
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
   ## Open scriptorium/plan in a temporary worktree for direct fixture mutations.
   let planPath = createTempDir("scriptorium_integration_plan_" & suffix & "_", "", getTempDir())
@@ -144,8 +153,7 @@ proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
 
 suite "integration orchestrator merge queue":
   test "IT-02 queue success moves ticket to done and merges ticket commit to master":
-    withTempRepo("scriptorium_integration_it02_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it02_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -177,8 +185,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-03 queue failure reopens ticket and appends failure note":
-    withTempRepo("scriptorium_integration_it03_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it03_", proc(repoPath: string) =
       addFailingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -200,8 +207,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-03b queue failure when integration-test fails reopens ticket":
-    withTempRepo("scriptorium_integration_it03b_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it03b_", proc(repoPath: string) =
       addIntegrationFailingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -224,8 +230,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-04 single-flight queue processing keeps second item pending":
-    withTempRepo("scriptorium_integration_it04_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it04_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
@@ -248,8 +253,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-05 merge conflict during merge master into ticket reopens ticket":
-    withTempRepo("scriptorium_integration_it05_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it05_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
 
       writeFile(repoPath / "conflict.txt", "line=base\n")
@@ -284,8 +288,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-08 recovery after partial queue transition converges without duplicate moves":
-    withTempRepo("scriptorium_integration_it08_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it08_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -319,8 +322,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-09 red master blocks assignment of open tickets":
-    withTempRepo("scriptorium_integration_it09_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it09_", proc(repoPath: string) =
       addFailingMakefile(repoPath)
       writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
@@ -334,8 +336,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-10 global halt while red resumes after master health is restored":
-    withTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
@@ -365,8 +366,7 @@ suite "integration orchestrator merge queue":
     )
 
   test "IT-11 integration-test failure on master blocks assignment of open tickets":
-    withTempRepo("scriptorium_integration_it11_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_integration_it11_", proc(repoPath: string) =
       addIntegrationFailingMakefile(repoPath)
       writeSpecInPlan(repoPath, "# Spec\n\nNeed assignment.\n", "integration-write-spec")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")

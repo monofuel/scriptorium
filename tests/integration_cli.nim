@@ -25,6 +25,11 @@ proc makeTestRepo(path: string) =
   discard execCmdEx("git -C " & path & " config user.name Test")
   discard execCmdEx("git -C " & path & " commit --allow-empty -m initial")
 
+proc makeInitializedTestRepo(path: string) =
+  ## Create a test repo with runInit already done (plan branch, config, etc).
+  makeTestRepo(path)
+  runInit(path, quiet = true)
+
 proc runCmdOrDie(cmd: string) =
   ## Run a shell command and fail the test immediately if it exits non-zero.
   let (_, rc) = execCmdEx(cmd)
@@ -68,9 +73,8 @@ proc addTicketToPlan(repoPath: string, state: string, fileName: string, content:
 suite "scriptorium CLI":
   test "status command prints ticket counts and active agent snapshot":
     let tmp = getTempDir() / "scriptorium_test_cli_status"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(
       tmp,
@@ -93,9 +97,8 @@ suite "scriptorium CLI":
 
   test "worktrees command lists active ticket worktrees":
     let tmp = getTempDir() / "scriptorium_test_cli_worktrees"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(
       tmp,
       "in-progress",
@@ -120,9 +123,8 @@ suite "scriptorium CLI":
 
   test "init creates AGENTS.md from template when missing":
     let tmp = getTempDir() / "scriptorium_test_cli_agents_create"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let agentsPath = tmp / "AGENTS.md"
     check fileExists(agentsPath)
@@ -130,9 +132,8 @@ suite "scriptorium CLI":
 
   test "init creates Makefile with placeholder targets when missing":
     let tmp = getTempDir() / "scriptorium_test_cli_makefile_create"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let makefilePath = tmp / "Makefile"
     check fileExists(makefilePath)
@@ -174,9 +175,8 @@ suite "scriptorium CLI":
 
   test "init creates tests/config.nims when missing":
     let tmp = getTempDir() / "scriptorium_test_cli_test_config_create"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let testConfigPath = tmp / "tests" / "config.nims"
     check fileExists(testConfigPath)
@@ -199,9 +199,8 @@ suite "scriptorium CLI":
 
   test "init creates scriptorium.json with default config when missing":
     let tmp = getTempDir() / "scriptorium_test_cli_config_create"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let configPath = tmp / "scriptorium.json"
     check fileExists(configPath)
@@ -247,9 +246,8 @@ suite "scriptorium CLI":
 
   test "init spec.md references AGENTS.md":
     let tmp = getTempDir() / "scriptorium_test_cli_spec_ref"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var specContent = ""
     withPlanWorktree(tmp, "spec_ref", proc(planPath: string) =
@@ -320,9 +318,8 @@ suite "scriptorium CLI":
 
   test "syncAgentsMd restores modified AGENTS.md to template":
     let tmp = getTempDir() / "scriptorium_test_cli_sync_restore"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     # Modify AGENTS.md to differ from template.
     writeFile(tmp / "AGENTS.md", "# Custom content\n")
@@ -335,9 +332,8 @@ suite "scriptorium CLI":
 
   test "syncAgentsMd is a no-op when AGENTS.md matches template":
     let tmp = getTempDir() / "scriptorium_test_cli_sync_noop"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     # Capture HEAD before sync.
     let (headBefore, _) = execCmdEx("git -C " & tmp & " rev-parse HEAD")
@@ -348,9 +344,8 @@ suite "scriptorium CLI":
 
   test "syncAgentsMd respects syncAgentsMd false in config":
     let tmp = getTempDir() / "scriptorium_test_cli_sync_disabled"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     # Write config with syncAgentsMd: false.
     var cfg = defaultConfig()

@@ -13,9 +13,8 @@ suite "orchestrator final v1 flow":
 
   test "blank spec tick skips orchestration and does not invoke agents":
     let tmp = getTempDir() / "scriptorium_test_v1_36_blank_spec_guard"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeOrchestratorEndpointConfig(tmp, 21)
 
@@ -39,9 +38,8 @@ suite "orchestrator final v1 flow":
 
   test "no-spec WAITING message logs INFO once then DEBUG on subsequent ticks":
     let tmp = getTempDir() / "scriptorium_test_spec_waiting_dedup"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeOrchestratorEndpointConfig(tmp, 23)
 
@@ -74,9 +72,8 @@ suite "orchestrator final v1 flow":
 
   test "integration-test failure on master blocks assignment of open tickets":
     let tmp = getTempDir() / "scriptorium_test_master_red_integration"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addIntegrationFailingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nNeed assignment.\n")
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
@@ -89,9 +86,8 @@ suite "orchestrator final v1 flow":
 
   test "runArchitectAreas commits files written by mocked architect runner":
     let tmp = getTempDir() / "scriptorium_test_v1_37_run_architect_areas"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nBuild area files.\n")
     var writtenCfg = defaultConfig()
     writtenCfg.agents.architect.reasoningEffort = "high"
@@ -133,9 +129,8 @@ suite "orchestrator final v1 flow":
 
   test "done tickets suppress areas from areasNeedingTickets":
     let tmp = getTempDir() / "scriptorium_test_done_ticket_suppression"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
     addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
@@ -146,9 +141,8 @@ suite "orchestrator final v1 flow":
 
   test "done ticket with unchanged area hash suppresses area":
     let tmp = getTempDir() / "scriptorium_test_done_unchanged_hash"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
     addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
@@ -163,9 +157,8 @@ suite "orchestrator final v1 flow":
 
   test "done ticket with changed area content triggers new tickets":
     let tmp = getTempDir() / "scriptorium_test_done_changed_hash"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-done-area.md", "# Area 01 v2\n")  # content differs from stored hash
     addAreaToPlan(tmp, "02-unchanged.md", "# Area 02\n")
     addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
@@ -181,9 +174,8 @@ suite "orchestrator final v1 flow":
 
   test "open ticket blocks area even when content changed":
     let tmp = getTempDir() / "scriptorium_test_open_blocks_changed"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-active.md", "# Area 01 v2\n")
     addTicketToPlan(tmp, "open", "0001-active-ticket.md", "# Ticket\n\n**Area:** 01-active\n")
     var hashes = initTable[string, string]()
@@ -195,9 +187,8 @@ suite "orchestrator final v1 flow":
 
   test "architect creates spec hash marker on first run":
     let tmp = getTempDir() / "scriptorium_test_arch_spec_hash_first_run"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     writeSpecInPlan(tmp, "# Spec\n\nBuild a CLI tool.\n")
 
     proc generator(model: string, spec: string): seq[AreaDocument] =
@@ -213,9 +204,8 @@ suite "orchestrator final v1 flow":
 
   test "architect skips when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_arch_skip_unchanged"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     let specContent = "# Spec\n\nBuild a CLI tool.\n"
     writeSpecInPlan(tmp, specContent)
     addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
@@ -232,9 +222,8 @@ suite "orchestrator final v1 flow":
 
   test "architect re-runs when spec changes":
     let tmp = getTempDir() / "scriptorium_test_arch_rerun_spec_changed"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     let oldSpec = "# Spec\n\nBuild a CLI tool.\n"
     writeSpecInPlan(tmp, "# Spec\n\nBuild a CLI tool with logging.\n")  # new content
     addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
@@ -257,9 +246,8 @@ suite "orchestrator final v1 flow":
 
   test "migration writes spec hash marker for existing areas without re-running":
     let tmp = getTempDir() / "scriptorium_test_arch_migration"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     let specContent = "# Spec\n\nExisting project.\n"
     writeSpecInPlan(tmp, specContent)
     addAreaToPlan(tmp, "01-cli.md", "# CLI Area\n")
@@ -281,9 +269,8 @@ suite "orchestrator final v1 flow":
 
   test "runOrchestratorForTicks drives spec to done in one bounded tick with mocked runners":
     let tmp = getTempDir() / "scriptorium_test_v1_39_full_cycle_tick"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nDeliver one full-flow ticket.\n")
     writeOrchestratorEndpointConfig(tmp, 22)
@@ -390,9 +377,8 @@ suite "interactive planning":
 
   test "turn commits when spec changes":
     let tmp = getTempDir() / "scriptorium_test_interactive_commit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     var capturedWorkingDir = ""
@@ -439,9 +425,8 @@ suite "interactive planning":
 
   test "multi-turn plan session includes history and sequential commits":
     let tmp = getTempDir() / "scriptorium_test_interactive_multiturn"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     var capturedPrompts: seq[string] = @[]
@@ -484,9 +469,8 @@ suite "interactive planning":
 
   test "turn makes no commit when spec unchanged":
     let tmp = getTempDir() / "scriptorium_test_interactive_no_commit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Return a result without modifying spec.md.
@@ -516,9 +500,8 @@ suite "interactive planning":
 
   test "/show, /help, /quit do not invoke runner":
     let tmp = getTempDir() / "scriptorium_test_interactive_commands"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -549,9 +532,8 @@ suite "interactive planning":
 
   test "/exit exits session without invoking runner":
     let tmp = getTempDir() / "scriptorium_test_interactive_exit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -581,9 +563,8 @@ suite "interactive planning":
 
   test "unknown slash commands rejected without invoking runner":
     let tmp = getTempDir() / "scriptorium_test_interactive_unknown_cmd"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -617,9 +598,8 @@ suite "interactive planning":
 
   test "turn rejects writes outside spec.md":
     let tmp = getTempDir() / "scriptorium_test_interactive_out_of_scope"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Write one out-of-scope file in the plan worktree.
@@ -653,9 +633,8 @@ suite "interactive planning":
 
   test "interrupt-style input exits session cleanly":
     let tmp = getTempDir() / "scriptorium_test_interactive_interrupt"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var runnerCalls = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -688,9 +667,8 @@ suite "interactive planning":
 suite "interactive ask session":
   test "ask prompt includes read-only instruction and spec":
     let tmp = getTempDir() / "scriptorium_test_ask_prompt"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let prompt = buildInteractiveAskPrompt(tmp, tmp, "# My Spec\n", @[], "what is this?")
     check "read-only" in prompt.toLowerAscii()
@@ -701,9 +679,8 @@ suite "interactive ask session":
 
   test "ask prompt includes conversation history":
     let tmp = getTempDir() / "scriptorium_test_ask_history"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let history = @[
       PlanTurn(role: "engineer", text: "hello"),
@@ -716,9 +693,8 @@ suite "interactive ask session":
 
   test "ask session invokes runner and records history":
     let tmp = getTempDir() / "scriptorium_test_ask_session"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     var capturedPrompt = ""
@@ -751,9 +727,8 @@ suite "interactive ask session":
 
   test "ask session makes no commits":
     let tmp = getTempDir() / "scriptorium_test_ask_no_commit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Return a response without modifying any files.
@@ -782,9 +757,8 @@ suite "interactive ask session":
 
   test "ask session rejects writes":
     let tmp = getTempDir() / "scriptorium_test_ask_rejects_writes"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Attempt to write a file, which should be rejected.
@@ -813,9 +787,8 @@ suite "interactive ask session":
 
   test "unknown slash commands rejected without invoking runner in ask mode":
     let tmp = getTempDir() / "scriptorium_test_ask_unknown_cmd"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -849,9 +822,8 @@ suite "interactive ask session":
 
   test "/exit exits ask session without invoking runner":
     let tmp = getTempDir() / "scriptorium_test_ask_exit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -881,9 +853,8 @@ suite "interactive ask session":
 
   test "/show, /help, /quit do not invoke runner in ask mode":
     let tmp = getTempDir() / "scriptorium_test_ask_commands"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
@@ -1145,9 +1116,8 @@ suite "non-blocking tick loop":
 
   test "serial mode executes one ticket per tick when maxAgents is 1":
     let tmp = getTempDir() / "scriptorium_test_serial_tick"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nSerial test.\n")
     addTicketToPlan(tmp, "open", "0001-serial.md", "# Ticket 1\n\n**Area:** a\n")
@@ -1186,9 +1156,8 @@ suite "concurrent agent execution":
 
   test "two agents run concurrently in separate worktrees without interfering":
     let tmp = getTempDir() / "scriptorium_test_concurrent_agents"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nConcurrent test.\n")
     addTicketToPlan(tmp, "open", "0001-alpha.md", "# Ticket Alpha\n\n**Area:** area-a\n")
@@ -1239,9 +1208,8 @@ suite "concurrent agent execution":
 
   test "submit_pr correctly identifies calling agent ticket in parallel mode":
     let tmp = getTempDir() / "scriptorium_test_concurrent_submit_pr"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-x\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-y\n")
@@ -1268,9 +1236,8 @@ suite "concurrent agent execution":
 
   test "concurrent start: all open tickets fill available slots in one tick":
     let tmp = getTempDir() / "scriptorium_test_concurrent_start"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nConcurrent start test.\n")
     addTicketToPlan(tmp, "open", "0001-alpha.md", "# Ticket Alpha\n\n**Area:** area-a\n")
@@ -1329,9 +1296,8 @@ suite "concurrent agent execution":
 
   test "managers are prioritized over coding agents when slots are scarce":
     let tmp = getTempDir() / "scriptorium_test_manager_priority"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     writeSpecInPlan(tmp, "# Spec\n\nManager priority test.\n")
     addAreaToPlan(tmp, "area-a.md", "# Area A\n")
@@ -1384,9 +1350,8 @@ suite "concurrent agent execution":
 
   test "stall detection works independently per agent":
     let tmp = getTempDir() / "scriptorium_test_concurrent_stall"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-staller.md", "# Ticket Staller\n\n**Area:** area-s\n")
     addTicketToPlan(tmp, "open", "0002-submitter.md", "# Ticket Submitter\n\n**Area:** area-t\n")

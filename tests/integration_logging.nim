@@ -51,9 +51,8 @@ suite "logging":
 
   test "executeAssignedTicket reopens ticket when agent does not call submit_pr":
     let tmp = getTempDir() / "scriptorium_test_reopen_failed"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0032-fail.md", "# Ticket 32\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 900)
 
@@ -89,9 +88,8 @@ suite "logging":
 
   test "executeAssignedTicket retries stalled agent with continuation prompt":
     let tmp = getTempDir() / "scriptorium_test_stall_retry"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0033-stall.md", "# Ticket 33\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 902)
 
@@ -130,9 +128,8 @@ suite "logging":
 
   test "executeAssignedTicket stops stall retries after maxAttempts":
     let tmp = getTempDir() / "scriptorium_test_stall_exhausted"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0034-stall.md", "# Ticket 34\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 903)
 
@@ -168,9 +165,8 @@ suite "logging":
 
   test "executeAssignedTicket includes passing test status in stall continuation prompt":
     let tmp = getTempDir() / "scriptorium_test_stall_testpass"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0035-stall.md", "# Ticket 35\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 904)
 
@@ -206,9 +202,8 @@ suite "logging":
 
   test "executeAssignedTicket includes failing test output in stall continuation prompt":
     let tmp = getTempDir() / "scriptorium_test_stall_testfail"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0036-stall.md", "# Ticket 36\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 905)
 
@@ -245,9 +240,8 @@ suite "logging":
 
   test "executeAssignedTicket accumulates test wall time on stall":
     let tmp = getTempDir() / "scriptorium_test_stall_testwall"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0037-testwall.md", "# Ticket 37\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 906)
 
@@ -284,9 +278,8 @@ suite "logging":
 
   test "executeAssignedTicket cleans up timing state on reopen":
     let tmp = getTempDir() / "scriptorium_test_timing_cleanup"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0038-cleanup.md", "# Ticket 38\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 907)
 
@@ -319,9 +312,8 @@ suite "logging":
 
   test "reassigned ticket gets a fresh worktree branch without stale commits":
     let tmp = getTempDir() / "scriptorium_test_fresh_worktree"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0050-stale.md", "# Ticket 50\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 901)
 

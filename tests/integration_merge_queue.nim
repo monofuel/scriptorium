@@ -86,9 +86,8 @@ suite "orchestrator mcp tools":
 suite "orchestrator coding agent execution":
   test "executeAssignedTicket runs agent and appends run summary":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     var writtenCfg = defaultConfig()
     writtenCfg.agents.coding.reasoningEffort = "high"
@@ -149,9 +148,8 @@ suite "orchestrator coding agent execution":
 
   test "executeAssignedTicket enqueues merge request from submit_pr MCP tool":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_enqueue"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -189,9 +187,8 @@ suite "orchestrator coding agent execution":
 
   test "executeAssignedTicket wires onEvent callback that accepts all event kinds":
     let tmp = getTempDir() / "scriptorium_test_execute_on_event"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let assignment = assignOldestOpenTicket(tmp)
@@ -229,9 +226,8 @@ suite "orchestrator coding agent execution":
 suite "orchestrator merge queue":
   test "ensureMergeQueueInitialized is idempotent":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_init"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let before = planCommitCount(tmp)
     let first = ensureMergeQueueInitialized(tmp)
@@ -249,9 +245,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue handles one item per call":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_single_flight"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
@@ -273,9 +268,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue success path merges to master and moves ticket to done":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_success"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -303,9 +297,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue failure path reopens ticket with failure note":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_failure"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addFailingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -327,9 +320,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue failure path reopens ticket when integration-test fails":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_integration_failure"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addIntegrationFailingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -353,9 +345,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue review approve proceeds to merge":
     let tmp = getTempDir() / "scriptorium_test_review_approve"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -387,9 +378,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue review request_changes reopens ticket":
     let tmp = getTempDir() / "scriptorium_test_review_changes"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -423,9 +413,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue review stall defaults to approve":
     let tmp = getTempDir() / "scriptorium_test_review_stall"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -451,9 +440,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue review captures reasoning from message events":
     let tmp = getTempDir() / "scriptorium_test_review_reasoning"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -487,9 +475,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue review truncates long reasoning":
     let tmp = getTempDir() / "scriptorium_test_review_reasoning_truncate"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -520,9 +507,8 @@ suite "orchestrator merge queue":
 
   test "executeAssignedTicket auto-commits dirty worktree before enqueue":
     let tmp = getTempDir() / "scriptorium_test_autocommit_dirty_worktree"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -556,9 +542,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue auto-commits dirty worktree before merge":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_autocommit"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -577,9 +562,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue parks ticket after MaxMergeFailures":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_stuck"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addFailingMakefile(tmp)
 
     let priorFailures = "## Merge Queue Failure\n\nfail 1\n\n## Merge Queue Failure\n\nfail 2\n"
@@ -608,9 +592,8 @@ suite "orchestrator merge queue":
 
   test "stuck tickets excluded from areasNeedingTickets":
     let tmp = getTempDir() / "scriptorium_test_stuck_areas_excluded"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "stuck", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
@@ -621,9 +604,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue recovers missing worktree from branch":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_recover_worktree"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -649,9 +631,8 @@ suite "orchestrator merge queue":
 
   test "processMergeQueue reopens ticket when worktree and branch are both missing":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_no_branch"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 

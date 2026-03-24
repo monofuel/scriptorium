@@ -104,9 +104,8 @@ suite "progress-based stall detection":
     ## When the agent returns with timeoutKind="progress", it should be treated
     ## as a stall and retried with a continuation prompt.
     let tmp = getTempDir() / "scriptorium_test_progress_stall"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0080-progress.md", "# Ticket 80\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 950)
 
@@ -142,9 +141,8 @@ suite "progress-based stall detection":
     ## When the agent repeatedly hits progress timeout and exhausts all attempts,
     ## the ticket should be reopened with timeout_progress failure reason.
     let tmp = getTempDir() / "scriptorium_test_progress_exhaust"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0081-progress-exhaust.md", "# Ticket 81\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 951)
 
@@ -178,9 +176,8 @@ suite "progress-based stall detection":
     ## Verify that the config value for codingAgentProgressTimeoutMs is
     ## passed through to the AgentRunRequest.
     let tmp = getTempDir() / "scriptorium_test_progress_config"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0082-progress-cfg.md", "# Ticket 82\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 952)
 

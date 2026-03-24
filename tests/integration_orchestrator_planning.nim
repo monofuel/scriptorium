@@ -9,9 +9,8 @@ import
 suite "orchestrator plan spec update":
   test "updateSpecFromArchitect runs in plan worktree, reads repo path, and commits":
     let tmp = getTempDir() / "scriptorium_test_plan_update_spec"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     writeFile(tmp / "source-marker.txt", "alpha\n")
     runCmdOrDie("git -C " & quoteShell(tmp) & " add source-marker.txt")
@@ -94,9 +93,8 @@ suite "orchestrator plan spec update":
 
   test "updateSpecFromArchitect rejects writes outside spec.md":
     let tmp = getTempDir() / "scriptorium_test_plan_out_of_scope"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
       ## Write to spec.md and one out-of-scope path to trigger guard failure.
@@ -122,9 +120,8 @@ suite "orchestrator plan spec update":
 
   test "updateSpecFromArchitect recovers stale managed deterministic worktree conflicts":
     let tmp = getTempDir() / "scriptorium_test_plan_stale_temp_conflict"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var managedPlanPath = ""
     proc bootstrapRunner(req: AgentRunRequest): AgentRunResult =
@@ -168,9 +165,8 @@ suite "orchestrator plan spec update":
 
   test "updateSpecFromArchitect keeps non-managed plan worktree conflicts intact":
     let tmp = getTempDir() / "scriptorium_test_plan_manual_conflict"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let manualPath = getTempDir() / "scriptorium_manual_plan_conflict"
     if dirExists(manualPath):
@@ -209,9 +205,8 @@ suite "orchestrator plan spec update":
 
   test "stale worktree metadata is pruned before creating plan worktree":
     let tmp = getTempDir() / "scriptorium_test_stale_prune"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     # First call captures the managed plan path.
     var managedPlanPath = ""
@@ -254,9 +249,8 @@ suite "orchestrator plan spec update":
 
   test "updateSpecFromArchitect fails fast when planner lock is held":
     let tmp = getTempDir() / "scriptorium_test_plan_lock_busy"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var managedPlanPath = ""
     proc bootstrapRunner(req: AgentRunRequest): AgentRunResult =
@@ -314,9 +308,8 @@ suite "orchestrator plan spec update":
 suite "orchestrator invariants":
   test "ticket state invariant fails when same ticket exists in multiple state directories":
     let tmp = getTempDir() / "scriptorium_test_invariant_duplicate_ticket_states"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
@@ -325,9 +318,8 @@ suite "orchestrator invariants":
 
   test "transition commit invariant passes for orchestrator-managed state moves":
     let tmp = getTempDir() / "scriptorium_test_invariant_transition_pass"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     discard assignOldestOpenTicket(tmp)
@@ -335,9 +327,8 @@ suite "orchestrator invariants":
 
   test "transition commit invariant fails for non-orchestrator ticket move commit":
     let tmp = getTempDir() / "scriptorium_test_invariant_transition_fail"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     moveTicketStateInPlan(tmp, "open", "in-progress", "0001-first.md")
 
@@ -346,9 +337,8 @@ suite "orchestrator invariants":
 
   test "simulated crash during ticket move keeps prior valid state":
     let tmp = getTempDir() / "scriptorium_test_invariant_no_partial_move_on_crash"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     let before = planCommitCount(tmp)
 
@@ -371,18 +361,16 @@ suite "orchestrator invariants":
 suite "orchestrator planning bootstrap":
   test "loads spec from plan branch":
     let tmp = getTempDir() / "scriptorium_test_plan_load_spec"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     let spec = loadSpecFromPlan(tmp)
     check "scriptorium plan" in spec
 
   test "missing spec raises error":
     let tmp = getTempDir() / "scriptorium_test_plan_missing_spec"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     removeSpecFromPlan(tmp)
 
     expect ValueError:
@@ -390,9 +378,8 @@ suite "orchestrator planning bootstrap":
 
   test "areas missing is true for blank plan and false when area exists":
     let tmp = getTempDir() / "scriptorium_test_areas_missing"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     check areasMissing(tmp)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
@@ -400,9 +387,8 @@ suite "orchestrator planning bootstrap":
 
   test "sync areas calls architect with configured model and spec":
     let tmp = getTempDir() / "scriptorium_test_sync_areas_call"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     var writtenCfg = defaultConfig()
     writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6")
     writeScriptoriumConfig(tmp, writtenCfg)
@@ -431,9 +417,8 @@ suite "orchestrator planning bootstrap":
 
   test "sync areas is idempotent on second run":
     let tmp = getTempDir() / "scriptorium_test_sync_areas_idempotent"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
 
     var callCount = 0
     proc generator(model: string, spec: string): seq[AreaDocument] =
@@ -460,9 +445,8 @@ suite "orchestrator planning bootstrap":
 suite "orchestrator manager ticket bootstrap":
   test "areas needing tickets excludes areas with open or in-progress work":
     let tmp = getTempDir() / "scriptorium_test_areas_needing_tickets"
-    makeTestRepo(tmp)
+    makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
-    runInit(tmp, quiet = true)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")

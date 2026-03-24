@@ -259,8 +259,7 @@ suite "ticket difficulty prediction":
     check updated == content
 
   test "runTicketPrediction appends prediction to ticket markdown":
-    withTempRepo("scriptorium_test_prediction_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_test_prediction_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "in-progress", "0099-pred.md",
         "# Predict Me\n\n**Area:** test-area\n\n**Worktree:** /tmp/fake\n")
 
@@ -287,8 +286,7 @@ suite "ticket difficulty prediction":
     )
 
   test "runTicketPrediction logs warning and continues on failure":
-    withTempRepo("scriptorium_test_prediction_fail_", proc(repoPath: string) =
-      runInit(repoPath, quiet = true)
+    withInitializedTempRepo("scriptorium_test_prediction_fail_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "in-progress", "0098-predfail.md",
         "# Predict Fail\n\n**Area:** test-area\n\n**Worktree:** /tmp/fake\n")
 
