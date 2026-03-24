@@ -81,3 +81,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 20m52s.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 13
+- reasoning: Single-file config struct addition with loadConfig parsing, but merge conflict risk adds a couple minutes for conflict resolution on retry.
