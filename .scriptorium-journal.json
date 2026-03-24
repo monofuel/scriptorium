@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0102",
+  "timestamp": "2026-03-24T02:24:45Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0102.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0102-use-git-worktree-remove-in-recovery-orphan-reopening.md\n**Ticket ID:** 0102\n**Branch:** scriptorium/ticket-0102\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-use-git-worktree-remove-in-recovery-orphan-reopening\n**Summary:** Replace bare removeDir with gitCheck(\"worktree\", \"remove\", \"--force\") + removeDir fallback in reopenOrphanedInProgressTickets, matching the existing pattern in cleanupStaleTicketWorktrees. Added unit test verifying git worktree tracking entries are properly cleaned up.\n",
+      "contentHash": "2D6C6B82A68401E6D46B2777DDACCAEA7116C0B5"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0102"
+}
