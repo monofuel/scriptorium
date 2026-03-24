@@ -44,3 +44,5 @@ Add the prompt builder and invocation proc that passes loop context to the archi
 - Use `withLockedPlanWorktree` from `lock_management.nim` for plan branch access.
 - The architect agent config comes from `loadConfig(repoPath).agents.architect`.
 - The write allowlist for `enforceWritePrefixAllowlist` should include: `spec.md`, `areas`, `tickets/open`, `iteration_log.md`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0098-build-architect-loop-prompt-and-invoke-architect-for-feedback-cycle
