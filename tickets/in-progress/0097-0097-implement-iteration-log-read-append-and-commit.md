@@ -14,3 +14,5 @@ Add procs to manage `iteration_log.md` on the plan branch.
    - `commitIterationLog*(planPath: string)` — stages and commits `iteration_log.md` if changed.
 
 2. Entry format (append to file):
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0097-0097-implement-iteration-log-read-append-and-commit
