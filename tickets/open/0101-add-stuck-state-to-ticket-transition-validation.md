@@ -65,3 +65,40 @@ The changes are minimal, correct, and follow existing patterns exactly:
 
 No convention violations, no dead code, no unrelated changes.
 Approved. The changes are clean, minimal, and correct — both source modifications follow the existing patterns exactly, and the test properly exercises the stuck-parking transition path.
+
+## Merge Queue Failure
+- Summary: Add PlanTicketsStuckDir to ticketStateFromPath() and transitionCountInCommit() so stuck-parking commits pass validation. Add unit test for stuck transition.\n- Failed gate: git merge master (ff-only and no-ff both failed)\n
+### Merge Output
+```text
+Merge made by the 'ort' strategy.
+ src/scriptorium/loop_system.nim | 20 +++++++++++
+ tests/test_loop_system.nim      | 74 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 94 insertions(+)
+ create mode 100644 src/scriptorium/loop_system.nim
+ create mode 100644 tests/test_loop_system.nim
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	src/scriptorium/ticket_assignment.nim
+	tests/test_ticket_assignment.nim
+Please commit your changes or stash them before you merge.
+Aborting
+Merge with strategy ort failed.
+```
+
+## Metrics
+- wall_time_seconds: 2067
+- coding_wall_seconds: 155
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 333766
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 34m27s.
