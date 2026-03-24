@@ -20,3 +20,5 @@ This means `validateTransitionCommitInvariant()` would incorrectly reject a vali
 
 - `src/scriptorium/ticket_assignment.nim` — `ticketStateFromPath` and `transitionCountInCommit`
 - `tests/test_ticket_assignment.nim` — new test case
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-add-stuck-state-to-ticket-transition-validation

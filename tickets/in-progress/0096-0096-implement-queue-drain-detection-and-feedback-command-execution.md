@@ -40,3 +40,5 @@ Add a new `src/scriptorium/loop_system.nim` module with queue-drain detection an
 - `listMarkdownFiles` is in `ticket_metadata.nim`.
 - `runCommandCapture` is in `git_ops.nim` with signature `(workingDir, command, args, timeoutMs)`.
 - Remember to add `config.nims` path hint: `tests/config.nims` already has `--path:"../src"`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0096-implement-queue-drain-detection-and-feedback-command-execution
