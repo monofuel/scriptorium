@@ -29,3 +29,5 @@ Add the `loop` configuration section to `scriptorium.json` parsing.
 - `loadConfig` on a repo with no `loop` key returns `LoopConfig(enabled: false)`.
 - `loadConfig` on `{"loop": {"enabled": true, "feedback": "make bench", "goal": "optimize latency", "maxIterations": 5}}` returns matching fields.
 - Add a unit test in `tests/test_scriptorium.nim` (or a new `tests/test_config.nim`) that verifies both cases using a temp directory with a written `scriptorium.json`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0095-0095-add-loop-config-fields-to-config-and-loadconfig

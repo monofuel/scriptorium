@@ -14,3 +14,5 @@ orchestrator (and future loop implementation) can read them from `scriptorium.js
 **`src/scriptorium/config.nim`**
 
 1. Add a new `LoopConfig` object type:
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0095-add-loop-system-config-keys-to-config-model
