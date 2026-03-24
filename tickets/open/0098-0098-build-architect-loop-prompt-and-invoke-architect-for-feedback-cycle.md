@@ -64,3 +64,18 @@ The code looks complete. Let me verify it compiles and tests pass.
 "The code looks complete. Let me verify it compiles and tests pass."}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3497,"cache_creation_input_tokens":6271,"cache_read_input_tokens":18837,"cache_creation":{"ephemeral_5m_input_tokens":6271,"ephemeral_1h_input_tokens":0},"output_tokens":1},"context_management":null},"parent_tool_use_id":null,"session_id":"15b598ba-dc19-43ad-990b-59d9d1421a69","uuid":"a93b940a-ad69-4db3-80e3-49ec9b0aa0ad"}
 {"type":"assistant","message":{"model":"claude-opus-4-6","id":"msg_bdrk_01QfqTMpJqi1HHPCthzWskLN","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_bdrk_018pqAcXoEPNZEEFKYyMErem","name":"Bash","input":{"command":"unset CLAUDE_CODE_USE_BEDROCK && make test 2>&1 | tail -40","description":"Run unit tests","timeout":300000}}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":3497,"cache_creation_input_tokens":6271,"cache_read_input_tokens":18837,"cache_creation":{"ephemeral_5m_input_tokens":6271,"ephemeral_1h_input_tokens":0},"output_tokens":1},"context_management":null},"parent_tool_use_id":null,"session_id":"15b598ba-dc19-43ad-990b-59d9d1421a69","uuid":"0503fa34-0cb4-4eda-a7d3-65bcff272c2a"}
 ```
+
+## Metrics
+- wall_time_seconds: 2978
+- coding_wall_seconds: 2410
+- test_wall_seconds: 0
+- attempt_count: 5
+- outcome: reopened
+- failure_reason: timeout_no_output
+- model: claude-opus-4-6
+- stdout_bytes: 69754
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted hard, actual was complex with 5 attempt(s) in 49m38s.
