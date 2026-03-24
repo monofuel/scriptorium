@@ -260,6 +260,29 @@ suite "config":
     check cfg.agents.audit.model == "claude-sonnet-4-6"
     check cfg.agents.audit.harness == harnessClaudeCode
 
+  test "loop defaults when key is absent":
+    let tmp = getTempDir() / "scriptorium_test_config_loop_absent"
+    createDir(tmp)
+    defer: removeDir(tmp)
+
+    let cfg = loadConfig(tmp)
+    check cfg.loop.enabled == false
+    check cfg.loop.feedback == ""
+    check cfg.loop.goal == ""
+    check cfg.loop.maxIterations == 0
+
+  test "loop parses all fields from JSON":
+    let tmp = getTempDir() / "scriptorium_test_config_loop_full"
+    createDir(tmp)
+    defer: removeDir(tmp)
+    writeFile(tmp / "scriptorium.json", """{"loop": {"enabled": true, "feedback": "make bench", "goal": "optimize latency", "maxIterations": 5}}""")
+
+    let cfg = loadConfig(tmp)
+    check cfg.loop.enabled == true
+    check cfg.loop.feedback == "make bench"
+    check cfg.loop.goal == "optimize latency"
+    check cfg.loop.maxIterations == 5
+
   test "audit config defaults when absent from JSON":
     let tmp = getTempDir() / "scriptorium_test_config_audit_absent"
     createDir(tmp)

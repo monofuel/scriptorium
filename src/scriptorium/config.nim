@@ -35,6 +35,12 @@ type
   Endpoints* = object
     local*: string
 
+  LoopConfig* = object
+    enabled*: bool
+    feedback*: string
+    goal*: string
+    maxIterations*: int
+
   ConcurrencyConfig* = object
     maxAgents*: int
     tokenBudgetMB*: int
@@ -50,6 +56,7 @@ type
     endpoints*: Endpoints
     concurrency*: ConcurrencyConfig
     timeouts*: TimeoutConfig
+    loop*: LoopConfig
     syncAgentsMd*: bool
     logLevel*: string
     fileLogLevel*: string
@@ -85,6 +92,7 @@ proc defaultConfig*(): Config =
       codingAgentProgressTimeoutMs: 600_000,
       codingAgentMaxAttempts: 5,
     ),
+    loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
     syncAgentsMd: true,
   )
 
@@ -147,6 +155,14 @@ proc loadConfig*(repoPath: string): Config =
     result.timeouts.codingAgentProgressTimeoutMs = parsed.timeouts.codingAgentProgressTimeoutMs
   if parsed.timeouts.codingAgentMaxAttempts > 0:
     result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
+  if raw.contains("\"loop\""):
+    result.loop.enabled = parsed.loop.enabled
+    if parsed.loop.feedback.len > 0:
+      result.loop.feedback = parsed.loop.feedback
+    if parsed.loop.goal.len > 0:
+      result.loop.goal = parsed.loop.goal
+    if parsed.loop.maxIterations > 0:
+      result.loop.maxIterations = parsed.loop.maxIterations
   if raw.contains("\"syncAgentsMd\""):
     result.syncAgentsMd = parsed.syncAgentsMd
   if parsed.logLevel.len > 0:
