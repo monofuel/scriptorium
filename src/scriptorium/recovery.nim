@@ -272,7 +272,9 @@ proc reopenOrphanedInProgressTickets*(repoPath: string): int =
       let inProgressRel = PlanTicketsInProgressDir / fileName
       let worktreePath = worktreePathForTicket(repoPath, inProgressRel)
       if dirExists(worktreePath):
-        removeDir(worktreePath)
+        discard gitCheck(repoPath, "worktree", "remove", "--force", worktreePath)
+        if dirExists(worktreePath):
+          removeDir(worktreePath)
         logDebug(&"recovery: removed stale worktree for {ticketId}")
 
       gitRun(planPath, "add", "-A", PlanTicketsInProgressDir, PlanTicketsOpenDir)

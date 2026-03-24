@@ -325,6 +325,53 @@ suite "reopenOrphanedInProgressTickets":
     # Stale worktree directory should also be cleaned up.
     check not dirExists(worktreeDir)
 
+  test "reopening orphaned ticket removes git worktree tracking entry":
+    let tmpDir = getTempDir() / "scriptorium_test_recovery_worktree_tracking"
+    makeTestRepoWithPlanBranch(tmpDir)
+    defer: removeDir(tmpDir)
+
+    # Create a ticket branch (unmerged).
+    let ticketBranch = TicketBranchPrefix & "0088"
+    runCmdOrDie(&"git -C {tmpDir} checkout -b {ticketBranch}")
+    writeFile(tmpDir / "wip88.txt", "work in progress")
+    runCmdOrDie(&"git -C {tmpDir} add wip88.txt")
+    runCmdOrDie(&"git -C {tmpDir} commit -m 'ticket 0088 wip'")
+    runCmdOrDie(&"git -C {tmpDir} checkout master")
+
+    # Create a real git worktree for this ticket.
+    let worktreeDir = managedTicketWorktreeRootPath(tmpDir) / "0088-tracked-worktree"
+    addWorktreeWithRecovery(tmpDir, worktreeDir, ticketBranch)
+    check dirExists(worktreeDir)
+
+    # Verify git is tracking this worktree.
+    let pathsBefore = listGitWorktreePaths(tmpDir)
+    var found = false
+    for p in pathsBefore:
+      if "0088-tracked-worktree" in p:
+        found = true
+        break
+    check found
+
+    # Place ticket in in-progress on plan branch.
+    let planWorktree = managedPlanWorktreePath(tmpDir)
+    addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
+    let ticketContent = "# Ticket 0088\nFake ticket.\n\n**Worktree:** " & worktreeDir
+    writeFile(planWorktree / "tickets" / "in-progress" / "0088-tracked-worktree.md", ticketContent)
+    runCmdOrDie(&"git -C {planWorktree} add -A")
+    runCmdOrDie(&"git -C {planWorktree} commit -m 'add ticket with real worktree'")
+    discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
+
+    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    check reopened == 1
+
+    # The worktree directory should be gone.
+    check not dirExists(worktreeDir)
+
+    # The git worktree tracking entry should also be gone.
+    let pathsAfter = listGitWorktreePaths(tmpDir)
+    for p in pathsAfter:
+      check "0088-tracked-worktree" notin p
+
 suite "recoverFromCrash":
   test "clean startup produces no recovery needed":
     let tmpDir = getTempDir() / "scriptorium_test_recovery_clean"
