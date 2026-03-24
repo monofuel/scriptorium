@@ -56,3 +56,28 @@ Everything else is clean:
 - Tests cover defaults, full parse, absent keys, and explicit false — good coverage.
 - No unused imports, dead code, or unrelated changes.
 Approved with a minor warning about the overly broad `raw.contains("\"enabled\"")` check in the loop config parsing. The implementation correctly adds all four `loop.*` config keys per the spec, follows project conventions, and has solid test coverage.
+
+## Merge Queue Failure
+- Summary: Added LoopConfig object type with enabled (bool), goal (string), feedback (string), and maxIterations (int) fields to Config model. Wired up parsing in loadConfig with proper default handling. Added 4 unit tests covering defaults, full JSON parsing, absent keys, and explicit false.\n
+### Merge Output
+```text
+Auto-merging src/scriptorium/config.nim
+CONFLICT (content): Merge conflict in src/scriptorium/config.nim
+Auto-merging tests/test_scriptorium.nim
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+## Metrics
+- wall_time_seconds: 1252
+- coding_wall_seconds: 765
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: merge_conflict
+- model: claude-opus-4-6
+- stdout_bytes: 173116
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 20m52s.
