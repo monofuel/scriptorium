@@ -41,3 +41,19 @@ Done. Changes:
 ```text
 , worktreePath)` followed by `removeDir` as a fallback — matching the pattern in `ticket_assignment.nim:323-328`.\n- **`tests/test_recovery.nim`**: Added test \"reopening orphaned ticket removes git worktree tracking entry\" that creates a real git worktree, verifies it's tracked, triggers recovery, and confirms both the directory and the `.git/worktrees/` tracking entry are removed.","stop_reason":"end_turn","session_id":"be4102de-0e76-4b4a-89cd-6e2f69c4f2af","total_cost_usd":0.49314299999999983,"usage":{"input_tokens":6602,"cache_creation_input_tokens":30006,"cache_read_input_tokens":355491,"output_tokens":3794,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":30006},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":6602,"outputTokens":3794,"cacheReadInputTokens":355491,"cacheCreationInputTokens":30006,"webSearchRequests":0,"costUSD":0.49314299999999983,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"728c0851-871f-42d7-bde9-c4c7911a7aa8"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 23s
+
+**Review Reasoning:** Let me review the changes against the ticket requirements and project conventions.
+Let me check the existing pattern in `ticket_assignment.nim` and the full context of the changed files.
+The implementation looks correct. The pattern in `recovery.nim:275-277` exactly matches the established pattern in `ticket_assignment.nim:323-325` and `ticket_assignment.nim:29-31`. The test creates a real git worktree, verifies tracking, triggers recovery, and confirms both the directory and tracking entry are cleaned up.
+
+The code is clean, follows conventions, and directly addresses the ticket requirements with no unrelated changes.
+
+
+**Approved.** The fix correctly replaces bare `removeDir` with `discard gitCheck(repoPath, "worktree", "remove", "--force", worktreePath)` + `removeDir` fallback, exactly matching the established pattern in `ticket_assignment.nim`. The test is thorough — it creates a real git worktree, verifies tracking, runs recovery, and asserts both the directory and the `.git/worktrees/` entry are gone.
