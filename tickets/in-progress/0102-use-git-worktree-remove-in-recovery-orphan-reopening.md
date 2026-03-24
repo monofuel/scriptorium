@@ -19,3 +19,5 @@ Recovery Step 1 (`cleanOrphanedWorktrees`) runs before Step 5 but cannot catch t
 
 - `src/scriptorium/recovery.nim` — `reopenOrphanedInProgressTickets` worktree cleanup
 - `tests/test_recovery.nim` — new test case
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-use-git-worktree-remove-in-recovery-orphan-reopening
