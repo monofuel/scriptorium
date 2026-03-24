@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0101",
+  "timestamp": "2026-03-24T00:52:45Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0002-0101.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0101-add-stuck-state-to-ticket-transition-validation.md\n**Ticket ID:** 0101\n**Branch:** scriptorium/ticket-0101\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-add-stuck-state-to-ticket-transition-validation\n**Summary:** Add PlanTicketsStuckDir to ticketStateFromPath() and transitionCountInCommit() so stuck-parking commits pass validation. Add unit test for stuck transition.\n",
+      "contentHash": "9A568DA2E244BC18C5D582ED21261F5AF0253195"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0101"
+}
