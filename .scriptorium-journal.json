@@ -1,0 +1,29 @@
+{
+  "operation": "assign 0096-0096-implement-queue-drain-detection-and-feedback-command-execution, 0101-add-stuck-state-to-ticket-transition-validation",
+  "timestamp": "2026-03-24T00:49:19Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0096-0096-implement-queue-drain-detection-and-feedback-command-execution.md",
+      "destination": "tickets/in-progress/0096-0096-implement-queue-drain-detection-and-feedback-command-execution.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0096-0096-implement-queue-drain-detection-and-feedback-command-execution.md",
+      "content": "# 0096 Implement queue-drain detection and feedback command execution\n\n**Area:** loop-system\n\nAdd a new `src/scriptorium/loop_system.nim` module with queue-drain detection and feedback command execution.\n\n## Requirements\n\n### Queue-drain detection\n\n1. Add `isQueueDrained*(planPath: string): bool` to `src/scriptorium/loop_system.nim`.\n\n2. The queue is drained when **all three** conditions hold:\n   - No markdown files in `tickets/open/`\n   - No markdown files in `tickets/in-progress/`\n   - No markdown files in `queue/merge/pending/` (excluding `.gitkeep`)\n\n3. Use `listMarkdownFiles` from `ticket_metadata` to check each directory. Use `PlanTicketsOpenDir`, `PlanTicketsInProgressDir`, `PlanMergeQueuePendingDir` constants from `shared_state.nim`.\n\n### Feedback command execution\n\n4. Add `runFeedbackCommand*(repoPath: string, command: string): string`.\n\n5. The proc should:\n   - Run the command synchronously as a shell command in `repoPath` as the working directory.\n   - Use `runCommandCapture` from `git_ops.nim`: call as `runCommandCapture(repoPath, \"sh\", @[\"-c\", command])`.\n   - Return stdout. If the command fails (non-zero exit), raise an exception with the exit code and output.\n   - Use a 300_000 ms timeout.\n\n### Unit tests\n\n6. Add `tests/test_loop_system.nim` with tests:\n   - `isQueueDrained` returns `true` when all directories are empty.\n   - `isQueueDrained` returns `false` when any one directory has a `.md` file.\n   - `runFeedbackCommand` with `echo hello` returns output containing `hello`.\n   - `runFeedbackCommand` with a failing command (e.g., `exit 1`) raises.\n\n## Implementation notes\n\n- `listMarkdownFiles` is in `ticket_metadata.nim`.\n- `runCommandCapture` is in `git_ops.nim` with signature `(workingDir, command, args, timeoutMs)`.\n- Remember to add `config.nims` path hint: `tests/config.nims` already has `--path:\"../src\"`.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0096-implement-queue-drain-detection-and-feedback-command-execution\n",
+      "contentHash": "4773761BA82B8518FEAE5B7AC9680850AF90AE63"
+    },
+    {
+      "action": "move",
+      "source": "tickets/open/0101-add-stuck-state-to-ticket-transition-validation.md",
+      "destination": "tickets/in-progress/0101-add-stuck-state-to-ticket-transition-validation.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0101-add-stuck-state-to-ticket-transition-validation.md",
+      "content": "# Add stuck state to ticket transition validation\n\n**Area:** plan-state\n\n## Problem\n\n`ticketStateFromPath()` in `src/scriptorium/ticket_assignment.nim:67-75` recognizes `tickets/open/`, `tickets/in-progress/`, and `tickets/done/` but does NOT recognize `tickets/stuck/`. Similarly, `transitionCountInCommit()` at lines 86-101 only passes `PlanTicketsOpenDir`, `PlanTicketsInProgressDir`, and `PlanTicketsDoneDir` to `git diff --name-status` — it omits `PlanTicketsStuckDir`.\n\nThis means `validateTransitionCommitInvariant()` would incorrectly reject a valid stuck-parking commit: it sees `MergeQueueStuckCommitPrefix` as a transition subject via `isOrchestratorTransitionSubject()` (line 83), but `transitionCountInCommit()` returns 0 because the stuck directory is invisible, triggering the \"must contain exactly one ticket transition (found 0)\" error.\n\n## Fix\n\n1. In `ticketStateFromPath()` (`src/scriptorium/ticket_assignment.nim`), add an `elif` branch for `PlanTicketsStuckDir`.\n2. In `transitionCountInCommit()`, add `PlanTicketsStuckDir` to the `git diff` pathspec list alongside the other three state directories.\n3. Add a unit test in `tests/test_ticket_assignment.nim` that:\n   - Creates a repo, initializes it, adds a ticket to `tickets/in-progress/`, then moves it to `tickets/stuck/` with a commit using `MergeQueueStuckCommitPrefix`.\n   - Calls `validateTransitionCommitInvariant()` and verifies it passes without error.\n\n## Files to modify\n\n- `src/scriptorium/ticket_assignment.nim` — `ticketStateFromPath` and `transitionCountInCommit`\n- `tests/test_ticket_assignment.nim` — new test case\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-add-stuck-state-to-ticket-transition-validation\n",
+      "contentHash": "857AE247C1E5BEF8A52FFC100BEBFE581AED97C5"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0096-0096-implement-queue-drain-detection-and-feedback-command-execution, 0101-add-stuck-state-to-ticket-transition-validation"
+}
