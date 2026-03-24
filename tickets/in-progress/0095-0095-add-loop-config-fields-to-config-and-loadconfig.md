@@ -31,3 +31,8 @@ Add the `loop` configuration section to `scriptorium.json` parsing.
 - Add a unit test in `tests/test_scriptorium.nim` (or a new `tests/test_config.nim`) that verifies both cases using a temp directory with a written `scriptorium.json`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0095-0095-add-loop-config-fields-to-config-and-loadconfig
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Single-file config struct addition with simple field merging in loadConfig, plus a straightforward unit test — all within one module, minimal integration risk.
