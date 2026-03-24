@@ -27,10 +27,18 @@ Ticket path:
 Ticket content:
 {{TICKET_CONTENT}}
 
-IMPORTANT: Before calling submit_pr, you MUST commit all changes:
-  git add -A && git commit -m "your description"
+IMPORTANT: Before calling submit_pr, you MUST:
+1. Commit all changes:
+     git add -A && git commit -m "your description"
+2. Rebase onto the latest default branch to pick up any changes merged while
+   you were working:
+     git fetch origin && git rebase origin/master
+   If the rebase has conflicts, resolve them (usually just the import block),
+   then continue with `git rebase --continue`.
+   If you cannot resolve the conflicts, call submit_pr anyway — the merge queue
+   will handle it.
 
-When your work is complete and all changes are committed, call the `submit_pr`
+When your work is complete and all changes are committed and rebased, call the `submit_pr`
 MCP tool with a short summary of what you did and include the `ticket_id`
 argument with your ticket ID (from the ticket path above). This signals the
 orchestrator to enqueue your changes for merge. Do not skip this step.

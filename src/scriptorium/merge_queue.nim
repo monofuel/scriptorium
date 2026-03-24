@@ -429,7 +429,18 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
     logInfo(fmt"ticket {item.ticketId}: merge started (make test running)")
     let mergeStartTime = epochTime()
     let defaultBranch = resolveDefaultBranch(repoPath)
-    let mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", defaultBranch])
+
+    # Rebase onto latest default branch before testing (sub-second, catches drift).
+    discard runCommandCapture(item.worktree, "git", @["fetch", "origin", defaultBranch])
+    let rebaseResult = runCommandCapture(item.worktree, "git", @["rebase", "origin/" & defaultBranch])
+    var mergeMasterResult: tuple[exitCode: int, output: string]
+    if rebaseResult.exitCode == 0:
+      logInfo(fmt"ticket {item.ticketId}: rebased onto {defaultBranch}")
+      mergeMasterResult = (exitCode: 0, output: rebaseResult.output)
+    else:
+      discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+      logInfo(fmt"ticket {item.ticketId}: rebase failed, falling back to merge")
+      mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", defaultBranch])
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
       qualityCheckResult = runRequiredQualityChecks(item.worktree)
@@ -458,8 +469,37 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       )
       mergedToMaster = mergeToMasterResult.exitCode == 0
       if not mergedToMaster:
-        failureOutput = mergeToMasterResult.output
-        failureStep = "git merge master (ff-only and no-ff both failed)"
+        # Last resort: rebase the ticket branch and retry the merge.
+        logInfo(fmt"ticket {item.ticketId}: merge to master failed, attempting rebase retry")
+        discard runCommandCapture(item.worktree, "git", @["fetch", "origin", defaultBranch])
+        let retryRebase = runCommandCapture(item.worktree, "git", @["rebase", "origin/" & defaultBranch])
+        if retryRebase.exitCode == 0:
+          logInfo(fmt"ticket {item.ticketId}: rebase succeeded, re-running quality checks")
+          let retryQuality = runRequiredQualityChecks(item.worktree)
+          if retryQuality.exitCode == 0:
+            let retryMerge = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
+              let ffResult = runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
+              if ffResult.exitCode == 0:
+                return ffResult
+              let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
+              if noFfResult.exitCode != 0:
+                discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+              return noFfResult
+            )
+            mergedToMaster = retryMerge.exitCode == 0
+            if mergedToMaster:
+              logInfo(fmt"ticket {item.ticketId}: rebase retry merge succeeded")
+            else:
+              failureOutput = retryMerge.output
+              failureStep = "git merge master (rebase retry also failed)"
+          else:
+            failureOutput = retryQuality.output
+            failureStep = &"make {retryQuality.failedTarget} (after rebase retry)"
+        else:
+          discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+          logInfo(fmt"ticket {item.ticketId}: rebase retry failed, proceeding with reopen")
+          failureOutput = mergeToMasterResult.output
+          failureStep = "git merge master (ff-only and no-ff both failed, rebase also failed)"
 
     if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0 and mergedToMaster:
       let mergeWallTime = epochTime() - mergeStartTime
