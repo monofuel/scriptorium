@@ -22,3 +22,8 @@ This means `validateTransitionCommitInvariant()` would incorrectly reject a vali
 - `tests/test_ticket_assignment.nim` — new test case
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-add-stuck-state-to-ticket-transition-validation
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Two small additions to existing pattern-matched branches in a single file plus a straightforward unit test, minimal integration risk.
