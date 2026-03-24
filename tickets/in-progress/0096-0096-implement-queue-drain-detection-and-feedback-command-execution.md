@@ -42,3 +42,8 @@ Add a new `src/scriptorium/loop_system.nim` module with queue-drain detection an
 - Remember to add `config.nims` path hint: `tests/config.nims` already has `--path:"../src"`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0096-implement-queue-drain-detection-and-feedback-command-execution
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Single new module with two straightforward procs plus unit tests, all using existing helpers with clear signatures specified in the ticket.
