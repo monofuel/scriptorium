@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0100",
+  "timestamp": "2026-03-24T02:02:38Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0100.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0100-0095-add-loop-system-config-keys-to-config-model.md\n**Ticket ID:** 0100\n**Branch:** scriptorium/ticket-0100\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0095-add-loop-system-config-keys-to-config-model\n**Summary:** No changes needed — LoopConfig (enabled, feedback, goal, maxIterations) already exists on master from the prior attempt's merge. Branch is up to date with master.\n",
+      "contentHash": "41A21C16850E1D0A309462CF801EA92E8C8A5C0A"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0100"
+}
