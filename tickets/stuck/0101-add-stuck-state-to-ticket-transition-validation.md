@@ -218,3 +218,35 @@ Everything checks out. The review:
 
 5. **Note on line 107**: Uses `fmt` instead of `&` for the format string — but this is pre-existing code, not introduced by this PR.
 Approved. Both source changes follow the existing patterns exactly, and the test properly exercises the stuck-parking transition through `validateTransitionCommitInvariant()`.
+
+## Merge Queue Failure
+- Summary: Add PlanTicketsStuckDir to ticketStateFromPath() and transitionCountInCommit() so stuck-parking commits pass validation. Add unit test for stuck transition.\n- Failed gate: git merge master (ff-only and no-ff both failed)\n
+### Merge Output
+```text
+Already up to date.
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	src/scriptorium/ticket_assignment.nim
+	tests/test_ticket_assignment.nim
+Please commit your changes or stash them before you merge.
+Aborting
+Merge with strategy ort failed.
+```
+
+## Metrics
+- wall_time_seconds: 1261
+- coding_wall_seconds: 115
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: parked
+- failure_reason: parked
+- model: claude-opus-4-6
+- stdout_bytes: 246812
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was complex with 1 attempt(s) in 21m1s.
