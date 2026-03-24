@@ -46,3 +46,8 @@ Add the prompt builder and invocation proc that passes loop context to the archi
 - The write allowlist for `enforceWritePrefixAllowlist` should include: `spec.md`, `areas`, `tickets/open`, `iteration_log.md`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0098-build-architect-loop-prompt-and-invoke-architect-for-feedback-cycle
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Cross-module implementation touching prompt_builders.nim and loop_system.nim with complex orchestration logic (worktree locking, iteration tracking, fallback handling, spec hash updates), plus integration with multiple existing modules (architect_agent, lock_management, config), likely requiring 2+ attempts due to integration risk.
