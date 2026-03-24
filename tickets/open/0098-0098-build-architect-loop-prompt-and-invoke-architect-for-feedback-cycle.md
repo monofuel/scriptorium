@@ -130,3 +130,18 @@ All 16 tests pass. Let me also verify `make test` works — the previous timeout
 compilation taking too long with a cold cache, which should be warm now."}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":777,"cache_read_input_tokens":30654,"cache_creation":{"ephemeral_5m_input_tokens":777,"ephemeral_1h_input_tokens":0},"output_tokens":2},"context_management":null},"parent_tool_use_id":null,"session_id":"5bf6c07d-f8b3-4595-8aab-2aab73808554","uuid":"0b8c71d9-7c44-4114-85c1-f7e51277a400"}
 {"type":"assistant","message":{"model":"claude-opus-4-6","id":"msg_bdrk_014T9auX3sob6WD1BcJPegHU","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_bdrk_013uunxDANPsuH7rzEy3fiwo","name":"Bash","input":{"command":"unset CLAUDE_CODE_USE_BEDROCK && make test 2>&1 | tail -30","description":"Run full test suite","timeout":600000}}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":777,"cache_read_input_tokens":30654,"cache_creation":{"ephemeral_5m_input_tokens":777,"ephemeral_1h_input_tokens":0},"output_tokens":2},"context_management":null},"parent_tool_use_id":null,"session_id":"5bf6c07d-f8b3-4595-8aab-2aab73808554","uuid":"4c94ab33-b4cd-4342-9e9e-d7b578f45d7e"}
 ```
+
+## Metrics
+- wall_time_seconds: 1828
+- coding_wall_seconds: 1821
+- test_wall_seconds: 0
+- attempt_count: 5
+- outcome: reopened
+- failure_reason: timeout_no_output
+- model: claude-opus-4-6
+- stdout_bytes: 78225
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted hard, actual was complex with 5 attempt(s) in 30m28s.
