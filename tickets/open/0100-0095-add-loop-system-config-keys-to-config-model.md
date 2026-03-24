@@ -1,0 +1,16 @@
+<!-- ticket: 0095-add-loop-config-keys.md -->
+# 0095 — Add loop system config keys to Config model
+
+**Area:** config-testing
+
+## Description
+
+The spec (Section 22: Loop System) defines four config keys under `loop.*` that are
+not yet present in the `Config` type or `loadConfig` proc. Add them so the
+orchestrator (and future loop implementation) can read them from `scriptorium.json`.
+
+### Required changes
+
+**`src/scriptorium/config.nim`**
+
+1. Add a new `LoopConfig` object type:
