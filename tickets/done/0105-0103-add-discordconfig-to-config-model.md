@@ -183,3 +183,39 @@ The ticket requirements are all satisfied on master:
 
 Since the diff is empty, there's nothing wrong with the code, but there's also nothing to merge — the branch adds no value.
 Approved. The branch is identical to master — all ticket work was already merged in a prior attempt. The rebase correctly resolved the conflict by converging to master's state, so there are no changes to review.
+
+## Merge Queue Success
+- Summary: Rebased onto latest master to resolve merge conflict in tests/test_config.nim. All ticket work (DiscordConfig type, config wiring, and unit tests) was already merged to master from a prior attempt. No new changes needed — clean rebase resolves the add/add conflict.\n
+### Quality Check Output
+```text
+] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:47:07Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:47:07Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:47:07Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:47:07Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:47:07Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] session summary: uptime=4m43s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] session summary: avg_ticket_wall=24s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] orchestrator PID guard acquired (PID 69177)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:50:38Z] [INFO] session summary: avg_ticket_wall=24s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1161
+- coding_wall_seconds: 60
+- test_wall_seconds: 318
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 58937
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was medium with 1 attempt(s) in 19m21s.
