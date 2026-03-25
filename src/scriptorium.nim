@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -13,6 +13,7 @@ Usage:
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
   scriptorium ask              Interactive read-only Q&A session with the Architect
+  scriptorium audit            Run the audit agent
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
   scriptorium --help           Show this help"""
@@ -75,6 +76,10 @@ proc cmdAsk() =
   ## Start a read-only Q&A session with the Architect.
   runInteractiveAskSession(getCurrentDir())
 
+proc cmdAudit() =
+  ## Run the audit agent against the current repository.
+  runAudit(getCurrentDir())
+
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
   let worktrees = listActiveTicketWorktrees(getCurrentDir())
@@ -102,6 +107,8 @@ when isMainModule:
     cmdPlan(planArgs)
   of "ask":
     cmdAsk()
+  of "audit":
+    cmdAudit()
   of "worktrees":
     cmdWorktrees()
   of "init":
