@@ -33,3 +33,5 @@ DiscordConfig* = object
 - Use `jsony` for JSON deserialization (already imported in config.nim).
 - Follow existing merge patterns — check `raw.contains("\"discord\"")` before merging.
 - Constants use PascalCase, variables use camelCase.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0105-0103-add-discordconfig-to-config-model
