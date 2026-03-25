@@ -250,3 +250,39 @@ The try/catch usage in `testNotAGitRepo` and `testAlreadyInitialized` is justifi
 
 One minor note: `createTempRepo` doesn't have `defer: removeDir(result)` inside it — cleanup relies on the caller. This is fine since all callers do `defer: removeDir(repo)`.
 Approved. The test file correctly covers all four ticket requirements, follows all project conventions, and the constants match the source module exactly. The code is clean with no issues.
+
+## Merge Queue Success
+- Summary: Add tests/test_init.nim with 4 unit tests for the init module: non-git directory raises ValueError, already-initialized repo raises ValueError, successful init creates plan branch with expected directory structure and .gitkeep files, and spec.md placeholder content matches exactly. Also removed stale nimby lock directory that was causing prior merge queue failures.\n
+### Quality Check Output
+```text
+ journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:42:48Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:42:48Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:42:48Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:42:48Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:42:48Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] session summary: uptime=6m50s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] session summary: avg_ticket_wall=22s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] orchestrator PID guard acquired (PID 260863)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T06:48:31Z] [INFO] session summary: avg_ticket_wall=22s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 581
+- coding_wall_seconds: 112
+- test_wall_seconds: 437
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 169555
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 9m41s.
