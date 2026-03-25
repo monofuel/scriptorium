@@ -33,3 +33,5 @@ Add the `guildy` library as a dependency, create the core `src/scriptorium/disco
 - The gateway connection is blocking (the process runs until terminated).
 - Follow Nim import conventions: one import block, bracket syntax, std/ first then libraries then local.
 - Check guildy's API for bot creation and message handling patterns. Typical pattern: create a bot, add message handlers, call a `start` or `run` method.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0107-0105-add-guildy-dependency-and-create-discord-gateway-module-with-cli-command
