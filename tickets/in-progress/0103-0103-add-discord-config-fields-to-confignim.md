@@ -53,3 +53,40 @@ Done. Changes in `src/scriptorium/config.nim`:
 ```text
  Added `DiscordConfig*` object type with `enabled`, `channelId`, and `allowedUsers` fields\n- Added `discord*: DiscordConfig` field to `Config`\n- Set defaults in `defaultConfig()` (enabled=false, empty channelId, empty allowedUsers)\n- Added merge logic in `loadConfig()` gated on `raw.contains(\"\\\"discord\\\"\")`\n- Added `discordTokenPresent*()` proc that checks `DISCORD_TOKEN` env var","stop_reason":"end_turn","session_id":"57009130-e892-4f92-b687-75b7c0c98469","total_cost_usd":0.36520874999999997,"usage":{"input_tokens":17,"cache_creation_input_tokens":26127,"cache_read_input_tokens":276510,"output_tokens":2543,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":26127},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":17,"outputTokens":2543,"cacheReadInputTokens":276510,"cacheCreationInputTokens":26127,"webSearchRequests":0,"costUSD":0.36520874999999997,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"63c69716-78d0-49df-8988-3701392b714a"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 18s
+
+**Review Reasoning:** Looking at the diff against the ticket requirements and project conventions.
+
+**Ticket requirements check:**
+1. `DiscordConfig` object type with `enabled`, `channelId`, `allowedUsers` fields — ✅
+2. `discord*: DiscordConfig` field on `Config` — ✅
+3. Defaults in `defaultConfig()` — ✅
+4. Merge logic gated on `raw.contains("\"discord\"")` — ✅
+5. `discordTokenPresent*()` proc checking env var — ✅
+6. Nim conventions followed — ✅
+
+**Convention check:**
+- Naming: PascalCase for type (`DiscordConfig`), camelCase for fields — ✅
+- Doc comment on `discordTokenPresent` proc — ✅
+- No new imports needed — ✅
+- No try/catch, no boolean error returns — ✅
+- Follows existing patterns (mirrors `LoopConfig` structure) — ✅
+
+**Spec compliance:**
+- `discord.enabled` (boolean, default false) — ✅
+- `discord.channelId` (string) — ✅
+- `discord.allowedUsers` (array of strings) — ✅
+- `DISCORD_TOKEN` not stored in config — ✅
+
+**Code quality:**
+- No dead code, no unused imports, no leftover artifacts — ✅
+- Changes are scoped to exactly what the ticket requires — ✅
+
+Clean implementation that follows existing patterns precisely. No issues found.
+Approved. The implementation cleanly follows the existing `LoopConfig` pattern, satisfies all ticket requirements, and adheres to project conventions.
