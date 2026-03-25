@@ -35,3 +35,8 @@ Add the `guildy` library as a dependency, create the core `src/scriptorium/disco
 - Check guildy's API for bot creation and message handling patterns. Typical pattern: create a bot, add message handlers, call a `start` or `run` method.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0107-0105-add-guildy-dependency-and-create-discord-gateway-module-with-cli-command
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Multi-file change (new discord_bot.nim module + CLI wiring in scriptorium.nim + dependency addition) with moderate logic for message filtering, but straightforward patterns and no complex integration risk.
