@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0105",
+  "timestamp": "2026-03-25T05:39:23Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0105.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0105-0103-add-discordconfig-to-config-model.md\n**Ticket ID:** 0105\n**Branch:** scriptorium/ticket-0105\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0105-0103-add-discordconfig-to-config-model\n**Summary:** Rebased onto latest master to resolve merge conflict in tests/test_config.nim. All ticket work (DiscordConfig type, config wiring, and unit tests) was already merged to master from a prior attempt. No new changes needed — clean rebase resolves the add/add conflict.\n",
+      "contentHash": "1C5047128DFA9E7CCEBB3B5FEC152D4B04141B39"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0105"
+}
