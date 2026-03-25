@@ -32,7 +32,7 @@ IMPORTANT: Before calling submit_pr, you MUST:
      git add -A && git commit -m "your description"
 2. Rebase onto the latest default branch to pick up any changes merged while
    you were working:
-     git fetch origin && git rebase origin/master
+     git rebase master
    If the rebase has conflicts, resolve them (usually just the import block),
    then continue with `git rebase --continue`.
    If you cannot resolve the conflicts, call submit_pr anyway — the merge queue

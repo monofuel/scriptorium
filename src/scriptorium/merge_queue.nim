@@ -431,8 +431,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
     let defaultBranch = resolveDefaultBranch(repoPath)
 
     # Rebase onto latest default branch before testing (sub-second, catches drift).
-    discard runCommandCapture(item.worktree, "git", @["fetch", "origin", defaultBranch])
-    let rebaseResult = runCommandCapture(item.worktree, "git", @["rebase", "origin/" & defaultBranch])
+    let rebaseResult = runCommandCapture(item.worktree, "git", @["rebase", defaultBranch])
     var mergeMasterResult: tuple[exitCode: int, output: string]
     if rebaseResult.exitCode == 0:
       logInfo(fmt"ticket {item.ticketId}: rebased onto {defaultBranch}")
@@ -471,8 +470,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       if not mergedToMaster:
         # Last resort: rebase the ticket branch and retry the merge.
         logInfo(fmt"ticket {item.ticketId}: merge to master failed, attempting rebase retry")
-        discard runCommandCapture(item.worktree, "git", @["fetch", "origin", defaultBranch])
-        let retryRebase = runCommandCapture(item.worktree, "git", @["rebase", "origin/" & defaultBranch])
+        let retryRebase = runCommandCapture(item.worktree, "git", @["rebase", defaultBranch])
         if retryRebase.exitCode == 0:
           logInfo(fmt"ticket {item.ticketId}: rebase succeeded, re-running quality checks")
           let retryQuality = runRequiredQualityChecks(item.worktree)
