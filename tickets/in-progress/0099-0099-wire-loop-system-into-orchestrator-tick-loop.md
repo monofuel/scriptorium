@@ -97,7 +97,9 @@ Approved. The implementation cleanly wires the loop system into the orchestrator
 - Summary: Wire loop system into orchestrator tick loop as step 8. Added loop_system import, loopIterationCount state, queue-drain detection with feedback cycle invocation after step 7, maxIterations limit enforcement, loop count in tick summary log, and three unit tests verifying disabled/enabled/max-iterations behavior.\n- Failed gate: git merge master (rebase retry also failed)\n
 ### Merge Output
 ```text
-Rebasing (2/3)Rebasing (3/3)Successfully rebased and updated refs/heads/scriptorium/ticket-0099.
+Rebasing (2/3)
+Rebasing (3/3)
+Successfully rebased and updated refs/heads/scriptorium/ticket-0099.
 ```
 
 ### Quality Check Output
