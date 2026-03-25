@@ -250,3 +250,8 @@ Merge with strategy ort failed.
 - actual_difficulty: complex
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was complex with 1 attempt(s) in 21m1s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 20
+- reasoning: The code changes themselves are trivial (two small pattern additions), but this ticket has failed 3 consecutive times due to a merge queue issue where local changes aren't committed before merge — the agent must diagnose and fix this operational problem, which adds complexity beyond the simple code fix.
