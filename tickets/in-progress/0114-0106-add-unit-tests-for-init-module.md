@@ -27,3 +27,8 @@ The test file must have `--path:"../src"` available via `tests/config.nims` (alr
 - `tests/test_init.nim` (new)
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0114-0106-add-unit-tests-for-init-module
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single new test file but requires setting up temp git repos, running git commands via osproc, and verifying directory structures and file contents across multiple test cases — moderate complexity with possible git subprocess quirks requiring a retry.
