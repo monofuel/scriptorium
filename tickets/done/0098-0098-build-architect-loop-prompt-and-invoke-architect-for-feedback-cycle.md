@@ -265,3 +265,39 @@ The implementation is clean, correct, and complete. All ticket requirements are 
 
 **One minor note**: The mock runner test (`testBuildArchitectLoopPromptWithMockRunner`) manually builds the prompt and calls the mock runner directly rather than going through `runArchitectLoopIteration`. This is reasonable since testing `runArchitectLoopIteration` directly would require mocking config, git, and locked worktrees — that would be overengineering for a unit test.
 Review approved. The implementation is clean, meets all ticket requirements, and follows project conventions.
+
+## Merge Queue Success
+- Summary: Add buildArchitectLoopPrompt to prompt_builders.nim (goal, iteration log, feedback output, iteration number, architect instructions) and runArchitectLoopIteration to loop_system.nim (config loading, locked plan worktree, prompt building, architect invocation with write prefix allowlist, fallback iteration log entry, commit, spec hash update). Two unit tests verify prompt contents and mock runner behavior.\n
+### Quality Check Output
+```text
+] [INFO] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:02:15Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:02:15Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:02:15Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:02:15Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:02:15Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:14Z] [INFO] session summary: uptime=5m47s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:14Z] [INFO] session summary: avg_ticket_wall=36s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:15Z] [INFO] orchestrator PID guard acquired (PID 91195)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:15Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:15Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:15Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T01:06:15Z] [INFO] session summary: avg_ticket_wall=36s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 1219
+- coding_wall_seconds: 275
+- test_wall_seconds: 375
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 387401
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: overestimated
+- brief_summary: Predicted hard, actual was medium with 1 attempt(s) in 20m19s.
