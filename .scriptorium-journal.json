@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0113-0105-add-discord-cli-command-entry-point",
+  "timestamp": "2026-03-25T06:02:21Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0113-0105-add-discord-cli-command-entry-point.md",
+      "destination": "tickets/in-progress/0113-0105-add-discord-cli-command-entry-point.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0113-0105-add-discord-cli-command-entry-point.md",
+      "content": "# 0105 Add discord CLI command entry point\n\n**Area:** cli-init\n\n## Problem\n\nThe spec (Section 1) requires the CLI to support `discord`, but `src/scriptorium.nim` has no case branch for it. The discord area owns the full bot implementation, but the CLI dispatch belongs to cli-init.\n\n## Task\n\n1. In `src/scriptorium.nim`, add a case branch for `\"discord\"` in the `case args[0]` block.\n2. Create a `cmdDiscord` proc that calls a `runDiscord` proc from a new module.\n3. Create `src/scriptorium/discord_cli.nim` with a `runDiscord*(repoPath: string)` proc stub that prints an error and quits: `echo \"scriptorium: discord command not yet implemented\"; quit(1)`.\n4. Add `\"discord\"` to the `Usage` help string (after `audit`).\n5. Run `make test` to confirm compilation and existing tests pass.\n\n## Files\n\n- `src/scriptorium.nim`\n- `src/scriptorium/discord_cli.nim` (new)\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0113-0105-add-discord-cli-command-entry-point\n",
+      "contentHash": "C2ED75CBF7DC66F55FE0BEC04CCF0441CFA32191"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0113-0105-add-discord-cli-command-entry-point"
+}
