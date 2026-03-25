@@ -30,3 +30,8 @@ The area spec requires `discord.enabled`, `discord.channelId`, and `discord.allo
 - `src/scriptorium/config.nim`
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0103-0103-add-discord-config-fields-to-confignim
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file change adding a new config object type and merge logic, following existing patterns (like the loop config), with straightforward defaults and a simple env-var check proc.
