@@ -106,3 +106,8 @@ make: *** [Makefile:7: nim.cfg] Error 1
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted medium, actual was hard with 1 attempt(s) in 2m26s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single new test file requiring temp git repo setup and subprocess calls — moderate complexity, but the merge queue failure was due to a nimby lock issue (infrastructure), not code complexity, so the retry should succeed quickly.
