@@ -73,6 +73,8 @@ proc ticketStateFromPath(path: string): string =
     result = PlanTicketsInProgressDir
   elif normalized.startsWith(PlanTicketsDoneDir & "/"):
     result = PlanTicketsDoneDir
+  elif normalized.startsWith(PlanTicketsStuckDir & "/"):
+    result = PlanTicketsStuckDir
 
 proc isOrchestratorTransitionSubject(subject: string): bool =
   ## Return true when one commit subject is an orchestrator ticket transition commit.
@@ -98,6 +100,7 @@ proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash:
       PlanTicketsOpenDir,
       PlanTicketsInProgressDir,
       PlanTicketsDoneDir,
+      PlanTicketsStuckDir,
     ],
   )
   if diffResult.exitCode != 0:
