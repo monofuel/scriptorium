@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0099-0099-wire-loop-system-into-orchestrator-tick-loop",
+  "timestamp": "2026-03-25T01:09:53Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0099-0099-wire-loop-system-into-orchestrator-tick-loop.md",
+      "destination": "tickets/in-progress/0099-0099-wire-loop-system-into-orchestrator-tick-loop.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0099-0099-wire-loop-system-into-orchestrator-tick-loop.md",
+      "content": "# 0099 Wire loop system into orchestrator tick loop\n\n**Area:** loop-system\n\nIntegrate queue-drain detection and feedback cycle into the orchestrator as tick step 8.\n\n## Requirements\n\n1. In `src/scriptorium/orchestrator.nim`, add the loop system import (`./loop_system`).\n\n2. Add loop iteration state to `runOrchestratorMainLoop`:\n   - `var loopIterationCount = 0` — tracks how many feedback cycles have run this session.\n   - Load `cfg.loop` at the start alongside `maxAgents`.\n\n3. After step 7 (merge queue processing, around line 330) and before the idle/sleep decision, add step 8:\n   - Only if `cfg.loop.enabled` is `true` and `cfg.loop.feedback.len > 0`:\n     - Check queue drain: `withPlanWorktree(repoPath, proc(planPath: string): bool = isQueueDrained(planPath))`\n     - Also check `runningAgentCount() == 0` (no async agents still running).\n     - If drained:\n       - If `cfg.loop.maxIterations > 0` and `loopIterationCount >= cfg.loop.maxIterations`:\n         - Log `\"loop: max iterations reached ({loopIterationCount}/{cfg.loop.maxIterations})\"` at INFO level.\n         - Do not start another cycle.\n       - Otherwise:\n         - Increment `loopIterationCount`.\n         - Log: `\"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})\"` at INFO.\n         - Call `runFeedbackCommand(repoPath, cfg.loop.feedback)` to get feedback output.\n         - Call `runArchitectLoopIteration(repoPath, runner, feedbackOutput)`.\n         - Log: `\"loop: feedback cycle {loopIterationCount} complete\"` at INFO.\n         - Set `idle = false` so the orchestrator immediately processes the next tick.\n\n4. Add `loop={loopIterationCount}` to the tick summary log line (the `summary` string near line 339).\n\n5. Add a unit test in `tests/test_orchestrator_flow.nim` (or `tests/test_loop_system.nim`) using a fake runner that verifies:\n   - When `loop.enabled = false`, no feedback cycle runs even when queue is drained.\n   - When `loop.enabled = true` and queue is drained, the feedback command and architect are invoked.\n   - When `maxIterations` is reached, no further cycles run.\n\n## Depends: 0095, 0096, 0098\n\n## Implementation notes\n\n- The orchestrator already uses `withPlanWorktree` extensively — follow the same pattern for drain checks.\n- Keep the loop logic minimal in the orchestrator: just detection + invocation. All intelligence lives in the architect prompt and judgment.\n- If the feedback command fails, log the error and skip the cycle (don't crash the orchestrator). Use a try/except around the feedback+architect calls, logging the error at WARN level.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0099-wire-loop-system-into-orchestrator-tick-loop\n",
+      "contentHash": "2CADF170068992F05178925AA678F70AE4F8C736"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0099-0099-wire-loop-system-into-orchestrator-tick-loop"
+}
