@@ -20,3 +20,8 @@ The spec (Section 1) requires the CLI to support `audit`, but `src/scriptorium.n
 - `src/scriptorium/audit_agent_cli.nim` (new)
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0112-0104-add-audit-cli-command-entry-point
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Straightforward stub addition: add a case branch in the main CLI dispatcher, create a one-file stub module, and update a help string — all clearly specified with minimal logic.
