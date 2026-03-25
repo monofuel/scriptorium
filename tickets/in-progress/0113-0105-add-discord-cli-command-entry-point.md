@@ -18,3 +18,5 @@ The spec (Section 1) requires the CLI to support `discord`, but `src/scriptorium
 
 - `src/scriptorium.nim`
 - `src/scriptorium/discord_cli.nim` (new)
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0113-0105-add-discord-cli-command-entry-point
