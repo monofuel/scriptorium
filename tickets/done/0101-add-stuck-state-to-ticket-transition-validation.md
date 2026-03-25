@@ -288,3 +288,39 @@ Everything checks out. The changes are correct, minimal, and follow existing pat
 
 One note: `PlanTicketsStuckDir` is already used in other files (line 60 of `ticket_assignment.nim`, `merge_queue.nim`, etc.), confirming the constant is well-established — these two spots were simply missed.
 Approved. Both source changes follow the existing pattern exactly, the test properly exercises the stuck-parking transition path using established helpers, and there are no convention or spec violations.
+
+## Merge Queue Success
+- Summary: Add PlanTicketsStuckDir to ticketStateFromPath() and transitionCountInCommit() so stuck-parking commits pass validateTransitionCommitInvariant(). Add unit test for stuck transition.\n
+### Quality Check Output
+```text
+] [INFO] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:51:39Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:51:39Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:51:39Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:51:39Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:51:39Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] session summary: uptime=6m44s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] session summary: avg_ticket_wall=53s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] orchestrator PID guard acquired (PID 46854)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T00:55:44Z] [INFO] session summary: avg_ticket_wall=53s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 589
+- coding_wall_seconds: 103
+- test_wall_seconds: 436
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 262951
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 9m49s.
