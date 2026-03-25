@@ -1,0 +1,17 @@
+{
+  "operation": "dequeue 0098",
+  "timestamp": "2026-03-25T00:59:00Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/active.md",
+      "content": "queue/merge/pending/0001-0098.md\n",
+      "contentHash": "61BC67D60DB832DFA99797908CCB005C325C7988"
+    },
+    {
+      "action": "remove",
+      "path": "queue/merge/pending/0001-0098.md"
+    }
+  ],
+  "commit_message": "scriptorium: cleanup merge queue dequeue 0098"
+}
