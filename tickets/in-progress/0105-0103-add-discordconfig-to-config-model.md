@@ -35,3 +35,8 @@ DiscordConfig* = object
 - Constants use PascalCase, variables use camelCase.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0105-0103-add-discordconfig-to-config-model
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file type addition and config wiring following an existing pattern (loop merge block), plus a straightforward unit test — one attempt expected.
