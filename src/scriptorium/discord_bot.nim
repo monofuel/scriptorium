@@ -1,20 +1,24 @@
 import
   std/[httpclient, json, os, strformat, strutils],
   guildy,
-  ./[config, git_ops, lock_management, merge_queue,
-     pause_flag, shared_state, ticket_assignment, ticket_metadata]
+  ./[agent_runner, architect_agent, config, git_ops, lock_management, merge_queue,
+     pause_flag, prompt_builders, shared_state, ticket_assignment, ticket_metadata]
 
 const
   DiscordApiBase = "https://discord.com/api/v10"
   DiscordMessageLimit = 2000
   ApplicationCommandType = 1
+  TruncatedMarker = "... [truncated]"
+  SpecUpdatedNote = "\n[spec.md updated]"
+  DiscordChatTicketId = "discord-chat"
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
   if msg.len <= DiscordMessageLimit:
     result = msg
   else:
-    result = msg[0 ..< DiscordMessageLimit - 3] & "..."
+    let markerLen = TruncatedMarker.len
+    result = msg[0 ..< DiscordMessageLimit - markerLen] & TruncatedMarker
 
 proc registerSlashCommands(token: string) =
   ## Register slash commands as global application commands.
@@ -53,6 +57,60 @@ proc respondToInteraction(token: string, interactionId: string, interactionToken
   let url = DiscordApiBase & "/interactions/" & interactionId & "/" & interactionToken & "/callback"
   discard client.postContent(url, $body)
   client.close()
+
+proc sendChannelMessage(token: string, channelId: string, content: string) =
+  ## Post a message to a Discord channel.
+  let client = newHttpClient()
+  client.headers = newHttpHeaders({
+    "Authorization": "Bot " & token,
+    "Content-Type": "application/json",
+  })
+  let body = %*{"content": truncateMessage(content)}
+  let url = DiscordApiBase & "/channels/" & channelId & "/messages"
+  discard client.postContent(url, $body)
+  client.close()
+
+proc handleChatMessage(repoPath: string, token: string, channelId: string, messageText: string) =
+  ## Invoke the architect with a chat message and post the response to the channel.
+  let cfg = loadConfig(repoPath)
+  var specChanged = false
+  var response = ""
+  try:
+    response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+      let existingSpec = loadSpecFromPlanPath(planPath)
+      let prompt = buildArchitectPlanPrompt(repoPath, planPath, messageText, existingSpec)
+      let agentResult = runPlanArchitectRequest(
+        runAgent,
+        repoPath,
+        planPath,
+        cfg.agents.architect,
+        prompt,
+        DiscordChatTicketId,
+      )
+      enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
+
+      let updatedSpec = loadSpecFromPlanPath(planPath)
+      if updatedSpec != existingSpec:
+        gitRun(planPath, "add", PlanSpecPath)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", PlanSpecCommitMessage)
+        specChanged = true
+
+      var reply = agentResult.lastMessage.strip()
+      if reply.len == 0:
+        reply = agentResult.stdout.strip()
+      if reply.len == 0:
+        reply = "(no response from architect)"
+      reply
+    )
+  except CatchableError as e:
+    let errMsg = e.msg
+    echo &"scriptorium: discord architect error: {errMsg}"
+    response = &"Error: {errMsg}"
+
+  if specChanged:
+    response = response & SpecUpdatedNote
+  sendChannelMessage(token, channelId, response)
 
 proc formatStatusMessage(repoPath: string): string =
   ## Build the /status response string from orchestrator state.
@@ -191,6 +249,7 @@ proc runDiscordBot*(repoPath: string) =
     let user = msg.author.username
     let content = msg.content
     echo &"scriptorium: discord message from {user}: {content}"
+    handleChatMessage(repoPath, token, channelId, content)
 
   bot.onInteraction = proc(interaction: DiscordInteraction) {.gcsafe.} =
     # Scope to configured channel.
