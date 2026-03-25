@@ -202,3 +202,8 @@ make: *** [Makefile:7: nim.cfg] Error 1
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted medium, actual was hard with 1 attempt(s) in 1m58s.
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 28
+- reasoning: Two prior attempts both failed due to nimby lock infrastructure issue during `make test` — the code itself was approved both times, so the third attempt needs to handle or work around the nimby lock contention, likely requiring 2 attempts to diagnose and fix the environmental issue.
