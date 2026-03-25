@@ -13,7 +13,7 @@ RUN npm install --global @openai/codex@${CODEX_VERSION} @anthropic-ai/claude-cod
     && codex --version \
     && claude --version
 
-COPY nimby.lock scriptorium.nimble Makefile ./
+COPY nimby.lock scriptorium.nimble Makefile config.nims ./
 COPY src ./src
 COPY scripts ./scripts
 
