@@ -36,3 +36,8 @@ Use `jsony` for writing test JSON files. Use `std/os` for temp directories and e
 - `tests/test_config.nim`
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0104-0104-add-unit-tests-for-config-loading
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single test file creation but requires reading and understanding the config module's API, writing 10 distinct test cases with temp file/env var management, and ensuring compilation — moderate complexity with possible iteration on import paths or API details.
