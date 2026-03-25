@@ -19,7 +19,11 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
   - `loop.goal` (string — free-text objective the architect reads every iteration)
   - `loop.feedback` (string — shell command whose stdout becomes context for the next iteration)
   - `loop.maxIterations` (integer, 0 means infinite)
+  - `discord.enabled` (boolean, default false)
+  - `discord.channelId` (string — Discord channel ID the bot is scoped to)
+  - `discord.allowedUsers` (array of strings — Discord user IDs permitted to interact)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.
+- `DISCORD_TOKEN` environment variable provides the Discord bot token. Never stored in config.
 - Repository test commands:
   - `make test` runs `tests/test_*.nim`.
   - `make integration-test` runs `tests/integration_*.nim`.
@@ -36,3 +40,4 @@ Covers runtime configuration, log level handling, test commands, and CI workflow
 - Section 12: Resource Management (token budget config).
 - Section 19: Audit Agent (audit role config).
 - Section 22: Loop System (loop config keys).
+- Section 23: Discord Bot Integration (discord config keys, DISCORD_TOKEN env var).
