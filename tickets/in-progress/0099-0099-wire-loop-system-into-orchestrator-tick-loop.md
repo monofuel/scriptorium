@@ -128,3 +128,27 @@ Automatic merge failed; fix conflicts and then commit the result.
 - predicted_difficulty: medium
 - predicted_duration_minutes: 18
 - reasoning: Reopened due to merge conflict in test file only — the implementation code was approved and correct; resolving the conflict and ensuring tests pass is a focused single-file fix with no logic changes needed.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0099/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0099/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+PR submitted. Here's a summary of the changes:
+
+**`src/scriptorium/orchestrator.nim`:**
+- Added `loop_system` to imports
+- Added `loopCfg` and `loopIterationCount` state variables in `runOrchestratorMainLoop`
+- Added step 8 after merge queue processing: checks `loopCfg.enabled`, `feedback.len > 0`, queue drained via `isQueueDrained`, and `runningAgentCount() == 0`. Respects `maxIterations` limit. Calls `runFeedbackCommand` + `runArchitectLoopIteration` with try/except for error resilience. Sets `idle = false` on success.
+- Added `loop={loopIterationCount}` to the tick summary log line
+
+**`tests/test_loop_system.nim`:**
+- Added 3 unit tests with fake runners:
+  - `testLoopDisabledNoCycle` — loop disabled, no feedback cycle even when drained
+  - `testLoopEnabledDrainedQueueTriggersCycle` — loop enabled + drained → feedback + architect invoked
+  - `testLoopMaxIterationsReached` — only one cycle runs with `maxIterations=1`
+```
+
+### Agent Stdout Tail
+```text
+loop={loopIterationCount}` to the tick summary log line\n\n**`tests/test_loop_system.nim`:**\n- Added 3 unit tests with fake runners:\n  - `testLoopDisabledNoCycle` — loop disabled, no feedback cycle even when drained\n  - `testLoopEnabledDrainedQueueTriggersCycle` — loop enabled + drained → feedback + architect invoked\n  - `testLoopMaxIterationsReached` — only one cycle runs with `maxIterations=1`","stop_reason":"end_turn","session_id":"b41fb145-50bc-47ff-859b-586dca0f5752","total_cost_usd":1.042044,"usage":{"input_tokens":2019,"cache_creation_input_tokens":55952,"cache_read_input_tokens":988098,"output_tokens":7528,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":55952},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":2019,"outputTokens":7528,"cacheReadInputTokens":988098,"cacheCreationInputTokens":55952,"webSearchRequests":0,"costUSD":1.042044,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"c52d460b-6771-4a39-bdf3-4b74efe308fd"}
+```
