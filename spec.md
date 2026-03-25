@@ -10,7 +10,7 @@
 
 ## 1. CLI Surface And Initialization
 
-- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `audit`, `worktrees`, `--version`, `--help`.
+- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `audit`, `discord`, `worktrees`, `--version`, `--help`.
 - `scriptorium --init [path]` must:
   - fail if target is not a git repository,
   - fail if `scriptorium/plan` already exists,
@@ -362,7 +362,11 @@
   - `loop.goal` (string — free-text objective the architect reads every iteration)
   - `loop.feedback` (string — shell command whose stdout becomes context for the next iteration)
   - `loop.maxIterations` (integer, 0 means infinite)
+  - `discord.enabled` (boolean, default false)
+  - `discord.channelId` (string — Discord channel ID the bot is scoped to)
+  - `discord.allowedUsers` (array of strings — Discord user IDs permitted to interact)
 - `SCRIPTORIUM_LOG_LEVEL` must override config-file `logLevel` when present.
+- `DISCORD_TOKEN` environment variable provides the Discord bot token. Never stored in config.
 - Repository test commands:
   - `make test` runs `tests/test_*.nim`
   - `make integration-test` runs `tests/integration_*.nim`
@@ -533,3 +537,37 @@ The loop system is deliberately minimal. It does not include:
 - Manager-level gating or per-ticket scoring.
 
 The entire loop surface is: **feedback command + iteration log + architect judgment**.
+
+## 23. Discord Bot Integration
+
+`scriptorium discord` runs a Discord bot as a separate process that acts as a frontend to the architect. The orchestrator has no coupling to Discord — it picks up spec and ticket changes on the plan branch as usual.
+
+### Process Model
+
+- `scriptorium discord` starts a blocking guildy gateway connection.
+- The bot is scoped to a single channel (`discord.channelId` in config). Messages in other channels are ignored.
+- Only users listed in `discord.allowedUsers` may interact. Messages from other users are ignored.
+- The bot token is read from the `DISCORD_TOKEN` environment variable. If unset, the command must fail with a clear error.
+- The bot process is independent of `scriptorium run`. Both may run simultaneously; plan branch coordination uses the same transactional commit lock (§17).
+
+### Slash Commands
+
+Four slash commands that require no LLM calls — they read or write local state directly:
+
+- `/status` — Report current iteration, tickets in flight, merge queue contents, and whether the orchestrator is running. Reads from `.scriptorium/` and the plan branch.
+- `/queue` — Show the current ticket queue with statuses. Formatted read of plan branch state.
+- `/pause` — Write a pause flag to `.scriptorium/`. The orchestrator stops picking up new work; in-flight agents finish but nothing new starts.
+- `/resume` — Remove the pause flag.
+
+### Chat Messages
+
+- Non-slash messages from allowed users in the configured channel are sent to the architect as standalone invocations.
+- Each message is stateless — no Discord chat history is carried between messages. The architect already has rich context from the plan branch, spec, and iteration log.
+- The architect's response is posted back to the channel.
+- If the architect modifies `spec.md` or creates tickets, it does so on the plan branch as normal, using the transactional commit lock.
+- The architect invocation follows the same pattern as `scriptorium plan` one-shot mode: managed plan worktree, repo-root context, write allowlist of `spec.md` only.
+
+### Dependencies
+
+- guildy for the Discord gateway connection.
+- No new dependencies for the orchestrator or any other existing component.
