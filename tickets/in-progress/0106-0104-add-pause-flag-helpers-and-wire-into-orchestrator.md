@@ -30,3 +30,5 @@ Implement pause flag file management in `.scriptorium/` and make the orchestrato
 
 - The pause file contents don't matter — file presence is the signal. Write an empty file or a timestamp.
 - Import `os` for `fileExists`, `writeFile`, `removeFile`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0106-0104-add-pause-flag-helpers-and-wire-into-orchestrator
