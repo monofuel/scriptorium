@@ -11,5 +11,5 @@ openai_leap 11.3.0 https://github.com/monofuel/openai_leap ddb57d1514b88f58b8f05
 chroma 1.0.0 https://github.com/treeform/chroma 2381748f92e5ea16cb2403ff7e20c6dd5443a59d
 bumpy 1.1.3 https://github.com/treeform/bumpy dc9a3d6d15680ec7f603959d65ba8ee4f1ddbc72
 vmath 2.0.1 https://github.com/treeform/vmath b1cb7ec85f6e7690cf1261227cd2d552275e3e53
-guildy 0.1.0 https://github.com/monofuel/guildy d5fe2eb17b33162a1ab10483afde4b51f7950d7f
+guildy 2.0.0 https://github.com/monofuel/guildy d18bb81b6fc3137ba4cb951ea51f9e7adf5cc1a6
 Typos 0.0.0 https://github.com/monofuel/Typos.git 4d94654856b48cd376386c9ef5c45799283eeb43

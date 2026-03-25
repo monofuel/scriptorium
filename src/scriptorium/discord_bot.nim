@@ -1,16 +1,19 @@
 import
-  std/[httpclient, json, os, strformat, strutils],
+  std/[json, os, strformat, strutils],
   guildy,
+  jsony,
   ./[agent_runner, architect_agent, config, git_ops, lock_management, merge_queue,
      pause_flag, prompt_builders, shared_state, ticket_assignment, ticket_metadata]
 
 const
-  DiscordApiBase = "https://discord.com/api/v10"
   DiscordMessageLimit = 2000
-  ApplicationCommandType = 1
   TruncatedMarker = "... [truncated]"
   SpecUpdatedNote = "\n[spec.md updated]"
   DiscordChatTicketId = "discord-chat"
+  InteractionResponseMessage = 4
+
+type
+  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -20,57 +23,18 @@ proc truncateMessage(msg: string): string =
     let markerLen = TruncatedMarker.len
     result = msg[0 ..< DiscordMessageLimit - markerLen] & TruncatedMarker
 
-proc registerSlashCommands(token: string) =
-  ## Register slash commands as global application commands.
-  let client = newHttpClient()
-  client.headers = newHttpHeaders({
-    "Authorization": "Bot " & token,
-    "Content-Type": "application/json",
-  })
-  # Fetch the bot's application ID.
-  let meResp = client.getContent(DiscordApiBase & "/users/@me")
-  let appId = parseJson(meResp)["id"].getStr()
-
-  # Bulk overwrite global application commands.
-  let commands = %*[
-    {"name": "status", "type": ApplicationCommandType, "description": "Show orchestrator status and ticket counts"},
-    {"name": "queue", "type": ApplicationCommandType, "description": "Show merge queue and ticket lists"},
-    {"name": "pause", "type": ApplicationCommandType, "description": "Pause the orchestrator"},
-    {"name": "resume", "type": ApplicationCommandType, "description": "Resume the orchestrator"},
+proc registerSlashCommands(c: GuildyClient) =
+  ## Register slash commands with Discord after gateway READY.
+  let commands = @[
+    SlashCommand(name: "status", description: "Show orchestrator status and ticket counts", `type`: 1),
+    SlashCommand(name: "queue", description: "Show merge queue and ticket lists", `type`: 1),
+    SlashCommand(name: "pause", description: "Pause the orchestrator", `type`: 1),
+    SlashCommand(name: "resume", description: "Resume the orchestrator", `type`: 1),
   ]
-  let url = DiscordApiBase & "/applications/" & appId & "/commands"
-  discard client.putContent(url, $commands)
-  client.close()
+  discard c.registerCommands(toJson(commands))
   echo "scriptorium: registered slash commands"
 
-proc respondToInteraction(token: string, interactionId: string, interactionToken: string, content: string) =
-  ## Send an interaction response to Discord.
-  let client = newHttpClient()
-  client.headers = newHttpHeaders({
-    "Authorization": "Bot " & token,
-    "Content-Type": "application/json",
-  })
-  let body = %*{
-    "type": 4,
-    "data": {"content": truncateMessage(content)},
-  }
-  let url = DiscordApiBase & "/interactions/" & interactionId & "/" & interactionToken & "/callback"
-  discard client.postContent(url, $body)
-  client.close()
-
-proc sendChannelMessage(token: string, channelId: string, content: string) =
-  ## Post a message to a Discord channel.
-  let client = newHttpClient()
-  client.headers = newHttpHeaders({
-    "Authorization": "Bot " & token,
-    "Content-Type": "application/json",
-  })
-  let body = %*{"content": truncateMessage(content)}
-  let url = DiscordApiBase & "/channels/" & channelId & "/messages"
-  discard client.postContent(url, $body)
-  client.close()
-
-proc handleChatMessage(repoPath: string, token: string, channelId: string, messageText: string) =
+proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string) =
   ## Invoke the architect with a chat message and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var specChanged = false
@@ -110,7 +74,12 @@ proc handleChatMessage(repoPath: string, token: string, channelId: string, messa
 
   if specChanged:
     response = response & SpecUpdatedNote
-  sendChannelMessage(token, channelId, response)
+  discard client.postChannelMessage(channelId, response)
+
+proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
+  ## Run architect chat in a background thread to avoid blocking the gateway.
+  let restClient = newGuildyClient(args.token)
+  handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText)
 
 proc formatStatusMessage(repoPath: string): string =
   ## Build the /status response string from orchestrator state.
@@ -234,13 +203,14 @@ proc runDiscordBot*(repoPath: string) =
     quit(1)
 
   let allowedUsers = cfg.discord.allowedUsers
+  let client = newGuildyClient(token)
 
-  registerSlashCommands(token)
+  let onRaw = proc(c: GuildyClient, event: JsonNode) {.gcsafe.} =
+    if event.hasKey("t") and event["t"].getStr() == "READY":
+      registerSlashCommands(c)
 
-  let bot = newDiscordBot(token)
-
-  bot.onMessage = proc(msg: DiscordMessage) {.gcsafe.} =
-    if msg.channelId != channelId:
+  let onMessage = proc(c: GuildyClient, msg: DiscordMessage) {.gcsafe.} =
+    if msg.channel_id != channelId:
       return
     if msg.author.bot:
       return
@@ -249,16 +219,16 @@ proc runDiscordBot*(repoPath: string) =
     let user = msg.author.username
     let content = msg.content
     echo &"scriptorium: discord message from {user}: {content}"
-    handleChatMessage(repoPath, token, channelId, content)
+    # Spawn background thread to avoid blocking the gateway event loop.
+    let threadPtr = create(Thread[ChatThreadArgs])
+    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, content))
 
-  bot.onInteraction = proc(interaction: DiscordInteraction) {.gcsafe.} =
-    # Scope to configured channel.
-    if interaction.channelId != channelId:
+  let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
+    if interaction.channel_id != channelId:
       return
-    # Enforce allowed users.
-    if allowedUsers.len > 0 and interaction.userId notin allowedUsers:
+    if allowedUsers.len > 0 and interaction.user_id notin allowedUsers:
       return
-    let cmd = interaction.commandName
+    let cmd = interaction.command_name
     echo &"scriptorium: slash command /{cmd}"
     var response = ""
     case cmd
@@ -272,7 +242,8 @@ proc runDiscordBot*(repoPath: string) =
       response = handleResume(repoPath)
     else:
       response = "Unknown command."
-    respondToInteraction(token, interaction.id, interaction.token, response)
+    let truncated = truncateMessage(response)
+    c.respondToInteraction(interaction.id, interaction.token, InteractionResponseMessage, truncated)
 
   echo "scriptorium: starting Discord bot"
-  bot.run()
+  client.startGateway(onRaw = onRaw, onMessage = onMessage, onInteraction = onInteraction)
