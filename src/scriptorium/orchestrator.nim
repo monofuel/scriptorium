@@ -1,10 +1,10 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery
+  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system
 
 const
   IdleSleepMs = 200
@@ -148,8 +148,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   ensureTimingsLockInitialized()
   let cfg = loadConfig(repoPath)
   let maxAgents = cfg.concurrency.maxAgents
+  let loopCfg = cfg.loop
   var ticks = 0
   var idle = false
+  var loopIterationCount = 0
   var masterHealthState = MasterHealthState()
   var specWaitingLogged = false
   while shouldRun:
@@ -330,10 +332,31 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             0
           )
 
+          # Step 8: Loop system — feedback cycle when queue is drained.
+          if loopCfg.enabled and loopCfg.feedback.len > 0:
+            let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
+              isQueueDrained(planPath)
+            )
+            if drained and runningAgentCount() == 0:
+              if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
+                let maxIter = loopCfg.maxIterations
+                logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")
+              else:
+                try:
+                  inc loopIterationCount
+                  logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
+                  let feedbackOutput = runFeedbackCommand(repoPath, loopCfg.feedback)
+                  discard runArchitectLoopIteration(repoPath, runner, feedbackOutput)
+                  logInfo(&"loop: feedback cycle {loopIterationCount} complete")
+                  idle = false
+                except CatchableError as e:
+                  let errMsg = e.msg
+                  logWarn(&"loop: feedback cycle failed: {errMsg}")
+
           let ticketCounts = readOrchestratorStatus(repoPath)
           let running = runningAgentCount()
           let stuck = ticketCounts.stuckTickets
-          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck}"
+          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
           logInfo(summary)
     except CatchableError as e:
       logError(&"tick {ticks} failed: {e.msg}")

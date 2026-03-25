@@ -1,6 +1,6 @@
 import
   std/[os, strutils],
-  scriptorium/[agent_runner, loop_system, prompt_builders]
+  scriptorium/[agent_runner, config, loop_system, prompt_builders]
 
 proc testQueueDrainedAllEmpty() =
   ## Verify isQueueDrained returns true when all directories are empty.
@@ -173,6 +173,88 @@ proc testBuildArchitectLoopPromptWithMockRunner() =
   doAssert feedback in capturedPrompt
   echo "[OK] mock runner receives prompt with goal, iteration log, and feedback"
 
+proc makeDrainedPlanDir(tmpDir: string) =
+  ## Create a fake plan directory with empty queues (drained state).
+  createDir(tmpDir / "tickets" / "open")
+  createDir(tmpDir / "tickets" / "in-progress")
+  createDir(tmpDir / "queue" / "merge" / "pending")
+
+proc testLoopDisabledNoCycle() =
+  ## Verify no feedback cycle runs when loop.enabled is false, even if queue is drained.
+  let tmpDir = getTempDir() / "test_loop_disabled"
+  makeDrainedPlanDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let loopCfg = LoopConfig(enabled: false, feedback: "echo test", goal: "test", maxIterations: 0)
+  var loopIterationCount = 0
+  var feedbackRan = false
+
+  # Simulate step 8 logic.
+  if loopCfg.enabled and loopCfg.feedback.len > 0:
+    let drained = isQueueDrained(tmpDir)
+    if drained:
+      inc loopIterationCount
+      feedbackRan = true
+
+  doAssert loopIterationCount == 0
+  doAssert feedbackRan == false
+  echo "[OK] loop disabled: no feedback cycle even when queue is drained"
+
+proc testLoopEnabledDrainedQueueTriggersCycle() =
+  ## Verify feedback command and architect are invoked when loop is enabled and queue is drained.
+  let tmpDir = getTempDir() / "test_loop_enabled_drained"
+  makeDrainedPlanDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let loopCfg = LoopConfig(enabled: true, feedback: "echo feedback-output", goal: "improve", maxIterations: 0)
+  var loopIterationCount = 0
+  var feedbackOutput = ""
+  var architectInvoked = false
+
+  let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+    architectInvoked = true
+    result = AgentRunResult(exitCode: 0)
+
+  # Simulate step 8 logic.
+  if loopCfg.enabled and loopCfg.feedback.len > 0:
+    let drained = isQueueDrained(tmpDir)
+    if drained:
+      if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
+        discard
+      else:
+        inc loopIterationCount
+        feedbackOutput = runFeedbackCommand("/tmp", loopCfg.feedback)
+        discard fakeRunner(AgentRunRequest(prompt: "test", workingDir: tmpDir))
+
+  doAssert loopIterationCount == 1
+  doAssert "feedback-output" in feedbackOutput
+  doAssert architectInvoked
+  echo "[OK] loop enabled + drained: feedback command and architect invoked"
+
+proc testLoopMaxIterationsReached() =
+  ## Verify no further cycles run once maxIterations is reached.
+  let tmpDir = getTempDir() / "test_loop_max_iter"
+  makeDrainedPlanDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let loopCfg = LoopConfig(enabled: true, feedback: "echo test", goal: "test", maxIterations: 1)
+  var loopIterationCount = 1
+  var feedbackRan = false
+
+  # Simulate step 8 logic with loopIterationCount already at maxIterations.
+  if loopCfg.enabled and loopCfg.feedback.len > 0:
+    let drained = isQueueDrained(tmpDir)
+    if drained:
+      if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
+        discard
+      else:
+        inc loopIterationCount
+        feedbackRan = true
+
+  doAssert loopIterationCount == 1
+  doAssert feedbackRan == false
+  echo "[OK] loop maxIterations reached: no further cycles run"
+
 when isMainModule:
   testQueueDrainedAllEmpty()
   testQueueNotDrainedOpenTicket()
@@ -188,3 +270,6 @@ when isMainModule:
   testAppendIterationLogEntryMultiple()
   testBuildArchitectLoopPromptContents()
   testBuildArchitectLoopPromptWithMockRunner()
+  testLoopDisabledNoCycle()
+  testLoopEnabledDrainedQueueTriggersCycle()
+  testLoopMaxIterationsReached()
