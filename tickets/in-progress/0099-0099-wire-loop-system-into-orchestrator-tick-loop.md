@@ -289,3 +289,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: complex
 - prediction_accuracy: underestimated
 - brief_summary: Predicted hard, actual was complex with 1 attempt(s) in 16m47s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 15
+- reasoning: Third reopening for the same merge conflict in test_loop_system.nim — implementation code is proven correct and approved; agent just needs to rebase against current master and resolve the single test file conflict, no logic changes required.
