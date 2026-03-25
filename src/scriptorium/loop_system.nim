@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./[git_ops, shared_state, ticket_metadata]
+  ./[agent_runner, architect_agent, config, git_ops, lock_management, logging, prompt_builders, shared_state, ticket_metadata]
 
 const
   IterationLogPath* = "iteration_log.md"
@@ -82,3 +82,55 @@ proc commitIterationLog*(planPath: string) =
     return
   gitRun(planPath, "add", IterationLogPath)
   gitRun(planPath, "commit", "-m", "chore: update iteration log")
+
+const
+  LoopWriteAllowPrefixes = ["spec.md", "areas", "tickets/open", "iteration_log.md"]
+  LoopScopeName = "architect loop"
+  LoopTicketId = "loop"
+
+proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackOutput: string): bool =
+  ## Run one architect loop iteration: build prompt, invoke architect, commit results.
+  let cfg = loadConfig(repoPath)
+  let goal = cfg.loop.goal
+  if goal.len == 0:
+    logWarn("loop goal is empty, skipping architect loop iteration")
+    return false
+
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    let iterLog = readIterationLog(planPath)
+    let iterNum = nextIterationNumber(planPath)
+    let prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, iterLog, feedbackOutput, iterNum)
+
+    discard runPlanArchitectRequest(
+      runner,
+      repoPath,
+      planPath,
+      cfg.agents.architect,
+      prompt,
+      LoopTicketId,
+    )
+
+    enforceWritePrefixAllowlist(planPath, LoopWriteAllowPrefixes, LoopScopeName)
+
+    let nextNum = nextIterationNumber(planPath)
+    if nextNum == iterNum:
+      appendIterationLogEntry(planPath, iterNum, feedbackOutput,
+        "Architect did not write an assessment.", "Architect did not write a strategy.", "None noted.")
+
+    commitIterationLog(planPath)
+
+    let specPath = planPath / PlanSpecPath
+    if fileExists(specPath):
+      let specChanged = gitCheck(planPath, "diff", "--quiet", PlanSpecPath) != 0
+      let specUntracked = gitCheck(planPath, "ls-files", "--error-unmatch", PlanSpecPath) != 0
+      if specChanged or specUntracked:
+        gitRun(planPath, "add", PlanSpecPath)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", "scriptorium: update spec from architect loop")
+        writeSpecHashMarker(planPath)
+        gitRun(planPath, "add", SpecHashMarkerPath)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", "scriptorium: update spec hash marker")
+
+    true
+  )
