@@ -44,3 +44,8 @@ Integrate queue-drain detection and feedback cycle into the orchestrator as tick
 - If the feedback command fails, log the error and skip the cycle (don't crash the orchestrator). Use a try/except around the feedback+architect calls, logging the error at WARN level.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0099-wire-loop-system-into-orchestrator-tick-loop
+
+## Prediction
+- predicted_difficulty: hard
+- predicted_duration_minutes: 30
+- reasoning: Cross-module integration wiring loop_system into orchestrator with multiple conditions, worktree interactions, and unit tests requiring fakes — likely 2+ attempts due to integration complexity and test setup.
