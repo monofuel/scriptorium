@@ -34,3 +34,8 @@ Run `scriptorium plan` to build your spec with the Architect.
 - `src/scriptorium/init.nim` (line ~8, `SpecPlaceholder` constant)
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0111-0103-fix-specmd-placeholder-text-to-match-spec
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 4
+- reasoning: Single constant string change in one file with exact replacement text provided, no logic changes.
