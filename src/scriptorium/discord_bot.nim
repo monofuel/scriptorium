@@ -23,15 +23,16 @@ proc truncateMessage(msg: string): string =
     let markerLen = TruncatedMarker.len
     result = msg[0 ..< DiscordMessageLimit - markerLen] & TruncatedMarker
 
-proc registerSlashCommands(c: GuildyClient) =
+proc registerSlashCommands(c: GuildyClient, serverId: string) =
   ## Register slash commands with Discord after gateway READY.
+  ## When serverId is set, registers as guild commands (instant). Otherwise global (slow propagation).
   let commands = @[
     SlashCommand(name: "status", description: "Show orchestrator status and ticket counts", `type`: 1),
     SlashCommand(name: "queue", description: "Show merge queue and ticket lists", `type`: 1),
     SlashCommand(name: "pause", description: "Pause the orchestrator", `type`: 1),
     SlashCommand(name: "resume", description: "Resume the orchestrator", `type`: 1),
   ]
-  discard c.registerCommands(toJson(commands))
+  discard c.registerCommands(toJson(commands), serverId)
   echo "scriptorium: registered slash commands"
 
 proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string) =
@@ -202,12 +203,13 @@ proc runDiscordBot*(repoPath: string) =
     echo "scriptorium: discord.channelId is required in scriptorium.json"
     quit(1)
 
+  let serverId = cfg.discord.serverId
   let allowedUsers = cfg.discord.allowedUsers
   let client = newGuildyClient(token)
 
   let onRaw = proc(c: GuildyClient, event: JsonNode) {.gcsafe.} =
     if event.hasKey("t") and event["t"].getStr() == "READY":
-      registerSlashCommands(c)
+      registerSlashCommands(c, serverId)
 
   let onMessage = proc(c: GuildyClient, msg: DiscordMessage) {.gcsafe.} =
     if msg.channel_id != channelId:

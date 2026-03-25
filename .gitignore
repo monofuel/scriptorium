@@ -13,6 +13,7 @@ nimcache
 *.ilk
 *.out
 .*
+!.env.example
 !.github
 !.codex
 !.codex/*

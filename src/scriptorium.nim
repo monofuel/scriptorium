@@ -95,7 +95,28 @@ proc cmdWorktrees() =
     for item in worktrees:
       echo item.worktree & "\t" & item.ticketId & "\t" & item.branch
 
+proc loadDotEnv() =
+  ## Load .env file from the current directory if it exists. Does not override existing env vars.
+  let path = getCurrentDir() / ".env"
+  if not fileExists(path):
+    return
+  for line in lines(path):
+    let stripped = line.strip()
+    if stripped.len == 0 or stripped[0] == '#':
+      continue
+    let eqPos = stripped.find('=')
+    if eqPos < 1:
+      continue
+    let key = stripped[0 ..< eqPos].strip()
+    var val = stripped[eqPos + 1 .. ^1].strip()
+    # Strip surrounding quotes.
+    if val.len >= 2 and val[0] == '"' and val[^1] == '"':
+      val = val[1 ..< ^1]
+    if getEnv(key).len == 0:
+      putEnv(key, val)
+
 when isMainModule:
+  loadDotEnv()
   let args = commandLineParams()
 
   if args.len == 0:
