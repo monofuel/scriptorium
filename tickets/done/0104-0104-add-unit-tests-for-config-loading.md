@@ -97,3 +97,39 @@ Review complete. The test file is well-written and correct. Let me verify my fin
 
 Everything looks clean. No dead code, no unused imports, no unrelated changes, no spec contradictions.
 **Approved.** All 10 test cases are present and correct. Assertions match the actual `config.nim` implementation. Conventions are followed (import style, doc comments, naming, error handling). Env var cleanup is properly handled with `defer` blocks and save/restore patterns. No issues found.
+
+## Merge Queue Success
+- Summary: Add tests/test_config.nim with 10 unit tests covering: default config values, missing config file fallback, partial and full JSON merge, SCRIPTORIUM_LOG_LEVEL and SCRIPTORIUM_FILE_LOG_LEVEL env var overrides, discord config loading, discordTokenPresent, resolveModel with/without CLAUDE_CODE_USE_BEDROCK, and inferHarness prefix mapping.\n
+### Quality Check Output
+```text
+] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T04:57:35Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T04:57:35Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T04:57:35Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T04:57:35Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T04:57:35Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] session summary: uptime=9m0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] session summary: avg_ticket_wall=25s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] orchestrator PID guard acquired (PID 113121)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:05:20Z] [INFO] session summary: avg_ticket_wall=25s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 698
+- coding_wall_seconds: 90
+- test_wall_seconds: 572
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 142986
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 11m38s.
