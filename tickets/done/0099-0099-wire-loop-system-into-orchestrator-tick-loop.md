@@ -356,3 +356,39 @@ I've reviewed the full diff. Here's my assessment:
 
 No issues found.
 **Approved.** The implementation correctly wires the loop system into the orchestrator tick loop. All ticket requirements, spec §22, and project conventions are satisfied. No code quality issues found. The previous unused `osproc` import has been cleaned up.
+
+## Merge Queue Success
+- Summary: Wire loop system into orchestrator tick loop as step 8. Added loop_system import, loopCfg and loopIterationCount state variables, queue-drain detection with feedback cycle invocation after step 7, maxIterations limit enforcement, error resilience via try/except with WARN logging, loop count in tick summary log, and three unit tests verifying disabled/enabled/max-iterations behavior.\n
+### Quality Check Output
+```text
+] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:45:29Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:45:29Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:45:29Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:45:29Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:45:29Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] session summary: uptime=7m42s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] session summary: avg_ticket_wall=40s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] orchestrator PID guard acquired (PID 31579)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T03:51:12Z] [INFO] session summary: avg_ticket_wall=40s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 718
+- coding_wall_seconds: 183
+- test_wall_seconds: 489
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 429835
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted hard, actual was easy with 1 attempt(s) in 11m58s.
