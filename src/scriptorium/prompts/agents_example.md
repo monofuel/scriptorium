@@ -17,6 +17,7 @@ This repository uses Nim and keeps dependencies minimal.
 
 - MUST use nimby (not nimble) for dependency management.
 - When adding dependencies, prefer packages from monofuel, treeform, and guzba.
+- Avoid using SDL, instead prefer native nim alternatives like silky, windy, paddy, slappy
 
 ### Recommended libraries by category
 
@@ -34,6 +35,8 @@ This repository uses Nim and keeps dependencies minimal.
 | Vector math | vmath | GLSL-style Vec2–Vec4, Mat3–Mat4, quaternions. |
 | Color | chroma | Color spaces, parsing, conversion. |
 | Windowing | windy | Cross-platform window and input management. |
+| Audio | slappy | audio library on top of OpenAL |
+| gamepads | paddy | game input library |
 | GPU rendering | boxy | 2D GPU rendering engine built on pixie. |
 | GPU compute | shady | Compute shaders for graphical GPU work. |
 | GPU compute (CUDA/HIP) | hippo | Low-level CUDA/HIP for serious GPU compute (LLM inference, etc). |
