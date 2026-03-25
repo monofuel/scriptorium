@@ -206,3 +206,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: accurate
 - brief_summary: Predicted hard, actual was hard with 1 attempt(s) in 12m15s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 15
+- reasoning: Reopened solely for a merge conflict in test_loop_system.nim — implementation was approved twice; just needs conflict resolution against master and recommit, no logic changes required.
