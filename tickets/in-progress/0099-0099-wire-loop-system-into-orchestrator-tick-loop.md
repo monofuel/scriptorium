@@ -235,3 +235,28 @@ Done. Here's a summary of the changes:
 ```text
 mary log line\n\n**`tests/test_loop_system.nim`:**\n- Added 3 orchestrator loop unit tests with fake runners:\n  - `testLoopDisabledNoCycle` — loop disabled, no feedback cycle even when drained\n  - `testLoopEnabledDrainedQueueTriggersCycle` — loop enabled + drained → feedback + architect invoked\n  - `testLoopMaxIterationsReached` — only one cycle runs with `maxIterations=1`","stop_reason":"end_turn","session_id":"9605790d-feac-4112-ae11-86ad00594b1e","total_cost_usd":2.0603997499999993,"usage":{"input_tokens":5108,"cache_creation_input_tokens":73127,"cache_read_input_tokens":2392382,"output_tokens":15265,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":73127},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":5108,"outputTokens":15265,"cacheReadInputTokens":2392382,"cacheCreationInputTokens":73127,"webSearchRequests":0,"costUSD":2.0603997499999993,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"0be9ab79-e7a9-480c-b44d-cd225971a678"}
 ```
+
+## Review
+**Review:** approved with warnings
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 53s
+
+**Warnings:** Minor: `osproc` is imported in `tests/test_loop_system.nim` (line 2) but not used directly anywhere in the file. Consider removing it to keep imports clean.
+
+**Review Reasoning:** Let me read the modified files to verify the changes in context.
+Let me check the orchestrator step 8 area more closely and verify the `osproc` import is used.
+Let me check if `osproc` is actually used in the test file.
+I've completed my review. Here's my assessment:
+
+**Spec compliance**: All requirements met. Step 8 is correctly placed after merge queue processing. Queue-drain checks all three conditions (open, in-progress, pending merge) plus `runningAgentCount() == 0`. `maxIterations` 0 means infinite, non-zero enforces limit. Feedback command + architect invocation with try/except error resilience per ticket requirement. `idle = false` on success. `loop={loopIterationCount}` in tick summary. Uses `withPlanWorktree` (unlocked) for drain check and `withLockedPlanWorktree` for the architect write cycle.
+
+**Convention compliance**: Imports use single-block bracket syntax with correct ordering. Constants are PascalCase. Variables are camelCase. Doc comments on all new procs with complete sentences and punctuation. Format strings use `&` with variables extracted before interpolation. Grouped `const`/`let`/`var` blocks.
+
+**Code quality issue**: `osproc` is imported in `tests/test_loop_system.nim` (line 2) but never used directly in the file. This is an unused import.
+
+No other issues found — no dead code, no commented-out code, no unrelated changes.
+Review submitted: **approved with warnings**.
+
+The implementation is correct and complete. The only minor issue is an unused `osproc` import in the test file.
