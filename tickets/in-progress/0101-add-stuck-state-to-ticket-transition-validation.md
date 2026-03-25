@@ -270,3 +270,21 @@ Done. Changes:
 ```text
 `ticketStateFromPath()` (line 76-77) and added `PlanTicketsStuckDir` to the `git diff` pathspec in `transitionCountInCommit()` (line 102).\n- **`tests/test_ticket_assignment.nim`**: New test file with a \"stuck state transition validation\" suite that moves a ticket from in-progress to stuck with the `MergeQueueStuckCommitPrefix` and verifies `validateTransitionCommitInvariant()` passes.","stop_reason":"end_turn","session_id":"731b20ab-b050-4707-99bf-fd2ff1bcc381","total_cost_usd":0.7873402500000002,"usage":{"input_tokens":4397,"cache_creation_input_tokens":52773,"cache_read_input_tokens":684298,"output_tokens":3735,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":52773},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":4397,"outputTokens":3735,"cacheReadInputTokens":684298,"cacheCreationInputTokens":52773,"webSearchRequests":0,"costUSD":0.7873402500000002,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"2d7cb0b8-ebd7-4847-a993-b222abea0113"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 37s
+
+**Review Reasoning:** Let me verify the test helpers exist and check whether there's an existing `test_ticket_assignment.nim` on master that this new file might conflict with.
+Good — the file doesn't exist on master and all helpers are available. Let me check `PlanTicketsStuckDir` is properly defined.
+Everything checks out. The changes are correct, minimal, and follow existing patterns exactly:
+
+1. **`ticketStateFromPath()`** — new `elif` for `PlanTicketsStuckDir` matches the three existing branches.
+2. **`transitionCountInCommit()`** — `PlanTicketsStuckDir` added to pathspec array, consistent with existing entries.
+3. **Test file** — uses all the right helpers (`makeInitializedTestRepo`, `addTicketToPlan`, `withPlanWorktree`, `runCmdOrDie`), proper `defer: removeDir`, correct commit message prefix. Import block follows conventions (std/ first, then local). No convention violations.
+
+One note: `PlanTicketsStuckDir` is already used in other files (line 60 of `ticket_assignment.nim`, `merge_queue.nim`, etc.), confirming the constant is well-established — these two spots were simply missed.
+Approved. Both source changes follow the existing pattern exactly, the test properly exercises the stuck-parking transition path using established helpers, and there are no convention or spec violations.
