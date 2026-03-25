@@ -49,3 +49,28 @@ Done. Created `tests/test_init.nim` with 4 tests covering all cases from the tic
 ```text
 ering all cases from the ticket:\n\n1. **Not a git repo** — `runInit` raises `ValueError` on a plain directory\n2. **Already initialized** — `runInit` raises `ValueError` when `scriptorium/plan` branch exists\n3. **Successful init** — verifies plan branch creation, all 6 directories with `.gitkeep`, and `spec.md` presence\n4. **spec.md placeholder content** — verifies exact text matches the constant","stop_reason":"end_turn","session_id":"dc86ba6e-a900-4421-8431-05bd44b858f6","total_cost_usd":0.39153625,"usage":{"input_tokens":55,"cache_creation_input_tokens":32173,"cache_read_input_tokens":232660,"output_tokens":2954,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":32173},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":55,"outputTokens":2954,"cacheReadInputTokens":232660,"cacheCreationInputTokens":32173,"webSearchRequests":0,"costUSD":0.39153625,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b5c1e3a2-d926-4264-b77d-0e8f6b63554d"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m5s
+
+**Review Reasoning:** I'll review the diff against the ticket requirements and project conventions.
+Let me check the source files to verify the test correctness.
+The test file looks solid. Let me verify one more thing about the project's test patterns.
+The review is complete. Here's my assessment:
+
+**Convention compliance**: All good.
+- Single import block with bracket syntax, std/ first then local
+- PascalCase constants, grouped const block
+- Doc comments (`##`) on every proc, complete sentences with punctuation
+- `when isMainModule` pattern matches other test files in the project
+
+**Spec compliance**: All 4 required test cases are present and correctly implemented per the ticket.
+
+**Code quality**: Clean, no dead code, no unused imports (`strutils` is used for `strip` and `join`), no leftover artifacts.
+
+**Minor note**: The `execCmdEx` calls in `testSuccessfulInit` use unquoted string concatenation for paths (e.g., `"git -C " & repo & " ..."`), whereas the source code uses `quoteShell`. This is safe here since temp paths won't contain spaces, but it's a small inconsistency. Not worth blocking on.
+Approved. The test file covers all four ticket requirements correctly, follows project conventions, and matches the actual behavior of `runInit` in `src/scriptorium/init.nim`.
