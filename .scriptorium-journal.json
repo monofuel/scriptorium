@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0113",
+  "timestamp": "2026-03-25T06:07:39Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0113.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0113-0105-add-discord-cli-command-entry-point.md\n**Ticket ID:** 0113\n**Branch:** scriptorium/ticket-0113\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0113-0105-add-discord-cli-command-entry-point\n**Summary:** Added \"discord\" CLI command entry point: new case branch in scriptorium.nim dispatching to cmdDiscord, new discord_cli.nim stub module with runDiscord proc, and \"discord\" added to Usage help string.\n",
+      "contentHash": "B8E113F80E620490AF0FC300F2B5EA50B14265DE"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0113"
+}
