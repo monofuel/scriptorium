@@ -32,3 +32,5 @@ Run `scriptorium plan` to build your spec with the Architect.
 ## Files
 
 - `src/scriptorium/init.nim` (line ~8, `SpecPlaceholder` constant)
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0111-0103-fix-specmd-placeholder-text-to-match-spec

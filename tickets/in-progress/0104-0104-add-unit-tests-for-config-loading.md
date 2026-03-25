@@ -34,3 +34,5 @@ Use `jsony` for writing test JSON files. Use `std/os` for temp directories and e
 ## Files to create
 
 - `tests/test_config.nim`
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0104-0104-add-unit-tests-for-config-loading
