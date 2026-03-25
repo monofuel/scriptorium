@@ -72,3 +72,39 @@ ns":0},"output_tokens":1},"context_management":null},"parent_tool_use_id":null,"
 
 **Code quality:** No dead code, no unused imports, no unrelated changes.
 Approved. The change is correct, minimal, and matches both the ticket and spec exactly.
+
+## Merge Queue Success
+- Summary: Updated SpecPlaceholder constant in src/scriptorium/init.nim to match the spec: "Run `scriptorium plan` to build your spec with the Architect."\n
+### Quality Check Output
+```text
+] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:33:27Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:33:27Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:33:27Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:33:27Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:33:27Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] session summary: uptime=6m14s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] session summary: avg_ticket_wall=26s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] orchestrator PID guard acquired (PID 23062)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:38:22Z] [INFO] session summary: avg_ticket_wall=26s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 0
+- coding_wall_seconds: 0
+- test_wall_seconds: 401
+- attempt_count: 0
+- outcome: done
+- failure_reason: 
+- model: unknown
+- stdout_bytes: 0
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted trivial, actual was complex with 0 attempt(s) in 0s.
