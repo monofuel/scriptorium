@@ -21,5 +21,11 @@
     "codingAgentHardTimeoutMs": 14400000,
     "codingAgentNoOutputTimeoutMs": 300000,
     "codingAgentMaxAttempts": 5
+  },
+  "discord": {
+    "enabled": true,
+    "serverId": "1180587895921328158",
+    "channelId": "1486502923486757055",
+    "allowedUserIds": ["215660018010161152"]
   }
 }

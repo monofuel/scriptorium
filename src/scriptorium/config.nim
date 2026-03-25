@@ -39,7 +39,7 @@ type
     enabled*: bool
     serverId*: string
     channelId*: string
-    allowedUsers*: seq[string]
+    allowedUserIds*: seq[string]
 
   LoopConfig* = object
     enabled*: bool
@@ -99,7 +99,7 @@ proc defaultConfig*(): Config =
       codingAgentProgressTimeoutMs: 600_000,
       codingAgentMaxAttempts: 5,
     ),
-    discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUsers: @[]),
+    discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
     syncAgentsMd: true,
   )
@@ -173,8 +173,8 @@ proc loadConfig*(repoPath: string): Config =
       result.discord.serverId = parsed.discord.serverId
     if parsed.discord.channelId.len > 0:
       result.discord.channelId = parsed.discord.channelId
-    if parsed.discord.allowedUsers.len > 0:
-      result.discord.allowedUsers = parsed.discord.allowedUsers
+    if parsed.discord.allowedUserIds.len > 0:
+      result.discord.allowedUserIds = parsed.discord.allowedUserIds
   if raw.contains("\"loop\""):
     result.loop.enabled = parsed.loop.enabled
     if parsed.loop.feedback.len > 0:

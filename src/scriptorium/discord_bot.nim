@@ -204,7 +204,7 @@ proc runDiscordBot*(repoPath: string) =
     quit(1)
 
   let serverId = cfg.discord.serverId
-  let allowedUsers = cfg.discord.allowedUsers
+  let allowedUserIds = cfg.discord.allowedUserIds
   let client = newGuildyClient(token)
 
   let onRaw = proc(c: GuildyClient, event: JsonNode) {.gcsafe.} =
@@ -216,7 +216,7 @@ proc runDiscordBot*(repoPath: string) =
       return
     if msg.author.bot:
       return
-    if allowedUsers.len > 0 and msg.author.id notin allowedUsers:
+    if allowedUserIds.len > 0 and msg.author.id notin allowedUserIds:
       return
     let user = msg.author.username
     let content = msg.content
@@ -228,7 +228,7 @@ proc runDiscordBot*(repoPath: string) =
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:
       return
-    if allowedUsers.len > 0 and interaction.user_id notin allowedUsers:
+    if allowedUserIds.len > 0 and interaction.user_id notin allowedUserIds:
       return
     let cmd = interaction.command_name
     echo &"scriptorium: slash command /{cmd}"

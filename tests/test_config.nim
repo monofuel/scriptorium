@@ -19,7 +19,7 @@ proc testDefaultConfigValues() =
   doAssert cfg.discord.enabled == false
   doAssert cfg.discord.serverId == ""
   doAssert cfg.discord.channelId == ""
-  doAssert cfg.discord.allowedUsers.len == 0
+  doAssert cfg.discord.allowedUserIds.len == 0
   doAssert cfg.logLevel == ""
   doAssert cfg.fileLogLevel == ""
   echo "[OK] defaultConfig returns expected default values"
@@ -78,7 +78,7 @@ proc testFullJsonMerge() =
       "codingAgentMaxAttempts": 10
     },
     "loop": {"enabled": true, "feedback": "echo ok", "goal": "ship it", "maxIterations": 5},
-    "discord": {"enabled": true, "serverId": "srv-1", "channelId": "12345", "allowedUsers": ["alice", "bob"]}
+    "discord": {"enabled": true, "serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["alice", "bob"]}
   }"""
   writeFile(tmpDir / "scriptorium.json", json)
 
@@ -103,7 +103,7 @@ proc testFullJsonMerge() =
   doAssert cfg.discord.enabled == true
   doAssert cfg.discord.serverId == "srv-1"
   doAssert cfg.discord.channelId == "12345"
-  doAssert cfg.discord.allowedUsers == @["alice", "bob"]
+  doAssert cfg.discord.allowedUserIds == @["alice", "bob"]
   echo "[OK] full JSON merge loads all values correctly"
 
 proc testEnvVarOverrideLogLevel() =
@@ -144,14 +144,14 @@ proc testDiscordConfigLoading() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"discord": {"enabled": true, "serverId": "srv-42", "channelId": "ch-999", "allowedUsers": ["user1", "user2", "user3"]}}"""
+  let json = """{"discord": {"enabled": true, "serverId": "srv-42", "channelId": "ch-999", "allowedUserIds": ["user1", "user2", "user3"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.discord.enabled == true
   doAssert cfg.discord.serverId == "srv-42"
   doAssert cfg.discord.channelId == "ch-999"
-  doAssert cfg.discord.allowedUsers == @["user1", "user2", "user3"]
+  doAssert cfg.discord.allowedUserIds == @["user1", "user2", "user3"]
   echo "[OK] discord config fields loaded correctly"
 
 proc testDiscordTokenPresent() =
