@@ -1,10 +1,10 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system
+  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag
 
 const
   IdleSleepMs = 200
@@ -187,9 +187,14 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         else:
           logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
 
-      # Step 2: Check health.
-
-      if not hasPlanBranch(repoPath):
+      # Pause check: skip new assignments but continue merge queue and completions.
+      if isPaused(repoPath):
+        logInfo("orchestrator paused, skipping new assignments")
+        let mergeProcessed = processMergeQueue(repoPath)
+        if mergeProcessed:
+          logInfo("merge queue: item processed (paused)")
+        idle = true
+      elif not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
         idle = true
       else:
