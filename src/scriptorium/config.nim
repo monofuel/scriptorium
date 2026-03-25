@@ -35,6 +35,11 @@ type
   Endpoints* = object
     local*: string
 
+  DiscordConfig* = object
+    enabled*: bool
+    channelId*: string
+    allowedUsers*: seq[string]
+
   LoopConfig* = object
     enabled*: bool
     feedback*: string
@@ -56,6 +61,7 @@ type
     endpoints*: Endpoints
     concurrency*: ConcurrencyConfig
     timeouts*: TimeoutConfig
+    discord*: DiscordConfig
     loop*: LoopConfig
     syncAgentsMd*: bool
     logLevel*: string
@@ -92,9 +98,14 @@ proc defaultConfig*(): Config =
       codingAgentProgressTimeoutMs: 600_000,
       codingAgentMaxAttempts: 5,
     ),
+    discord: DiscordConfig(enabled: false, channelId: "", allowedUsers: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
     syncAgentsMd: true,
   )
+
+proc discordTokenPresent*(): bool =
+  ## Return whether the DISCORD_TOKEN environment variable is set.
+  getEnv("DISCORD_TOKEN").len > 0
 
 proc resolveModel*(model: string): string =
   ## Translate Anthropic-style model IDs to Bedrock format when
@@ -155,6 +166,12 @@ proc loadConfig*(repoPath: string): Config =
     result.timeouts.codingAgentProgressTimeoutMs = parsed.timeouts.codingAgentProgressTimeoutMs
   if parsed.timeouts.codingAgentMaxAttempts > 0:
     result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
+  if raw.contains("\"discord\""):
+    result.discord.enabled = parsed.discord.enabled
+    if parsed.discord.channelId.len > 0:
+      result.discord.channelId = parsed.discord.channelId
+    if parsed.discord.allowedUsers.len > 0:
+      result.discord.allowedUsers = parsed.discord.allowedUsers
   if raw.contains("\"loop\""):
     result.loop.enabled = parsed.loop.enabled
     if parsed.loop.feedback.len > 0:
