@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, discord_cli, init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -14,6 +14,7 @@ Usage:
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
   scriptorium ask              Interactive read-only Q&A session with the Architect
   scriptorium audit            Run the audit agent
+  scriptorium discord          Run the Discord bot
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
   scriptorium --help           Show this help"""
@@ -80,6 +81,10 @@ proc cmdAudit() =
   ## Run the audit agent against the current repository.
   runAudit(getCurrentDir())
 
+proc cmdDiscord() =
+  ## Run the Discord bot.
+  runDiscord(getCurrentDir())
+
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
   let worktrees = listActiveTicketWorktrees(getCurrentDir())
@@ -109,6 +114,8 @@ when isMainModule:
     cmdAsk()
   of "audit":
     cmdAudit()
+  of "discord":
+    cmdDiscord()
   of "worktrees":
     cmdWorktrees()
   of "init":
