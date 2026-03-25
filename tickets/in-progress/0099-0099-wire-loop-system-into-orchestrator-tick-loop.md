@@ -42,3 +42,5 @@ Integrate queue-drain detection and feedback cycle into the orchestrator as tick
 - The orchestrator already uses `withPlanWorktree` extensively — follow the same pattern for drain checks.
 - Keep the loop logic minimal in the orchestrator: just detection + invocation. All intelligence lives in the architect prompt and judgment.
 - If the feedback command fails, log the error and skip the cycle (don't crash the orchestrator). Use a try/except around the feedback+architect calls, logging the error at WARN level.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0099-wire-loop-system-into-orchestrator-tick-loop
