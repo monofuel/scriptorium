@@ -89,3 +89,39 @@ The implementation looks correct. Let me verify against all requirements:
 
 Everything looks clean.
 Approved. The implementation cleanly satisfies all five ticket requirements, follows project conventions (import style, doc comments, naming, error handling), and aligns with the spec. The stub is appropriately scoped to the cli-init area.
+
+## Merge Queue Success
+- Summary: Added audit CLI command entry point: case branch for "audit" in the main dispatcher, cmdAudit proc, stub runAudit proc in new src/scriptorium/audit_agent_cli.nim module, and "audit" in the Usage help string.\n
+### Quality Check Output
+```text
+] journal: began transition — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:54:04Z] [INFO] journal: executed steps — complete 0001
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:54:04Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:54:04Z] [INFO] merge queue: item processed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:54:04Z] [INFO] tick 0 summary: architect=updated manager=no-op coding=1/4 agents merge=processing agents=1/4 open=0 in-progress=0 done=1 stuck=0 loop=0
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:54:04Z] [INFO] shutdown: waiting for 1 running agent(s)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] session summary: uptime=4m7s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] session summary: avg_ticket_wall=23s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-10 global halt while red resumes after master health is restored
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] orchestrator PID guard acquired (PID 102308)
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] recovery: clean startup, no recovery needed
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [WARN] master is unhealthy — skipping tick
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] session summary: uptime=0s ticks=1 tickets_completed=3 tickets_reopened=3 tickets_parked=0 merge_queue_processed=3
+[tests/integration_orchestrator_queue.nim] [2026-03-25T05:57:02Z] [INFO] session summary: avg_ticket_wall=23s avg_coding_wall=0s avg_test_wall=0s first_attempt_success=100%
+[tests/integration_orchestrator_queue.nim]   [OK] IT-11 integration-test failure on master blocks assignment of open tickets
+```
+
+## Metrics
+- wall_time_seconds: 748
+- coding_wall_seconds: 74
+- test_wall_seconds: 285
+- attempt_count: 2
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 120322
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 2 attempt(s) in 12m28s.
