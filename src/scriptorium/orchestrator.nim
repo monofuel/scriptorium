@@ -184,11 +184,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           )
         else:
           logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
-        if isRateLimited(completion.result.stdout) or isRateLimited(completion.result.lastMessage):
-          recordRateLimit(completion.ticketId)
 
-      # Step 2: Check backoff / health.
-      discard isRateLimitBackoffActive()
+      # Step 2: Check health.
 
       if not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
@@ -242,17 +239,16 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             if maxAgents <= 1:
               managerChanged = runManagerForAreas(repoPath, runner)
             else:
-              let effectiveMax = effectiveMaxAgents(maxAgents)
               discard withPlanWorktree(repoPath, proc(planPath: string): int =
                 if not hasRunnableSpecInPlanPath(planPath): return 0
                 let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
                 for areaRelPath in areasToProcess:
-                  if emptySlotCount(effectiveMax) <= 0: break
+                  if emptySlotCount(maxAgents) <= 0: break
                   let areaId = areaIdFromAreaPath(areaRelPath)
                   if isManagerRunningForArea(areaId): continue
                   let areaContent = readFile(planPath / areaRelPath)
                   let nextId = nextTicketId(planPath)
-                  startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, effectiveMax, managerAgentWorkerThread)
+                  startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, maxAgents, managerAgentWorkerThread)
                 0
               )
             let managerElapsed = epochTime() - t0
@@ -280,8 +276,6 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
           if isTokenBudgetExceeded(tokenBudgetMB):
             codingStatus = "budget-exceeded"
-          elif isRateLimitBackoffActive():
-            codingStatus = "rate-limited"
           elif maxAgents <= 1:
             if hasRunnableSpec(repoPath):
               t0 = epochTime()
@@ -299,8 +293,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 else:
                   codingStatus = &"{agentResult.ticketId}(failed, {codingDuration})"
           else:
-            let effectiveMax = effectiveMaxAgents(maxAgents)
-            let slotsAvailable = emptySlotCount(effectiveMax)
+            let slotsAvailable = emptySlotCount(maxAgents)
             if slotsAvailable > 0:
               let assignments = assignOpenTickets(repoPath, slotsAvailable)
               for assignment in assignments:

@@ -7,7 +7,7 @@ import
 
 suite "orchestrator final v1 flow":
   setup:
-    resetRateLimitState()
+
     while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
@@ -96,7 +96,7 @@ suite "orchestrator final v1 flow":
 
 suite "orchestrator agent enqueue with fakes":
   setup:
-    resetRateLimitState()
+
     while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
@@ -227,7 +227,7 @@ suite "orchestrator agent enqueue with fakes":
 
 suite "non-blocking tick loop":
   setup:
-    resetRateLimitState()
+
     while consumeSubmitPrSummary() != "": discard
     discard consumeReviewDecision()
     tickSleepOverrideMs = 0
@@ -272,7 +272,7 @@ suite "non-blocking tick loop":
 
 suite "concurrent agent execution":
   setup:
-    resetRateLimitState()
+
     while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 

@@ -1,5 +1,5 @@
 import
-  std/[locks, math, strformat, strutils, tables, times],
+  std/[locks, strformat, strutils, tables, times],
   ./[agent_runner, logging]
 
 const
@@ -21,9 +21,6 @@ const
   ReviewActionMaxBytes* = 32
   ReviewFeedbackMaxBytes* = 4096
   ReviewTruncationMarker* = "... [truncated]"
-  RateLimitBaseBackoffSeconds* = 2.0
-  RateLimitMaxBackoffSeconds* = 120.0
-  RateLimitBackoffMultiplier* = 2.0
   ValidDifficulties* = ["trivial", "easy", "medium", "hard", "complex"]
 
 type
@@ -168,9 +165,6 @@ var
   timingsLock*: Lock
   timingsLockInitialized* = false
   agentRunnerOverride*: AgentRunner
-  rateLimitBackoffUntil*: float = 0.0
-  rateLimitConsecutiveCount*: int = 0
-  rateLimitConcurrencyReduction*: int = 0
 
 proc ensureSubmitPrLockInitialized*() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.
@@ -299,55 +293,6 @@ proc isTokenBudgetExceeded*(tokenBudgetMB: int): bool =
     logInfo(&"resource limit: token budget exhausted ({usedMB}MB/{tokenBudgetMB}MB), pausing new assignments")
     return true
   return false
-
-proc isRateLimited*(output: string): bool =
-  ## Check if agent output contains rate limit indicators (HTTP 429 or equivalent).
-  let lower = output.toLowerAscii()
-  if "429" in lower and ("rate" in lower or "too many" in lower or "limit" in lower):
-    return true
-  if "rate limit" in lower or "rate_limit" in lower or "ratelimit" in lower:
-    return true
-  if "too many requests" in lower:
-    return true
-  return false
-
-proc rateLimitBackoffSeconds*(): float =
-  ## Calculate the current exponential backoff duration based on consecutive rate limit count.
-  if rateLimitConsecutiveCount <= 0:
-    return 0.0
-  let exponent = rateLimitConsecutiveCount - 1
-  let backoff = RateLimitBaseBackoffSeconds * pow(RateLimitBackoffMultiplier, exponent.float)
-  result = min(backoff, RateLimitMaxBackoffSeconds)
-
-proc recordRateLimit*(ticketId: string) =
-  ## Record a rate limit event: increment counter, set backoff expiry, reduce concurrency by 1.
-  rateLimitConsecutiveCount += 1
-  let backoffSecs = rateLimitBackoffSeconds()
-  rateLimitBackoffUntil = epochTime() + backoffSecs
-  rateLimitConcurrencyReduction = rateLimitConsecutiveCount
-  let backoffInt = int(backoffSecs)
-  logInfo(&"resource limit: rate limited (ticket {ticketId}, backing off {backoffInt}s)")
-
-proc isRateLimitBackoffActive*(): bool =
-  ## Check if rate limit backoff is currently active. Restores concurrency when backoff expires.
-  if rateLimitBackoffUntil <= 0.0:
-    return false
-  if epochTime() >= rateLimitBackoffUntil:
-    rateLimitBackoffUntil = 0.0
-    rateLimitConsecutiveCount = 0
-    rateLimitConcurrencyReduction = 0
-    return false
-  return true
-
-proc effectiveMaxAgents*(maxAgents: int): int =
-  ## Return the effective max agents after applying rate limit concurrency reduction.
-  result = max(1, maxAgents - rateLimitConcurrencyReduction)
-
-proc resetRateLimitState*() =
-  ## Reset all rate limit backpressure state.
-  rateLimitBackoffUntil = 0.0
-  rateLimitConsecutiveCount = 0
-  rateLimitConcurrencyReduction = 0
 
 proc resetSessionStats*() =
   ## Reset session statistics to default values.
