@@ -128,3 +128,45 @@ Done. Created `tests/test_init.nim` with 4 passing tests:
 ```text
 ing tests:\n\n1. **Not a git repo** — `runInit` raises `ValueError` on a plain directory\n2. **Already initialized** — `runInit` raises `ValueError` when `scriptorium/plan` branch exists\n3. **Successful init** — verifies plan branch creation, all 6 directories with `.gitkeep`, and `spec.md` presence\n4. **spec.md placeholder content** — verifies exact text matches the constant","stop_reason":"end_turn","session_id":"12dad0b9-5e43-462d-ba79-b89e8cc88dba","total_cost_usd":0.42936199999999997,"usage":{"input_tokens":5746,"cache_creation_input_tokens":29090,"cache_read_input_tokens":269989,"output_tokens":3353,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":29090},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":5746,"outputTokens":3353,"cacheReadInputTokens":269989,"cacheCreationInputTokens":29090,"webSearchRequests":0,"costUSD":0.42936199999999997,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"f4a30e64-0544-4269-a3f2-1b369f1bea19"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 31s
+
+**Review Reasoning:** I'll review the diff against the ticket requirements and project conventions.
+Let me verify the test against the source module.
+Now I have full context. Let me review:
+
+**Ticket requirements:**
+1. Not a git repo → raises ValueError ✅
+2. Already initialized → raises ValueError ✅
+3. Successful init → plan branch, directories with .gitkeep, spec.md ✅
+4. spec.md placeholder content matches ✅
+
+**Convention check:**
+- Import: single block, bracket syntax, std/ first then local ✅
+- Constants: PascalCase, grouped `const` block ✅
+- Doc comments (`##`) on every proc, complete sentences with punctuation ✅
+- No forward declarations ✅
+- `quoteShell` used for paths (improvement over first attempt) ✅
+
+**Spec compliance:**
+- The test's `SpecPlaceholder` matches `init.nim:8` exactly ✅
+- The test's `ExpectedDirs` matches `init.nim:16-23` (`PlanDirs`) exactly ✅
+- The spec's required `tickets/stuck/` directory is present ✅ (note: spec §1 doesn't list `tickets/stuck/` but the code does, and the ticket says to test what `runInit` creates)
+
+**Code quality:**
+- No dead code, no unused imports (`strutils` used for `strip` and `join`) ✅
+- No leftover artifacts ✅
+- No unrelated changes ✅
+- `when isMainModule` pattern matches project conventions ✅
+
+**One minor note:** `createTempRepo` doesn't use `quoteShell` for the `git init` command (line `"git init " & quoteShell(result)`), wait — actually it does use `quoteShell`. All `execCmdEx` calls use `quoteShell`. Good.
+
+Everything looks clean. The test file correctly covers all four ticket requirements, follows project conventions, and matches the source module's behavior.
+
+
+Review approved. The test file correctly covers all four ticket requirements, follows all project conventions (imports, naming, doc comments, variable grouping), and the constants match the source module exactly.
