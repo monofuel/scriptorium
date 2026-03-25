@@ -172,6 +172,42 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
     ],
   )
 
+proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string, iterationLog: string, feedbackOutput: string, iterationNumber: int): string =
+  ## Build the architect loop prompt containing goal, iteration log, feedback, and instructions.
+  let iterNum = $iterationNumber
+  result = &"""You are the architect for a loop-driven development cycle.
+
+## Goal
+
+{goal}
+
+## Current Iteration
+
+Iteration {iterNum}
+
+## Iteration Log
+
+{iterationLog}
+
+## Latest Feedback Output
+
+{feedbackOutput}
+
+## Instructions
+
+- Assess previous results against declared expectations from the prior iteration.
+- Write the next iteration log entry to `iteration_log.md` (iteration number, feedback summary, assessment, strategy, tradeoffs).
+- Update `spec.md`, area files, or create tickets as needed for the next iteration.
+- If results diverge significantly from prior declared expectations, investigate rather than press forward.
+- For hard constraints, treat violations as non-negotiable.
+
+## Workspace
+
+- Repository: {repoPath}
+- Plan worktree: {planPath}
+- You may write to: `spec.md`, `areas/`, `tickets/open/`, `iteration_log.md`
+"""
+
 proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
   var conversationHistory = ""

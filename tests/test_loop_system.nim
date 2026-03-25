@@ -1,6 +1,6 @@
 import
   std/[os, strutils],
-  scriptorium/loop_system
+  scriptorium/[agent_runner, loop_system, prompt_builders]
 
 proc testQueueDrainedAllEmpty() =
   ## Verify isQueueDrained returns true when all directories are empty.
@@ -137,6 +137,42 @@ proc testAppendIterationLogEntryMultiple() =
   doAssert num == 3
   echo "[OK] multiple appends produce correct iteration numbers"
 
+proc testBuildArchitectLoopPromptContents() =
+  ## Verify buildArchitectLoopPrompt includes goal, iteration log, feedback, iteration number, and instructions.
+  let
+    goal = "Reduce test flakiness below 1%"
+    iterLog = "## Iteration 1\nPrevious results here\n"
+    feedback = "3 tests still flaky"
+    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, iterLog, feedback, 2)
+  doAssert goal in prompt
+  doAssert iterLog in prompt
+  doAssert feedback in prompt
+  doAssert "Iteration 2" in prompt
+  doAssert "Assess previous results" in prompt
+  doAssert "Write the next iteration log entry" in prompt
+  doAssert "investigate rather than press forward" in prompt
+  doAssert "hard constraints" in prompt
+  doAssert "non-negotiable" in prompt
+  echo "[OK] buildArchitectLoopPrompt contains goal, log, feedback, iteration number, and instructions"
+
+proc testBuildArchitectLoopPromptWithMockRunner() =
+  ## Verify a mock runner receives a prompt containing expected content.
+  var capturedPrompt = ""
+  let mockRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+    capturedPrompt = request.prompt
+    result = AgentRunResult(exitCode: 0)
+
+  let
+    goal = "Ship v2.0"
+    iterLog = "## Iteration 1\nFirst pass\n"
+    feedback = "Build succeeded"
+    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, iterLog, feedback, 2)
+  discard mockRunner(AgentRunRequest(prompt: prompt, workingDir: "/plan"))
+  doAssert goal in capturedPrompt
+  doAssert iterLog in capturedPrompt
+  doAssert feedback in capturedPrompt
+  echo "[OK] mock runner receives prompt with goal, iteration log, and feedback"
+
 when isMainModule:
   testQueueDrainedAllEmpty()
   testQueueNotDrainedOpenTicket()
@@ -150,3 +186,5 @@ when isMainModule:
   testNextIterationNumberWithEntries()
   testAppendIterationLogEntry()
   testAppendIterationLogEntryMultiple()
+  testBuildArchitectLoopPromptContents()
+  testBuildArchitectLoopPromptWithMockRunner()
