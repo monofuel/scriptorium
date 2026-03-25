@@ -86,3 +86,41 @@ Review complete. Here's my assessment:
 
 
 The changes are clean and correct. Approved — all ticket requirements met, conventions followed, spec-compliant, no quality issues.
+
+## Merge Queue Success
+- Summary: Add pause flag helpers (writePauseFlag, removePauseFlag, isPaused) in new pause_flag.nim module and wire isPaused check into orchestrator tick loop to skip new assignments while still processing merge queue and in-flight completions.\n
+### Quality Check Output
+```text
+0s)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0001: continuation prompt sent (attempt 2/2, test_status=passing)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0001: coding agent started (model=claude-sonnet-4-6, attempt 2/2)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0001: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0001: in-progress -> open (reopened, reason=no submit_pr, attempts=2, total wall=0s)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: began transition — reopen 0001
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: executed steps — reopen 0001
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0002: coding agent started (model=claude-sonnet-4-6, attempt 1/2)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0002: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0002: submit_pr called (summary="submitted")
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: began transition — enqueue 0002
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: executed steps — enqueue 0002
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:06:36Z] [INFO] ticket 0002: merge queue entered (position=1)
+[tests/integration_orchestrator_flow.nim]   [OK] stall detection works independently per agent
+```
+
+## Metrics
+- wall_time_seconds: 957
+- coding_wall_seconds: 183
+- test_wall_seconds: 218
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 373708
+
+## Post-Analysis
+- actual_difficulty: medium
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was medium with 1 attempt(s) in 15m57s.
