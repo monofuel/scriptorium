@@ -25,3 +25,5 @@ The test file must have `--path:"../src"` available via `tests/config.nims` (alr
 ## Files
 
 - `tests/test_init.nim` (new)
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0114-0106-add-unit-tests-for-init-module
