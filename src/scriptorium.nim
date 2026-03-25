@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, discord_cli, init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, discord_bot, init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -83,7 +83,7 @@ proc cmdAudit() =
 
 proc cmdDiscord() =
   ## Run the Discord bot.
-  runDiscord(getCurrentDir())
+  runDiscordBot(getCurrentDir())
 
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
