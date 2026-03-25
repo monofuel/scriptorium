@@ -143,3 +143,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 0 attempt(s) in 0s.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 8
+- reasoning: Only needs to resolve a merge conflict in tests/test_config.nim — the test file content is already written and reviewed, just needs conflict markers resolved and rebased onto master.
