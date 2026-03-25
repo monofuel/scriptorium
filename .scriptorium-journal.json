@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0104",
+  "timestamp": "2026-03-25T04:55:18Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0104.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0104-0104-add-unit-tests-for-config-loading.md\n**Ticket ID:** 0104\n**Branch:** scriptorium/ticket-0104\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0104-0104-add-unit-tests-for-config-loading\n**Summary:** Add tests/test_config.nim with 10 unit tests covering: default config values, missing config file fallback, partial and full JSON merge, SCRIPTORIUM_LOG_LEVEL and SCRIPTORIUM_FILE_LOG_LEVEL env var overrides, discord config loading, discordTokenPresent, resolveModel with/without CLAUDE_CODE_USE_BEDROCK, and inferHarness prefix mapping.\n",
+      "contentHash": "E98D607831635410F7DF27D396C188F77E2A171A"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0104"
+}
