@@ -55,3 +55,37 @@ Submitted. The changes were already complete from the previous attempt — audit
 ,"parent_tool_use_id":null,"session_id":"75e1deb1-2819-4787-a268-6be5b1d6acd4","uuid":"07c356da-a16b-4bc0-b3d7-eda5f6fa39b4"}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":21942,"duration_api_ms":21810,"num_turns":7,"result":"Submitted. The changes were already complete from the previous attempt — audit CLI entry point with case branch, `cmdAudit` proc, stub module, and help string update.","stop_reason":"end_turn","session_id":"75e1deb1-2819-4787-a268-6be5b1d6acd4","total_cost_usd":0.12699325,"usage":{"input_tokens":9,"cache_creation_input_tokens":13797,"cache_read_input_tokens":45684,"output_tokens":715,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":13797},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":9,"outputTokens":715,"cacheReadInputTokens":45684,"cacheCreationInputTokens":13797,"webSearchRequests":0,"costUSD":0.12699325,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"efffdcfd-8cc8-4555-9310-80dddceeade8"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 23s
+
+**Review Reasoning:** Let me review the changes against the ticket requirements and project conventions.
+The implementation looks correct. Let me verify against all requirements:
+
+**Ticket requirements:**
+1. Case branch for `"audit"` in dispatcher — present at line 110-111.
+2. `cmdAudit` proc calling `runAudit` — present at lines 79-81.
+3. `src/scriptorium/audit_agent_cli.nim` with `runAudit*(repoPath: string)` stub that prints error and quits — present and correct.
+4. `"audit"` added to Usage help string after `ask` — present at line 16.
+5. Tests pass — agent confirmed.
+
+**Convention checks:**
+- Import style: single block, bracket syntax, std/ first then local — correct.
+- Doc comments on every proc with `##`, complete sentences with punctuation — correct.
+- No forward declarations — correct.
+- Constants PascalCase, variables camelCase — correct.
+- No try/catch, no boolean error returns — correct.
+
+**Spec compliance:**
+- Spec §1 lists `audit` as a required CLI command — implemented.
+- Spec §19 says `scriptorium audit` runs the audit agent on demand — the stub is appropriate for this cli-init area ticket; full implementation belongs to the audit agent area.
+
+**Code quality:**
+- No dead code, no unused imports, no leftover artifacts, no unrelated changes.
+
+Everything looks clean.
+Approved. The implementation cleanly satisfies all five ticket requirements, follows project conventions (import style, doc comments, naming, error handling), and aligns with the spec. The stub is appropriately scoped to the cli-init area.
