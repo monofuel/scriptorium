@@ -86,3 +86,8 @@ The ticket says to "Add a DiscordConfig type" with just `channelId` and `allowed
 
 Everything else looks correct — the test file follows conventions, the merge block follows the existing pattern, imports are correct.
 **Changes requested:** The diff removes the `enabled` field from `DiscordConfig` that already existed on master and is required by spec §16. The ticket asks to *add* the type with `channelId`/`allowedUsers` — not to remove existing fields. Master already had the complete `DiscordConfig` with `enabled`, `channelId`, and `allowedUsers`, so the only net change needed is the new test file.
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Restoring the `enabled` field that was incorrectly removed and keeping the new test file — minimal diff against master, single file fix plus test, one attempt expected.
