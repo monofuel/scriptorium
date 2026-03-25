@@ -123,3 +123,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: accurate
 - brief_summary: Predicted hard, actual was hard with 1 attempt(s) in 17m7s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Reopened due to merge conflict in test file only — the implementation code was approved and correct; resolving the conflict and ensuring tests pass is a focused single-file fix with no logic changes needed.
