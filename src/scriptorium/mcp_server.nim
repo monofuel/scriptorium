@@ -104,6 +104,36 @@ proc createOrchestratorServer*(): HttpMcpServer =
     recordReviewDecision(action, feedback)
     %*"Review decision recorded."
   server.registerTool(submitReviewTool, submitReviewHandler)
+  let submitTicketsTool = McpTool(
+    name: "submit_tickets",
+    description: "Submit generated tickets for an area to the orchestrator",
+    inputSchema: %*{
+      "type": "object",
+      "properties": {
+        "area_id": {
+          "type": "string",
+          "description": "Area ID these tickets belong to"
+        },
+        "tickets": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Array of ticket markdown content strings"
+        }
+      },
+      "required": ["area_id", "tickets"]
+    },
+  )
+  let submitTicketsHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
+    let areaId = arguments["area_id"].getStr()
+    var tickets: seq[string]
+    for item in arguments["tickets"]:
+      tickets.add(item.getStr())
+    let ticketCount = tickets.len
+    {.cast(gcsafe).}:
+      logInfo(&"manager {areaId}: submit_tickets accepted ({ticketCount} tickets)")
+    recordSubmitTickets(areaId, tickets)
+    %*"Tickets recorded."
+  server.registerTool(submitTicketsTool, submitTicketsHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
 proc shutdownMonitor(server: mummy.Server) {.thread.} =

@@ -1,4 +1,4 @@
-## Unit tests for per-area manager agent: prompt building and ticket document parsing.
+## Unit tests for per-area manager agent: prompt building and submit_tickets MCP state.
 
 import
   std/[os, strutils, unittest],
@@ -41,75 +41,24 @@ suite "buildManagerTicketsPrompt":
     )
     check prompt.contains("0007")
 
-suite "parseTicketDocumentsFromOutput":
-  test "extracts single fenced markdown block":
-    let output = """Some preamble text.
+suite "submit_tickets MCP state":
+  test "recordSubmitTickets and consumeSubmitTickets round-trip":
+    let tickets = @["# Ticket 1\n\nContent.", "# Ticket 2\n\nMore content."]
+    recordSubmitTickets("backend", tickets)
+    let consumed = consumeSubmitTickets("backend")
+    check consumed.len == 2
+    check consumed[0].contains("# Ticket 1")
+    check consumed[1].contains("# Ticket 2")
 
-```markdown
-# Add User Auth
+  test "consumeSubmitTickets returns empty when no tickets recorded":
+    let consumed = consumeSubmitTickets("nonexistent")
+    check consumed.len == 0
 
-Implement user authentication.
-
-**Area:** backend-api
-```
-
-Done.
-"""
-    let docs = parseTicketDocumentsFromOutput(output)
-    check docs.len == 1
-    check docs[0].contains("# Add User Auth")
-    check docs[0].contains("Implement user authentication.")
-
-  test "extracts multiple fenced markdown blocks":
-    let output = """
-```markdown
-# First Ticket
-
-Content one.
-```
-
-Some intermediate text.
-
-```markdown
-# Second Ticket
-
-Content two.
-```
-"""
-    let docs = parseTicketDocumentsFromOutput(output)
-    check docs.len == 2
-    check docs[0].contains("# First Ticket")
-    check docs[1].contains("# Second Ticket")
-
-  test "returns empty seq when no fenced blocks":
-    let docs = parseTicketDocumentsFromOutput("just some text without fences")
-    check docs.len == 0
-
-  test "skips empty fenced blocks":
-    let output = """
-```markdown
-```
-
-```markdown
-# Real Ticket
-
-Content here.
-```
-"""
-    let docs = parseTicketDocumentsFromOutput(output)
-    check docs.len == 1
-    check docs[0].contains("# Real Ticket")
-
-  test "handles fenced block with no closing fence":
-    let output = """
-```markdown
-# Unclosed Block
-
-This block has no closing fence.
-"""
-    let docs = parseTicketDocumentsFromOutput(output)
-    check docs.len == 1
-    check docs[0].contains("# Unclosed Block")
+  test "consumeSubmitTickets clears state after consumption":
+    recordSubmitTickets("frontend", @["# T1\n\nContent."])
+    discard consumeSubmitTickets("frontend")
+    let second = consumeSubmitTickets("frontend")
+    check second.len == 0
 
 suite "writeTicketsForAreaFromStrings":
   test "writes ticket files with area field and sequential IDs":

@@ -54,42 +54,24 @@ proc writeTicketsForArea*(
 
   result = hasChanges
 
-proc parseTicketDocumentsFromOutput*(output: string): seq[string] =
-  ## Parse ticket markdown documents from agent output fenced blocks.
-  ## Extracts content between ```markdown and ``` fences.
-  var i = 0
-  let lines = output.splitLines()
-  while i < lines.len:
-    let line = lines[i].strip()
-    if line.startsWith("```") and "markdown" in line.toLowerAscii():
-      inc i
-      var docLines: seq[string]
-      while i < lines.len:
-        if lines[i].strip() == "```":
-          inc i
-          break
-        docLines.add(lines[i])
-        inc i
-      let content = docLines.join("\n").strip()
-      if content.len > 0:
-        result.add(content)
-    else:
-      inc i
-
 proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: string,
     nextId: int, runner: AgentRunner): seq[string] =
   ## Run the manager agent for a single area and return ticket documents in memory.
-  ## The agent runs in the project repo directory and produces tickets via stdout.
-  ## It does not touch the plan worktree directly.
+  ## The agent calls the submit_tickets MCP tool to deliver tickets.
   let cfg = loadConfig(repoPath)
   let areaRelPath = PlanAreasDir / areaId & ".md"
   let prompt = buildManagerTicketsPrompt(repoPath, areaId, areaRelPath, areaContent, nextId)
-  let agentResult = runner(AgentRunRequest(
+
+  # Clear any stale tickets from a previous run for this area.
+  discard consumeSubmitTickets(areaId)
+
+  discard runner(AgentRunRequest(
     prompt: prompt,
     workingDir: repoPath,
     harness: cfg.agents.manager.harness,
     model: cfg.agents.manager.model,
     reasoningEffort: cfg.agents.manager.reasoningEffort,
+    mcpEndpoint: cfg.endpoints.local,
     ticketId: ManagerTicketIdPrefix & areaId,
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
@@ -100,9 +82,8 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
         logDebug(&"manager[{areaId}]: {event.text}"),
   ))
 
-  # Parse ticket documents from agent output.
-  let output = agentResult.stdout & "\n" & agentResult.lastMessage
-  result = parseTicketDocumentsFromOutput(output)
+  # Consume tickets submitted via the MCP tool.
+  result = consumeSubmitTickets(areaId)
 
 proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     ticketDocs: seq[string], nextId: int) =

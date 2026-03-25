@@ -150,6 +150,7 @@ var
   submitPrLock*: Lock
   submitPrLockInitialized* = false
   submitPrSummaries*: Table[string, string]
+  submitTicketsEntries*: Table[string, seq[string]]
   activeTicketEntries*: Table[string, string]
   reviewActionLen* = 0
   reviewActionBuffer*: array[ReviewActionMaxBytes, char]
@@ -204,6 +205,22 @@ proc consumeSubmitPrSummary*(ticketId: string = ""): string {.gcsafe.} =
           result = v
           submitPrSummaries.del(k)
           break
+
+proc recordSubmitTickets*(areaId: string, tickets: seq[string]) {.gcsafe.} =
+  ## Store submitted tickets for a manager area.
+  ensureSubmitPrLockInitialized()
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      submitTicketsEntries[areaId] = tickets
+
+proc consumeSubmitTickets*(areaId: string): seq[string] {.gcsafe.} =
+  ## Return and clear submitted tickets for a manager area.
+  ensureSubmitPrLockInitialized()
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      if submitTicketsEntries.hasKey(areaId):
+        result = submitTicketsEntries[areaId]
+        submitTicketsEntries.del(areaId)
 
 proc setActiveTicketWorktree*(worktreePath: string, ticketId: string) {.gcsafe.} =
   ## Register an active ticket worktree mapping.

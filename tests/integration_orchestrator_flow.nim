@@ -44,12 +44,13 @@ suite "orchestrator final v1 flow":
           timeoutKind: "none",
         )
       of "manager-01-full-flow":
+        recordSubmitTickets("01-full-flow", @["# Full Flow\n\n**Area:** 01-full-flow"])
         result = AgentRunResult(
           backend: harnessCodex,
           exitCode: 0,
           attempt: 1,
           attemptCount: 1,
-          lastMessage: "```markdown\n# Full Flow\n\n**Area:** 01-full-flow\n```",
+          lastMessage: "tickets submitted",
           timeoutKind: "none",
         )
       of "0001-prediction":
