@@ -57,3 +57,41 @@ Everything checks out:
 - **Spec compliance**: `discord` is listed in §1 CLI commands and §23 describes the full bot. The stub is appropriate for the cli-init area scope.
 - **Code quality**: No dead code, no unused imports, no leftover artifacts, no unrelated changes.
 Approved. The changes are clean, minimal, and match the ticket requirements exactly. The implementation follows the existing `audit` command pattern correctly.
+
+## Merge Queue Success
+- Summary: Added "discord" CLI command entry point: new case branch in scriptorium.nim dispatching to cmdDiscord, new discord_cli.nim stub module with runDiscord proc, and "discord" added to Usage help string.\n
+### Quality Check Output
+```text
+0s)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:38Z] [INFO] ticket 0001: continuation prompt sent (attempt 2/2, test_status=passing)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:38Z] [INFO] ticket 0001: coding agent started (model=claude-sonnet-4-6, attempt 2/2)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:38Z] [INFO] ticket 0001: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0001: in-progress -> open (reopened, reason=no submit_pr, attempts=2, total wall=0s)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0001: post-analysis skipped (no prediction section)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: began transition — reopen 0001
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: executed steps — reopen 0001
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0002: coding agent started (model=claude-sonnet-4-6, attempt 1/2)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0002: coding agent finished (exit=0, wall=0s, stall=true)
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0002: submit_pr called (summary="submitted")
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: began transition — enqueue 0002
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: executed steps — enqueue 0002
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] journal: transition complete
+[tests/integration_orchestrator_flow.nim] [2026-03-25T06:16:39Z] [INFO] ticket 0002: merge queue entered (position=1)
+[tests/integration_orchestrator_flow.nim]   [OK] stall detection works independently per agent
+```
+
+## Metrics
+- wall_time_seconds: 858
+- coding_wall_seconds: 62
+- test_wall_seconds: 204
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 120218
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 14m18s.
