@@ -74,3 +74,35 @@ The review is complete. Here's my assessment:
 
 **Minor note**: The `execCmdEx` calls in `testSuccessfulInit` use unquoted string concatenation for paths (e.g., `"git -C " & repo & " ..."`), whereas the source code uses `quoteShell`. This is safe here since temp paths won't contain spaces, but it's a small inconsistency. Not worth blocking on.
 Approved. The test file covers all four ticket requirements correctly, follows project conventions, and matches the actual behavior of `runInit` in `src/scriptorium/init.nim`.
+
+## Merge Queue Failure
+- Summary: Add tests/test_init.nim with 4 unit tests for the init module: non-git directory raises ValueError, already-initialized repo raises ValueError, successful init creates plan branch with expected directory structure and .gitkeep files, and spec.md placeholder content matches exactly.\n- Failed gate: make test\n
+### Merge Output
+```text
+Current branch scriptorium/ticket-0114 is up to date.
+```
+
+### Quality Check Output
+```text
+$ make test
+nimby sync -g nimby.lock
+Nimby 0.1.20
+Using global packages directory.
+Nimby is already running, delete ~/.nimby/nimbylock to release lock
+make: *** [Makefile:7: nim.cfg] Error 1
+```
+
+## Metrics
+- wall_time_seconds: 146
+- coding_wall_seconds: 74
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 105936
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted medium, actual was hard with 1 attempt(s) in 2m26s.
