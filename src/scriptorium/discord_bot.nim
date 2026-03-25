@@ -17,7 +17,7 @@ proc truncateMessage(msg: string): string =
     result = msg[0 ..< DiscordMessageLimit - 3] & "..."
 
 proc registerSlashCommands(token: string) =
-  ## Register /status and /queue as global application commands.
+  ## Register slash commands as global application commands.
   let client = newHttpClient()
   client.headers = newHttpHeaders({
     "Authorization": "Bot " & token,
@@ -31,11 +31,13 @@ proc registerSlashCommands(token: string) =
   let commands = %*[
     {"name": "status", "type": ApplicationCommandType, "description": "Show orchestrator status and ticket counts"},
     {"name": "queue", "type": ApplicationCommandType, "description": "Show merge queue and ticket lists"},
+    {"name": "pause", "type": ApplicationCommandType, "description": "Pause the orchestrator"},
+    {"name": "resume", "type": ApplicationCommandType, "description": "Resume the orchestrator"},
   ]
   let url = DiscordApiBase & "/applications/" & appId & "/commands"
   discard client.putContent(url, $commands)
   client.close()
-  echo "scriptorium: registered /status and /queue slash commands"
+  echo "scriptorium: registered slash commands"
 
 proc respondToInteraction(token: string, interactionId: string, interactionToken: string, content: string) =
   ## Send an interaction response to Discord.
@@ -144,6 +146,22 @@ proc formatQueueMessage(repoPath: string): string =
   lines.add(queueResult)
   result = lines.join("\n")
 
+proc handlePause(repoPath: string): string =
+  ## Handle the /pause slash command.
+  if isPaused(repoPath):
+    result = "Orchestrator is already paused."
+  else:
+    writePauseFlag(repoPath)
+    result = "Orchestrator paused. In-flight agents will finish but no new work will start."
+
+proc handleResume(repoPath: string): string =
+  ## Handle the /resume slash command.
+  if not isPaused(repoPath):
+    result = "Orchestrator was not paused."
+  else:
+    removePauseFlag(repoPath)
+    result = "Orchestrator resumed. New work will be picked up on the next tick."
+
 proc runDiscordBot*(repoPath: string) =
   ## Start the Discord bot gateway connection.
   let token = getEnv("DISCORD_TOKEN")
@@ -189,6 +207,10 @@ proc runDiscordBot*(repoPath: string) =
       response = formatStatusMessage(repoPath)
     of "queue":
       response = formatQueueMessage(repoPath)
+    of "pause":
+      response = handlePause(repoPath)
+    of "resume":
+      response = handleResume(repoPath)
     else:
       response = "Unknown command."
     respondToInteraction(token, interaction.id, interaction.token, response)
