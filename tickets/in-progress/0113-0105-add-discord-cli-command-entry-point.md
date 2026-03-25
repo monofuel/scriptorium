@@ -20,3 +20,8 @@ The spec (Section 1) requires the CLI to support `discord`, but `src/scriptorium
 - `src/scriptorium/discord_cli.nim` (new)
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0113-0105-add-discord-cli-command-entry-point
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Boilerplate CLI dispatch addition across two files with a stub proc, mirroring the existing audit command pattern, one attempt expected.
