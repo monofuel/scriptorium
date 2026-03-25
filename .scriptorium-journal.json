@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0105-0103-add-discordconfig-to-config-model",
+  "timestamp": "2026-03-25T04:44:02Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0105-0103-add-discordconfig-to-config-model.md",
+      "destination": "tickets/in-progress/0105-0103-add-discordconfig-to-config-model.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0105-0103-add-discordconfig-to-config-model.md",
+      "content": "# 0103 — Add DiscordConfig to config model\n\n**Area:** discord\n\n## Description\n\nAdd a `DiscordConfig` type to `src/scriptorium/config.nim` and wire it into `Config`, `defaultConfig`, and `loadConfig`.\n\n### Requirements\n\n1. Add a new type:\n```nim\nDiscordConfig* = object\n  channelId*: string\n  allowedUsers*: seq[string]\n```\n\n2. Add `discord*: DiscordConfig` field to the `Config` object.\n\n3. In `defaultConfig()`, initialize with empty defaults: `discord: DiscordConfig(channelId: \"\", allowedUsers: @[])`.\n\n4. In `loadConfig()`, merge parsed discord fields into result when the `\"discord\"` key is present in raw JSON (same pattern as the `\"loop\"` merge block).\n\n5. The bot token is read from the `DISCORD_TOKEN` environment variable at runtime — it is **never** stored in config. Do not add a token field.\n\n6. Add a unit test in `tests/test_config.nim` (or create it if absent) that verifies:\n   - `defaultConfig().discord.channelId == \"\"`\n   - `defaultConfig().discord.allowedUsers.len == 0`\n   - A JSON config with a discord section round-trips through `loadConfig` correctly.\n\n### Notes\n\n- Use `jsony` for JSON deserialization (already imported in config.nim).\n- Follow existing merge patterns — check `raw.contains(\"\\\"discord\\\"\")` before merging.\n- Constants use PascalCase, variables use camelCase.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0105-0103-add-discordconfig-to-config-model\n",
+      "contentHash": "463968846936826AD29881F6E9397BD261561EF0"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0105-0103-add-discordconfig-to-config-model"
+}
