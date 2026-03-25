@@ -32,3 +32,8 @@ Implement pause flag file management in `.scriptorium/` and make the orchestrato
 - Import `os` for `fileExists`, `writeFile`, `removeFile`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0106-0104-add-pause-flag-helpers-and-wire-into-orchestrator
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Simple file presence check helpers (3 small procs) plus a single guard clause in the orchestrator tick loop, with straightforward unit tests — all well-specified with minimal integration risk.
