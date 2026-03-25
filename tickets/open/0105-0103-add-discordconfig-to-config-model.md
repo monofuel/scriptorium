@@ -119,3 +119,27 @@ tests/test_config.nim` file with 4 tests:\n- `defaultConfig().discord.channelId`
 
 **Review Reasoning:** The diff adds a single test file with 4 well-structured tests covering all DiscordConfig fields. Imports follow conventions, procs have proper doc comments, naming is correct, and there's no dead code or unused imports. No changes to `config.nim` since master already has the complete implementation.
 Review approved. The test file is clean and covers all required cases: empty defaults for `channelId` and `allowedUsers`, `enabled` defaulting to false, and a JSON round-trip through `loadConfig`.
+
+## Merge Queue Failure
+- Summary: Added unit tests for DiscordConfig in tests/test_config.nim. Master already had the complete DiscordConfig implementation (with enabled, channelId, allowedUsers fields), so the only change needed was the test file. Tests verify empty defaults and JSON round-trip through loadConfig.\n
+### Merge Output
+```text
+Auto-merging tests/test_config.nim
+CONFLICT (add/add): Merge conflict in tests/test_config.nim
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+## Metrics
+- wall_time_seconds: 0
+- coding_wall_seconds: 0
+- test_wall_seconds: 0
+- attempt_count: 0
+- outcome: reopened
+- failure_reason: merge_conflict
+- model: unknown
+- stdout_bytes: 0
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 0 attempt(s) in 0s.
