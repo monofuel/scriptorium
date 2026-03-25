@@ -18,3 +18,5 @@ The spec (Section 1) requires the CLI to support `audit`, but `src/scriptorium.n
 
 - `src/scriptorium.nim`
 - `src/scriptorium/audit_agent_cli.nim` (new)
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0112-0104-add-audit-cli-command-entry-point
