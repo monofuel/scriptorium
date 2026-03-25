@@ -28,3 +28,5 @@ The area spec requires `discord.enabled`, `discord.channelId`, and `discord.allo
 ## Files to modify
 
 - `src/scriptorium/config.nim`
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0103-0103-add-discord-config-fields-to-confignim
