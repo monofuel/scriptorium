@@ -26,3 +26,19 @@ services:
       - AWS_REGION
     entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]
+
+  discord:
+    init: true
+    build:
+      context: .
+    volumes:
+      - .:/workspace
+      - ~/.aws:/home/scriptorium/.aws:ro
+    working_dir: /workspace
+    env_file: .env
+    environment:
+      - CLAUDE_CODE_USE_BEDROCK
+      - AWS_PROFILE
+      - AWS_REGION
+    entrypoint: ["/app/scripts/entrypoint.sh"]
+    command: ["discord"]
