@@ -3,7 +3,7 @@
 import
   std/[options, os, posix, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[dashboard, git_ops, pause_flag]
+  scriptorium/[dashboard, git_ops, pause_flag, ticket_metadata]
 
 suite "formatUptime":
   test "seconds only":
@@ -94,3 +94,40 @@ suite "getApiStatus":
     check "uptime" in json
     check "paused" in json
     check "loopIteration" in json
+
+suite "parseTitleFromTicketContent":
+  test "extracts title from first heading":
+    let content = "# My Ticket Title\n\n**Area:** dashboard\n\nSome body."
+    check parseTitleFromTicketContent(content) == "My Ticket Title"
+
+  test "returns empty string when no heading":
+    check parseTitleFromTicketContent("No heading here\njust text") == ""
+
+  test "ignores sub-headings and finds first h1":
+    let content = "## Sub heading\n# Real Title"
+    check parseTitleFromTicketContent(content) == "Real Title"
+
+  test "strips extra whitespace from title":
+    check parseTitleFromTicketContent("#   Spaced Title  ") == "Spaced Title"
+
+suite "parseTicketSummary":
+  test "extracts id, area, title, and state":
+    let content = "# Add Foo Feature\n\n**Area:** dashboard\n\nDescription."
+    let summary = parseTicketSummary("0042-add-foo.md", content, "open")
+    check summary.id == "0042"
+    check summary.area == "dashboard"
+    check summary.title == "Add Foo Feature"
+    check summary.state == "open"
+
+  test "handles ticket with no area field":
+    let content = "# No Area Ticket\n\nJust content."
+    let summary = parseTicketSummary("0001-no-area.md", content, "done")
+    check summary.id == "0001"
+    check summary.area == ""
+    check summary.title == "No Area Ticket"
+    check summary.state == "done"
+
+  test "uses ticketIdFromTicketPath for ID extraction":
+    let content = "# Test\n\n**Area:** core"
+    let summary = parseTicketSummary("0100-long-slug-name.md", content, "in-progress")
+    check summary.id == "0100"

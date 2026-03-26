@@ -2,7 +2,7 @@ import
   std/[options, os, posix, strformat, strutils, times],
   jsony,
   mummy, mummy/routers,
-  ./[config, git_ops, logging, pause_flag]
+  ./[config, git_ops, logging, pause_flag, ticket_metadata]
 
 type
   DashboardStatus* = object
@@ -102,6 +102,117 @@ proc statusHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+type
+  TicketSummary* = object
+    id*: string
+    area*: string
+    title*: string
+    state*: string
+
+  TicketDetail* = object
+    id*: string
+    area*: string
+    title*: string
+    state*: string
+    content*: string
+
+  TicketListResponse* = object
+    open*: seq[TicketSummary]
+    inProgress*: seq[TicketSummary]
+    done*: seq[TicketSummary]
+
+proc parseTitleFromTicketContent*(content: string): string =
+  ## Extract the title from the first markdown heading in ticket content.
+  for line in content.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith("# "):
+      result = trimmed[2..^1].strip()
+      break
+
+proc parseTicketSummary*(filename: string, content: string, state: string): TicketSummary =
+  ## Build a ticket summary from a filename, its markdown content, and state.
+  let ticketId = ticketIdFromTicketPath(filename)
+  let area = parseAreaFromTicketContent(content)
+  let title = parseTitleFromTicketContent(content)
+  result = TicketSummary(id: ticketId, area: area, title: title, state: state)
+
+proc listTicketsInState(repoPath: string, state: string): seq[TicketSummary] =
+  ## List all tickets in the given state directory from the plan branch.
+  let dirPath = PlanBranch & ":tickets/" & state
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirPath])
+  if dirResult.exitCode != 0:
+    return
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    let filePath = "tickets/" & state & "/" & trimmed
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    result.add(parseTicketSummary(trimmed, fileResult.output, state))
+
+proc findTicketById(repoPath: string, ticketId: string): Option[TicketDetail] =
+  ## Search all ticket state directories for a ticket matching the given ID.
+  let states = ["open", "in-progress", "done"]
+  for state in states:
+    let dirPath = PlanBranch & ":tickets/" & state
+    let dirResult = runCommandCapture(repoPath, "git", @["show", dirPath])
+    if dirResult.exitCode != 0:
+      continue
+    for line in dirResult.output.splitLines():
+      let trimmed = line.strip()
+      if trimmed.len == 0 or not trimmed.endsWith(".md"):
+        continue
+      let fileId = ticketIdFromTicketPath(trimmed)
+      if fileId != ticketId:
+        continue
+      let filePath = "tickets/" & state & "/" & trimmed
+      let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+      if fileResult.exitCode != 0:
+        continue
+      let area = parseAreaFromTicketContent(fileResult.output)
+      let title = parseTitleFromTicketContent(fileResult.output)
+      return some(TicketDetail(
+        id: fileId, area: area, title: title,
+        state: state, content: fileResult.output,
+      ))
+
+proc ticketsHandler(request: Request) =
+  ## Handle GET /api/tickets and return JSON list of tickets by state.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  var resp: TicketListResponse
+  resp.open = listTicketsInState(repoPath, "open")
+  resp.inProgress = listTicketsInState(repoPath, "in-progress")
+  resp.done = listTicketsInState(repoPath, "done")
+  let body = toJson(resp)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc ticketDetailHandler(request: Request) =
+  ## Handle GET /api/tickets/:id and return JSON ticket detail or 404.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let pathParts = request.uri.split("/")
+  if pathParts.len < 4:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "ticket not found"}""")
+    return
+  let ticketId = pathParts[3]
+  let detail = findTicketById(repoPath, ticketId)
+  if detail.isNone:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "ticket not found"}""")
+    return
+  let body = toJson(detail.get)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -112,6 +223,8 @@ proc runDashboard*(repoPath: string) =
   var router: Router
   router.get("/", indexHandler)
   router.get("/api/status", statusHandler)
+  router.get("/api/tickets", ticketsHandler)
+  router.get("/api/tickets/*", ticketDetailHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)
