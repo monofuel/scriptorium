@@ -3,7 +3,7 @@
 import
   std/[options, os, posix, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[dashboard, git_ops, pause_flag, ticket_metadata]
+  scriptorium/[dashboard, git_ops, pause_flag]
 
 suite "formatUptime":
   test "seconds only":
@@ -131,3 +131,57 @@ suite "parseTicketSummary":
     let content = "# Test\n\n**Area:** core"
     let summary = parseTicketSummary("0100-long-slug-name.md", content, "in-progress")
     check summary.id == "0100"
+
+suite "parseQueueItemSummary":
+  test "parses all fields from merge queue markdown":
+    let content = "# Merge Queue Item\n\n" &
+      "**Ticket:** tickets/in-progress/0042-add-foo.md\n" &
+      "**Ticket ID:** 0042\n" &
+      "**Branch:** scriptorium/ticket-0042\n" &
+      "**Worktree:** /tmp/worktree-0042\n" &
+      "**Summary:** Add foo feature\n"
+    let item = parseQueueItemSummary(content)
+    check item.ticketId == "0042"
+    check item.branch == "scriptorium/ticket-0042"
+    check item.summary == "Add foo feature"
+
+  test "handles missing fields gracefully":
+    let content = "# Merge Queue Item\n\n**Ticket ID:** 0099\n"
+    let item = parseQueueItemSummary(content)
+    check item.ticketId == "0099"
+    check item.branch == ""
+    check item.summary == ""
+
+  test "handles empty content":
+    let item = parseQueueItemSummary("")
+    check item.ticketId == ""
+    check item.branch == ""
+    check item.summary == ""
+
+suite "parseMergeOutcome":
+  test "parses success outcome":
+    let content = "# Ticket\n\n## Merge Queue Success\n- Summary: Added new feature\n\n## Post-Analysis\n"
+    let outcome = parseMergeOutcome(content, "0042")
+    check outcome.isSome
+    check outcome.get.ticketId == "0042"
+    check outcome.get.outcome == "success"
+    check outcome.get.summary == "Added new feature"
+
+  test "parses failure outcome":
+    let content = "# Ticket\n\n## Merge Queue Failure\n- Summary: Fix bug\n- Failed gate: make test\n"
+    let outcome = parseMergeOutcome(content, "0050")
+    check outcome.isSome
+    check outcome.get.ticketId == "0050"
+    check outcome.get.outcome == "failure"
+    check outcome.get.summary == "Fix bug"
+
+  test "returns none when no merge section":
+    let content = "# Ticket\n\n## Description\nJust a ticket.\n"
+    let outcome = parseMergeOutcome(content, "0001")
+    check outcome.isNone
+
+  test "stops at next heading after merge section":
+    let content = "# Ticket\n\n## Merge Queue Success\n- Summary: Done\n\n## Review\n- Summary: Not this\n"
+    let outcome = parseMergeOutcome(content, "0010")
+    check outcome.isSome
+    check outcome.get.summary == "Done"

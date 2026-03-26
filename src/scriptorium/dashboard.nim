@@ -1,8 +1,8 @@
 import
-  std/[options, os, posix, strformat, strutils, times],
+  std/[algorithm, options, os, posix, strformat, strutils, times],
   jsony,
   mummy, mummy/routers,
-  ./[config, git_ops, logging, pause_flag, ticket_metadata]
+  ./[config, git_ops, logging, pause_flag, shared_state, ticket_metadata]
 
 type
   DashboardStatus* = object
@@ -213,6 +213,130 @@ proc ticketDetailHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+const
+  RecentOutcomesLimit = 10
+
+type
+  QueueItemSummary* = object
+    ticketId*: string
+    branch*: string
+    summary*: string
+
+  MergeOutcome* = object
+    ticketId*: string
+    outcome*: string
+    summary*: string
+
+  QueueResponse* = object
+    pending*: seq[QueueItemSummary]
+    active*: Option[QueueItemSummary]
+    recentOutcomes*: seq[MergeOutcome]
+
+proc parseQueueItemSummary*(content: string): QueueItemSummary =
+  ## Parse a merge queue item markdown into a QueueItemSummary.
+  let ticketId = parseQueueField(content, "**Ticket ID:**")
+  let branch = parseQueueField(content, "**Branch:**")
+  let summary = parseQueueField(content, "**Summary:**")
+  result = QueueItemSummary(ticketId: ticketId, branch: branch, summary: summary)
+
+proc listPendingQueueItems*(repoPath: string): seq[QueueItemSummary] =
+  ## List pending merge queue items from the plan branch.
+  let dirRef = PlanBranch & ":" & PlanMergeQueuePendingDir
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirRef])
+  if dirResult.exitCode != 0:
+    return
+  var files: seq[string] = @[]
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    files.add(trimmed)
+  files.sort()
+  for filename in files:
+    let filePath = PlanMergeQueuePendingDir & "/" & filename
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    result.add(parseQueueItemSummary(fileResult.output))
+
+proc getActiveQueueItem*(repoPath: string): Option[QueueItemSummary] =
+  ## Read the active merge queue item from the plan branch.
+  let activeRef = PlanBranch & ":" & PlanMergeQueueActivePath
+  let activeResult = runCommandCapture(repoPath, "git", @["show", activeRef])
+  if activeResult.exitCode != 0:
+    return none(QueueItemSummary)
+  let activePendingPath = activeResult.output.strip()
+  if activePendingPath.len == 0:
+    return none(QueueItemSummary)
+  let fileRef = PlanBranch & ":" & activePendingPath
+  let fileResult = runCommandCapture(repoPath, "git", @["show", fileRef])
+  if fileResult.exitCode != 0:
+    return none(QueueItemSummary)
+  result = some(parseQueueItemSummary(fileResult.output))
+
+proc parseMergeOutcome*(ticketContent: string, ticketId: string): Option[MergeOutcome] =
+  ## Extract merge outcome from a done ticket's content.
+  var inMergeSection = false
+  var outcome = ""
+  var summary = ""
+  for line in ticketContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed == "## Merge Queue Success":
+      inMergeSection = true
+      outcome = "success"
+      continue
+    if trimmed == "## Merge Queue Failure":
+      inMergeSection = true
+      outcome = "failure"
+      continue
+    if inMergeSection and trimmed.startsWith("## "):
+      break
+    if inMergeSection and trimmed.startsWith("- Summary: "):
+      summary = trimmed["- Summary: ".len..^1].strip()
+  if outcome.len > 0:
+    return some(MergeOutcome(ticketId: ticketId, outcome: outcome, summary: summary))
+
+proc getRecentMergeOutcomes*(repoPath: string): seq[MergeOutcome] =
+  ## Read the last done tickets and extract merge outcomes.
+  let dirRef = PlanBranch & ":" & PlanTicketsDoneDir
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirRef])
+  if dirResult.exitCode != 0:
+    return
+  var files: seq[string] = @[]
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    files.add(trimmed)
+  files.sort(order = SortOrder.Descending)
+  for filename in files:
+    let filePath = PlanTicketsDoneDir & "/" & filename
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    let ticketId = ticketIdFromTicketPath(filename)
+    let outcomeOpt = parseMergeOutcome(fileResult.output, ticketId)
+    if outcomeOpt.isSome:
+      result.add(outcomeOpt.get)
+      if result.len >= RecentOutcomesLimit:
+        break
+
+proc getApiQueue*(repoPath: string): QueueResponse =
+  ## Build the queue response object from plan branch data.
+  result.pending = listPendingQueueItems(repoPath)
+  result.active = getActiveQueueItem(repoPath)
+  result.recentOutcomes = getRecentMergeOutcomes(repoPath)
+
+proc queueHandler(request: Request) =
+  ## Handle GET /api/queue and return JSON merge queue state.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let queue = getApiQueue(repoPath)
+  let body = toJson(queue)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -225,6 +349,7 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/status", statusHandler)
   router.get("/api/tickets", ticketsHandler)
   router.get("/api/tickets/*", ticketDetailHandler)
+  router.get("/api/queue", queueHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)
