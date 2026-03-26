@@ -821,3 +821,100 @@ suite "renderAgentsPage":
     check "<!DOCTYPE html>" in html
     check """class="active">Agents""" in html
     check "Agents" in html
+
+suite "listLogIds":
+  test "returns empty seq when role directory does not exist":
+    let tmp = createTempDir("logids_missing_", "", getTempDir())
+    defer: removeDir(tmp)
+    let ids = listLogIds(tmp, "coder")
+    check ids.len == 0
+
+  test "returns sorted subdirectory names":
+    let tmp = createTempDir("logids_multi_", "", getTempDir())
+    defer: removeDir(tmp)
+    let roleDir = tmp / ".scriptorium" / "logs" / "coder"
+    createDir(roleDir / "0042")
+    createDir(roleDir / "0010")
+    createDir(roleDir / "0099")
+    let ids = listLogIds(tmp, "coder")
+    check ids == @["0010", "0042", "0099"]
+
+  test "ignores files in role directory":
+    let tmp = createTempDir("logids_files_", "", getTempDir())
+    defer: removeDir(tmp)
+    let roleDir = tmp / ".scriptorium" / "logs" / "review"
+    createDir(roleDir)
+    writeFile(roleDir / "stray-file.txt", "ignored")
+    createDir(roleDir / "0001")
+    let ids = listLogIds(tmp, "review")
+    check ids == @["0001"]
+
+suite "escapeHtml":
+  test "escapes angle brackets and ampersand":
+    let escaped = escapeHtml("<script>alert('xss')</script>")
+    check "<script>" notin escaped
+    check "&lt;" in escaped
+    check "&gt;" in escaped
+
+  test "escapes ampersand":
+    let escaped = escapeHtml("a & b")
+    check "&amp;" in escaped
+
+  test "passes through plain text unchanged":
+    let escaped = escapeHtml("hello world")
+    check escaped == "hello world"
+
+suite "renderSpecSection":
+  test "contains htmx-loaded pre block":
+    let html = renderSpecSection()
+    check """hx-get="/fragments/spec"""" in html
+    check """hx-trigger="load"""" in html
+    check "spec-content" in html
+    check "Loading spec..." in html
+
+suite "renderSpecPage":
+  test "produces full HTML page with spec view active":
+    let html = renderSpecPage()
+    check "<!DOCTYPE html>" in html
+    check """class="active">Spec""" in html
+    check "spec-content" in html
+
+suite "renderLogsSection":
+  test "contains role dropdown with all valid roles":
+    let html = renderLogsSection()
+    check """value="coder"""" in html
+    check """value="manager"""" in html
+    check """value="review"""" in html
+    check """value="architect"""" in html
+    check """value="audit"""" in html
+
+  test "contains ID dropdown with htmx trigger":
+    let html = renderLogsSection()
+    check """id="log-id"""" in html
+    check """hx-get="/api/log-content"""" in html
+
+  test "contains log content pre block":
+    let html = renderLogsSection()
+    check """id="log-content"""" in html
+    check "log-content" in html
+
+suite "renderLogsPage":
+  test "produces full HTML page with logs view active":
+    let html = renderLogsPage()
+    check "<!DOCTYPE html>" in html
+    check """class="active">Logs""" in html
+
+suite "renderLogIdOptions":
+  test "renders default option when empty":
+    let html = renderLogIdOptions(@[])
+    check """Select ID...""" in html
+
+  test "renders option elements for each id":
+    let html = renderLogIdOptions(@["0042", "0099"])
+    check """value="0042"""" in html
+    check """value="0099"""" in html
+
+  test "escapes HTML in id values":
+    let html = renderLogIdOptions(@["<script>"])
+    check "<script>" notin html
+    check "&lt;script&gt;" in html

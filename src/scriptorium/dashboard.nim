@@ -6,6 +6,16 @@ import
   ./[architect_agent, config, dashboard_views, git_ops, logging, pause_flag,
       shared_state, ticket_metadata]
 
+proc listLogIds*(repoPath: string, role: string): seq[string] =
+  ## List available log identifiers for a role by scanning the log directory.
+  let logDir = repoPath / ManagedStateDirName / PlanLogDirName / role
+  if not dirExists(logDir):
+    return
+  for kind, path in walkDir(logDir):
+    if kind == pcDir:
+      result.add(lastPathPart(path))
+  result.sort()
+
 type
   DashboardStatus* = object
     pidAlive*: bool
@@ -784,6 +794,87 @@ proc fragmentHealthHandler(request: Request) =
   headers["Content-Type"] = "text/html"
   request.respond(200, headers, html)
 
+proc specPageHandler(request: Request) =
+  ## Serve the spec HTML page with htmx-loaded preformatted content.
+  let html = renderSpecPage()
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc logsPageHandler(request: Request) =
+  ## Serve the logs HTML page with two-level dropdown navigation.
+  let html = renderLogsPage()
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc fragmentSpecHandler(request: Request) =
+  ## Handle GET /fragments/spec and return HTML-escaped spec content.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let spec = getApiSpec(repoPath)
+  let escaped = escapeHtml(spec.content)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, escaped)
+
+proc logIdsHandler(request: Request) =
+  ## Handle GET /api/log-ids?role=<role> and return HTML option elements.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let uri = request.uri
+  var role = ""
+  let qIndex = uri.find('?')
+  if qIndex >= 0:
+    let query = uri[qIndex + 1..^1]
+    for pair in query.split('&'):
+      let parts = pair.split('=', 1)
+      if parts.len == 2 and parts[0] == "role":
+        role = parts[1]
+  if role notin ValidLogRoles:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "text/html"
+    request.respond(200, headers, renderLogIdOptions(@[]))
+    return
+  let ids = listLogIds(repoPath, role)
+  let html = renderLogIdOptions(ids)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc logContentHandler(request: Request) =
+  ## Handle GET /api/log-content?role=<role>&id=<id> and return HTML-escaped log content.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let uri = request.uri
+  var role = ""
+  var id = ""
+  let qIndex = uri.find('?')
+  if qIndex >= 0:
+    let query = uri[qIndex + 1..^1]
+    for pair in query.split('&'):
+      let parts = pair.split('=', 1)
+      if parts.len == 2:
+        if parts[0] == "role":
+          role = parts[1]
+        elif parts[0] == "id":
+          id = parts[1]
+  if role notin ValidLogRoles or id.len == 0:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "text/html"
+    request.respond(200, headers, "Invalid role or ID.")
+    return
+  let logOpt = getLogContent(repoPath, role, id)
+  if logOpt.isNone:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "text/html"
+    request.respond(200, headers, "Log not found.")
+    return
+  let escaped = escapeHtml(logOpt.get.content)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, escaped)
+
 proc oobFragment*(id: string, content: string): string =
   ## Build an htmx out-of-band swap fragment.
   result = &"""<div id="{id}" hx-swap-oob="true">{content}</div>"""
@@ -866,6 +957,8 @@ proc runDashboard*(repoPath: string) =
   router.get("/tickets", ticketBoardHandler)
   router.get("/queue", mergeQueueHandler)
   router.get("/agents", agentsPageHandler)
+  router.get("/spec", specPageHandler)
+  router.get("/logs", logsPageHandler)
   router.get("/api/status", statusHandler)
   router.get("/api/tickets", ticketsHandler)
   router.get("/api/tickets/*", ticketDetailHandler)
@@ -884,6 +977,9 @@ proc runDashboard*(repoPath: string) =
   router.get("/fragments/agents", fragmentAgentsHandler)
   router.get("/fragments/queue", fragmentQueueHandler)
   router.get("/fragments/health", fragmentHealthHandler)
+  router.get("/fragments/spec", fragmentSpecHandler)
+  router.get("/api/log-ids", logIdsHandler)
+  router.get("/api/log-content", logContentHandler)
   router.get("/ws", wsUpgradeHandler)
   router.notFoundHandler = notFoundHandler
   router.methodNotAllowedHandler = methodNotAllowedHandler

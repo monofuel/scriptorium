@@ -1,5 +1,5 @@
 import
-  std/[options, sequtils, strformat, strutils]
+  std/[options, sequtils, strformat, strutils, xmltree]
 
 const
   HtmxCdn = "https://unpkg.com/htmx.org@2.0.4"
@@ -10,8 +10,8 @@ const
     ("Ticket Board", "/tickets", "tickets"),
     ("Merge Queue", "/queue", "queue"),
     ("Agents", "/agents", "agents"),
-    ("Spec", "#spec", "spec"),
-    ("Logs", "#logs", "logs"),
+    ("Spec", "/spec", "spec"),
+    ("Logs", "/logs", "logs"),
   ]
 
   DashboardCss = """
@@ -60,6 +60,10 @@ const
     .agents-table th { text-align: left; color: #8b949e; padding: 8px 12px; border-bottom: 2px solid #30363d; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; }
     .agents-table td { padding: 8px 12px; border-bottom: 1px solid #30363d; color: #c9d1d9; }
     .agents-table tfoot td { color: #8b949e; padding-top: 12px; border-bottom: none; }
+    .spec-content { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; white-space: pre-wrap; font-size: 0.9em; max-height: 80vh; overflow-y: scroll; }
+    .log-controls { display: flex; gap: 12px; margin-bottom: 16px; }
+    .log-controls select { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; padding: 8px 12px; font-family: monospace; }
+    .log-content { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 16px; white-space: pre-wrap; font-size: 0.85em; max-height: 70vh; overflow-y: scroll; }
   """
 
 proc renderNavigation*(activeView: string): string =
@@ -332,3 +336,49 @@ proc renderAgentsPage*(agents: seq[AgentViewSlot], maxAgents: int): string =
   ## Render the full agents page with navigation.
   let section = renderAgentsSection(agents, maxAgents)
   result = renderPage("agents", section)
+
+proc escapeHtml*(text: string): string =
+  ## Escape HTML special characters to prevent XSS when rendering raw text.
+  result = xmltree.escape(text)
+
+proc renderSpecSection*(): string =
+  ## Render the spec section with an htmx-loaded preformatted block.
+  result = """<div class="container"><h1>Spec</h1>""" &
+    """<pre class="spec-content" id="spec-content" hx-get="/fragments/spec" hx-trigger="load">""" &
+    """<span class="loading">Loading spec...</span></pre></div>"""
+
+proc renderSpecPage*(): string =
+  ## Render the full spec page with navigation.
+  let section = renderSpecSection()
+  result = renderPage("spec", section)
+
+proc renderLogsSection*(): string =
+  ## Render the logs section with role and ID dropdowns and a content area.
+  result = """<div class="container"><h1>Logs</h1>""" &
+    """<div class="log-controls">""" &
+    """<select id="log-role" name="role" hx-get="/api/log-ids" hx-target="#log-id" hx-trigger="change" hx-include="this">""" &
+    """<option value="">Select role...</option>""" &
+    """<option value="coder">coder</option>""" &
+    """<option value="manager">manager</option>""" &
+    """<option value="review">review</option>""" &
+    """<option value="architect">architect</option>""" &
+    """<option value="audit">audit</option>""" &
+    """</select>""" &
+    """<select id="log-id" name="id" hx-get="/api/log-content" hx-target="#log-content" hx-trigger="change" hx-include="[name='role'],[name='id']">""" &
+    """<option value="">Select ID...</option>""" &
+    """</select>""" &
+    """</div>""" &
+    """<pre class="log-content" id="log-content">Select a role and identifier to view logs.</pre>""" &
+    """</div>"""
+
+proc renderLogsPage*(): string =
+  ## Render the full logs page with navigation.
+  let section = renderLogsSection()
+  result = renderPage("logs", section)
+
+proc renderLogIdOptions*(ids: seq[string]): string =
+  ## Render HTML option elements for a list of log identifiers.
+  result = """<option value="">Select ID...</option>"""
+  for id in ids:
+    let escaped = escapeHtml(id)
+    result.add(&"""<option value="{escaped}">{escaped}</option>""")
