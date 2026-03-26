@@ -1,6 +1,6 @@
 import
-  std/[algorithm, json, locks, options, os, posix, sets, strformat, strutils,
-       times],
+  std/[algorithm, json, locks, options, os, posix, sequtils, sets, strformat,
+       strutils, times],
   jsony,
   mummy, mummy/routers,
   ./[architect_agent, config, dashboard_views, git_ops, logging, pause_flag,
@@ -416,6 +416,56 @@ proc getApiAgents*(repoPath: string): AgentsResponse =
       continue
     result.agents.add(parseAgentFromTicket(trimmed, fileResult.output))
 
+proc mergeQueueHandler(request: Request) =
+  ## Serve the merge queue HTML page with pending items and recent history.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let queue = getApiQueue(repoPath)
+  var pending: seq[QueueViewItem]
+  let activeId = if queue.active.isSome: queue.active.get.ticketId else: ""
+  for item in queue.pending:
+    let isActive = item.ticketId == activeId
+    pending.add(QueueViewItem(
+      ticketId: item.ticketId, branch: item.branch,
+      summary: item.summary, isActive: isActive,
+    ))
+  if queue.active.isSome and activeId.len > 0:
+    let found = pending.anyIt(it.ticketId == activeId)
+    if not found:
+      let a = queue.active.get
+      pending.insert(QueueViewItem(
+        ticketId: a.ticketId, branch: a.branch,
+        summary: a.summary, isActive: true,
+      ), 0)
+  var history: seq[MergeHistoryItem]
+  for outcome in queue.recentOutcomes:
+    history.add(MergeHistoryItem(
+      ticketId: outcome.ticketId,
+      passed: outcome.outcome == "success",
+      summary: outcome.summary,
+    ))
+  let html = renderMergeQueuePage(pending, history)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc agentsPageHandler(request: Request) =
+  ## Serve the agents HTML page with live table of active agent slots.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let agentsResp = getApiAgents(repoPath)
+  var slots: seq[AgentViewSlot]
+  for agent in agentsResp.agents:
+    slots.add(AgentViewSlot(
+      role: agent.role, ticketId: agent.ticketId,
+      areaId: agent.areaId, elapsed: agent.elapsed,
+      status: agent.status,
+    ))
+  let html = renderAgentsPage(slots, agentsResp.maxAgents)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
 proc agentsHandler(request: Request) =
   ## Handle GET /api/agents and return JSON list of active agent slots.
   {.cast(gcsafe).}:
@@ -814,6 +864,8 @@ proc runDashboard*(repoPath: string) =
   var router: Router
   router.get("/", indexHandler)
   router.get("/tickets", ticketBoardHandler)
+  router.get("/queue", mergeQueueHandler)
+  router.get("/agents", agentsPageHandler)
   router.get("/api/status", statusHandler)
   router.get("/api/tickets", ticketsHandler)
   router.get("/api/tickets/*", ticketDetailHandler)

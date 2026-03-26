@@ -1,7 +1,7 @@
 ## Tests for the dashboard status JSON construction helpers and HTML view rendering.
 
 import
-  std/[json, options, os, posix, strutils, tempfiles, unittest],
+  std/[json, options, os, posix, sequtils, strutils, tempfiles, unittest],
   jsony,
   scriptorium/[dashboard, dashboard_views, git_ops, pause_flag]
 
@@ -665,3 +665,159 @@ suite "renderTicketBoardSection":
     check "0001" in html
     check "0002" in html
     check "0003" in html
+
+suite "renderQueueItem":
+  test "renders pending item without active class":
+    let item = QueueViewItem(ticketId: "0042", branch: "scriptorium/ticket-0042",
+                             summary: "Add foo feature", isActive: false)
+    let html = renderQueueItem(item)
+    check "0042" in html
+    check "Add foo feature" in html
+    check "scriptorium/ticket-0042" in html
+    check """class="active"""" notin html
+
+  test "renders active item with highlighted class":
+    let item = QueueViewItem(ticketId: "0050", branch: "scriptorium/ticket-0050",
+                             summary: "Fix bug", isActive: true)
+    let html = renderQueueItem(item)
+    check """class="active"""" in html
+    check "0050" in html
+
+  test "renders as list item":
+    let item = QueueViewItem(ticketId: "0001", branch: "b", summary: "s", isActive: false)
+    let html = renderQueueItem(item)
+    check html.startsWith("<li")
+    check html.endsWith("</li>")
+
+suite "renderMergeHistoryItem":
+  test "renders pass indicator for successful merge":
+    let item = MergeHistoryItem(ticketId: "0042", passed: true, summary: "Added feature")
+    let html = renderMergeHistoryItem(item)
+    check "history-pass" in html
+    check "&#10003;" in html
+    check "0042" in html
+    check "Added feature" in html
+
+  test "renders fail indicator for failed merge":
+    let item = MergeHistoryItem(ticketId: "0099", passed: false, summary: "Build failed")
+    let html = renderMergeHistoryItem(item)
+    check "history-fail" in html
+    check "&#10007;" in html
+    check "0099" in html
+
+suite "renderMergeQueueSection":
+  test "renders empty state when no pending items":
+    let html = renderMergeQueueSection(@[], @[])
+    check "Merge Queue" in html
+    check "No pending items" in html
+
+  test "renders ordered list with pending items":
+    let items = @[
+      QueueViewItem(ticketId: "0001", branch: "b1", summary: "s1", isActive: false),
+      QueueViewItem(ticketId: "0002", branch: "b2", summary: "s2", isActive: true),
+    ]
+    let html = renderMergeQueueSection(items, @[])
+    check "queue-list" in html
+    check "0001" in html
+    check "0002" in html
+    check """class="active"""" in html
+
+  test "renders recent history section":
+    let history = @[
+      MergeHistoryItem(ticketId: "0010", passed: true, summary: "Done"),
+      MergeHistoryItem(ticketId: "0011", passed: false, summary: "Failed"),
+    ]
+    let html = renderMergeQueueSection(@[], history)
+    check "Recent History" in html
+    check "history-pass" in html
+    check "history-fail" in html
+
+  test "omits history section when empty":
+    let html = renderMergeQueueSection(@[], @[])
+    check "Recent History" notin html
+
+  test "uses hx-get for live loading":
+    let html = renderMergeQueueSection(@[], @[])
+    check """hx-get="/api/queue"""" in html
+    check """hx-trigger="load"""" in html
+
+suite "renderMergeQueuePage":
+  test "produces full HTML page with queue view active":
+    let html = renderMergeQueuePage(@[], @[])
+    check "<!DOCTYPE html>" in html
+    check """class="active">Merge Queue""" in html
+    check "Merge Queue" in html
+
+suite "renderAgentRow":
+  test "renders row with ticket id":
+    let slot = AgentViewSlot(role: "coder", ticketId: "0042", areaId: "",
+                             elapsed: "5m 30s", status: "running")
+    let html = renderAgentRow(slot)
+    check "<tr>" in html
+    check "coder" in html
+    check "0042" in html
+    check "5m 30s" in html
+    check "running" in html
+
+  test "renders row with area id when no ticket":
+    let slot = AgentViewSlot(role: "manager", ticketId: "", areaId: "dashboard",
+                             elapsed: "", status: "running")
+    let html = renderAgentRow(slot)
+    check "manager" in html
+    check "dashboard" in html
+
+  test "renders dash when no identifier":
+    let slot = AgentViewSlot(role: "coder", ticketId: "", areaId: "",
+                             elapsed: "", status: "running")
+    let html = renderAgentRow(slot)
+    check "<td>-</td>" in html
+
+  test "renders dash for empty elapsed":
+    let slot = AgentViewSlot(role: "coder", ticketId: "0001", areaId: "",
+                             elapsed: "", status: "running")
+    let html = renderAgentRow(slot)
+    check ">-</td>" in html
+
+suite "renderAgentsSection":
+  test "renders table with headers":
+    let html = renderAgentsSection(@[], 4)
+    check "agents-table" in html
+    check "<th>Role</th>" in html
+    check "<th>Ticket/Area</th>" in html
+    check "<th>Elapsed</th>" in html
+    check "<th>Status</th>" in html
+
+  test "shows empty state when no agents":
+    let html = renderAgentsSection(@[], 4)
+    check "No active agents" in html
+
+  test "renders agent rows":
+    let agents = @[
+      AgentViewSlot(role: "coder", ticketId: "0042", areaId: "core",
+                    elapsed: "2m 10s", status: "running"),
+    ]
+    let html = renderAgentsSection(agents, 4)
+    check "0042" in html
+    check "coder" in html
+
+  test "shows slot usage in footer":
+    let agents = @[
+      AgentViewSlot(role: "coder", ticketId: "0001", areaId: "",
+                    elapsed: "1m", status: "running"),
+      AgentViewSlot(role: "coder", ticketId: "0002", areaId: "",
+                    elapsed: "3m", status: "running"),
+    ]
+    let html = renderAgentsSection(agents, 4)
+    check "2/4 slots in use" in html
+
+  test "uses hx-get for live loading":
+    let html = renderAgentsSection(@[], 4)
+    check """hx-get="/api/agents"""" in html
+    check """hx-trigger="load"""" in html
+
+suite "renderAgentsPage":
+  test "produces full HTML page with agents view active":
+    let html = renderAgentsPage(@[], 4)
+    check "<!DOCTYPE html>" in html
+    check """class="active">Agents""" in html
+    check "Agents" in html

@@ -1,5 +1,5 @@
 import
-  std/[options, strformat, strutils]
+  std/[options, sequtils, strformat, strutils]
 
 const
   HtmxCdn = "https://unpkg.com/htmx.org@2.0.4"
@@ -8,8 +8,8 @@ const
   NavItems = [
     ("Overview", "/", "overview"),
     ("Ticket Board", "/tickets", "tickets"),
-    ("Merge Queue", "#queue", "queue"),
-    ("Agents", "#agents", "agents"),
+    ("Merge Queue", "/queue", "queue"),
+    ("Agents", "/agents", "agents"),
     ("Spec", "#spec", "spec"),
     ("Logs", "#logs", "logs"),
   ]
@@ -46,6 +46,20 @@ const
     .ticket-card .ticket-title { color: #e6edf3; margin-top: 4px; }
     .ticket-card .ticket-meta { color: #8b949e; font-size: 0.8em; margin-top: 4px; }
     .ticket-detail { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 12px; margin-top: 8px; white-space: pre-wrap; font-size: 0.85em; }
+    .queue-list { list-style: decimal; padding-left: 24px; }
+    .queue-list li { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+    .queue-list li.active { background: #0c2d6b; border-color: #58a6ff; }
+    .queue-item-id { color: #8b949e; font-size: 0.85em; }
+    .queue-item-summary { color: #e6edf3; margin-top: 4px; }
+    .queue-item-branch { color: #8b949e; font-size: 0.8em; margin-top: 2px; }
+    .history-list { margin-top: 16px; }
+    .history-item { padding: 6px 0; border-bottom: 1px solid #30363d; font-size: 0.9em; }
+    .history-pass { color: #3fb950; }
+    .history-fail { color: #f85149; }
+    .agents-table { width: 100%; border-collapse: collapse; }
+    .agents-table th { text-align: left; color: #8b949e; padding: 8px 12px; border-bottom: 2px solid #30363d; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.05em; }
+    .agents-table td { padding: 8px 12px; border-bottom: 1px solid #30363d; color: #c9d1d9; }
+    .agents-table tfoot td { color: #8b949e; padding-top: 12px; border-bottom: none; }
   """
 
 proc renderNavigation*(activeView: string): string =
@@ -221,3 +235,100 @@ proc renderTicketBoardSection*(openCards: seq[TicketCard],
     result.add(renderTicketCard(card))
   result.add("</div>")
   result.add("</div></div>")
+
+type
+  QueueViewItem* = object
+    ticketId*: string
+    branch*: string
+    summary*: string
+    isActive*: bool
+
+  MergeHistoryItem* = object
+    ticketId*: string
+    passed*: bool
+    summary*: string
+
+  AgentViewSlot* = object
+    role*: string
+    ticketId*: string
+    areaId*: string
+    elapsed*: string
+    status*: string
+
+proc renderQueueItem*(item: QueueViewItem): string =
+  ## Render a single merge queue item as an HTML list item.
+  let cls = if item.isActive: """ class="active"""" else: ""
+  let ticketId = item.ticketId
+  let summary = item.summary
+  let branch = item.branch
+  result = &"""<li{cls}><span class="queue-item-id">{ticketId}</span>""" &
+    &"""<div class="queue-item-summary">{summary}</div>""" &
+    &"""<div class="queue-item-branch">{branch}</div></li>"""
+
+proc renderMergeHistoryItem*(item: MergeHistoryItem): string =
+  ## Render a single merge history entry with pass/fail indicator.
+  let indicator = if item.passed: """<span class="history-pass">&#10003;</span>"""
+                  else: """<span class="history-fail">&#10007;</span>"""
+  let ticketId = item.ticketId
+  let summary = item.summary
+  result = &"""<div class="history-item">{indicator} <strong>{ticketId}</strong> {summary}</div>"""
+
+proc renderMergeQueueSection*(pending: seq[QueueViewItem],
+                              history: seq[MergeHistoryItem]): string =
+  ## Render the merge queue section with pending items list and recent history.
+  result = """<div class="container"><h1>Merge Queue</h1>"""
+  result.add("""<div id="queue-content" hx-get="/api/queue" hx-trigger="load">""")
+  if pending.len == 0:
+    result.add("""<p class="detail">No pending items.</p>""")
+  else:
+    result.add("""<ol class="queue-list">""")
+    for item in pending:
+      result.add(renderQueueItem(item))
+    result.add("</ol>")
+  if history.len > 0:
+    result.add("""<h2 style="margin-top: 24px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; font-size: 1em;">Recent History</h2>""")
+    result.add("""<div class="history-list">""")
+    for item in history:
+      result.add(renderMergeHistoryItem(item))
+    result.add("</div>")
+  result.add("</div></div>")
+
+proc renderMergeQueuePage*(pending: seq[QueueViewItem],
+                           history: seq[MergeHistoryItem]): string =
+  ## Render the full merge queue page with navigation.
+  let section = renderMergeQueueSection(pending, history)
+  result = renderPage("queue", section)
+
+proc renderAgentRow*(slot: AgentViewSlot): string =
+  ## Render a single agent slot as a table row.
+  let role = slot.role
+  let identifier = if slot.ticketId.len > 0: slot.ticketId
+                   elif slot.areaId.len > 0: slot.areaId
+                   else: "-"
+  let elapsed = if slot.elapsed.len > 0: slot.elapsed else: "-"
+  let status = slot.status
+  result = &"<tr><td>{role}</td><td>{identifier}</td><td>{elapsed}</td><td>{status}</td></tr>"
+
+proc renderAgentsSection*(agents: seq[AgentViewSlot], maxAgents: int): string =
+  ## Render the agents section with a table of active slots and capacity footer.
+  let usedCount = agents.len
+  let usedStr = $usedCount
+  let maxStr = $maxAgents
+  result = """<div class="container"><h1>Agents</h1>"""
+  result.add("""<div id="agents-content" hx-get="/api/agents" hx-trigger="load">""")
+  result.add("""<table class="agents-table"><thead><tr>""")
+  result.add("<th>Role</th><th>Ticket/Area</th><th>Elapsed</th><th>Status</th>")
+  result.add("</tr></thead><tbody>")
+  if agents.len == 0:
+    result.add("""<tr><td colspan="4" class="detail">No active agents.</td></tr>""")
+  else:
+    for slot in agents:
+      result.add(renderAgentRow(slot))
+  result.add("</tbody>")
+  result.add(&"""<tfoot><tr><td colspan="4">{usedStr}/{maxStr} slots in use</td></tr></tfoot>""")
+  result.add("</table></div></div>")
+
+proc renderAgentsPage*(agents: seq[AgentViewSlot], maxAgents: int): string =
+  ## Render the full agents page with navigation.
+  let section = renderAgentsSection(agents, maxAgents)
+  result = renderPage("agents", section)
