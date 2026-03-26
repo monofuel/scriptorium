@@ -2,7 +2,8 @@ import
   std/[algorithm, options, os, posix, strformat, strutils, times],
   jsony,
   mummy, mummy/routers,
-  ./[config, git_ops, logging, pause_flag, shared_state, ticket_metadata]
+  ./[architect_agent, config, git_ops, logging, pause_flag, shared_state,
+      ticket_metadata]
 
 type
   DashboardStatus* = object
@@ -494,6 +495,65 @@ proc areaDetailHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+const
+  ValidLogRoles* = ["coder", "manager", "review", "architect", "audit"]
+
+type
+  LogResponse* = object
+    role*: string
+    id*: string
+    content*: string
+
+proc resolveLogDir*(repoPath: string, role: string, id: string): string =
+  ## Build the filesystem path to a log directory for the given role and ticket ID.
+  result = repoPath / ManagedStateDirName / PlanLogDirName / role / id
+
+proc getLogContent*(repoPath: string, role: string, id: string): Option[LogResponse] =
+  ## Read log content for a role and ticket ID, returning none if not found.
+  let logDir = resolveLogDir(repoPath, role, id)
+  if not dirExists(logDir):
+    return none(LogResponse)
+  var parts: seq[string]
+  for kind, path in walkDir(logDir):
+    if kind == pcFile and path.endsWith(".jsonl"):
+      parts.add(readFile(path))
+  if parts.len == 0:
+    for kind, path in walkDir(logDir):
+      if kind == pcFile:
+        parts.add(readFile(path))
+  if parts.len == 0:
+    return none(LogResponse)
+  let content = parts.join("\n")
+  result = some(LogResponse(role: role, id: id, content: content))
+
+proc logsHandler(request: Request) =
+  ## Handle GET /api/logs/:role/:id and return JSON log content.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let pathParts = request.uri.split("/")
+  if pathParts.len < 5:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "not found"}""")
+    return
+  let role = pathParts[3]
+  let id = pathParts[4]
+  if role notin ValidLogRoles:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(400, headers, """{"error": "invalid role"}""")
+    return
+  let logOpt = getLogContent(repoPath, role, id)
+  if logOpt.isNone:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "log not found"}""")
+    return
+  let body = toJson(logOpt.get)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -511,6 +571,7 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/spec", specHandler)
   router.get("/api/areas", areasHandler)
   router.get("/api/areas/*", areaDetailHandler)
+  router.get("/api/logs/*/*", logsHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)

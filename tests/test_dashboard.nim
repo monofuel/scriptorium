@@ -253,3 +253,65 @@ suite "parseAreaSummary":
     check "\"summary\"" in json
     check "\"auth\"" in json
     check "\"# Authentication\"" in json
+
+suite "resolveLogDir":
+  test "builds correct path for coder role":
+    let path = resolveLogDir("/repo", "coder", "0042")
+    check path == "/repo/.scriptorium/logs/coder/0042"
+
+  test "builds correct path for review role":
+    let path = resolveLogDir("/repo", "review", "0099")
+    check path == "/repo/.scriptorium/logs/review/0099"
+
+  test "builds correct path for architect role":
+    let path = resolveLogDir("/repo", "architect", "spec")
+    check path == "/repo/.scriptorium/logs/architect/spec"
+
+suite "getLogContent":
+  test "returns none when log directory does not exist":
+    let tmp = createTempDir("logs_missing_", "", getTempDir())
+    defer: removeDir(tmp)
+    let result = getLogContent(tmp, "coder", "0042")
+    check result.isNone
+
+  test "returns content when jsonl file exists":
+    let tmp = createTempDir("logs_exist_", "", getTempDir())
+    defer: removeDir(tmp)
+    let logDir = tmp / ".scriptorium" / "logs" / "coder" / "0042"
+    createDir(logDir)
+    writeFile(logDir / "attempt-01.jsonl", "{\"msg\":\"hello\"}")
+    let result = getLogContent(tmp, "coder", "0042")
+    check result.isSome
+    check result.get.role == "coder"
+    check result.get.id == "0042"
+    check "{\"msg\":\"hello\"}" in result.get.content
+
+  test "returns none when directory exists but is empty":
+    let tmp = createTempDir("logs_empty_", "", getTempDir())
+    defer: removeDir(tmp)
+    let logDir = tmp / ".scriptorium" / "logs" / "review" / "0001"
+    createDir(logDir)
+    let result = getLogContent(tmp, "review", "0001")
+    check result.isNone
+
+  test "falls back to non-jsonl files when no jsonl present":
+    let tmp = createTempDir("logs_txt_", "", getTempDir())
+    defer: removeDir(tmp)
+    let logDir = tmp / ".scriptorium" / "logs" / "architect" / "spec"
+    createDir(logDir)
+    writeFile(logDir / "stdout.log", "some output")
+    let result = getLogContent(tmp, "architect", "spec")
+    check result.isSome
+    check "some output" in result.get.content
+
+suite "ValidLogRoles":
+  test "contains expected roles":
+    check "coder" in ValidLogRoles
+    check "manager" in ValidLogRoles
+    check "review" in ValidLogRoles
+    check "architect" in ValidLogRoles
+    check "audit" in ValidLogRoles
+
+  test "rejects unknown roles":
+    check "unknown" notin ValidLogRoles
+    check "admin" notin ValidLogRoles
