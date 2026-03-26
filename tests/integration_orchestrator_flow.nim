@@ -1,8 +1,8 @@
 ## Tests for orchestrator tick flow, concurrent execution, and merge queue ordering.
 
 import
-  std/[json, locks, os, osproc, sequtils, strutils, tables, tempfiles, times, unittest],
-  scriptorium/[agent_runner, config, init, logging, orchestrator, ticket_metadata],
+  std/[algorithm, json, locks, os, osproc, sequtils, strutils, tables, tempfiles, times, unittest],
+  scriptorium/[agent_pool, agent_runner, config, init, logging, orchestrator, ticket_metadata],
   helpers
 
 suite "orchestrator final v1 flow":
@@ -543,3 +543,107 @@ suite "concurrent agent execution":
     check "tickets/open/0001-staller.md" in files
     let hasMergeEntry = files.anyIt(it.startsWith("queue/merge/pending/") and it.contains("0002"))
     check hasMergeEntry
+
+suite "agent pool thread lifecycle":
+  setup:
+    ensurePoolResultChanOpen()
+    # Drain any leftover state from prior tests.
+    joinAllAgentThreads()
+
+  teardown:
+    joinAllAgentThreads()
+
+  test "start 2 coding agents, verify counts, collect completions":
+    proc coderWorker(args: AgentThreadArgs) {.thread.} =
+      ## Sleep briefly then send a completion result back to the pool.
+      sleep(50)
+      sendPoolResult(AgentPoolCompletionResult(
+        role: arCoder,
+        ticketId: args.ticketId,
+        result: AgentRunResult(exitCode: 0, submitted: true),
+      ))
+
+    let assignment1 = TicketAssignment(
+      inProgressTicket: "tickets/in-progress/0001-alpha.md",
+      branch: "scriptorium/ticket-0001",
+      worktree: "/tmp/fake-wt-0001",
+    )
+    let assignment2 = TicketAssignment(
+      inProgressTicket: "tickets/in-progress/0002-beta.md",
+      branch: "scriptorium/ticket-0002",
+      worktree: "/tmp/fake-wt-0002",
+    )
+
+    startCodingAgentAsync("/tmp", assignment1, 4, coderWorker)
+    startCodingAgentAsync("/tmp", assignment2, 4, coderWorker)
+
+    check runningAgentCount() == 2
+    check runningAgentCountByRole(arCoder) == 2
+    check emptySlotCount(4) == 2
+
+    # Wait for threads to finish and send results.
+    sleep(200)
+
+    let completions = checkCompletedAgents()
+    check completions.len == 2
+    check runningAgentCount() == 0
+
+    var completedIds: seq[string] = @[]
+    for c in completions:
+      check c.role == arCoder
+      check c.result.exitCode == 0
+      check c.result.submitted == true
+      completedIds.add(c.ticketId)
+    completedIds.sort()
+    check completedIds == @["0001", "0002"]
+
+  test "mixed manager and coder share the slot pool correctly":
+    proc mixedWorker(args: AgentThreadArgs) {.thread.} =
+      ## Sleep briefly then send a completion tagged by the args role marker.
+      sleep(50)
+      if args.areaId.len > 0:
+        sendPoolResult(AgentPoolCompletionResult(
+          role: arManager,
+          areaId: args.areaId,
+          result: AgentRunResult(exitCode: 0),
+        ))
+      else:
+        sendPoolResult(AgentPoolCompletionResult(
+          role: arCoder,
+          ticketId: args.ticketId,
+          result: AgentRunResult(exitCode: 0, submitted: true),
+        ))
+
+    let coderAssignment = TicketAssignment(
+      inProgressTicket: "tickets/in-progress/0003-gamma.md",
+      branch: "scriptorium/ticket-0003",
+      worktree: "/tmp/fake-wt-0003",
+    )
+
+    startManagerAgentAsync("/tmp", "backend-api", "# Area\n", "/tmp/plan", 100, 4, mixedWorker)
+    startCodingAgentAsync("/tmp", coderAssignment, 4, mixedWorker)
+
+    check runningAgentCount() == 2
+    check runningAgentCountByRole(arManager) == 1
+    check runningAgentCountByRole(arCoder) == 1
+    check emptySlotCount(4) == 2
+
+    sleep(200)
+
+    let completions = checkCompletedAgents()
+    check completions.len == 2
+    check runningAgentCount() == 0
+    check emptySlotCount(4) == 4
+
+    var hasManager = false
+    var hasCoder = false
+    for c in completions:
+      if c.role == arManager:
+        check c.areaId == "backend-api"
+        hasManager = true
+      elif c.role == arCoder:
+        check c.ticketId == "0003"
+        check c.result.submitted == true
+        hasCoder = true
+    check hasManager
+    check hasCoder
