@@ -271,6 +271,71 @@ suite "non-blocking tick loop":
     check "tickets/done/0001-serial.md" in files
     check "tickets/open/0001-serial.md" notin files
 
+  test "serial mode full lifecycle with 2 areas and 2 tickets verifies no pool slots used":
+    let tmp = getTempDir() / "scriptorium_test_serial_full_lifecycle"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nSerial lifecycle test.\n")
+    # Areas without tickets so managers will be invoked to create them.
+    addAreaToPlan(tmp, "area-a.md", "# Area A\n\n## Goal\n- Area A work.\n")
+    addAreaToPlan(tmp, "area-b.md", "# Area B\n\n## Goal\n- Area B work.\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 1
+    writeScriptoriumConfig(tmp, cfg)
+
+    var callOrder: seq[string] = @[]
+    var maxRunningAgents = 0
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Track call order and verify no pool slots are consumed in serial mode.
+      let currentRunning = runningAgentCount()
+      {.cast(gcsafe).}:
+        if currentRunning > maxRunningAgents:
+          maxRunningAgents = currentRunning
+        callOrder.add(request.ticketId)
+      if request.ticketId == "run":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId == "manager-area-a":
+        recordSubmitTickets("area-a", @["# Task A\n\n**Area:** area-a"])
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId == "manager-area-b":
+        recordSubmitTickets("area-b", @["# Task B\n\n**Area:** area-b"])
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      elif request.ticketId == "0001":
+        recordSubmitPrSummary("serial a done", "0001")
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      elif request.ticketId == "0002":
+        recordSubmitPrSummary("serial b done", "0002")
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    # Run enough ticks to process both tickets through full lifecycle.
+    runOrchestratorForTicks(tmp, 3, fakeRunner)
+
+    # runningAgentCount must stay 0 throughout (no pool slots used in serial mode).
+    check maxRunningAgents == 0
+
+    # Verify sequential call order: managers before coding agents.
+    let managerCalls = callOrder.filterIt(it.startsWith("manager-"))
+    let codingCalls = callOrder.filterIt(it in ["0001", "0002"])
+    check managerCalls.len >= 2
+    check codingCalls.len >= 1
+
+    # Managers must appear before any coding agent in call order.
+    let lastManagerIdx = callOrder.find(managerCalls[^1])
+    let firstCoderIdx = callOrder.find(codingCalls[0])
+    check lastManagerIdx < firstCoderIdx
+
+    # Full lifecycle: at least one ticket reaches done via merge queue.
+    let files = planTreeFiles(tmp)
+    let doneTickets = files.filterIt(it.startsWith("tickets/done/"))
+    check doneTickets.len >= 1
+
 suite "concurrent agent execution":
   setup:
 
