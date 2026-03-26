@@ -1,5 +1,5 @@
 import
-  std/[algorithm, options, os, posix, strformat, strutils, times],
+  std/[algorithm, json, options, os, posix, strformat, strutils, times],
   jsony,
   mummy, mummy/routers,
   ./[architect_agent, config, git_ops, logging, pause_flag, shared_state,
@@ -554,6 +554,71 @@ proc logsHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+type
+  HealthResponse* = object
+    lastCommit*: Option[string]
+    healthy*: bool
+    timestamp*: Option[string]
+
+  IterationResponse* = object
+    currentIteration*: int
+    logContent*: string
+
+proc parseHealthCache*(rawJson: string): HealthResponse =
+  ## Parse health cache JSON and return the entry with the latest timestamp.
+  let rootNode = parseJson(rawJson)
+  var latestTimestamp = ""
+  var latestCommit = ""
+  var latestHealthy = false
+  for commitHash, entryNode in rootNode.pairs:
+    let ts = entryNode["timestamp"].getStr()
+    if ts > latestTimestamp:
+      latestTimestamp = ts
+      latestCommit = commitHash
+      latestHealthy = entryNode["healthy"].getBool()
+  if latestCommit.len > 0:
+    result = HealthResponse(
+      lastCommit: some(latestCommit),
+      healthy: latestHealthy,
+      timestamp: some(latestTimestamp),
+    )
+
+proc getApiHealth*(repoPath: string): HealthResponse =
+  ## Read health cache from the plan branch and return the latest entry.
+  let cacheRef = PlanBranch & ":health/cache.json"
+  let cacheResult = runCommandCapture(repoPath, "git", @["show", cacheRef])
+  if cacheResult.exitCode != 0:
+    return
+  result = parseHealthCache(cacheResult.output)
+
+proc getApiIteration*(repoPath: string): IterationResponse =
+  ## Read iteration log from the plan branch and return current iteration and content.
+  let logRef = PlanBranch & ":iteration_log.md"
+  let logResult = runCommandCapture(repoPath, "git", @["show", logRef])
+  if logResult.exitCode == 0:
+    result.logContent = logResult.output
+    result.currentIteration = parseIterationCount(logResult.output)
+
+proc healthHandler(request: Request) =
+  ## Handle GET /api/health and return JSON with health cache status.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let health = getApiHealth(repoPath)
+  let body = toJson(health)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc iterationHandler(request: Request) =
+  ## Handle GET /api/iteration and return JSON with iteration state.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let iteration = getApiIteration(repoPath)
+  let body = toJson(iteration)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -572,6 +637,8 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/areas", areasHandler)
   router.get("/api/areas/*", areaDetailHandler)
   router.get("/api/logs/*/*", logsHandler)
+  router.get("/api/health", healthHandler)
+  router.get("/api/iteration", iterationHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)

@@ -1,7 +1,7 @@
 ## Tests for the dashboard status JSON construction helpers.
 
 import
-  std/[options, os, posix, strutils, tempfiles, unittest],
+  std/[json, options, os, posix, strutils, tempfiles, unittest],
   jsony,
   scriptorium/[dashboard, git_ops, pause_flag]
 
@@ -315,3 +315,53 @@ suite "ValidLogRoles":
   test "rejects unknown roles":
     check "unknown" notin ValidLogRoles
     check "admin" notin ValidLogRoles
+
+suite "parseHealthCache":
+  test "returns defaults for empty JSON object":
+    let result = parseHealthCache("{}")
+    check result.lastCommit.isNone
+    check result.healthy == false
+    check result.timestamp.isNone
+
+  test "returns single entry":
+    let raw = """{"abc123": {"healthy": true, "timestamp": "2026-03-25T10:00:00Z", "test_exit_code": 0, "integration_test_exit_code": 0, "test_wall_seconds": 10, "integration_test_wall_seconds": 20}}"""
+    let result = parseHealthCache(raw)
+    check result.lastCommit.isSome
+    check result.lastCommit.get == "abc123"
+    check result.healthy == true
+    check result.timestamp.isSome
+    check result.timestamp.get == "2026-03-25T10:00:00Z"
+
+  test "returns entry with latest timestamp":
+    let raw = """{
+      "older": {"healthy": false, "timestamp": "2026-03-24T08:00:00Z", "test_exit_code": 1, "integration_test_exit_code": 0, "test_wall_seconds": 5, "integration_test_wall_seconds": 10},
+      "newer": {"healthy": true, "timestamp": "2026-03-25T12:00:00Z", "test_exit_code": 0, "integration_test_exit_code": 0, "test_wall_seconds": 8, "integration_test_wall_seconds": 15}
+    }"""
+    let result = parseHealthCache(raw)
+    check result.lastCommit.get == "newer"
+    check result.healthy == true
+    check result.timestamp.get == "2026-03-25T12:00:00Z"
+
+  test "returns unhealthy entry when it is latest":
+    let raw = """{
+      "good": {"healthy": true, "timestamp": "2026-03-20T00:00:00Z", "test_exit_code": 0, "integration_test_exit_code": 0, "test_wall_seconds": 5, "integration_test_wall_seconds": 10},
+      "bad": {"healthy": false, "timestamp": "2026-03-26T00:00:00Z", "test_exit_code": 1, "integration_test_exit_code": 0, "test_wall_seconds": 5, "integration_test_wall_seconds": 10}
+    }"""
+    let result = parseHealthCache(raw)
+    check result.lastCommit.get == "bad"
+    check result.healthy == false
+
+  test "serializes to JSON with expected fields":
+    let result = parseHealthCache("{}")
+    let jsonStr = toJson(result)
+    check "lastCommit" in jsonStr
+    check "healthy" in jsonStr
+    check "timestamp" in jsonStr
+
+suite "IterationResponse serialization":
+  test "serializes with expected fields":
+    let resp = IterationResponse(currentIteration: 3, logContent: "## Iteration 3\nContent")
+    let jsonStr = toJson(resp)
+    check "currentIteration" in jsonStr
+    check "logContent" in jsonStr
+    check "3" in jsonStr
