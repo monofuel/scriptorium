@@ -2,6 +2,7 @@ import
   std/[options, sequtils, strformat, strutils, xmltree]
 
 const
+  # TODO: vendor these locally so the dashboard works without internet access.
   HtmxCdn = "https://unpkg.com/htmx.org@2.0.4"
   HtmxWsExt = "https://unpkg.com/htmx-ext-ws@2.0.3/ws.js"
 

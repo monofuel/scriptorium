@@ -27,6 +27,18 @@ services:
     entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]
 
+  dashboard:
+    init: true
+    build:
+      context: .
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    ports:
+      - "8098:8098"
+    entrypoint: ["/app/scripts/entrypoint.sh"]
+    command: ["dashboard"]
+
   discord:
     init: true
     build:
