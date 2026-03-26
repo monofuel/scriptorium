@@ -421,3 +421,22 @@ suite "pause and resume toggle":
 
     writePauseFlag(tmp)
     check isPaused(tmp) == true
+
+suite "oobFragment":
+  test "generates correct htmx out-of-band swap div":
+    let result = oobFragment("status", "hello")
+    check result == """<div id="status" hx-swap-oob="true">hello</div>"""
+
+  test "handles empty content":
+    let result = oobFragment("target", "")
+    check result == """<div id="target" hx-swap-oob="true"></div>"""
+
+  test "preserves HTML content inside fragment":
+    let inner = "<span>active</span>"
+    let result = oobFragment("badge", inner)
+    check result == """<div id="badge" hx-swap-oob="true"><span>active</span></div>"""
+
+  test "handles JSON content":
+    let jsonContent = """{"pidAlive":true,"paused":false}"""
+    let result = oobFragment("status", jsonContent)
+    check """hx-swap-oob="true">{"pidAlive":true,"paused":false}</div>""" in result

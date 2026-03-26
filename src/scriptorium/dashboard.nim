@@ -1,5 +1,6 @@
 import
-  std/[algorithm, json, options, os, posix, strformat, strutils, times],
+  std/[algorithm, json, locks, options, os, posix, sets, strformat, strutils,
+       times],
   jsony,
   mummy, mummy/routers,
   ./[architect_agent, config, git_ops, logging, pause_flag, shared_state,
@@ -649,6 +650,76 @@ proc methodNotAllowedHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(405, headers, """{"error": "method not allowed"}""")
 
+proc oobFragment*(id: string, content: string): string =
+  ## Build an htmx out-of-band swap fragment.
+  result = &"""<div id="{id}" hx-swap-oob="true">{content}</div>"""
+
+const
+  WsPollIntervalMs = 2000
+
+var
+  wsLock: Lock
+  wsClients: HashSet[WebSocket]
+  wsLastStatus: string
+
+initLock(wsLock)
+
+proc wsUpgradeHandler(request: Request) =
+  ## Upgrade an HTTP request to a WebSocket connection at /ws.
+  discard request.upgradeToWebSocket()
+
+proc wsHandler*(
+  websocket: WebSocket,
+  event: WebSocketEvent,
+  message: Message,
+) =
+  ## Handle WebSocket lifecycle events for dashboard clients.
+  case event
+  of OpenEvent:
+    {.gcsafe.}:
+      withLock wsLock:
+        wsClients.incl(websocket)
+    {.cast(gcsafe).}:
+      let repoPath = getCurrentDir()
+      let status = getApiStatus(repoPath)
+      let statusJson = toJson(status)
+      let fragment = oobFragment("status", statusJson)
+      websocket.send(fragment)
+  of MessageEvent:
+    discard
+  of ErrorEvent:
+    {.gcsafe.}:
+      withLock wsLock:
+        wsClients.excl(websocket)
+  of CloseEvent:
+    {.gcsafe.}:
+      withLock wsLock:
+        wsClients.excl(websocket)
+
+proc broadcastToClients(fragment: string) =
+  ## Send a fragment to all connected WebSocket clients.
+  withLock wsLock:
+    for client in wsClients:
+      client.send(fragment)
+
+proc wsPollLoop() {.thread.} =
+  ## Background thread that polls for state changes and pushes updates to WebSocket clients.
+  while true:
+    sleep(WsPollIntervalMs)
+    {.cast(gcsafe).}:
+      let repoPath = getCurrentDir()
+      let status = getApiStatus(repoPath)
+      let statusJson = toJson(status)
+      var clientCount: int
+      withLock wsLock:
+        clientCount = wsClients.len
+      if clientCount == 0:
+        continue
+      if statusJson != wsLastStatus:
+        wsLastStatus = statusJson
+        let fragment = oobFragment("status", statusJson)
+        broadcastToClients(fragment)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -671,8 +742,12 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/iteration", iterationHandler)
   router.post("/api/pause", pauseHandler)
   router.post("/api/resume", resumeHandler)
+  router.get("/ws", wsUpgradeHandler)
   router.notFoundHandler = notFoundHandler
   router.methodNotAllowedHandler = methodNotAllowedHandler
 
-  let server = newServer(router)
+  var pollThread: Thread[void]
+  createThread(pollThread, wsPollLoop)
+
+  let server = newServer(router, wsHandler)
   server.serve(Port(port), host)
