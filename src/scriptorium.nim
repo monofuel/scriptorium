@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, config, discord_bot, init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -84,11 +84,8 @@ proc cmdAudit() =
   runAudit(getCurrentDir())
 
 proc cmdDashboard() =
-  ## Print a stub message for the dashboard command using configured host and port.
-  let cfg = loadConfig(getCurrentDir())
-  let host = cfg.dashboard.host
-  let port = $cfg.dashboard.port
-  echo &"scriptorium: dashboard not yet implemented (will serve on {host}:{port})"
+  ## Start the web dashboard HTTP server.
+  runDashboard(getCurrentDir())
 
 proc cmdDiscord() =
   ## Run the Discord bot.
