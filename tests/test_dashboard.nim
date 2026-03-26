@@ -185,3 +185,37 @@ suite "parseMergeOutcome":
     let outcome = parseMergeOutcome(content, "0010")
     check outcome.isSome
     check outcome.get.summary == "Done"
+
+suite "parseAgentFromTicket":
+  test "parses ticket id, area, and sets role to coder":
+    let content = "# Add Login Page\n\n**Area:** auth\n\nDescription here."
+    let agent = parseAgentFromTicket("0042-add-login.md", content)
+    check agent.ticketId == "0042"
+    check agent.areaId == "auth"
+    check agent.role == "coder"
+    check agent.status == "running"
+
+  test "handles ticket with no area":
+    let content = "# Fix Bug\n\nNo area field."
+    let agent = parseAgentFromTicket("0099-fix-bug.md", content)
+    check agent.ticketId == "0099"
+    check agent.areaId == ""
+    check agent.role == "coder"
+    check agent.status == "running"
+
+  test "elapsed is empty when worktree does not exist":
+    let content = "# Task\n\n**Area:** core\n\n**Worktree:** /tmp/nonexistent-worktree-path-12345"
+    let agent = parseAgentFromTicket("0001-task.md", content)
+    check agent.elapsed == ""
+
+  test "serializes to JSON with expected fields":
+    let content = "# Feature\n\n**Area:** dashboard"
+    let agent = parseAgentFromTicket("0050-feature.md", content)
+    let json = toJson(agent)
+    check "role" in json
+    check "ticketId" in json
+    check "areaId" in json
+    check "elapsed" in json
+    check "status" in json
+    check "\"coder\"" in json
+    check "\"running\"" in json

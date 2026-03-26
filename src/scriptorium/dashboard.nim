@@ -337,6 +337,64 @@ proc queueHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+type
+  AgentSlotResponse* = object
+    role*: string
+    ticketId*: string
+    areaId*: string
+    elapsed*: string
+    status*: string
+
+  AgentsResponse* = object
+    agents*: seq[AgentSlotResponse]
+    maxAgents*: int
+
+proc parseAgentFromTicket*(filename: string, content: string): AgentSlotResponse =
+  ## Parse an in-progress ticket into an agent slot response.
+  let ticketId = ticketIdFromTicketPath(filename)
+  let areaId = parseAreaFromTicketContent(content)
+  let worktree = parseWorktreeFromTicketContent(content)
+  var elapsed = ""
+  if worktree.len > 0 and dirExists(worktree):
+    let mtime = getFileInfo(worktree).lastWriteTime
+    let secs = (getTime() - mtime).inSeconds
+    elapsed = formatUptime(secs)
+  result = AgentSlotResponse(
+    role: "coder",
+    ticketId: ticketId,
+    areaId: areaId,
+    elapsed: elapsed,
+    status: "running",
+  )
+
+proc getApiAgents*(repoPath: string): AgentsResponse =
+  ## Build the agents response by reading in-progress tickets from the plan branch.
+  let cfg = loadConfig(repoPath)
+  result.maxAgents = cfg.concurrency.maxAgents
+  let dirRef = PlanBranch & ":" & PlanTicketsInProgressDir
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirRef])
+  if dirResult.exitCode != 0:
+    return
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    let filePath = PlanTicketsInProgressDir & "/" & trimmed
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    result.agents.add(parseAgentFromTicket(trimmed, fileResult.output))
+
+proc agentsHandler(request: Request) =
+  ## Handle GET /api/agents and return JSON list of active agent slots.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let agents = getApiAgents(repoPath)
+  let body = toJson(agents)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -350,6 +408,7 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/tickets", ticketsHandler)
   router.get("/api/tickets/*", ticketDetailHandler)
   router.get("/api/queue", queueHandler)
+  router.get("/api/agents", agentsHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)
