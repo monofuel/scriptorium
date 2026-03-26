@@ -3,8 +3,8 @@ import
        times],
   jsony,
   mummy, mummy/routers,
-  ./[architect_agent, config, git_ops, logging, pause_flag, shared_state,
-      ticket_metadata]
+  ./[architect_agent, config, dashboard_views, git_ops, logging, pause_flag,
+      shared_state, ticket_metadata]
 
 type
   DashboardStatus* = object
@@ -14,24 +14,14 @@ type
     loopIteration*: int
 
 const
-  HtmxJs = "// htmx placeholder"
-  DashboardHtml = """<!DOCTYPE html>
-<html>
-<head>
-  <title>scriptorium dashboard</title>
-  <script>""" & HtmxJs & """</script>
-</head>
-<body>
-  <div id="app">Dashboard loading...</div>
-</body>
-</html>"""
   NotFoundJson = """{"error": "not found"}"""
 
 proc indexHandler(request: Request) =
-  ## Serve the main dashboard HTML page.
+  ## Serve the main dashboard HTML page with overview as default view.
+  let html = renderOverviewPage()
   var headers: HttpHeaders
   headers["Content-Type"] = "text/html"
-  request.respond(200, headers, DashboardHtml)
+  request.respond(200, headers, html)
 
 proc notFoundHandler(request: Request) =
   ## Return a 404 JSON response for unknown routes.
@@ -650,6 +640,61 @@ proc methodNotAllowedHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(405, headers, """{"error": "method not allowed"}""")
 
+proc fragmentStatusHandler(request: Request) =
+  ## Handle GET /fragments/status and return an HTML fragment for the status card.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let status = getApiStatus(repoPath)
+  let html = renderStatusFragment(status.pidAlive, status.uptime, status.paused,
+                                  status.loopIteration)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc fragmentTicketsHandler(request: Request) =
+  ## Handle GET /fragments/tickets and return an HTML fragment for ticket counts.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let openTickets = listTicketsInState(repoPath, "open")
+  let inProgressTickets = listTicketsInState(repoPath, "in-progress")
+  let doneTickets = listTicketsInState(repoPath, "done")
+  let html = renderTicketsFragment(openTickets.len, inProgressTickets.len,
+                                   doneTickets.len)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc fragmentAgentsHandler(request: Request) =
+  ## Handle GET /fragments/agents and return an HTML fragment for agent summary.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let agents = getApiAgents(repoPath)
+  let html = renderAgentsFragment(agents.agents.len, agents.maxAgents)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc fragmentQueueHandler(request: Request) =
+  ## Handle GET /fragments/queue and return an HTML fragment for merge queue depth.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let queue = getApiQueue(repoPath)
+  let html = renderQueueFragment(queue.pending.len, queue.active.isSome)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
+proc fragmentHealthHandler(request: Request) =
+  ## Handle GET /fragments/health and return an HTML fragment for health status.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let health = getApiHealth(repoPath)
+  let html = renderHealthFragment(health.healthy, health.lastCommit.isSome,
+                                  health.lastCommit)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
 proc oobFragment*(id: string, content: string): string =
   ## Build an htmx out-of-band swap fragment.
   result = &"""<div id="{id}" hx-swap-oob="true">{content}</div>"""
@@ -742,6 +787,11 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/iteration", iterationHandler)
   router.post("/api/pause", pauseHandler)
   router.post("/api/resume", resumeHandler)
+  router.get("/fragments/status", fragmentStatusHandler)
+  router.get("/fragments/tickets", fragmentTicketsHandler)
+  router.get("/fragments/agents", fragmentAgentsHandler)
+  router.get("/fragments/queue", fragmentQueueHandler)
+  router.get("/fragments/health", fragmentHealthHandler)
   router.get("/ws", wsUpgradeHandler)
   router.notFoundHandler = notFoundHandler
   router.methodNotAllowedHandler = methodNotAllowedHandler

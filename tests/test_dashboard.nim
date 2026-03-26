@@ -1,9 +1,9 @@
-## Tests for the dashboard status JSON construction helpers.
+## Tests for the dashboard status JSON construction helpers and HTML view rendering.
 
 import
   std/[json, options, os, posix, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[dashboard, git_ops, pause_flag]
+  scriptorium/[dashboard, dashboard_views, git_ops, pause_flag]
 
 suite "formatUptime":
   test "seconds only":
@@ -440,3 +440,146 @@ suite "oobFragment":
     let jsonContent = """{"pidAlive":true,"paused":false}"""
     let result = oobFragment("status", jsonContent)
     check """hx-swap-oob="true">{"pidAlive":true,"paused":false}</div>""" in result
+
+suite "renderNavigation":
+  test "contains all navigation links":
+    let nav = renderNavigation("overview")
+    check "<nav>" in nav
+    check "Overview" in nav
+    check "Ticket Board" in nav
+    check "Merge Queue" in nav
+    check "Agents" in nav
+    check "Spec" in nav
+    check "Logs" in nav
+
+  test "marks active view with active class":
+    let nav = renderNavigation("overview")
+    check """class="active">Overview""" in nav
+
+  test "does not mark inactive views as active":
+    let nav = renderNavigation("overview")
+    check """class="active">Agents""" notin nav
+
+  test "marks different view as active":
+    let nav = renderNavigation("tickets")
+    check """class="active">Ticket Board""" in nav
+
+suite "renderStatusFragment":
+  test "shows running when pid is alive":
+    let html = renderStatusFragment(true, some("1h 5m 3s"), false, 10)
+    check "Running" in html
+    check "status-ok" in html
+    check "1h 5m 3s" in html
+    check "10" in html
+
+  test "shows stopped when pid is not alive":
+    let html = renderStatusFragment(false, none(string), false, 0)
+    check "Stopped" in html
+    check "status-error" in html
+
+  test "shows paused badge when paused":
+    let html = renderStatusFragment(true, some("5s"), true, 1)
+    check "PAUSED" in html
+    check "badge-yellow" in html
+
+  test "no paused badge when not paused":
+    let html = renderStatusFragment(true, some("5s"), false, 1)
+    check "PAUSED" notin html
+
+suite "renderTicketsFragment":
+  test "shows ticket counts":
+    let html = renderTicketsFragment(5, 3, 12)
+    check "3" in html
+    check "in progress" in html
+    check "5 open" in html
+    check "12 done" in html
+
+  test "shows zero counts":
+    let html = renderTicketsFragment(0, 0, 0)
+    check "0" in html
+
+suite "renderAgentsFragment":
+  test "shows agent slot usage":
+    let html = renderAgentsFragment(2, 4)
+    check "2 / 4" in html
+    check "agent slots in use" in html
+
+suite "renderQueueFragment":
+  test "shows pending count and active status":
+    let html = renderQueueFragment(3, true)
+    check "3 pending" in html
+    check "1 active" in html
+
+  test "shows idle when no active item":
+    let html = renderQueueFragment(0, false)
+    check "0 pending" in html
+    check "idle" in html
+
+suite "renderHealthFragment":
+  test "shows healthy status with commit":
+    let html = renderHealthFragment(true, true, some("abc1234def"))
+    check "Healthy" in html
+    check "status-ok" in html
+    check "abc1234" in html
+
+  test "shows unhealthy status":
+    let html = renderHealthFragment(false, true, some("bad1234"))
+    check "Unhealthy" in html
+    check "status-error" in html
+
+  test "shows no data when hasData is false":
+    let html = renderHealthFragment(false, false, none(string))
+    check "No data" in html
+
+suite "renderOverviewSection":
+  test "contains all htmx-powered cards with correct ids":
+    let html = renderOverviewSection()
+    check """id="overview-status"""" in html
+    check """id="overview-tickets"""" in html
+    check """id="overview-agents"""" in html
+    check """id="overview-queue"""" in html
+    check """id="overview-health"""" in html
+
+  test "cards use hx-get to load from fragment endpoints":
+    let html = renderOverviewSection()
+    check """hx-get="/fragments/status"""" in html
+    check """hx-get="/fragments/tickets"""" in html
+    check """hx-get="/fragments/agents"""" in html
+    check """hx-get="/fragments/queue"""" in html
+    check """hx-get="/fragments/health"""" in html
+
+  test "cards use hx-trigger load":
+    let html = renderOverviewSection()
+    check """hx-trigger="load"""" in html
+
+suite "renderOverviewPage":
+  test "produces full HTML page with doctype and head":
+    let html = renderOverviewPage()
+    check "<!DOCTYPE html>" in html
+    check "<html>" in html
+    check "<title>scriptorium dashboard</title>" in html
+    check "<style>" in html
+
+  test "includes htmx script tag":
+    let html = renderOverviewPage()
+    check "htmx.org" in html
+
+  test "includes websocket extension":
+    let html = renderOverviewPage()
+    check "htmx-ext-ws" in html
+    check """ws-connect="/ws"""" in html
+
+  test "includes navigation with overview active":
+    let html = renderOverviewPage()
+    check """class="active">Overview""" in html
+
+  test "includes overview section cards":
+    let html = renderOverviewPage()
+    check """id="overview-status"""" in html
+
+suite "renderPage":
+  test "wraps body content with navigation":
+    let html = renderPage("agents", "<div>content</div>")
+    check "<nav>" in html
+    check "<div>content</div>" in html
+    check """class="active">Agents""" in html
