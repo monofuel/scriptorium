@@ -727,3 +727,79 @@ suite "concurrent manager completion ticket ID serialization":
         inc areaBCounts
     check areaACounts == 2
     check areaBCounts == 2
+
+suite "token budget gates coding but allows managers":
+  setup:
+
+    while consumeSubmitPrSummary() != "": discard
+    tickSleepOverrideMs = 0
+    capturedLogs = @[]
+    captureLogs = true
+
+  teardown:
+    tickSleepOverrideMs = -1
+    captureLogs = false
+    capturedLogs = @[]
+    ticketStdoutBytes.clear()
+
+  test "budget exceeded pauses coding agents but still spawns managers":
+    let tmp = getTempDir() / "scriptorium_test_token_budget_gate"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nToken budget gating test.\n")
+    # Area with no tickets triggers manager invocation.
+    addAreaToPlan(tmp, "area-needs-tickets.md", "# Area Needs Tickets\n\n## Goal\n- Generate tickets.\n")
+    # Open ticket in a separate area for the coding agent check.
+    addTicketToPlan(tmp, "open", "0001-task.md", "# Task\n\n**Area:** area-other\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 4
+    cfg.concurrency.tokenBudgetMB = 1
+    writeScriptoriumConfig(tmp, cfg)
+
+    # Pre-seed stdout bytes exceeding the 1 MB budget.
+    ticketStdoutBytes["seed"] = 2 * 1024 * 1024
+
+    var managerInvoked = false
+    var codingInvoked = false
+    var invocationLock: Lock
+    initLock(invocationLock)
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Track whether manager and coding agents are invoked.
+      if request.ticketId == "run":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.startsWith("manager"):
+        {.cast(gcsafe).}:
+          acquire(invocationLock)
+          managerInvoked = true
+          release(invocationLock)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      else:
+        {.cast(gcsafe).}:
+          acquire(invocationLock)
+          codingInvoked = true
+          release(invocationLock)
+        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
+
+    runOrchestratorForTicks(tmp, 2, fakeRunner)
+
+    acquire(invocationLock)
+    let finalManagerInvoked = managerInvoked
+    let finalCodingInvoked = codingInvoked
+    release(invocationLock)
+    deinitLock(invocationLock)
+
+    # Manager must be invoked to generate tickets for the area.
+    check finalManagerInvoked
+
+    # Coding agent must NOT be invoked because the budget is exceeded.
+    check not finalCodingInvoked
+
+    # Tick summary log must contain coding=budget-exceeded.
+    let summaryLogs = capturedLogs.filterIt(it.msg.contains("tick") and it.msg.contains("coding=budget-exceeded"))
+    check summaryLogs.len > 0
