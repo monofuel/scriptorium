@@ -20,6 +20,8 @@ proc testDefaultConfigValues() =
   doAssert cfg.discord.serverId == ""
   doAssert cfg.discord.channelId == ""
   doAssert cfg.discord.allowedUserIds.len == 0
+  doAssert cfg.dashboard.port == 8098
+  doAssert cfg.dashboard.host == "127.0.0.1"
   doAssert cfg.logLevel == ""
   doAssert cfg.fileLogLevel == ""
   echo "[OK] defaultConfig returns expected default values"
@@ -78,7 +80,8 @@ proc testFullJsonMerge() =
       "codingAgentMaxAttempts": 10
     },
     "loop": {"enabled": true, "feedback": "echo ok", "goal": "ship it", "maxIterations": 5},
-    "discord": {"enabled": true, "serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["alice", "bob"]}
+    "discord": {"enabled": true, "serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["alice", "bob"]},
+    "dashboard": {"port": 9999, "host": "0.0.0.0"}
   }"""
   writeFile(tmpDir / "scriptorium.json", json)
 
@@ -104,6 +107,8 @@ proc testFullJsonMerge() =
   doAssert cfg.discord.serverId == "srv-1"
   doAssert cfg.discord.channelId == "12345"
   doAssert cfg.discord.allowedUserIds == @["alice", "bob"]
+  doAssert cfg.dashboard.port == 9999
+  doAssert cfg.dashboard.host == "0.0.0.0"
   echo "[OK] full JSON merge loads all values correctly"
 
 proc testEnvVarOverrideLogLevel() =
@@ -196,15 +201,24 @@ proc testResolveModel() =
   doAssert resolveModel("some-other-model") == "some-other-model"
   echo "[OK] resolveModel translates correctly with and without CLAUDE_CODE_USE_BEDROCK"
 
-proc testDashboardDefaults() =
-  ## Verify defaultConfig returns expected dashboard defaults.
-  let cfg = defaultConfig()
-  doAssert cfg.dashboard.host == "127.0.0.1"
-  doAssert cfg.dashboard.port == 8098
-  echo "[OK] defaultConfig returns expected dashboard defaults"
+proc testDashboardConfigLoading() =
+  ## Verify dashboard section fields are loaded correctly from JSON.
+  let tmpDir = getTempDir() / "test_config_dashboard"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
 
-proc testDashboardPartialOverride() =
-  ## Verify loadConfig with partial dashboard JSON overrides only specified fields.
+  let json = """{"dashboard": {"port": 9000, "host": "0.0.0.0"}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.dashboard.port == 9000
+  doAssert cfg.dashboard.host == "0.0.0.0"
+  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.concurrency.maxAgents == 4
+  echo "[OK] dashboard config fields loaded correctly"
+
+proc testDashboardPartialConfig() =
+  ## Verify partial dashboard JSON overrides only port while host stays default.
   let tmpDir = getTempDir() / "test_config_dashboard_partial"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
@@ -215,21 +229,7 @@ proc testDashboardPartialOverride() =
   let cfg = loadConfig(tmpDir)
   doAssert cfg.dashboard.port == 9000
   doAssert cfg.dashboard.host == "127.0.0.1"
-  echo "[OK] dashboard partial override works correctly"
-
-proc testDashboardMissing() =
-  ## Verify loadConfig without a dashboard key returns defaults.
-  let tmpDir = getTempDir() / "test_config_dashboard_missing"
-  createDir(tmpDir)
-  defer: removeDir(tmpDir)
-
-  let json = """{"logLevel": "info"}"""
-  writeFile(tmpDir / "scriptorium.json", json)
-
-  let cfg = loadConfig(tmpDir)
-  doAssert cfg.dashboard.host == "127.0.0.1"
-  doAssert cfg.dashboard.port == 8098
-  echo "[OK] dashboard defaults preserved when key is missing"
+  echo "[OK] dashboard partial config works correctly"
 
 proc testInferHarness() =
   ## Verify inferHarness maps model prefixes to correct harnesses.
@@ -252,6 +252,5 @@ when isMainModule:
   testDiscordTokenPresent()
   testResolveModel()
   testInferHarness()
-  testDashboardDefaults()
-  testDashboardPartialOverride()
-  testDashboardMissing()
+  testDashboardConfigLoading()
+  testDashboardPartialConfig()

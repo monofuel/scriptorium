@@ -18,6 +18,8 @@ const
   DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
   DefaultLocalEndpoint = "http://127.0.0.1:8097"
+  DefaultDashboardPort = 8098
+  DefaultDashboardHost = "127.0.0.1"
 
 type
   AgentConfig* = object
@@ -106,7 +108,7 @@ proc defaultConfig*(): Config =
     ),
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
-    dashboard: DashboardConfig(host: "127.0.0.1", port: 8098),
+    dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,
   )
 
