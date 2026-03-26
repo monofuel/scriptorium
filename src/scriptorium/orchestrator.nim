@@ -412,16 +412,6 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
   shouldRun = false
 
-proc parseLogLevel(value: string): LogLevel =
-  ## Parse a log level string into a LogLevel enum value.
-  case value.toLowerAscii()
-  of "debug": lvlDebug
-  of "info": lvlInfo
-  of "warn", "warning": lvlWarn
-  of "error": lvlError
-  else:
-    raise newException(ValueError, &"unknown log level: {value}")
-
 proc applyLogLevelFromConfig(repoPath: string) =
   ## Apply log level from config or environment variable.
   let cfg = loadConfig(repoPath)

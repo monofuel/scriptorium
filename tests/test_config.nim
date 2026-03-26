@@ -1,6 +1,6 @@
 import
   std/[os],
-  scriptorium/config
+  scriptorium/[config, logging]
 
 proc testDefaultConfigValues() =
   ## Verify defaultConfig returns expected default values for all fields.
@@ -241,7 +241,24 @@ proc testInferHarness() =
   doAssert inferHarness("llama-3") == harnessTypoi
   echo "[OK] inferHarness maps model prefixes to correct harnesses"
 
+proc testParseLogLevel() =
+  ## Verify parseLogLevel maps strings to correct LogLevel values.
+  doAssert parseLogLevel("debug") == lvlDebug
+  doAssert parseLogLevel("info") == lvlInfo
+  doAssert parseLogLevel("warn") == lvlWarn
+  doAssert parseLogLevel("warning") == lvlWarn
+  doAssert parseLogLevel("error") == lvlError
+  doAssert parseLogLevel("DEBUG") == lvlDebug
+  var raised = false
+  try:
+    discard parseLogLevel("invalid")
+  except ValueError:
+    raised = true
+  doAssert raised, "parseLogLevel should raise ValueError for invalid input"
+  echo "[OK] parseLogLevel maps strings correctly"
+
 when isMainModule:
+  testParseLogLevel()
   testDefaultConfigValues()
   testMissingConfigFile()
   testPartialJsonMerge()

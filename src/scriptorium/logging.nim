@@ -1,7 +1,7 @@
 ## Global file logger for scriptorium orchestrator sessions.
 
 import
-  std/[os, strformat, times]
+  std/[os, strformat, strutils, times]
 
 type
   LogLevel* = enum
@@ -79,3 +79,13 @@ proc logWarn*(msg: string) =
 proc logError*(msg: string) =
   ## Log a message at error level.
   log(lvlError, msg)
+
+proc parseLogLevel*(value: string): LogLevel =
+  ## Parse a log level string into a LogLevel enum value.
+  case value.toLowerAscii()
+  of "debug": lvlDebug
+  of "info": lvlInfo
+  of "warn", "warning": lvlWarn
+  of "error": lvlError
+  else:
+    raise newException(ValueError, &"unknown log level: {value}")
