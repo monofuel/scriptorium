@@ -219,3 +219,37 @@ suite "parseAgentFromTicket":
     check "status" in json
     check "\"coder\"" in json
     check "\"running\"" in json
+
+suite "parseAreaSummary":
+  test "extracts id and first line as summary":
+    let content = "# Dashboard Area\n\nThis area covers the web dashboard."
+    let area = parseAreaSummary("dashboard.md", content)
+    check area.id == "dashboard"
+    check area.summary == "# Dashboard Area"
+
+  test "strips .md extension from filename for id":
+    let area = parseAreaSummary("core-engine.md", "Core engine overview")
+    check area.id == "core-engine"
+
+  test "skips empty leading lines":
+    let content = "\n\n  \nActual first line"
+    let area = parseAreaSummary("test.md", content)
+    check area.summary == "Actual first line"
+
+  test "returns empty summary for empty content":
+    let area = parseAreaSummary("empty.md", "")
+    check area.id == "empty"
+    check area.summary == ""
+
+  test "returns empty summary for whitespace-only content":
+    let area = parseAreaSummary("blank.md", "  \n  \n  ")
+    check area.id == "blank"
+    check area.summary == ""
+
+  test "serializes to JSON with expected fields":
+    let area = parseAreaSummary("auth.md", "# Authentication\n\nHandles auth.")
+    let json = toJson(area)
+    check "\"id\"" in json
+    check "\"summary\"" in json
+    check "\"auth\"" in json
+    check "\"# Authentication\"" in json

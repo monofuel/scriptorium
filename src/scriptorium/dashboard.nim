@@ -395,6 +395,105 @@ proc agentsHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+type
+  SpecResponse* = object
+    content*: string
+
+  AreaSummary* = object
+    id*: string
+    summary*: string
+
+  AreasResponse* = object
+    areas*: seq[AreaSummary]
+
+  AreaDetail* = object
+    id*: string
+    content*: string
+
+proc parseAreaSummary*(filename: string, content: string): AreaSummary =
+  ## Build an area summary from a filename and its markdown content.
+  let id = filename.replace(".md", "")
+  var summary = ""
+  for line in content.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len > 0:
+      summary = trimmed
+      break
+  result = AreaSummary(id: id, summary: summary)
+
+proc getApiSpec*(repoPath: string): SpecResponse =
+  ## Read the full spec.md from the plan branch.
+  let specRef = PlanBranch & ":" & PlanSpecPath
+  let specResult = runCommandCapture(repoPath, "git", @["show", specRef])
+  if specResult.exitCode == 0:
+    result.content = specResult.output
+
+proc listAreas*(repoPath: string): seq[AreaSummary] =
+  ## List all areas from the plan branch with their first-line summaries.
+  let dirRef = PlanBranch & ":" & PlanAreasDir & "/"
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirRef])
+  if dirResult.exitCode != 0:
+    return
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    let filePath = PlanAreasDir & "/" & trimmed
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    result.add(parseAreaSummary(trimmed, fileResult.output))
+
+proc getAreaById*(repoPath: string, areaId: string): Option[AreaDetail] =
+  ## Read a single area by ID from the plan branch.
+  let fileRef = PlanBranch & ":" & PlanAreasDir & "/" & areaId & ".md"
+  let fileResult = runCommandCapture(repoPath, "git", @["show", fileRef])
+  if fileResult.exitCode != 0:
+    return none(AreaDetail)
+  result = some(AreaDetail(id: areaId, content: fileResult.output))
+
+proc specHandler(request: Request) =
+  ## Handle GET /api/spec and return JSON with spec content.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let spec = getApiSpec(repoPath)
+  let body = toJson(spec)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc areasHandler(request: Request) =
+  ## Handle GET /api/areas and return JSON list of area summaries.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let resp = AreasResponse(areas: listAreas(repoPath))
+  let body = toJson(resp)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc areaDetailHandler(request: Request) =
+  ## Handle GET /api/areas/:id and return JSON area detail or 404.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let pathParts = request.uri.split("/")
+  if pathParts.len < 4:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "area not found"}""")
+    return
+  let areaId = pathParts[3]
+  let detail = getAreaById(repoPath, areaId)
+  if detail.isNone:
+    var headers: HttpHeaders
+    headers["Content-Type"] = "application/json"
+    request.respond(404, headers, """{"error": "area not found"}""")
+    return
+  let body = toJson(detail.get)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -409,6 +508,9 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/tickets/*", ticketDetailHandler)
   router.get("/api/queue", queueHandler)
   router.get("/api/agents", agentsHandler)
+  router.get("/api/spec", specHandler)
+  router.get("/api/areas", areasHandler)
+  router.get("/api/areas/*", areaDetailHandler)
   router.notFoundHandler = notFoundHandler
 
   let server = newServer(router)
