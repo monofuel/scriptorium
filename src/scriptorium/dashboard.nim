@@ -619,6 +619,36 @@ proc iterationHandler(request: Request) =
   headers["Content-Type"] = "application/json"
   request.respond(200, headers, body)
 
+type
+  PauseResponse* = object
+    paused*: bool
+
+proc pauseHandler(request: Request) =
+  ## Handle POST /api/pause, create the pause flag file and return JSON.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  writePauseFlag(repoPath)
+  let body = toJson(PauseResponse(paused: true))
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc resumeHandler(request: Request) =
+  ## Handle POST /api/resume, remove the pause flag file and return JSON.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  removePauseFlag(repoPath)
+  let body = toJson(PauseResponse(paused: false))
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(200, headers, body)
+
+proc methodNotAllowedHandler(request: Request) =
+  ## Return a 405 JSON response when the HTTP method is not allowed for a route.
+  var headers: HttpHeaders
+  headers["Content-Type"] = "application/json"
+  request.respond(405, headers, """{"error": "method not allowed"}""")
+
 proc runDashboard*(repoPath: string) =
   ## Start the blocking mummy HTTP server for the dashboard.
   let cfg = loadConfig(repoPath)
@@ -639,7 +669,10 @@ proc runDashboard*(repoPath: string) =
   router.get("/api/logs/*/*", logsHandler)
   router.get("/api/health", healthHandler)
   router.get("/api/iteration", iterationHandler)
+  router.post("/api/pause", pauseHandler)
+  router.post("/api/resume", resumeHandler)
   router.notFoundHandler = notFoundHandler
+  router.methodNotAllowedHandler = methodNotAllowedHandler
 
   let server = newServer(router)
   server.serve(Port(port), host)

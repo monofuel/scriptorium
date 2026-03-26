@@ -365,3 +365,59 @@ suite "IterationResponse serialization":
     check "currentIteration" in jsonStr
     check "logContent" in jsonStr
     check "3" in jsonStr
+
+suite "PauseResponse serialization":
+  test "paused true serializes correctly":
+    let resp = PauseResponse(paused: true)
+    let jsonStr = toJson(resp)
+    check "\"paused\":true" in jsonStr
+
+  test "paused false serializes correctly":
+    let resp = PauseResponse(paused: false)
+    let jsonStr = toJson(resp)
+    check "\"paused\":false" in jsonStr
+
+suite "pause and resume toggle":
+  test "pause creates flag and resume removes it":
+    let tmp = createTempDir("dashboard_pause_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    check isPaused(tmp) == false
+
+    writePauseFlag(tmp)
+    check isPaused(tmp) == true
+
+    removePauseFlag(tmp)
+    check isPaused(tmp) == false
+
+  test "pause is idempotent":
+    let tmp = createTempDir("dashboard_pause_idem_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    writePauseFlag(tmp)
+    writePauseFlag(tmp)
+    check isPaused(tmp) == true
+
+  test "resume is idempotent":
+    let tmp = createTempDir("dashboard_resume_idem_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    removePauseFlag(tmp)
+    check isPaused(tmp) == false
+
+  test "pause then resume then pause toggles correctly":
+    let tmp = createTempDir("dashboard_toggle_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    writePauseFlag(tmp)
+    check isPaused(tmp) == true
+
+    removePauseFlag(tmp)
+    check isPaused(tmp) == false
+
+    writePauseFlag(tmp)
+    check isPaused(tmp) == true
