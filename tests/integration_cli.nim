@@ -376,3 +376,12 @@ suite "scriptorium CLI":
       syncAgentsMd(tmp)
 
     check readFile(tmp / "AGENTS.md") == customContent
+
+  test "dashboard command prints stub message and exits 0":
+    let tmp = getTempDir() / "scriptorium_test_cli_dashboard"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "dashboard")
+    check rc == 0
+    check output.contains("dashboard not yet implemented")

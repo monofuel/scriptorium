@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, discord_bot, init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, config, discord_bot, init, orchestrator, output_formatting]
 
 const
   Version = "0.1.0"
@@ -15,6 +15,7 @@ Usage:
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
   scriptorium ask              Interactive read-only Q&A session with the Architect
   scriptorium audit            Run the audit agent
+  scriptorium dashboard        Start the web dashboard
   scriptorium discord          Run the Discord bot
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
@@ -82,6 +83,13 @@ proc cmdAudit() =
   ## Run the audit agent against the current repository.
   runAudit(getCurrentDir())
 
+proc cmdDashboard() =
+  ## Print a stub message for the dashboard command using configured host and port.
+  let cfg = loadConfig(getCurrentDir())
+  let host = cfg.dashboard.host
+  let port = $cfg.dashboard.port
+  echo &"scriptorium: dashboard not yet implemented (will serve on {host}:{port})"
+
 proc cmdDiscord() =
   ## Run the Discord bot.
   runDiscordBot(getCurrentDir())
@@ -134,6 +142,8 @@ when isMainModule:
     cmdPlan(planArgs)
   of "ask":
     cmdAsk()
+  of "dashboard":
+    cmdDashboard()
   of "audit":
     cmdAudit()
   of "discord":
