@@ -47,6 +47,10 @@ type
     goal*: string
     maxIterations*: int
 
+  DashboardConfig* = object
+    host*: string
+    port*: int
+
   ConcurrencyConfig* = object
     maxAgents*: int
     tokenBudgetMB*: int
@@ -64,6 +68,7 @@ type
     timeouts*: TimeoutConfig
     discord*: DiscordConfig
     loop*: LoopConfig
+    dashboard*: DashboardConfig
     syncAgentsMd*: bool
     logLevel*: string
     fileLogLevel*: string
@@ -101,6 +106,7 @@ proc defaultConfig*(): Config =
     ),
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
+    dashboard: DashboardConfig(host: "127.0.0.1", port: 8098),
     syncAgentsMd: true,
   )
 
@@ -183,6 +189,11 @@ proc loadConfig*(repoPath: string): Config =
       result.loop.goal = parsed.loop.goal
     if parsed.loop.maxIterations > 0:
       result.loop.maxIterations = parsed.loop.maxIterations
+  if raw.contains("\"dashboard\""):
+    if parsed.dashboard.host.len > 0:
+      result.dashboard.host = parsed.dashboard.host
+    if parsed.dashboard.port > 0:
+      result.dashboard.port = parsed.dashboard.port
   if raw.contains("\"syncAgentsMd\""):
     result.syncAgentsMd = parsed.syncAgentsMd
   if parsed.logLevel.len > 0:
