@@ -222,6 +222,18 @@ suite "scriptorium CLI":
 
     check readFile(configPath) == existingContent
 
+  test "--init flag works as alias for init subcommand":
+    let tmp = getTempDir() / "scriptorium_test_cli_init_flag"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "--init")
+    check rc == 0
+    check output.contains("Initialized scriptorium workspace.")
+    # Verify plan branch was created.
+    let (_, branchRc) = execCmdEx("git -C " & tmp & " rev-parse --verify scriptorium/plan")
+    check branchRc == 0
+
   test "init output lists created files and next steps":
     let tmp = getTempDir() / "scriptorium_test_cli_init_output"
     makeTestRepo(tmp)

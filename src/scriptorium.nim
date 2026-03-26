@@ -8,6 +8,7 @@ const
 
 Usage:
   scriptorium init [path]      Initialize a new scriptorium workspace
+  scriptorium --init [path]    Alias for init
   scriptorium run              Start the orchestrator daemon
   scriptorium status           Show ticket counts and agent activity
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
@@ -139,7 +140,7 @@ when isMainModule:
     cmdDiscord()
   of "worktrees":
     cmdWorktrees()
-  of "init":
+  of "init", "--init":
     let path = if args.len > 1: args[1] else: ""
     cmdInit(path)
   of "--version":
