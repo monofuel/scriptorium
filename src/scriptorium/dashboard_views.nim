@@ -7,7 +7,7 @@ const
 
   NavItems = [
     ("Overview", "/", "overview"),
-    ("Ticket Board", "#tickets", "tickets"),
+    ("Ticket Board", "/tickets", "tickets"),
     ("Merge Queue", "#queue", "queue"),
     ("Agents", "#agents", "agents"),
     ("Spec", "#spec", "spec"),
@@ -37,6 +37,15 @@ const
     .badge-red { background: #3d0000; color: #f85149; }
     .badge-blue { background: #0c2d6b; color: #58a6ff; }
     .loading { color: #8b949e; font-style: italic; }
+    .kanban { display: flex; gap: 16px; }
+    .kanban-column { flex: 1; min-width: 0; }
+    .kanban-column h2 { font-size: 1em; color: #8b949e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ticket-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-bottom: 8px; cursor: pointer; }
+    .ticket-card:hover { border-color: #58a6ff; }
+    .ticket-card .ticket-id { color: #8b949e; font-size: 0.85em; }
+    .ticket-card .ticket-title { color: #e6edf3; margin-top: 4px; }
+    .ticket-card .ticket-meta { color: #8b949e; font-size: 0.8em; margin-top: 4px; }
+    .ticket-detail { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 12px; margin-top: 8px; white-space: pre-wrap; font-size: 0.85em; }
   """
 
 proc renderNavigation*(activeView: string): string =
@@ -129,3 +138,86 @@ proc renderOverviewPage*(): string =
   ## Render the full overview page with navigation and overview section.
   let overview = renderOverviewSection()
   result = renderPage("overview", overview)
+
+type
+  TicketCard* = object
+    id*: string
+    area*: string
+    title*: string
+    state*: string
+    elapsed*: string
+    attempt*: string
+    outcome*: string
+    wallTime*: string
+
+proc parseTicketCard*(id: string, area: string, title: string, state: string,
+                      content: string): TicketCard =
+  ## Build a ticket card from ticket fields and raw markdown content.
+  result = TicketCard(id: id, area: area, title: title, state: state)
+  var inMetrics = false
+  for line in content.splitLines():
+    let trimmed = line.strip()
+    if trimmed == "## Metrics":
+      inMetrics = true
+      continue
+    if inMetrics and trimmed.startsWith("## "):
+      break
+    if inMetrics:
+      if trimmed.startsWith("- attempt_count: "):
+        result.attempt = trimmed["- attempt_count: ".len..^1].strip()
+      elif trimmed.startsWith("- wall_time_seconds: "):
+        let secs = trimmed["- wall_time_seconds: ".len..^1].strip()
+        result.wallTime = secs & "s"
+      elif trimmed.startsWith("- outcome: "):
+        result.outcome = trimmed["- outcome: ".len..^1].strip()
+
+proc renderTicketCard*(card: TicketCard): string =
+  ## Render one ticket card as an HTML div with htmx click-to-expand.
+  let areaBadge = if card.area.len > 0:
+    let a = card.area
+    &""" <span class="badge badge-blue">{a}</span>"""
+  else:
+    ""
+  let ticketId = card.id
+  let title = card.title
+  var meta = ""
+  if card.state == "in-progress":
+    if card.elapsed.len > 0:
+      meta.add(&"""<span>Elapsed: {card.elapsed}</span>""")
+    if card.attempt.len > 0:
+      if meta.len > 0: meta.add(" | ")
+      meta.add(&"""<span>Attempt: {card.attempt}</span>""")
+  elif card.state == "done":
+    if card.outcome.len > 0:
+      meta.add(&"""<span>Outcome: {card.outcome}</span>""")
+    if card.wallTime.len > 0:
+      if meta.len > 0: meta.add(" | ")
+      meta.add(&"""<span>Wall: {card.wallTime}</span>""")
+  let metaHtml = if meta.len > 0:
+    &"""<div class="ticket-meta">{meta}</div>"""
+  else:
+    ""
+  result = &"""<div class="ticket-card" hx-get="/api/tickets/{ticketId}" hx-trigger="click" hx-target="find .ticket-detail" hx-swap="innerHTML">""" &
+    &"""<span class="ticket-id">{ticketId}</span>{areaBadge}""" &
+    &"""<div class="ticket-title">{title}</div>""" &
+    metaHtml &
+    """<div class="ticket-detail"></div></div>"""
+
+proc renderTicketBoardSection*(openCards: seq[TicketCard],
+                               inProgressCards: seq[TicketCard],
+                               doneCards: seq[TicketCard]): string =
+  ## Render the three-column kanban board section.
+  result = """<div class="container"><h1>Ticket Board</h1><div class="kanban">"""
+  result.add("""<div class="kanban-column"><h2>Open</h2>""")
+  for card in openCards:
+    result.add(renderTicketCard(card))
+  result.add("</div>")
+  result.add("""<div class="kanban-column"><h2>In Progress</h2>""")
+  for card in inProgressCards:
+    result.add(renderTicketCard(card))
+  result.add("</div>")
+  result.add("""<div class="kanban-column"><h2>Done</h2>""")
+  for card in doneCards:
+    result.add(renderTicketCard(card))
+  result.add("</div>")
+  result.add("</div></div>")

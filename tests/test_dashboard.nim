@@ -583,3 +583,85 @@ suite "renderPage":
     check "<nav>" in html
     check "<div>content</div>" in html
     check """class="active">Agents""" in html
+
+suite "parseTicketCard":
+  test "parses open ticket with no metrics":
+    let content = "# Add Foo\n\n**Area:** dashboard\n\nDescription."
+    let card = parseTicketCard("0042", "dashboard", "Add Foo", "open", content)
+    check card.id == "0042"
+    check card.area == "dashboard"
+    check card.title == "Add Foo"
+    check card.state == "open"
+    check card.attempt == ""
+    check card.wallTime == ""
+    check card.outcome == ""
+
+  test "parses done ticket with metrics":
+    let content = "# Fix Bug\n\n**Area:** core\n\n## Metrics\n" &
+      "- wall_time_seconds: 120\n- attempt_count: 2\n- outcome: success\n"
+    let card = parseTicketCard("0099", "core", "Fix Bug", "done", content)
+    check card.attempt == "2"
+    check card.wallTime == "120s"
+    check card.outcome == "success"
+
+  test "parses in-progress ticket with attempt count":
+    let content = "# WIP\n\n## Metrics\n- attempt_count: 3\n"
+    let card = parseTicketCard("0010", "", "WIP", "in-progress", content)
+    check card.attempt == "3"
+
+  test "stops parsing metrics at next heading":
+    let content = "# T\n\n## Metrics\n- attempt_count: 1\n## Other\n- attempt_count: 9\n"
+    let card = parseTicketCard("0001", "", "T", "done", content)
+    check card.attempt == "1"
+
+suite "renderTicketCard":
+  test "renders open card with area badge":
+    let card = TicketCard(id: "0042", area: "dashboard", title: "Add Foo", state: "open")
+    let html = renderTicketCard(card)
+    check "ticket-card" in html
+    check "0042" in html
+    check "dashboard" in html
+    check "badge-blue" in html
+    check "Add Foo" in html
+    check """hx-get="/api/tickets/0042"""" in html
+
+  test "renders in-progress card with elapsed and attempt":
+    let card = TicketCard(id: "0050", area: "core", title: "Fix Bug",
+                          state: "in-progress", elapsed: "5m 30s", attempt: "2")
+    let html = renderTicketCard(card)
+    check "Elapsed: 5m 30s" in html
+    check "Attempt: 2" in html
+
+  test "renders done card with outcome and wall time":
+    let card = TicketCard(id: "0099", area: "", title: "Done Task",
+                          state: "done", outcome: "success", wallTime: "120s")
+    let html = renderTicketCard(card)
+    check "Outcome: success" in html
+    check "Wall: 120s" in html
+
+  test "card without area omits badge":
+    let card = TicketCard(id: "0001", area: "", title: "No Area", state: "open")
+    let html = renderTicketCard(card)
+    check "badge-blue" notin html
+
+  test "card includes expandable detail div":
+    let card = TicketCard(id: "0001", area: "", title: "T", state: "open")
+    let html = renderTicketCard(card)
+    check "ticket-detail" in html
+
+suite "renderTicketBoardSection":
+  test "renders three columns":
+    let html = renderTicketBoardSection(@[], @[], @[])
+    check "kanban" in html
+    check ">Open<" in html
+    check ">In Progress<" in html
+    check ">Done<" in html
+
+  test "includes cards in correct columns":
+    let openCard = TicketCard(id: "0001", area: "a", title: "O", state: "open")
+    let ipCard = TicketCard(id: "0002", area: "b", title: "I", state: "in-progress")
+    let doneCard = TicketCard(id: "0003", area: "c", title: "D", state: "done")
+    let html = renderTicketBoardSection(@[openCard], @[ipCard], @[doneCard])
+    check "0001" in html
+    check "0002" in html
+    check "0003" in html

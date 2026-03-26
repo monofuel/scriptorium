@@ -170,6 +170,45 @@ proc findTicketById(repoPath: string, ticketId: string): Option[TicketDetail] =
         state: state, content: fileResult.output,
       ))
 
+proc buildTicketCards(repoPath: string, state: string): seq[TicketCard] =
+  ## Build ticket cards with metadata for a given state directory.
+  let dirPath = PlanBranch & ":tickets/" & state
+  let dirResult = runCommandCapture(repoPath, "git", @["show", dirPath])
+  if dirResult.exitCode != 0:
+    return
+  for line in dirResult.output.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len == 0 or not trimmed.endsWith(".md"):
+      continue
+    let filePath = "tickets/" & state & "/" & trimmed
+    let fileResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & filePath])
+    if fileResult.exitCode != 0:
+      continue
+    let ticketId = ticketIdFromTicketPath(trimmed)
+    let area = parseAreaFromTicketContent(fileResult.output)
+    let title = parseTitleFromTicketContent(fileResult.output)
+    var card = parseTicketCard(ticketId, area, title, state, fileResult.output)
+    if state == "in-progress":
+      let worktree = parseWorktreeFromTicketContent(fileResult.output)
+      if worktree.len > 0 and dirExists(worktree):
+        let mtime = getFileInfo(worktree).lastWriteTime
+        let secs = (getTime() - mtime).inSeconds
+        card.elapsed = formatUptime(secs)
+    result.add(card)
+
+proc ticketBoardHandler(request: Request) =
+  ## Serve the ticket board HTML page with three-column kanban layout.
+  {.cast(gcsafe).}:
+    let repoPath = getCurrentDir()
+  let openCards = buildTicketCards(repoPath, "open")
+  let inProgressCards = buildTicketCards(repoPath, "in-progress")
+  let doneCards = buildTicketCards(repoPath, "done")
+  let section = renderTicketBoardSection(openCards, inProgressCards, doneCards)
+  let html = renderPage("tickets", section)
+  var headers: HttpHeaders
+  headers["Content-Type"] = "text/html"
+  request.respond(200, headers, html)
+
 proc ticketsHandler(request: Request) =
   ## Handle GET /api/tickets and return JSON list of tickets by state.
   {.cast(gcsafe).}:
@@ -774,6 +813,7 @@ proc runDashboard*(repoPath: string) =
 
   var router: Router
   router.get("/", indexHandler)
+  router.get("/tickets", ticketBoardHandler)
   router.get("/api/status", statusHandler)
   router.get("/api/tickets", ticketsHandler)
   router.get("/api/tickets/*", ticketDetailHandler)
