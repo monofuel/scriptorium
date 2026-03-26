@@ -647,3 +647,83 @@ suite "agent pool thread lifecycle":
         hasCoder = true
     check hasManager
     check hasCoder
+
+suite "concurrent manager completion ticket ID serialization":
+  setup:
+
+    while consumeSubmitPrSummary() != "": discard
+    tickSleepOverrideMs = 0
+
+  teardown:
+    tickSleepOverrideMs = -1
+
+  test "two managers completing concurrently produce non-overlapping ticket IDs":
+    let tmp = getTempDir() / "scriptorium_test_concurrent_manager_ids"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nConcurrent manager ID test.\n")
+    addAreaToPlan(tmp, "area-a.md", "# Area A\n\n## Goal\n- Area A work.\n")
+    addAreaToPlan(tmp, "area-b.md", "# Area B\n\n## Goal\n- Area B work.\n")
+
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 2
+    writeScriptoriumConfig(tmp, cfg)
+
+    let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Architect no-ops; managers submit 2 tickets each via recordSubmitTickets.
+      if request.ticketId == "run":
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId == "manager-area-a":
+        recordSubmitTickets("area-a", @[
+          "# Task A1\n\n**Area:** area-a",
+          "# Task A2\n\n**Area:** area-a",
+        ])
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId == "manager-area-b":
+        recordSubmitTickets("area-b", @[
+          "# Task B1\n\n**Area:** area-b",
+          "# Task B2\n\n**Area:** area-b",
+        ])
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
+      elif request.ticketId.endsWith("-prediction"):
+        return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
+      else:
+        return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
+
+    runOrchestratorForTicks(tmp, 3, fakeRunner)
+
+    # Collect ticket files from tickets/open/ on the plan branch.
+    let allFiles = planTreeFiles(tmp)
+    let openTickets = allFiles.filterIt(it.startsWith("tickets/open/") and it.endsWith(".md"))
+
+    check openTickets.len == 4
+
+    # Extract numeric prefixes and verify uniqueness and monotonic ordering.
+    var prefixes: seq[int] = @[]
+    for ticketFile in openTickets:
+      let fileName = ticketFile.split("/")[^1]
+      let dashIdx = fileName.find('-')
+      let numStr = fileName[0..<dashIdx]
+      prefixes.add(parseInt(numStr))
+    prefixes.sort()
+
+    # All IDs must be unique.
+    check prefixes.deduplicate() == prefixes
+
+    # IDs must be monotonically increasing.
+    for i in 1..<prefixes.len:
+      check prefixes[i] > prefixes[i - 1]
+
+    # Verify each ticket's area field matches the correct area.
+    var areaACounts = 0
+    var areaBCounts = 0
+    for ticketFile in openTickets:
+      let content = readPlanFile(tmp, ticketFile)
+      let areaId = parseAreaFromTicketContent(content)
+      if areaId == "area-a":
+        inc areaACounts
+      elif areaId == "area-b":
+        inc areaBCounts
+    check areaACounts == 2
+    check areaBCounts == 2
