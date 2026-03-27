@@ -6,6 +6,56 @@ Scriptorium keeps planning and execution state in Git, runs a strict Architect �
 
 > **Note:** Scriptorium is experimental. There is no warranty. Letting agents run loose is a bad idea but this is still a fun project. You should probably run this in a container.
 
+```mermaid
+graph LR
+    Human(("Human"))
+    Architect["Architect"]
+    Spec[("spec.md")]
+    Manager["Manager"]
+    Coder["Coder"]
+    Reviewer["Reviewer"]
+    Approved((approved?))
+    Tests((tests?))
+    Master[("master")]
+    Stuck[("stuck")]
+    Drained((drained?))
+    Eval(("eval"))
+    Loop["Loop Architect"]
+
+    Human -->|plan| Architect
+    Architect -->|spec| Spec
+    Spec --> Architect
+    Architect -->|areas| Manager
+    Manager -->|tickets| Coder
+    Coder -->|submit_pr| Reviewer
+    Reviewer --> Approved
+    Approved -->|yes| Tests
+    Approved -->|no| Coder
+    Tests -->|pass| Master
+    Tests -->|fail| Coder
+    Tests -->|parked| Stuck
+    Master --> Drained
+    Drained -->|yes| Eval
+    Eval --> Loop
+    Loop --> Spec
+
+    style Human fill:#4a9eff,stroke:#333,color:#fff
+    style Architect fill:#ff6b6b,stroke:#333,color:#fff
+    style Manager fill:#ff6b6b,stroke:#333,color:#fff
+    style Coder fill:#ff6b6b,stroke:#333,color:#fff
+    style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
+    style Loop fill:#ff6b6b,stroke:#333,color:#fff
+    style Approved fill:#ffd93d,stroke:#333,color:#333
+    style Tests fill:#ffd93d,stroke:#333,color:#333
+    style Drained fill:#ffd93d,stroke:#333,color:#333
+    style Eval fill:#ffd93d,stroke:#333,color:#333
+    style Spec fill:#6bcb77,stroke:#333,color:#333
+    style Master fill:#6bcb77,stroke:#333,color:#333
+    style Stuck fill:#999,stroke:#333,color:#fff
+```
+
+**Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human
+
 ## Usage
 
 Use `scriptorium plan` to talk to the **Architect** — the planning agent that reads your project source and maintains `spec.md`. The Architect decides what work needs to be done and breaks it into areas and tickets. `scriptorium plan` opens an interactive session where you can describe what you want built or changed, and the Architect updates the spec accordingly.
@@ -60,67 +110,6 @@ Current features:
 - Claude Code, Codex, and typoi agent harnesses
 
 ## Core workflow
-
-```mermaid
-graph TD
-    Human(("👤 Human"))
-    Architect["🤖 Architect LLM"]
-    Spec[("spec.md")]
-    SpecChanged((spec changed?))
-    Manager["🤖 Manager LLM"]
-    Tickets[("tickets/open/")]
-    Coder["🤖 Coding Agent LLM"]
-    Reviewer["🤖 Review Agent LLM"]
-    Approved((approved?))
-    MergeQueue((tests pass?))
-    Master[("master")]
-    Stuck[("tickets/stuck/")]
-    Reopen((retry limit?))
-    Loop["🤖 Loop: Architect LLM"]
-    Drained((queues empty?))
-    Feedback(("run eval"))
-
-    Human -->|"scriptorium plan"| Architect
-    Architect --> Spec
-    Spec --> SpecChanged
-    SpecChanged -->|yes| Architect
-    SpecChanged -->|no| Manager
-    Architect -->|"areas/*.md"| Manager
-    Manager --> Tickets
-    Tickets --> Coder
-    Coder -->|"submit_pr"| Reviewer
-    Reviewer --> Approved
-    Approved -->|yes| MergeQueue
-    Approved -->|no, feedback| Coder
-    MergeQueue -->|pass| Master
-    MergeQueue -->|fail| Reopen
-    Reopen -->|retry| Tickets
-    Reopen -->|parked| Stuck
-    Master --> Drained
-    Drained -->|"no, work pending"| Tickets
-    Drained -->|"yes (loop enabled)"| Feedback
-    Feedback --> Loop
-    Loop --> Spec
-
-    style Human fill:#4a9eff,stroke:#333,color:#fff
-    style Architect fill:#ff6b6b,stroke:#333,color:#fff
-    style Manager fill:#ff6b6b,stroke:#333,color:#fff
-    style Coder fill:#ff6b6b,stroke:#333,color:#fff
-    style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
-    style Loop fill:#ff6b6b,stroke:#333,color:#fff
-    style SpecChanged fill:#ffd93d,stroke:#333,color:#333
-    style Approved fill:#ffd93d,stroke:#333,color:#333
-    style MergeQueue fill:#ffd93d,stroke:#333,color:#333
-    style Reopen fill:#ffd93d,stroke:#333,color:#333
-    style Drained fill:#ffd93d,stroke:#333,color:#333
-    style Feedback fill:#ffd93d,stroke:#333,color:#333
-    style Spec fill:#6bcb77,stroke:#333,color:#333
-    style Tickets fill:#6bcb77,stroke:#333,color:#333
-    style Master fill:#6bcb77,stroke:#333,color:#333
-    style Stuck fill:#999,stroke:#333,color:#fff
-```
-
-**Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human
 
 At a high level:
 
