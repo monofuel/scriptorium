@@ -194,6 +194,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         let mergeProcessed = processMergeQueue(repoPath)
         if mergeProcessed:
           logInfo("merge queue: item processed (paused)")
+          let cleaned = cleanupStaleTicketWorktrees(repoPath)
+          for path in cleaned:
+            logInfo(&"worktree cleaned after merge: {path}")
         idle = true
       elif not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
@@ -323,6 +326,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if mergeProcessed:
             logInfo("merge queue: item processed")
             mergeStatus = "processing"
+            let cleaned = cleanupStaleTicketWorktrees(repoPath)
+            for path in cleaned:
+              logInfo(&"worktree cleaned after merge: {path}")
 
           if maxAgents <= 1:
             if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
