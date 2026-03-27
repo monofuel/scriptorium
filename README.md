@@ -9,38 +9,33 @@ Scriptorium keeps planning and execution state in Git, runs a strict Architect �
 ```mermaid
 graph TD
     Human(("👤 Human"))
+    Discord["scriptorium discord\nbot"]
+    Architect["🤖 Architect LLM"]
+    Spec[("spec.md")]
+    SpecChanged((spec changed?))
+    AreaArchitect["🤖 Architect LLM\ngenerates areas/*.md"]
+    Manager["🤖 Manager LLM\ngenerates tickets"]
+    Tickets[("tickets/open/")]
+    Coder["🤖 Coding Agent LLM\nimplements ticket"]
+    Reviewer["🤖 Review Agent LLM\nevaluates changes"]
+    Approved((approved?))
+    MergeQueue((make test?))
+    Master[("master branch")]
+    Stuck[("tickets/stuck/")]
+    Reopen((retry limit?))
+    Drained((queues empty?))
+    Feedback(("run eval command"))
 
-    subgraph "scriptorium plan / scriptorium ask"
-        PlanArchitect["🤖 Architect LLM\nhuman describes goals"]
-    end
-
-    subgraph "scriptorium run — Orchestrator Loop"
-        Spec[("spec.md")]
-        SpecChanged((spec changed?))
-        Architect["🤖 Architect LLM\ngenerates areas/*.md"]
-        Manager["🤖 Manager LLM\ngenerates tickets"]
-        Tickets[("tickets/open/")]
-        Coder["🤖 Coding Agent LLM\nimplements ticket"]
-        Reviewer["🤖 Review Agent LLM\nevaluates changes"]
-        Approved((approved?))
-        MergeQueue((make test?))
-        Master[("master branch")]
-        Stuck[("tickets/stuck/")]
-        Reopen((retry limit?))
-        Drained((queues empty?))
-        Feedback(("run eval command"))
-        Loop["🤖 Loop Architect LLM\nupdates spec from eval"]
-    end
-
-    Human -->|"scriptorium plan"| PlanArchitect
-    Human -->|"scriptorium ask\n(read-only)"| PlanArchitect
-    PlanArchitect -->|"writes spec.md"| Spec
-    Human -->|"scriptorium run"| Spec
+    Human -->|"scriptorium plan"| Architect
+    Human -->|"scriptorium ask (read-only)"| Architect
+    Human -->|"scriptorium discord"| Discord
+    Discord --> Architect
+    Architect -->|"writes"| Spec
 
     Spec --> SpecChanged
-    SpecChanged -->|yes| Architect
+    SpecChanged -->|yes| AreaArchitect
     SpecChanged -->|no, skip| Drained
-    Architect --> Manager
+    AreaArchitect --> Manager
     Manager --> Tickets
     Tickets --> Coder
     Coder -->|"calls submit_pr MCP tool"| Reviewer
@@ -54,16 +49,15 @@ graph TD
     Master --> Drained
     Drained -->|"work pending"| Tickets
     Drained -->|"yes, loop enabled"| Feedback
-    Feedback --> Loop
-    Loop -->|"updates spec.md"| Spec
+    Feedback -->|"eval output"| Architect
 
     style Human fill:#4a9eff,stroke:#333,color:#fff
-    style PlanArchitect fill:#ff6b6b,stroke:#333,color:#fff
+    style Discord fill:#7289da,stroke:#333,color:#fff
     style Architect fill:#ff6b6b,stroke:#333,color:#fff
+    style AreaArchitect fill:#ff6b6b,stroke:#333,color:#fff
     style Manager fill:#ff6b6b,stroke:#333,color:#fff
     style Coder fill:#ff6b6b,stroke:#333,color:#fff
     style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
-    style Loop fill:#ff6b6b,stroke:#333,color:#fff
     style SpecChanged fill:#ffd93d,stroke:#333,color:#333
     style Approved fill:#ffd93d,stroke:#333,color:#333
     style MergeQueue fill:#ffd93d,stroke:#333,color:#333
@@ -74,25 +68,6 @@ graph TD
     style Tickets fill:#6bcb77,stroke:#333,color:#333
     style Master fill:#6bcb77,stroke:#333,color:#333
     style Stuck fill:#999,stroke:#333,color:#fff
-```
-
-```mermaid
-graph TD
-    Human(("👤 Human"))
-    DiscordBot["scriptorium discord\nbot listens in channel"]
-    DiscordArchitect["🤖 Architect LLM\nhuman describes goals"]
-    DiscordSpec[("spec.md")]
-
-    Human -->|"sends message"| DiscordBot
-    DiscordBot --> DiscordArchitect
-    DiscordArchitect -->|"writes spec.md"| DiscordSpec
-    DiscordArchitect -->|"replies in channel"| DiscordBot
-    DiscordBot -->|"posts response"| Human
-
-    style Human fill:#4a9eff,stroke:#333,color:#fff
-    style DiscordBot fill:#7289da,stroke:#333,color:#fff
-    style DiscordArchitect fill:#ff6b6b,stroke:#333,color:#fff
-    style DiscordSpec fill:#6bcb77,stroke:#333,color:#333
 ```
 
 **Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human, 🟣 Purple = Discord bot
