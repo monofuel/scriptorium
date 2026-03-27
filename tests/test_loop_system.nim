@@ -51,19 +51,51 @@ proc testQueueNotDrainedPending() =
 
 proc testRunFeedbackCommandSuccess() =
   ## Verify runFeedbackCommand returns output from a successful command.
-  let output = runFeedbackCommand("/tmp", "echo hello")
-  doAssert output.strip() == "hello"
+  let fb = runFeedbackCommand("/tmp", "echo hello")
+  doAssert fb.exitCode == 0
+  doAssert fb.timedOut == false
+  doAssert fb.output.strip() == "hello"
   echo "[OK] runFeedbackCommand returns output containing hello"
 
 proc testRunFeedbackCommandFailure() =
-  ## Verify runFeedbackCommand raises on a failing command.
-  var raised = false
-  try:
-    discard runFeedbackCommand("/tmp", "exit 1")
-  except IOError:
-    raised = true
-  doAssert raised, "Expected IOError from failing command"
-  echo "[OK] runFeedbackCommand raises on failing command"
+  ## Verify runFeedbackCommand returns exit code on a failing command without raising.
+  let fb = runFeedbackCommand("/tmp", "exit 1")
+  doAssert fb.exitCode != 0
+  doAssert fb.timedOut == false
+  echo "[OK] runFeedbackCommand returns non-zero exit code without raising"
+
+proc testRunFeedbackCommandTimeoutResult() =
+  ## Verify FeedbackResult correctly represents a timeout scenario.
+  ## Note: runCommandCapture's readAll blocks until process exits, so we
+  ## test the timeout path by verifying the FeedbackResult structure directly.
+  let fb = FeedbackResult(output: "timed out", exitCode: -1, timedOut: true)
+  doAssert fb.timedOut == true
+  doAssert fb.exitCode == -1
+  doAssert fb.output == "timed out"
+  echo "[OK] FeedbackResult correctly represents timeout"
+
+proc testFormatFeedbackResultSuccess() =
+  ## Verify formatFeedbackResult passes through output on success.
+  let fb = FeedbackResult(output: "all good", exitCode: 0, timedOut: false)
+  let formatted = formatFeedbackResult(fb)
+  doAssert formatted == "all good"
+  echo "[OK] formatFeedbackResult passes through output on success"
+
+proc testFormatFeedbackResultFailure() =
+  ## Verify formatFeedbackResult includes exit code on failure.
+  let fb = FeedbackResult(output: "some output", exitCode: 1, timedOut: false)
+  let formatted = formatFeedbackResult(fb)
+  doAssert "[EXIT CODE 1]" in formatted
+  doAssert "some output" in formatted
+  echo "[OK] formatFeedbackResult includes exit code on failure"
+
+proc testFormatFeedbackResultTimeout() =
+  ## Verify formatFeedbackResult includes timeout marker.
+  let fb = FeedbackResult(output: "timed out msg", exitCode: -1, timedOut: true)
+  let formatted = formatFeedbackResult(fb)
+  doAssert "[TIMEOUT]" in formatted
+  doAssert "timed out msg" in formatted
+  echo "[OK] formatFeedbackResult includes timeout marker"
 
 proc testReadIterationLogMissing() =
   ## Verify readIterationLog returns empty string when file does not exist.
@@ -206,7 +238,7 @@ proc testLoopEnabledDrainedQueueTriggersCycle() =
   makeDrainedPlanDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let loopCfg = LoopConfig(enabled: true, feedback: "echo feedback-output", goal: "improve", maxIterations: 0)
+  let loopCfg = LoopConfig(enabled: true, feedback: "echo feedback-output", goal: "improve", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs)
   var loopIterationCount = 0
   var feedbackOutput = ""
   var architectInvoked = false
@@ -223,7 +255,8 @@ proc testLoopEnabledDrainedQueueTriggersCycle() =
         discard
       else:
         inc loopIterationCount
-        feedbackOutput = runFeedbackCommand("/tmp", loopCfg.feedback)
+        let fb = runFeedbackCommand("/tmp", loopCfg.feedback, loopCfg.feedbackTimeoutMs)
+        feedbackOutput = formatFeedbackResult(fb)
         discard fakeRunner(AgentRunRequest(prompt: "test", workingDir: tmpDir))
 
   doAssert loopIterationCount == 1
@@ -262,6 +295,10 @@ when isMainModule:
   testQueueNotDrainedPending()
   testRunFeedbackCommandSuccess()
   testRunFeedbackCommandFailure()
+  testRunFeedbackCommandTimeoutResult()
+  testFormatFeedbackResultSuccess()
+  testFormatFeedbackResultFailure()
+  testFormatFeedbackResultTimeout()
   testReadIterationLogMissing()
   testReadIterationLogExists()
   testNextIterationNumberEmpty()

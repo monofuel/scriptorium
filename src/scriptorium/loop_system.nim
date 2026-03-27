@@ -13,14 +13,30 @@ proc isQueueDrained*(planPath: string): bool =
     pendingFiles = listMarkdownFiles(planPath / PlanMergeQueuePendingDir)
   result = openFiles.len == 0 and inProgressFiles.len == 0 and pendingFiles.len == 0
 
-proc runFeedbackCommand*(repoPath: string, command: string): string =
-  ## Run a shell command synchronously in the given repo directory and return stdout.
-  let commandResult = runCommandCapture(repoPath, "sh", @["-c", command], 600_000)
-  if commandResult.exitCode != 0:
-    let exitCode = commandResult.exitCode
-    let output = commandResult.output
-    raise newException(IOError, &"Feedback command failed with exit code {exitCode}: {output}")
-  result = commandResult.output
+type
+  FeedbackResult* = object
+    output*: string
+    exitCode*: int
+    timedOut*: bool
+
+proc runFeedbackCommand*(repoPath: string, command: string, timeoutMs: int = DefaultFeedbackTimeoutMs): FeedbackResult =
+  ## Run a shell command synchronously in the given repo directory and return its output.
+  ## Never raises on failure or timeout — the caller gets full context to pass to the architect.
+  try:
+    let commandResult = runCommandCapture(repoPath, "sh", @["-c", command], timeoutMs)
+    result = FeedbackResult(output: commandResult.output, exitCode: commandResult.exitCode, timedOut: false)
+  except IOError as e:
+    result = FeedbackResult(output: e.msg, exitCode: -1, timedOut: true)
+
+proc formatFeedbackResult*(fb: FeedbackResult): string =
+  ## Format a FeedbackResult into a string suitable for the architect prompt.
+  if fb.timedOut:
+    result = &"[TIMEOUT] Feedback command timed out.\n{fb.output}"
+  elif fb.exitCode != 0:
+    let exitCode = fb.exitCode
+    result = &"[EXIT CODE {exitCode}] Feedback command failed.\n{fb.output}"
+  else:
+    result = fb.output
 
 proc readIterationLog*(planPath: string): string =
   ## Read the iteration log file content, returning empty string if missing.

@@ -20,6 +20,7 @@ const
   DefaultLocalEndpoint = "http://127.0.0.1:8097"
   DefaultDashboardPort = 8098
   DefaultDashboardHost = "127.0.0.1"
+  DefaultFeedbackTimeoutMs* = 7_200_000
 
 type
   AgentConfig* = object
@@ -48,6 +49,7 @@ type
     feedback*: string
     goal*: string
     maxIterations*: int
+    feedbackTimeoutMs*: int
 
   DashboardConfig* = object
     host*: string
@@ -107,7 +109,7 @@ proc defaultConfig*(): Config =
       codingAgentMaxAttempts: 5,
     ),
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
-    loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0),
+    loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,
   )
@@ -191,6 +193,8 @@ proc loadConfig*(repoPath: string): Config =
       result.loop.goal = parsed.loop.goal
     if parsed.loop.maxIterations > 0:
       result.loop.maxIterations = parsed.loop.maxIterations
+    if parsed.loop.feedbackTimeoutMs > 0:
+      result.loop.feedbackTimeoutMs = parsed.loop.feedbackTimeoutMs
   if raw.contains("\"dashboard\""):
     if parsed.dashboard.host.len > 0:
       result.dashboard.host = parsed.dashboard.host

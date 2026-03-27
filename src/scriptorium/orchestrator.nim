@@ -348,17 +348,22 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 let maxIter = loopCfg.maxIterations
                 logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")
               else:
+                inc loopIterationCount
+                logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
+                let feedbackResult = runFeedbackCommand(repoPath, loopCfg.feedback, loopCfg.feedbackTimeoutMs)
+                if feedbackResult.timedOut:
+                  logWarn(&"loop: feedback command timed out (iteration {loopIterationCount})")
+                elif feedbackResult.exitCode != 0:
+                  let exitCode = feedbackResult.exitCode
+                  logWarn(&"loop: feedback command exited with code {exitCode} (iteration {loopIterationCount})")
+                let feedbackOutput = formatFeedbackResult(feedbackResult)
                 try:
-                  inc loopIterationCount
-                  logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
-                  let feedbackOutput = runFeedbackCommand(repoPath, loopCfg.feedback)
                   discard runArchitectLoopIteration(repoPath, runner, feedbackOutput)
                   logInfo(&"loop: feedback cycle {loopIterationCount} complete")
-                  idle = false
                 except CatchableError as e:
                   let errMsg = e.msg
-                  logWarn(&"loop: feedback cycle failed: {errMsg}")
-                  idle = true
+                  logWarn(&"loop: architect iteration failed: {errMsg}")
+                idle = false
 
           let ticketCounts = readOrchestratorStatus(repoPath)
           let running = runningAgentCount()
