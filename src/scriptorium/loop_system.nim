@@ -15,7 +15,7 @@ proc isQueueDrained*(planPath: string): bool =
 
 proc runFeedbackCommand*(repoPath: string, command: string): string =
   ## Run a shell command synchronously in the given repo directory and return stdout.
-  let commandResult = runCommandCapture(repoPath, "sh", @["-c", command], 300_000)
+  let commandResult = runCommandCapture(repoPath, "sh", @["-c", command], 600_000)
   if commandResult.exitCode != 0:
     let exitCode = commandResult.exitCode
     let output = commandResult.output

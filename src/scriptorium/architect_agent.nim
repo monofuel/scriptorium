@@ -12,8 +12,8 @@ const
   PlanLogDirName* = "logs"
   PlanWriteScopeName* = "scriptorium plan"
   PlanDefaultMaxAttempts = 1
-  PlanNoOutputTimeoutMs* = 120_000
-  PlanHardTimeoutMs* = 300_000
+  PlanNoOutputTimeoutMs* = 600_000
+  PlanHardTimeoutMs* = 7_200_000
   PlanHeartbeatIntervalMs* = 3000
   SpecHashMarkerPath* = "areas/.spec-hash"
   SpecHashCommitMessage = "scriptorium: update spec hash marker"

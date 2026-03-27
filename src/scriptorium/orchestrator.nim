@@ -8,6 +8,7 @@ export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders,
 
 const
   IdleSleepMs = 200
+  AgentPollSleepMs = 10_000
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
 
@@ -226,7 +227,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if hasRunnableSpec(repoPath):
             specWaitingLogged = false
             # Step 3: Run architect (sequential, must complete before managers).
-            logInfo("architect: generating areas from spec")
+            logDebug("architect: generating areas from spec")
             t0 = epochTime()
             architectChanged = runArchitectAreas(repoPath, runner)
             let architectElapsed = epochTime() - t0
@@ -241,7 +242,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
             # Step 4+5: Read areas needing tickets and start managers.
             # Managers are prioritized over coders: they run first to fill slots.
-            logInfo("manager: generating tickets")
+            logDebug("manager: generating tickets")
             t0 = epochTime()
             if maxAgents <= 1:
               managerChanged = runManagerForAreas(repoPath, runner)
@@ -314,7 +315,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if not shouldRun: break
 
           # Step 7: Process at most one merge-queue item.
-          logInfo("merge queue: processing")
+          logDebug("merge queue: processing")
           t0 = epochTime()
           let mergeProcessed = processMergeQueue(repoPath)
           let mergeElapsed = epochTime() - t0
@@ -328,7 +329,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               logDebug(&"tick {ticks}: idle")
               idle = true
           else:
-            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed and runningAgentCount() == 0:
+            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
               logDebug(&"tick {ticks}: idle")
               idle = true
 
@@ -357,17 +358,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 except CatchableError as e:
                   let errMsg = e.msg
                   logWarn(&"loop: feedback cycle failed: {errMsg}")
+                  idle = true
 
           let ticketCounts = readOrchestratorStatus(repoPath)
           let running = runningAgentCount()
+          let agentDesc = runningAgentSummary()
           let stuck = ticketCounts.stuckTickets
-          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents} open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
+          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents}({agentDesc}) open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
           logInfo(summary)
     except CatchableError as e:
       logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop
     if tickSleepOverrideMs >= 0:
       sleep(tickSleepOverrideMs)
+    elif idle and runningAgentCount() > 0:
+      sleep(AgentPollSleepMs)
     elif idle:
       sleep(IdleBackoffSleepMs)
     else:

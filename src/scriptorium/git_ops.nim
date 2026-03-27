@@ -1,9 +1,11 @@
 import
-  std/[locks, os, osproc, streams, strformat, strutils],
+  std/[locks, os, osproc, streams, strformat, strutils, times],
   ./logging
 
 const
   GitCommandTimeoutMs* = 60_000
+  GitLockMaxAgeSeconds = 300
+  GitLockFiles = [".git/packed-refs.lock", ".git/index.lock"]
   PlanBranch* = "scriptorium/plan"
   ManagedStateDirName* = ".scriptorium"
   ManagedWorktreeDirName* = "worktrees"
@@ -37,13 +39,19 @@ proc releaseProcessLock() =
   {.cast(gcsafe).}:
     release(processLock)
 
-proc gitRun*(dir: string, args: varargs[string]) =
-  ## Run a git subcommand in dir and raise an IOError on non-zero exit.
-  let argsSeq = @args
+proc cleanStaleGitLocks*(repoPath: string) =
+  ## Remove stale git lock files that may have been left behind on NFS.
+  for lockRel in GitLockFiles:
+    let lockPath = repoPath / lockRel
+    if fileExists(lockPath):
+      let age = epochTime() - getLastModificationTime(lockPath).toUnixFloat()
+      if age > GitLockMaxAgeSeconds.float:
+        logWarn(&"removing stale git lock: {lockRel} (age={age:.0f}s)")
+        removeFile(lockPath)
+
+proc gitRunOnce(dir: string, argsSeq: seq[string]): tuple[exitCode: int, output: string] =
+  ## Run a git subcommand once and return exit code and output.
   let allArgs = @["-C", dir] & argsSeq
-  # Nim's osproc double-closes the stdout fd when poStdErrToStdOut is used
-  # (errHandle == outHandle). Serialize startProcess/close to prevent a
-  # race where one thread's double-close kills another thread's pipe fd.
   acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
@@ -55,9 +63,23 @@ proc gitRun*(dir: string, args: varargs[string]) =
   if rc == -1:
     let argsStr = argsSeq.join(" ")
     raise newException(IOError, &"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
-  if rc != 0:
+  result = (exitCode: rc, output: output)
+
+proc gitRun*(dir: string, args: varargs[string]) =
+  ## Run a git subcommand in dir, retrying once after cleaning stale locks.
+  let argsSeq = @args
+  let first = gitRunOnce(dir, argsSeq)
+  if first.exitCode == 0:
+    return
+  if "lock" in first.output.toLowerAscii():
+    cleanStaleGitLocks(dir)
+    let retry = gitRunOnce(dir, argsSeq)
+    if retry.exitCode == 0:
+      return
     let argsStr = argsSeq.join(" ")
-    raise newException(IOError, &"git {argsStr} failed: {output.strip()}")
+    raise newException(IOError, &"git {argsStr} failed after lock cleanup: {retry.output.strip()}")
+  let argsStr = argsSeq.join(" ")
+  raise newException(IOError, &"git {argsStr} failed: {first.output.strip()}")
 
 proc gitCheck*(dir: string, args: varargs[string]): int =
   ## Run a git subcommand in dir and return its exit code.

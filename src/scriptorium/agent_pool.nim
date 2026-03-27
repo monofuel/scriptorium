@@ -1,5 +1,5 @@
 import
-  std/[strformat, times],
+  std/[strformat, strutils, times],
   ./[agent_runner, logging, shared_state, ticket_metadata]
 
 const
@@ -39,6 +39,16 @@ proc runningAgentCountByRole*(role: AgentRole): int =
   for slot in runningPoolSlots:
     if slot.role == role:
       inc result
+
+proc runningAgentSummary*(): string =
+  ## Return a short description of running agents, e.g. "2mgr+1code".
+  let mgr = runningAgentCountByRole(arManager)
+  let code = runningAgentCountByRole(arCoder)
+  var parts: seq[string]
+  if mgr > 0: parts.add($mgr & "mgr")
+  if code > 0: parts.add($code & "code")
+  if parts.len == 0: return "none"
+  result = parts.join("+")
 
 proc emptySlotCount*(maxAgents: int): int =
   ## Return the number of available agent slots.

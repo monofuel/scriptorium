@@ -289,6 +289,7 @@ proc reopenOrphanedInProgressTickets*(repoPath: string): int =
 
 proc recoverFromCrash*(repoPath: string): RecoverySummary =
   ## Execute the full startup recovery sequence before the first orchestrator tick.
+  cleanStaleGitLocks(repoPath)
   result.worktreesCleaned = cleanOrphanedWorktrees(repoPath)
   result.staleMarkersCleared = detectStaleAgentProcesses(repoPath)
   result.planAction = reconcileDirtyPlanBranch(repoPath)
