@@ -11,14 +11,9 @@ graph TD
     Human(("👤 Human"))
 
     subgraph "CLI Commands"
-        Init["scriptorium init"]
         Plan["scriptorium plan"]
         Ask["scriptorium ask"]
         Run["scriptorium run"]
-        Status["scriptorium status"]
-        Audit["scriptorium audit"]
-        Dashboard["scriptorium dashboard"]
-        Discord["scriptorium discord"]
     end
 
     subgraph "scriptorium run — Orchestrator Loop"
@@ -39,18 +34,12 @@ graph TD
         Loop["🤖 Loop Architect LLM\nupdates spec from eval"]
     end
 
-    Human -->|"scriptorium init"| Init
     Human -->|"scriptorium plan"| Plan
     Human -->|"scriptorium ask"| Ask
     Human -->|"scriptorium run"| Run
-    Human -->|"scriptorium status"| Status
-    Human -->|"scriptorium audit"| Audit
-    Human -->|"scriptorium dashboard"| Dashboard
-    Human -->|"scriptorium discord"| Discord
 
     Plan -->|"updates via Architect LLM"| Spec
     Ask -->|"read-only queries"| Spec
-    Audit -->|"audits via LLM"| Spec
     Run --> Spec
 
     Spec --> SpecChanged
@@ -81,11 +70,7 @@ graph TD
     style Loop fill:#ff6b6b,stroke:#333,color:#fff
     style Plan fill:#4a9eff,stroke:#333,color:#fff
     style Ask fill:#4a9eff,stroke:#333,color:#fff
-    style Init fill:#4a9eff,stroke:#333,color:#fff
     style Run fill:#4a9eff,stroke:#333,color:#fff
-    style Status fill:#4a9eff,stroke:#333,color:#fff
-    style Audit fill:#4a9eff,stroke:#333,color:#fff
-    style Dashboard fill:#4a9eff,stroke:#333,color:#fff
     style Discord fill:#4a9eff,stroke:#333,color:#fff
     style SpecChanged fill:#ffd93d,stroke:#333,color:#333
     style Approved fill:#ffd93d,stroke:#333,color:#333
