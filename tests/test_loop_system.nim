@@ -134,10 +134,10 @@ proc testNextIterationNumberWithEntries() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  writeFile(tmpDir / "iteration_log.md", "## Iteration 1\nfoo\n\n## Iteration 3\nbar\n")
+  writeFile(tmpDir / "iteration_log.md", "## Iteration 1 — Baseline Assessment\nfoo\n\n## Iteration 3\nbar\n")
   let num = nextIterationNumber(tmpDir)
   doAssert num == 4
-  echo "[OK] nextIterationNumber returns 4 after iteration 3"
+  echo "[OK] nextIterationNumber returns 4 after iteration 3 (with suffixed heading)"
 
 proc testAppendIterationLogEntry() =
   ## Verify appendIterationLogEntry appends formatted entry.

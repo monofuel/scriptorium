@@ -54,7 +54,15 @@ proc nextIterationNumber*(planPath: string): int =
   var highest = 0
   for line in content.splitLines():
     if line.startsWith("## Iteration "):
-      let numStr = line[len("## Iteration ")..^1].strip()
+      let rest = line[len("## Iteration ")..^1].strip()
+      var numStr = ""
+      for ch in rest:
+        if ch in {'0'..'9'}:
+          numStr.add(ch)
+        else:
+          break
+      if numStr.len == 0:
+        continue
       let num = parseInt(numStr)
       if num > highest:
         highest = num
