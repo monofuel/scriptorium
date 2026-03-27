@@ -1,5 +1,5 @@
 import
-  std/[os, strformat, strutils],
+  std/[os, strformat, strutils, times],
   ./[agent_runner, architect_agent, config, git_ops, lock_management, logging, prompt_builders, shared_state, ticket_metadata]
 
 const
@@ -136,6 +136,7 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
     let iterLog = readIterationLog(planPath)
     let iterNum = nextIterationNumber(planPath)
     var prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, iterLog, feedbackOutput, iterNum)
+    logInfo(&"loop: iteration {iterNum}, invoking architect")
 
     var specModified = false
     for attempt in 1..MaxLoopRetries:
@@ -143,6 +144,7 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
         prompt = prompt & LoopRetryPromptSuffix
         logInfo(&"loop: retrying architect (attempt {attempt}/{MaxLoopRetries}), spec was not modified")
 
+      let t0 = epochTime()
       discard runPlanArchitectRequest(
         runner,
         repoPath,
@@ -151,10 +153,14 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
         prompt,
         LoopTicketId,
       )
+      let architectElapsed = epochTime() - t0
 
       enforceWritePrefixAllowlist(planPath, LoopWriteAllowPrefixes, LoopScopeName)
 
-      if specWasModified(planPath):
+      let modified = specWasModified(planPath)
+      logInfo(&"loop: architect completed (attempt {attempt}/{MaxLoopRetries}, {architectElapsed:.1f}s), spec modified: {modified}")
+
+      if modified:
         specModified = true
         break
 
@@ -171,6 +177,7 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
       logWarn(&"loop: architect did not modify spec.md after {MaxLoopRetries} attempts")
       return false
 
+    logInfo("loop: committing spec changes")
     gitRun(planPath, "add", PlanSpecPath)
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
       gitRun(planPath, "commit", "-m", "scriptorium: update spec from architect loop")

@@ -355,23 +355,31 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")
               else:
                 inc loopIterationCount
+                let cycleT0 = epochTime()
                 logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
+                logInfo(&"loop: running feedback command...")
+                let feedbackT0 = epochTime()
                 let feedbackResult = runFeedbackCommand(repoPath, loopCfg.feedback, loopCfg.feedbackTimeoutMs)
+                let feedbackElapsed = epochTime() - feedbackT0
                 if feedbackResult.timedOut:
-                  logWarn(&"loop: feedback command timed out (iteration {loopIterationCount})")
+                  logWarn(&"loop: feedback command timed out ({feedbackElapsed:.1f}s)")
                 elif feedbackResult.exitCode != 0:
                   let exitCode = feedbackResult.exitCode
-                  logWarn(&"loop: feedback command exited with code {exitCode} (iteration {loopIterationCount})")
+                  logWarn(&"loop: feedback command exited with code {exitCode} ({feedbackElapsed:.1f}s)")
+                else:
+                  logInfo(&"loop: feedback command completed (exit 0, {feedbackElapsed:.1f}s)")
                 let feedbackOutput = formatFeedbackResult(feedbackResult)
                 try:
                   let specUpdated = runArchitectLoopIteration(repoPath, runner, feedbackOutput)
+                  let cycleElapsed = epochTime() - cycleT0
                   if specUpdated:
-                    logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated")
+                    logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated (total {cycleElapsed:.1f}s)")
                   else:
-                    logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes")
+                    logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes (total {cycleElapsed:.1f}s)")
                 except CatchableError as e:
                   let errMsg = e.msg
-                  logWarn(&"loop: architect iteration failed: {errMsg}")
+                  let cycleElapsed = epochTime() - cycleT0
+                  logWarn(&"loop: architect iteration failed ({cycleElapsed:.1f}s): {errMsg}")
                 idle = false
 
           let ticketCounts = readOrchestratorStatus(repoPath)
