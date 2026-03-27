@@ -4,8 +4,7 @@ Git-native agent orchestration for software projects.
 
 Scriptorium keeps planning and execution state in Git, runs a strict Architect → Manager → Coding → Review workflow, and merges work only when `master` stays green.
 
-WARNING: this is a work in progress and is not yet ready for general use.
-There is no warranty, it is highly experimental, letting agents run loose is a bad idea but this is still a fun project. You should probably run this in a container.
+> **Note:** Scriptorium is experimental. There is no warranty. Letting agents run loose is a bad idea but this is still a fun project. You should probably run this in a container.
 
 ## Usage
 
@@ -28,12 +27,12 @@ scriptorium run
 
 ### Importing an existing project
 
-If you already have a Nim project and want scriptorium to manage it, run
+If you already have a project and want scriptorium to manage it, run
 `scriptorium init` in the repo root, then use `scriptorium plan` to tell the
 Architect about what's already there:
 
 ```bash
-scriptorium --init
+scriptorium init
 scriptorium plan "Read the existing source code and write a spec that describes the current project structure, features, and areas."
 ```
 
@@ -46,7 +45,7 @@ Path and workflow terminology is defined in `docs/terms.md`.
 ## Status
 
 Current features:
-- CLI commands: `--init`, `run`, `status`, `plan`, `ask`, `worktrees`, `--version`, `--help`
+- CLI commands: `init`, `run`, `status`, `plan`, `ask`, `audit`, `dashboard`, `discord`, `worktrees`, `--version`, `--help`
 - Architect → Manager → Coding → Review agent workflow
 - Parallel coding agents with area-based conflict avoidance
 - Ticket dependencies (`**Depends:**` field — tickets with unsatisfied deps are skipped)
@@ -55,7 +54,10 @@ Current features:
 - Stuck ticket parking after repeated failures
 - Configurable timeouts, retry limits, and concurrency
 - Merge safety with test gates and merge queue
-- Codex and Claude Code agent harnesses
+- Loop system for feedback-driven iterative development (eval → architect → work → repeat)
+- Web dashboard for monitoring spec, tickets, agents, and logs
+- Discord bot integration for remote orchestrator interaction
+- Claude Code, Codex, and typoi agent harnesses
 
 ## Core workflow
 
@@ -64,7 +66,7 @@ At a high level:
 1. Engineer creates or revises `spec.md` with `scriptorium plan`.
 2. Orchestrator reads `spec.md` and generates `areas/*.md` (Architect).
 3. Orchestrator generates `tickets/open/*.md` from areas (Manager).
-4. Open tickets are assigned to deterministic `/tmp/scriptorium/<repo-key>/worktrees/tickets/<ticket>/` worktrees and moved to `tickets/in-progress/`. Multiple tickets are assigned concurrently when they touch independent areas.
+4. Open tickets are assigned to `.scriptorium/worktrees/tickets/<ticket>/` worktrees and moved to `tickets/in-progress/`. Multiple tickets are assigned concurrently when they touch independent areas.
    - Tickets with unsatisfied `**Depends:**` references are skipped until their dependencies reach `done/`.
 5. Coding agent implements the ticket and calls the `submit_pr` MCP tool with a summary.
 6. Review agent evaluates the changes — approves or requests changes. Rejected work gets a new coding session with feedback.
@@ -85,7 +87,7 @@ If `spec.md` is missing or still the placeholder, the loop idles and logs:
 - Nim >= 2.0.0
 - Git
 - `make`
-- Codex CLI and Claude Code CLI for integration/e2e runs (`npm i -g @openai/codex @anthropic-ai/claude-code`)
+- Agent CLI(s) depending on harness: `claude` ([Claude Code](https://claude.ai/code)), `codex` ([Codex CLI](https://github.com/openai/codex)), or `typoi`
 
 ### 2) Build
 
@@ -99,7 +101,7 @@ make build
 From your project root:
 
 ```bash
-scriptorium --init
+scriptorium init
 ```
 
 This creates the orphan branch `scriptorium/plan` with base planning structure.
@@ -111,10 +113,11 @@ Create `scriptorium.json` in repo root:
 ```json
 {
   "agents": {
-    "architect": { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "medium" },
-    "coding":    { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "high" },
-    "manager":   { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "high" },
-    "reviewer":  { "harness": "codex", "model": "gpt-5.1-codex-mini", "reasoningEffort": "medium" }
+    "architect": { "model": "claude-opus-4-6" },
+    "coding":    { "model": "claude-sonnet-4-6" },
+    "manager":   { "model": "claude-sonnet-4-6" },
+    "reviewer":  { "model": "claude-sonnet-4-6" },
+    "audit":     { "model": "claude-haiku-4-5-20251001" }
   },
   "endpoints": {
     "local": "http://127.0.0.1:8097"
@@ -126,7 +129,25 @@ Create `scriptorium.json` in repo root:
   "timeouts": {
     "codingAgentHardTimeoutMs": 14400000,
     "codingAgentNoOutputTimeoutMs": 300000,
+    "codingAgentProgressTimeoutMs": 600000,
     "codingAgentMaxAttempts": 5
+  },
+  "loop": {
+    "enabled": false,
+    "feedback": "bash scripts/eval.sh",
+    "goal": "Improve eval score",
+    "maxIterations": 0,
+    "feedbackTimeoutMs": 7200000
+  },
+  "dashboard": {
+    "host": "127.0.0.1",
+    "port": 8098
+  },
+  "discord": {
+    "enabled": false,
+    "serverId": "",
+    "channelId": "",
+    "allowedUserIds": []
   },
   "logLevel": "INFO",
   "fileLogLevel": "DEBUG"
@@ -134,11 +155,10 @@ Create `scriptorium.json` in repo root:
 ```
 
 Notes:
-- Each agent has `harness`, `model`, and `reasoningEffort` fields.
-- Harness routing is prefix-based: `claude-*` → claude-code harness, `gpt-*` / `codex-*` → codex harness.
-- `concurrency.maxAgents` controls parallel coding agents (default 1).
+- Each agent has `harness` and `model` fields. Harness defaults to `claude-code` and is inferred from the model name: `claude-*` → claude-code, `gpt-*` / `codex-*` → codex, other → typoi.
+- `concurrency.maxAgents` controls parallel coding agents (default 4).
 - `concurrency.tokenBudgetMB` caps cumulative stdout bytes before pausing new assignments (default 0 = unlimited).
-- Timeout defaults: 4h hard timeout, 5min no-output timeout, 5 max attempts.
+- Timeout defaults: 4h hard timeout, 5min no-output timeout, 10min progress timeout, 5 max attempts.
 - `endpoints.local` defaults to `http://127.0.0.1:8097` when omitted.
 - `logLevel` / `fileLogLevel` can be overridden via `SCRIPTORIUM_LOG_LEVEL` / `SCRIPTORIUM_FILE_LOG_LEVEL` environment variables.
 
@@ -157,10 +177,10 @@ scriptorium plan "Add CI checks for merge queue invariants"
 ```
 
 Planning execution model (both modes):
-- Architect runs in a deterministic `/tmp/scriptorium/<repo-key>/worktrees/plan` worktree.
+- Architect runs in a `.scriptorium/worktrees/plan` worktree.
 - Prompt includes repo-root path so Architect can read project source.
 - Post-run write guard allows only `spec.md`; any other file edits fail the command.
-- Planner/manager writes are single-flight via `/tmp/scriptorium/<repo-key>/locks/repo.lock`; concurrent planner/manager runs fail fast.
+- Planner/manager writes are single-flight via lock file; concurrent planner/manager runs fail fast.
 
 Interactive planning commands:
 - `/show` prints current `spec.md`
@@ -177,15 +197,68 @@ Runtime quality gates:
 - Master health runs `make test` and `make integration-test` on `master` before scheduling work.
 - Merge queue runs the same two targets in each ticket worktree before fast-forwarding into `master`.
 
-### 7) Logging
+### 7) Loop system (optional)
+
+The loop system enables feedback-driven iterative development. When enabled, the orchestrator runs a feedback command (e.g. an eval script), passes the output to the Architect, and the Architect updates `spec.md` to improve results. The normal pipeline then creates areas, tickets, and coding work from the updated spec.
+
+Configure in `scriptorium.json`:
+
+```json
+{
+  "loop": {
+    "enabled": true,
+    "feedback": "bash scripts/eval.sh",
+    "goal": "Improve eval score above 90%",
+    "maxIterations": 0,
+    "feedbackTimeoutMs": 7200000
+  }
+}
+```
+
+- `feedback`: shell command to run for evaluation. Its stdout/stderr is passed to the Architect.
+- `goal`: high-level objective the Architect works toward each iteration.
+- `maxIterations`: stop after N iterations (0 = unlimited).
+- `feedbackTimeoutMs`: timeout for the feedback command in milliseconds (default: 7,200,000 = 2 hours).
+
+The loop runs when all ticket queues are drained: eval → architect updates spec → pipeline creates work → agents implement → merge → repeat.
+
+### 8) Dashboard
+
+```bash
+scriptorium dashboard
+```
+
+Starts a web UI at `http://127.0.0.1:8098` (configurable via `dashboard.host` and `dashboard.port`). The dashboard shows the current spec, ticket board, merge queue, active agents, and agent logs.
+
+### 9) Discord bot
+
+```bash
+scriptorium discord
+```
+
+Starts a Discord bot for remote interaction with the orchestrator. Requires the `DISCORD_TOKEN` environment variable.
+
+Configure in `scriptorium.json`:
+
+```json
+{
+  "discord": {
+    "enabled": true,
+    "serverId": "your-server-id",
+    "channelId": "your-channel-id",
+    "allowedUserIds": ["user-id-1"]
+  }
+}
+```
+
+### 10) Logging
 
 `scriptorium run` writes a human-readable log file per session to:
 
 ```text
-/tmp/scriptorium/{project_name}/run_{datetime}.log
+.scriptorium/logs/orchestrator/run_{datetime}.log
 ```
 
-- `{project_name}` is the repo directory name (e.g. `scriptorium`)
 - `{datetime}` is a UTC timestamp like `2026-02-28T14-30-00Z`
 - The directory is created automatically on startup
 
@@ -200,18 +273,21 @@ Log levels: `DEBUG`, `INFO`, `WARN`, `ERROR`. Logged events include orchestrator
 To follow a live session:
 
 ```bash
-tail -f /tmp/scriptorium/myproject/run_*.log
+tail -f .scriptorium/logs/orchestrator/run_*.log
 ```
 
 ## CLI reference
 
 ```text
-scriptorium --init [path]    Initialize workspace
+scriptorium init [path]      Initialize workspace (--init also works)
 scriptorium run              Start orchestrator daemon
 scriptorium status           Show ticket counts and active agent info
 scriptorium plan             Interactive Architect planning session
 scriptorium plan <prompt>    One-shot spec update
 scriptorium ask              Interactive read-only Q&A with the Architect
+scriptorium audit            Run spec audit
+scriptorium dashboard        Start web dashboard
+scriptorium discord          Start Discord bot
 scriptorium worktrees        List active ticket worktrees
 scriptorium --version        Print version
 scriptorium --help           Show help
@@ -293,7 +369,7 @@ make e2e-test
   - Installs `@openai/codex` and `@anthropic-ai/claude-code`
   - Runs: `make e2e-test`
   - Uses repo secrets `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`
-  - Uploads debug artifacts on failure (`/tmp/scriptorium`, `/tmp/scriptorium-plan-logs`)
+  - Uploads debug artifacts on failure
 
 This split keeps PR CI safe while still running key-backed integration and e2e coverage on trusted `master` pushes.
 
