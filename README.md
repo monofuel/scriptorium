@@ -7,37 +7,71 @@ Scriptorium keeps planning and execution state in Git, runs a strict Architect �
 > **Note:** Scriptorium is experimental. There is no warranty. Letting agents run loose is a bad idea but this is still a fun project. You should probably run this in a container.
 
 ```mermaid
-graph LR
-    Human(("Human"))
-    Architect["Architect"]
-    Spec[("spec.md")]
-    Manager["Manager"]
-    Coder["Coder"]
-    Reviewer["Reviewer"]
-    Approved((approved?))
-    Tests((tests?))
-    Master[("master")]
-    Stuck[("stuck")]
-    Drained((drained?))
-    Eval(("eval"))
-    Loop["Loop Architect"]
+graph TD
+    Human(("👤 Human"))
 
-    Human -->|plan| Architect
-    Architect -->|spec| Spec
-    Spec --> Architect
-    Architect -->|areas| Manager
-    Manager -->|tickets| Coder
-    Coder -->|submit_pr| Reviewer
+    subgraph "CLI Commands"
+        Init["scriptorium init"]
+        Plan["scriptorium plan"]
+        Ask["scriptorium ask"]
+        Run["scriptorium run"]
+        Status["scriptorium status"]
+        Audit["scriptorium audit"]
+        Dashboard["scriptorium dashboard"]
+        Discord["scriptorium discord"]
+    end
+
+    subgraph "scriptorium run — Orchestrator Loop"
+        Spec[("spec.md")]
+        SpecChanged((spec changed?))
+        Architect["🤖 Architect LLM\ngenerates areas/*.md"]
+        Manager["🤖 Manager LLM\ngenerates tickets"]
+        Tickets[("tickets/open/")]
+        Coder["🤖 Coding Agent LLM\nimplements ticket"]
+        Reviewer["🤖 Review Agent LLM\nevaluates changes"]
+        Approved((approved?))
+        MergeQueue((make test?))
+        Master[("master branch")]
+        Stuck[("tickets/stuck/")]
+        Reopen((retry limit?))
+        Drained((queues empty?))
+        Feedback(("run eval command"))
+        Loop["🤖 Loop Architect LLM\nupdates spec from eval"]
+    end
+
+    Human -->|"scriptorium init"| Init
+    Human -->|"scriptorium plan"| Plan
+    Human -->|"scriptorium ask"| Ask
+    Human -->|"scriptorium run"| Run
+    Human -->|"scriptorium status"| Status
+    Human -->|"scriptorium audit"| Audit
+    Human -->|"scriptorium dashboard"| Dashboard
+    Human -->|"scriptorium discord"| Discord
+
+    Plan -->|"updates via Architect LLM"| Spec
+    Ask -->|"read-only queries"| Spec
+    Audit -->|"audits via LLM"| Spec
+    Run --> Spec
+
+    Spec --> SpecChanged
+    SpecChanged -->|yes| Architect
+    SpecChanged -->|no, skip| Drained
+    Architect --> Manager
+    Manager --> Tickets
+    Tickets --> Coder
+    Coder -->|"calls submit_pr MCP tool"| Reviewer
     Reviewer --> Approved
-    Approved -->|yes| Tests
-    Approved -->|no| Coder
-    Tests -->|pass| Master
-    Tests -->|fail| Coder
-    Tests -->|parked| Stuck
+    Approved -->|yes| MergeQueue
+    Approved -->|"no, sends feedback"| Coder
+    MergeQueue -->|"make test passes"| Master
+    MergeQueue -->|"make test fails"| Reopen
+    Reopen -->|retry| Tickets
+    Reopen -->|"too many failures"| Stuck
     Master --> Drained
-    Drained -->|yes| Eval
-    Eval --> Loop
-    Loop --> Spec
+    Drained -->|"work pending"| Tickets
+    Drained -->|"yes, loop enabled"| Feedback
+    Feedback --> Loop
+    Loop -->|"updates spec.md"| Spec
 
     style Human fill:#4a9eff,stroke:#333,color:#fff
     style Architect fill:#ff6b6b,stroke:#333,color:#fff
@@ -45,16 +79,27 @@ graph LR
     style Coder fill:#ff6b6b,stroke:#333,color:#fff
     style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
     style Loop fill:#ff6b6b,stroke:#333,color:#fff
+    style Plan fill:#4a9eff,stroke:#333,color:#fff
+    style Ask fill:#4a9eff,stroke:#333,color:#fff
+    style Init fill:#4a9eff,stroke:#333,color:#fff
+    style Run fill:#4a9eff,stroke:#333,color:#fff
+    style Status fill:#4a9eff,stroke:#333,color:#fff
+    style Audit fill:#4a9eff,stroke:#333,color:#fff
+    style Dashboard fill:#4a9eff,stroke:#333,color:#fff
+    style Discord fill:#4a9eff,stroke:#333,color:#fff
+    style SpecChanged fill:#ffd93d,stroke:#333,color:#333
     style Approved fill:#ffd93d,stroke:#333,color:#333
-    style Tests fill:#ffd93d,stroke:#333,color:#333
+    style MergeQueue fill:#ffd93d,stroke:#333,color:#333
+    style Reopen fill:#ffd93d,stroke:#333,color:#333
     style Drained fill:#ffd93d,stroke:#333,color:#333
-    style Eval fill:#ffd93d,stroke:#333,color:#333
+    style Feedback fill:#ffd93d,stroke:#333,color:#333
     style Spec fill:#6bcb77,stroke:#333,color:#333
+    style Tickets fill:#6bcb77,stroke:#333,color:#333
     style Master fill:#6bcb77,stroke:#333,color:#333
     style Stuck fill:#999,stroke:#333,color:#fff
 ```
 
-**Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human
+**Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human CLI command
 
 ## Usage
 
