@@ -364,8 +364,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                   logWarn(&"loop: feedback command exited with code {exitCode} (iteration {loopIterationCount})")
                 let feedbackOutput = formatFeedbackResult(feedbackResult)
                 try:
-                  discard runArchitectLoopIteration(repoPath, runner, feedbackOutput)
-                  logInfo(&"loop: feedback cycle {loopIterationCount} complete")
+                  let specUpdated = runArchitectLoopIteration(repoPath, runner, feedbackOutput)
+                  if specUpdated:
+                    logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated")
+                  else:
+                    logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes")
                 except CatchableError as e:
                   let errMsg = e.msg
                   logWarn(&"loop: architect iteration failed: {errMsg}")

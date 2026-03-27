@@ -195,9 +195,9 @@ Iteration {iterNum}
 
 ## Instructions
 
+- You MUST update `spec.md` with concrete changes to improve the next eval result. Writing only to `iteration_log.md` is not sufficient — the spec drives all downstream work.
 - Assess previous results against declared expectations from the prior iteration.
 - Write the next iteration log entry to `iteration_log.md` (iteration number, feedback summary, assessment, strategy, tradeoffs).
-- Update `spec.md`, area files, or create tickets as needed for the next iteration.
 - If results diverge significantly from prior declared expectations, investigate rather than press forward.
 - For hard constraints, treat violations as non-negotiable.
 

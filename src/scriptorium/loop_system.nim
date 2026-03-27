@@ -111,9 +111,21 @@ const
   LoopWriteAllowPrefixes = ["spec.md", "areas", "tickets/open", "iteration_log.md"]
   LoopScopeName = "architect loop"
   LoopTicketId = "loop"
+  MaxLoopRetries* = 2
+  LoopRetryPromptSuffix = "\n\n## IMPORTANT — Retry\n\nYour previous attempt did not modify spec.md. The loop REQUIRES spec changes to drive work. You MUST update spec.md with concrete changes based on the feedback. Do not just write an assessment — change the spec."
+
+proc specWasModified(planPath: string): bool =
+  ## Check whether spec.md has uncommitted changes or is untracked.
+  let specPath = planPath / PlanSpecPath
+  if not fileExists(specPath):
+    return false
+  let changed = gitCheck(planPath, "diff", "--quiet", PlanSpecPath) != 0
+  let untracked = gitCheck(planPath, "ls-files", "--error-unmatch", PlanSpecPath) != 0
+  result = changed or untracked
 
 proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackOutput: string): bool =
   ## Run one architect loop iteration: build prompt, invoke architect, commit results.
+  ## Returns true when spec.md was modified, false when the architect failed to produce changes.
   let cfg = loadConfig(repoPath)
   let goal = cfg.loop.goal
   if goal.len == 0:
@@ -123,38 +135,45 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let iterLog = readIterationLog(planPath)
     let iterNum = nextIterationNumber(planPath)
-    let prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, iterLog, feedbackOutput, iterNum)
+    var prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, iterLog, feedbackOutput, iterNum)
 
-    discard runPlanArchitectRequest(
-      runner,
-      repoPath,
-      planPath,
-      cfg.agents.architect,
-      prompt,
-      LoopTicketId,
-    )
+    var specModified = false
+    for attempt in 1..MaxLoopRetries:
+      if attempt > 1:
+        prompt = prompt & LoopRetryPromptSuffix
+        logInfo(&"loop: retrying architect (attempt {attempt}/{MaxLoopRetries}), spec was not modified")
 
-    enforceWritePrefixAllowlist(planPath, LoopWriteAllowPrefixes, LoopScopeName)
+      discard runPlanArchitectRequest(
+        runner,
+        repoPath,
+        planPath,
+        cfg.agents.architect,
+        prompt,
+        LoopTicketId,
+      )
+
+      enforceWritePrefixAllowlist(planPath, LoopWriteAllowPrefixes, LoopScopeName)
+
+      if specWasModified(planPath):
+        specModified = true
+        break
 
     let nextNum = nextIterationNumber(planPath)
     if nextNum == iterNum:
+      let assessment = if specModified: "Architect did not write an assessment."
+                       else: "Architect did not modify spec.md after " & $MaxLoopRetries & " attempts."
       appendIterationLogEntry(planPath, iterNum, feedbackOutput,
-        "Architect did not write an assessment.", "Architect did not write a strategy.", "None noted.")
+        assessment, "Architect did not write a strategy.", "None noted.")
 
     commitIterationLog(planPath)
 
-    let specPath = planPath / PlanSpecPath
-    if fileExists(specPath):
-      let specChanged = gitCheck(planPath, "diff", "--quiet", PlanSpecPath) != 0
-      let specUntracked = gitCheck(planPath, "ls-files", "--error-unmatch", PlanSpecPath) != 0
-      if specChanged or specUntracked:
-        gitRun(planPath, "add", PlanSpecPath)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", "scriptorium: update spec from architect loop")
-        writeSpecHashMarker(planPath)
-        gitRun(planPath, "add", SpecHashMarkerPath)
-        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-          gitRun(planPath, "commit", "-m", "scriptorium: update spec hash marker")
+    if not specModified:
+      logWarn(&"loop: architect did not modify spec.md after {MaxLoopRetries} attempts")
+      return false
+
+    gitRun(planPath, "add", PlanSpecPath)
+    if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+      gitRun(planPath, "commit", "-m", "scriptorium: update spec from architect loop")
 
     true
   )

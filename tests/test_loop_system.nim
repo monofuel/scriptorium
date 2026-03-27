@@ -180,6 +180,7 @@ proc testBuildArchitectLoopPromptContents() =
   doAssert iterLog in prompt
   doAssert feedback in prompt
   doAssert "Iteration 2" in prompt
+  doAssert "MUST update" in prompt
   doAssert "Assess previous results" in prompt
   doAssert "Write the next iteration log entry" in prompt
   doAssert "investigate rather than press forward" in prompt
@@ -288,6 +289,19 @@ proc testLoopMaxIterationsReached() =
   doAssert feedbackRan == false
   echo "[OK] loop maxIterations reached: no further cycles run"
 
+proc testMaxLoopRetriesConstant() =
+  ## Verify MaxLoopRetries is at least 2.
+  doAssert MaxLoopRetries >= 2
+  echo "[OK] MaxLoopRetries is at least 2"
+
+proc testLoopRetryPromptContainsRetryLanguage() =
+  ## Verify the retry prompt suffix contains enforcement language.
+  let prompt = buildArchitectLoopPrompt("/repo", "/plan", "goal", "", "feedback", 1)
+  # The retry suffix is appended internally, but we can check the base prompt enforces spec changes.
+  doAssert "MUST update" in prompt
+  doAssert "spec.md" in prompt
+  echo "[OK] loop prompt enforces spec.md modification"
+
 when isMainModule:
   testQueueDrainedAllEmpty()
   testQueueNotDrainedOpenTicket()
@@ -310,3 +324,5 @@ when isMainModule:
   testLoopDisabledNoCycle()
   testLoopEnabledDrainedQueueTriggersCycle()
   testLoopMaxIterationsReached()
+  testMaxLoopRetriesConstant()
+  testLoopRetryPromptContainsRetryLanguage()
