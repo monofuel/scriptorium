@@ -61,6 +61,67 @@ Current features:
 
 ## Core workflow
 
+```mermaid
+graph TD
+    Human(("👤 Human"))
+    Architect["🤖 Architect LLM"]
+    Spec[("spec.md")]
+    SpecChanged((spec changed?))
+    Manager["🤖 Manager LLM"]
+    Tickets[("tickets/open/")]
+    Coder["🤖 Coding Agent LLM"]
+    Reviewer["🤖 Review Agent LLM"]
+    Approved((approved?))
+    MergeQueue((tests pass?))
+    Master[("master")]
+    Stuck[("tickets/stuck/")]
+    Reopen((retry limit?))
+    Loop["🤖 Loop: Architect LLM"]
+    Drained((queues empty?))
+    Feedback(("run eval"))
+
+    Human -->|"scriptorium plan"| Architect
+    Architect --> Spec
+    Spec --> SpecChanged
+    SpecChanged -->|yes| Architect
+    SpecChanged -->|no| Manager
+    Architect -->|"areas/*.md"| Manager
+    Manager --> Tickets
+    Tickets --> Coder
+    Coder -->|"submit_pr"| Reviewer
+    Reviewer --> Approved
+    Approved -->|yes| MergeQueue
+    Approved -->|no, feedback| Coder
+    MergeQueue -->|pass| Master
+    MergeQueue -->|fail| Reopen
+    Reopen -->|retry| Tickets
+    Reopen -->|parked| Stuck
+    Master --> Drained
+    Drained -->|"no, work pending"| Tickets
+    Drained -->|"yes (loop enabled)"| Feedback
+    Feedback --> Loop
+    Loop --> Spec
+
+    style Human fill:#4a9eff,stroke:#333,color:#fff
+    style Architect fill:#ff6b6b,stroke:#333,color:#fff
+    style Manager fill:#ff6b6b,stroke:#333,color:#fff
+    style Coder fill:#ff6b6b,stroke:#333,color:#fff
+    style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
+    style Loop fill:#ff6b6b,stroke:#333,color:#fff
+    style SpecChanged fill:#ffd93d,stroke:#333,color:#333
+    style Approved fill:#ffd93d,stroke:#333,color:#333
+    style MergeQueue fill:#ffd93d,stroke:#333,color:#333
+    style Reopen fill:#ffd93d,stroke:#333,color:#333
+    style Drained fill:#ffd93d,stroke:#333,color:#333
+    style Feedback fill:#ffd93d,stroke:#333,color:#333
+    style Spec fill:#6bcb77,stroke:#333,color:#333
+    style Tickets fill:#6bcb77,stroke:#333,color:#333
+    style Master fill:#6bcb77,stroke:#333,color:#333
+    style Stuck fill:#999,stroke:#333,color:#fff
+```
+
+**Legend:** 🔴 Red = LLM agent, 🟡 Yellow = code decision, 🟢 Green = git state, 🔵 Blue = human
+
 At a high level:
 
 1. Engineer creates or revises `spec.md` with `scriptorium plan`.
@@ -76,6 +137,7 @@ At a high level:
    - on pass: fast-forward merge to `master`, move ticket to `tickets/done/`
    - on fail: move ticket back to `tickets/open/` and append failure notes
    - on repeated failures: park ticket in `tickets/stuck/`
+8. When the loop system is enabled and all queues drain, a feedback command runs and the Architect updates the spec to start the next iteration.
 
 If `spec.md` is missing or still the placeholder, the loop idles and logs:
 `WAITING: no spec — run 'scriptorium plan'`
