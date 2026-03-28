@@ -16,6 +16,7 @@ const
   ReviewAgentTemplate* = staticRead(PromptDirectory & "review_agent.md")
   AgentsExampleTemplate* = staticRead(PromptDirectory & "agents_example.md")
   AuditAgentTemplate* = staticRead(PromptDirectory & "audit_agent.md")
+  ArchitectDoTemplate* = staticRead(PromptDirectory & "architect_do.md")
 
 type
   PromptBinding* = tuple[name: string, value: string]

@@ -57,6 +57,35 @@ proc runPlanArchitectRequest*(
     onEvent: onEvent,
   ))
 
+proc runDoArchitectRequest*(
+  runner: AgentRunner,
+  repoPath: string,
+  agentCfg: AgentConfig,
+  prompt: string,
+  ticketId: string,
+  onEvent: AgentEventHandler = nil,
+  heartbeatIntervalMs: int = 0,
+): AgentRunResult =
+  ## Run one architect "do" pass with full repo access (not plan worktree).
+  if runner.isNil:
+    raise newException(ValueError, "agent runner is required")
+  result = runner(AgentRunRequest(
+    prompt: prompt,
+    workingDir: repoPath,
+    harness: agentCfg.harness,
+    model: agentCfg.model,
+    reasoningEffort: agentCfg.reasoningEffort,
+    ticketId: ticketId,
+    attempt: DefaultAgentAttempt,
+    skipGitRepoCheck: false,
+    logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "do",
+    noOutputTimeoutMs: PlanNoOutputTimeoutMs,
+    hardTimeoutMs: PlanHardTimeoutMs,
+    heartbeatIntervalMs: heartbeatIntervalMs,
+    maxAttempts: PlanDefaultMaxAttempts,
+    onEvent: onEvent,
+  ))
+
 proc planAgentLogRoot*(repoPath: string, ticketId: string): string =
   ## Return the log root for one plan-branch agent run.
   let cleanTicketId = ticketId.strip()

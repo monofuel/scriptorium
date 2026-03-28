@@ -14,6 +14,8 @@ Usage:
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
   scriptorium ask              Interactive read-only Q&A session with the Architect
+  scriptorium do               Interactive coding session with full repo access
+  scriptorium do <prompt>      One-shot: run an ad-hoc task with full repo access
   scriptorium audit            Run the audit agent
   scriptorium dashboard        Start the web dashboard
   scriptorium discord          Run the Discord bot
@@ -79,6 +81,14 @@ proc cmdPlan(args: seq[string]) =
 proc cmdAsk() =
   ## Start a read-only Q&A session with the Architect.
   runInteractiveAskSession(getCurrentDir())
+
+proc cmdDo(args: seq[string]) =
+  ## Run the architect as a coding agent with full repo access.
+  if args.len == 0:
+    runInteractiveDoSession(getCurrentDir())
+  else:
+    let prompt = args.join(" ").strip()
+    runOneShotDoSession(getCurrentDir(), prompt)
 
 proc cmdAudit() =
   ## Run the audit agent against the current repository.
@@ -152,6 +162,9 @@ when isMainModule:
     cmdPlan(planArgs)
   of "ask":
     cmdAsk()
+  of "do":
+    let doArgs = if args.len > 1: args[1..^1] else: @[]
+    cmdDo(doArgs)
   of "dashboard":
     cmdDashboard()
   of "audit":

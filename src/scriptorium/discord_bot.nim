@@ -13,7 +13,24 @@ const
   InteractionResponseMessage = 4
 
 type
-  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string]
+  ChatMode* = enum
+    chatModePlan, chatModeAsk, chatModeDo
+
+  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode]
+
+proc parseChatMode*(message: string): tuple[mode: ChatMode, text: string] =
+  ## Parse an optional mode prefix from a Discord message.
+  ## Supported prefixes: "ask:", "plan:", "do:". Default: chatModePlan.
+  let trimmed = message.strip()
+  let lower = trimmed.toLowerAscii()
+  if lower.startsWith("ask:"):
+    result = (chatModeAsk, trimmed[4..^1].strip())
+  elif lower.startsWith("plan:"):
+    result = (chatModePlan, trimmed[5..^1].strip())
+  elif lower.startsWith("do:"):
+    result = (chatModeDo, trimmed[3..^1].strip())
+  else:
+    result = (chatModePlan, trimmed)
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -77,10 +94,74 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
     response = response & SpecUpdatedNote
   discard client.postChannelMessage(channelId, response)
 
+proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string) =
+  ## Invoke the architect in read-only mode and post the response to the channel.
+  let cfg = loadConfig(repoPath)
+  var response = ""
+  try:
+    response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+      let spec = loadSpecFromPlanPath(planPath)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, @[], messageText)
+      let agentResult = runPlanArchitectRequest(
+        runAgent,
+        repoPath,
+        planPath,
+        cfg.agents.architect,
+        prompt,
+        DiscordChatTicketId,
+      )
+      enforceNoWrites(planPath, "scriptorium discord ask")
+
+      var reply = agentResult.lastMessage.strip()
+      if reply.len == 0:
+        reply = agentResult.stdout.strip()
+      if reply.len == 0:
+        reply = "(no response from architect)"
+      reply
+    )
+  except CatchableError as e:
+    let errMsg = e.msg
+    echo &"scriptorium: discord ask error: {errMsg}"
+    response = &"Error: {errMsg}"
+
+  discard client.postChannelMessage(channelId, response)
+
+proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string) =
+  ## Invoke the architect with full repo access and post the response to the channel.
+  {.cast(gcsafe).}:
+    let cfg = loadConfig(repoPath)
+    var response = ""
+    try:
+      let prompt = buildDoOneShotPrompt(repoPath, messageText)
+      let agentResult = runDoArchitectRequest(
+        runAgent,
+        repoPath,
+        cfg.agents.architect,
+        prompt,
+        DiscordChatTicketId,
+      )
+      response = agentResult.lastMessage.strip()
+      if response.len == 0:
+        response = agentResult.stdout.strip()
+      if response.len == 0:
+        response = "(no response from architect)"
+    except CatchableError as e:
+      let errMsg = e.msg
+      echo &"scriptorium: discord do error: {errMsg}"
+      response = &"Error: {errMsg}"
+
+    discard client.postChannelMessage(channelId, response)
+
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
-  ## Run architect chat in a background thread to avoid blocking the gateway.
+  ## Run architect chat in a background thread, routed by mode.
   let restClient = newGuildyClient(args.token)
-  handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText)
+  case args.mode
+  of chatModePlan:
+    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText)
+  of chatModeAsk:
+    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText)
+  of chatModeDo:
+    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText)
 
 proc formatStatusMessage(repoPath: string): string =
   ## Build the /status response string from orchestrator state.
@@ -220,10 +301,11 @@ proc runDiscordBot*(repoPath: string) =
       return
     let user = msg.author.username
     let content = msg.content
-    echo &"scriptorium: discord message from {user}: {content}"
+    let (mode, text) = parseChatMode(content)
+    echo &"scriptorium: discord message from {user} (mode={mode}): {text}"
     # Spawn background thread to avoid blocking the gateway event loop.
     let threadPtr = create(Thread[ChatThreadArgs])
-    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, content))
+    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode))
 
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:

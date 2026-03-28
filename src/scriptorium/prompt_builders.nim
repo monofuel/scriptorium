@@ -208,6 +208,34 @@ Iteration {iterNum}
 - You may write to: `spec.md`, `areas/`, `tickets/open/`, `iteration_log.md`
 """
 
+proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string): string =
+  ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
+  result = renderPromptTemplate(
+    ArchitectDoTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "CONVERSATION_HISTORY", value: ""),
+      (name: "USER_MESSAGE", value: userPrompt.strip()),
+    ],
+  )
+
+proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string): string =
+  ## Build the multi-turn architect "do" prompt with conversation history.
+  var conversationHistory = ""
+  if history.len > 0:
+    conversationHistory = "\nConversation history:\n"
+    for turn in history:
+      conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
+
+  result = renderPromptTemplate(
+    ArchitectDoTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "CONVERSATION_HISTORY", value: conversationHistory),
+      (name: "USER_MESSAGE", value: userMsg.strip()),
+    ],
+  )
+
 proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
   var conversationHistory = ""
