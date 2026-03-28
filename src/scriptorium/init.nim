@@ -83,18 +83,31 @@ proc syncAgentsMd*(repoPath: string) =
     gitRun(repoPath, "add", AgentsFileName)
     gitRun(repoPath, "commit", "-m", "scriptorium: sync AGENTS.md from template")
 
+proc hasOriginRemote(repoPath: string): bool =
+  ## Return true when the repository has an origin remote configured.
+  result = gitCheck(repoPath, "remote", "get-url", "origin") == 0
+
 proc runInit*(path: string, quiet: bool = false) =
   ## Initialize a new scriptorium workspace in the given git repository.
+  ## Idempotent: safe to run multiple times. Skips steps that are already done.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()
 
   if gitCheck(target, "rev-parse", "--git-dir") != 0:
-    raise newException(ValueError, fmt"{target} is not a git repository")
+    raise newException(ValueError, &"{target} is not a git repository")
 
-  if gitCheck(target, "rev-parse", "--verify", PlanBranch) == 0:
-    raise newException(ValueError, "workspace already initialized (scriptorium/plan branch exists)")
+  let planBranchExists = gitCheck(target, "rev-parse", "--verify", PlanBranch) == 0
 
-  let defaultBranch = resolveDefaultBranch(target)
-  discard execCmdEx("git -C " & quoteShell(target) & " remote set-head origin " & quoteShell(defaultBranch))
+  # Detect default branch. Fall back to "master" if detection fails (no remote, unusual naming).
+  var defaultBranch = "master"
+  try:
+    defaultBranch = resolveDefaultBranch(target)
+  except IOError:
+    if not quiet:
+      echo "scriptorium: could not detect default branch, using 'master'"
+
+  # Set remote HEAD if origin exists.
+  if hasOriginRemote(target):
+    discard execCmdEx("git -C " & quoteShell(target) & " remote set-head origin " & quoteShell(defaultBranch))
 
   ensureScriptoriumIgnored(target)
 
@@ -126,47 +139,59 @@ proc runInit*(path: string, quiet: bool = false) =
     let configJson = defaultConfig().toJson()
     writeFile(configPath, configJson & "\n")
 
-  let tmpPlan = target / ".scriptorium" / "plan_init"
-  if dirExists(tmpPlan):
-    removeDir(tmpPlan)
+  # Create plan branch only if it does not already exist.
+  if not planBranchExists:
+    let tmpPlan = target / ".scriptorium" / "plan_init"
 
-  gitRun(target, "worktree", "add", "--orphan", "-b", PlanBranch, tmpPlan)
-  defer:
-    discard execCmdEx(
-      "git -C " & quoteShell(target) & " worktree remove --force " & quoteShell(tmpPlan)
-    )
+    # Clean up stale worktree from a previous interrupted init.
+    discard gitCheck(target, "worktree", "remove", "--force", tmpPlan)
+    discard gitCheck(target, "worktree", "prune")
+    if dirExists(tmpPlan):
+      removeDir(tmpPlan)
 
-  for d in PlanDirs:
-    createDir(tmpPlan / d)
-    writeFile(tmpPlan / d / ".gitkeep", "")
-  writeFile(tmpPlan / "spec.md", SpecPlaceholder)
+    gitRun(target, "worktree", "add", "--orphan", "-b", PlanBranch, tmpPlan)
+    defer:
+      discard execCmdEx(
+        "git -C " & quoteShell(target) & " worktree remove --force " & quoteShell(tmpPlan)
+      )
 
-  gitRun(tmpPlan, "add", ".")
-  gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
+    for d in PlanDirs:
+      createDir(tmpPlan / d)
+      writeFile(tmpPlan / d / ".gitkeep", "")
+    writeFile(tmpPlan / "spec.md", SpecPlaceholder)
+
+    gitRun(tmpPlan, "add", ".")
+    gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
 
   if not quiet:
-    echo "Initialized scriptorium workspace."
-    echo ""
-    echo "Created:"
-    echo &"  Branch: {PlanBranch}"
-    let dirsStr = PlanDirs.join(", ")
-    echo &"    Directories: {dirsStr}"
-    echo "    spec.md"
-    if createdAgents:
-      echo &"  {AgentsFileName}"
-    if createdMakefile:
-      echo &"  {MakefileName}"
-    if createdTestConfig:
-      echo &"  {TestConfigNimsName}"
-    if createdConfig:
-      echo &"  {ConfigFileName}"
-    echo ""
-    echo "Next steps:"
-    if createdAgents:
-      echo &"  Edit {AgentsFileName} to describe your project."
-    if createdConfig:
-      echo &"  Edit {ConfigFileName} to configure models and harness."
-    if createdMakefile:
-      echo &"  Edit {MakefileName} to set up real test/build targets."
-    echo "  Run `scriptorium plan` to build your spec."
-    echo "  Run `scriptorium run` to start the orchestrator."
+    if planBranchExists and not createdAgents and not createdMakefile and not createdTestConfig and not createdConfig:
+      echo "scriptorium: workspace already initialized, nothing to do."
+    else:
+      echo "Initialized scriptorium workspace."
+      echo ""
+      echo "Created:"
+      if not planBranchExists:
+        echo &"  Branch: {PlanBranch}"
+        let dirsStr = PlanDirs.join(", ")
+        echo &"    Directories: {dirsStr}"
+        echo "    spec.md"
+      else:
+        echo &"  Branch: {PlanBranch} (already exists)"
+      if createdAgents:
+        echo &"  {AgentsFileName}"
+      if createdMakefile:
+        echo &"  {MakefileName}"
+      if createdTestConfig:
+        echo &"  {TestConfigNimsName}"
+      if createdConfig:
+        echo &"  {ConfigFileName}"
+      echo ""
+      echo "Next steps:"
+      if createdAgents:
+        echo &"  Edit {AgentsFileName} to describe your project."
+      if createdConfig:
+        echo &"  Edit {ConfigFileName} to configure models and harness."
+      if createdMakefile:
+        echo &"  Edit {MakefileName} to set up real test/build targets."
+      echo "  Run `scriptorium plan` to build your spec."
+      echo "  Run `scriptorium run` to start the orchestrator."

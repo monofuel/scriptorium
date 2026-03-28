@@ -1,5 +1,5 @@
 import
-  std/[os, osproc],
+  std/[os, osproc, strutils],
   scriptorium/init
 
 const
@@ -40,21 +40,17 @@ proc testNotAGitRepo() =
   doAssert raised, "expected ValueError for non-git directory"
   echo "[OK] runInit raises ValueError on non-git directory"
 
-proc testAlreadyInitialized() =
-  ## Verify runInit raises ValueError when scriptorium/plan branch exists.
+proc testAlreadyInitializedDoesNotCrash() =
+  ## Verify runInit succeeds when scriptorium/plan branch already exists.
   let repo = createTempRepo()
   defer: removeDir(repo)
 
   let qpath = quoteShell(repo)
   discard execCmdEx("git -C " & qpath & " branch scriptorium/plan")
 
-  var raised = false
-  try:
-    runInit(repo, quiet = true)
-  except ValueError:
-    raised = true
-  doAssert raised, "expected ValueError for already initialized repo"
-  echo "[OK] runInit raises ValueError when already initialized"
+  # Should not raise. Idempotent.
+  runInit(repo, quiet = true)
+  echo "[OK] runInit does not crash when plan branch already exists"
 
 proc testSuccessfulInit() =
   ## Verify runInit creates plan branch with expected directories and spec.md.
@@ -96,8 +92,50 @@ proc testSpecPlaceholderContent() =
   doAssert specOut == SpecPlaceholder, "spec.md content mismatch: got " & repr(specOut)
   echo "[OK] spec.md placeholder content matches expected text"
 
+proc testDoubleInitIdempotent() =
+  ## Verify running init twice does not crash and preserves all state.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  let qpath = quoteShell(repo)
+  let (sha1, _) = execCmdEx("git -C " & qpath & " rev-parse scriptorium/plan")
+
+  # Second init should succeed without error.
+  runInit(repo, quiet = true)
+
+  # Plan branch should still exist with same commit.
+  let (sha2, rc2) = execCmdEx("git -C " & qpath & " rev-parse scriptorium/plan")
+  doAssert rc2 == 0, "scriptorium/plan branch should still exist"
+  doAssert sha1.strip() == sha2.strip(), "plan branch commit should be unchanged"
+
+  # Files created by first init should still be present.
+  doAssert fileExists(repo / "AGENTS.md")
+  doAssert fileExists(repo / "Makefile")
+  doAssert fileExists(repo / "tests" / "config.nims")
+  doAssert fileExists(repo / "scriptorium.json")
+  echo "[OK] double init is idempotent"
+
+proc testInitNoRemote() =
+  ## Verify init works on a repo with no remote configured.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  # No remote — should not crash, should fall back to "master".
+  runInit(repo, quiet = true)
+
+  let qpath = quoteShell(repo)
+  let (_, branchRc) = execCmdEx(
+    "git -C " & qpath & " rev-parse --verify scriptorium/plan"
+  )
+  doAssert branchRc == 0, "scriptorium/plan branch should exist"
+  echo "[OK] init works on repo with no remote"
+
 when isMainModule:
   testNotAGitRepo()
-  testAlreadyInitialized()
+  testAlreadyInitializedDoesNotCrash()
   testSuccessfulInit()
   testSpecPlaceholderContent()
+  testDoubleInitIdempotent()
+  testInitNoRemote()
