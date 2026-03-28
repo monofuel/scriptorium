@@ -11,6 +11,7 @@ const
   AgentPollSleepMs = 10_000
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
+  UnstickCommitPrefix = "scriptorium: unstick ticket"
 
 var tickSleepOverrideMs*: int = -1
   ## When >= 0, overrides both idle and active sleep durations in the tick loop.
@@ -343,6 +344,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             scanForCycleBlockedTickets(planPath)
             0
           )
+
+          # Step 7b: Recover stuck tickets that can be retried.
+          let recoveredCount = recoverStuckTickets(repoPath)
+          if recoveredCount > 0:
+            logInfo(&"recovered {recoveredCount} stuck ticket(s)")
 
           # Step 8: Loop system — feedback cycle when queue is drained.
           if loopCfg.enabled and loopCfg.feedback.len > 0:

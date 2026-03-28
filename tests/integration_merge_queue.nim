@@ -566,7 +566,7 @@ suite "orchestrator merge queue":
     defer: removeDir(tmp)
     addFailingMakefile(tmp)
 
-    let priorFailures = "## Merge Queue Failure\n\nfail 1\n\n## Merge Queue Failure\n\nfail 2\n"
+    let priorFailures = "## Merge Queue Failure\n\nfail 1\n\n## Merge Queue Failure\n\nfail 2\n\n## Merge Queue Failure\n\nfail 3\n\n## Merge Queue Failure\n\nfail 4\n"
     let ticketContent = "# Ticket 1\n\n**Area:** a\n\n" & priorFailures
     addTicketToPlan(tmp, "open", "0001-first.md", ticketContent)
 
@@ -584,7 +584,7 @@ suite "orchestrator merge queue":
       "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/stuck/0001-first.md"
     )
     check ticketRc == 0
-    check ticketOut.count("## Merge Queue Failure") == 3
+    check ticketOut.count("## Merge Queue Failure") == 5
 
     let commits = latestPlanCommits(tmp, 2)
     check commits.len > 1

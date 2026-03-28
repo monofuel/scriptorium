@@ -6,6 +6,7 @@ const
   TicketAssignCommitPrefix* = "scriptorium: assign ticket"
   TicketAgentRunCommitPrefix* = "scriptorium: record agent run"
   TicketAgentFailReopenCommitPrefix* = "scriptorium: reopen failed ticket"
+  TicketUnstickCommitPrefix* = "scriptorium: unstick ticket"
   MergeQueueDoneCommitPrefix = "scriptorium: complete ticket"
   MergeQueueReopenCommitPrefix = "scriptorium: reopen ticket"
   MergeQueueStuckCommitPrefix = "scriptorium: park stuck ticket"
@@ -83,7 +84,8 @@ proc isOrchestratorTransitionSubject(subject: string): bool =
     subject.startsWith(MergeQueueDoneCommitPrefix & " ") or
     subject.startsWith(MergeQueueReopenCommitPrefix & " ") or
     subject.startsWith(MergeQueueStuckCommitPrefix & " ") or
-    subject.startsWith(TicketAgentFailReopenCommitPrefix & " ")
+    subject.startsWith(TicketAgentFailReopenCommitPrefix & " ") or
+    subject.startsWith(TicketUnstickCommitPrefix & " ")
 
 proc transitionCountInCommit(repoPath: string, parentCommit: string, commitHash: string): int =
   ## Count ticket state transitions represented by one commit diff.
@@ -511,3 +513,30 @@ proc loadOrchestratorEndpoint*(repoPath: string): OrchestratorEndpoint =
   ## Load and parse the orchestrator endpoint from repo configuration.
   let cfg = loadConfig(repoPath)
   result = parseEndpoint(cfg.endpoints.local)
+
+proc recoverStuckTickets*(repoPath: string): int =
+  ## Move recoverable stuck tickets back to open for retry.
+  ## A ticket is recoverable if its stuck count is below MaxStuckCount.
+  ## Returns the number of tickets recovered.
+  result = withPlanWorktree(repoPath, proc(planPath: string): int =
+    let stuckFiles = listMarkdownFiles(planPath / PlanTicketsStuckDir)
+    var recovered = 0
+    for ticketPath in stuckFiles:
+      let content = readFile(ticketPath)
+      let stuckCount = parseStuckCount(content)
+      if stuckCount >= MaxStuckCount:
+        continue
+      let filename = extractFilename(ticketPath)
+      let ticketId = ticketIdFromTicketPath(PlanTicketsStuckDir / filename)
+      let openRelPath = PlanTicketsOpenDir / filename
+      let commitMsg = TicketUnstickCommitPrefix & " " & ticketId
+      let steps = @[
+        newMoveStep(PlanTicketsStuckDir / filename, openRelPath),
+      ]
+      beginJournalTransition(planPath, "unstick " & ticketId, steps, commitMsg)
+      executeJournalSteps(planPath)
+      completeJournalTransition(planPath)
+      logInfo(&"recovered stuck ticket {ticketId} (stuck count {stuckCount})")
+      recovered += 1
+    recovered
+  )

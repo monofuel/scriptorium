@@ -9,7 +9,7 @@ const
   MergeQueueReopenCommitPrefix* = "scriptorium: reopen ticket"
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   MergeQueueStuckCommitPrefix* = "scriptorium: park stuck ticket"
-  MaxMergeFailures = 3
+  MaxMergeFailures = 5
   RequiredQualityTargets* = ["test", "integration-test"]
   QualityCheckTimeoutMs* = 300_000
   MakeTestTimeoutMs* = 300_000
@@ -17,6 +17,32 @@ const
   ReviewAgentHardTimeoutMs = 300_000
   ReviewAgentCommitPrefix = "scriptorium: review ticket"
   ReviewReasoningMaxChars* = 2000
+  StuckCountMarker* = "## Stuck Count: "
+  MaxStuckCount* = 2
+
+proc parseStuckCount*(content: string): int =
+  ## Parse the stuck count from ticket content. Returns 0 if no marker found.
+  for line in content.splitLines():
+    if line.startsWith(StuckCountMarker):
+      let countStr = line[StuckCountMarker.len .. ^1].strip()
+      try:
+        return parseInt(countStr)
+      except ValueError:
+        return 0
+  return 0
+
+proc setStuckCount*(content: string, count: int): string =
+  ## Set or update the stuck count marker in ticket content.
+  let marker = StuckCountMarker & $count
+  let existing = content.find(StuckCountMarker)
+  if existing >= 0:
+    let lineEnd = content.find('\n', existing)
+    if lineEnd >= 0:
+      result = content[0 ..< existing] & marker & content[lineEnd .. ^1]
+    else:
+      result = content[0 ..< existing] & marker
+  else:
+    result = content.strip() & "\n\n" & marker & "\n"
 
 proc runWorktreeMakeTest*(worktreePath: string): tuple[exitCode: int, output: string] =
   ## Run `make test` in the agent worktree and return exit code and combined output.
@@ -561,7 +587,9 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let parkedWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
         cleanupTicketTimings(item.ticketId)
         let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
-        let contentWithMetrics = runPostAnalysis(updatedContent.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "parked", attempts, parkedWallSeconds)
+        let currentStuckCount = parseStuckCount(updatedContent)
+        let contentWithStuckCount = setStuckCount(updatedContent, currentStuckCount + 1)
+        let contentWithMetrics = runPostAnalysis(contentWithStuckCount.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "parked", attempts, parkedWallSeconds)
         let stuckCommitMsg = MergeQueueStuckCommitPrefix & " " & item.ticketId
         let stuckSteps = @[
           newWriteStep(item.ticketPath, contentWithMetrics),
