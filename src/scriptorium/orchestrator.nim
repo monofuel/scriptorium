@@ -1,7 +1,7 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
   agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag
@@ -27,13 +27,14 @@ proc installSignalHandlers() =
   posix.signal(SIGINT, handlePosixSignal)
   posix.signal(SIGTERM, handlePosixSignal)
 
-proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int] =
+proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int, testOutput: string] =
   ## Run the master health check and return detailed results.
-  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int] =
+  let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int, testOutput: string] =
     var testExitCode = 0
     var integrationTestExitCode = 0
     var testWall = 0
     var integrationTestWall = 0
+    var failureOutput = ""
     for target in RequiredQualityTargets:
       let t0 = epochTime()
       let targetResult = runCommandCapture(masterPath, "make", @[target])
@@ -45,11 +46,12 @@ proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int
         integrationTestExitCode = targetResult.exitCode
         integrationTestWall = elapsed
       if targetResult.exitCode != 0:
+        failureOutput = targetResult.output
         break
-    result = (testExitCode: testExitCode, integrationTestExitCode: integrationTestExitCode, testWallSeconds: testWall, integrationTestWallSeconds: integrationTestWall)
+    result = (testExitCode: testExitCode, integrationTestExitCode: integrationTestExitCode, testWallSeconds: testWall, integrationTestWallSeconds: integrationTestWall, testOutput: failureOutput)
   )
   let healthy = checkResult.testExitCode == 0 and checkResult.integrationTestExitCode == 0
-  result = (healthy: healthy, testExitCode: checkResult.testExitCode, integrationTestExitCode: checkResult.integrationTestExitCode, testWallSeconds: checkResult.testWallSeconds, integrationTestWallSeconds: checkResult.integrationTestWallSeconds)
+  result = (healthy: healthy, testExitCode: checkResult.testExitCode, integrationTestExitCode: checkResult.integrationTestExitCode, testWallSeconds: checkResult.testWallSeconds, integrationTestWallSeconds: checkResult.integrationTestWallSeconds, testOutput: checkResult.testOutput)
 
 proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   ## Return cached master health, refreshing only when the master commit changes.
@@ -81,6 +83,7 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   let healthResult = checkMasterHealth(repoPath)
   state.head = currentHead
   state.healthy = healthResult.healthy
+  state.testOutput = healthResult.testOutput
   state.initialized = true
 
   # Persist to file cache on plan branch.
@@ -156,12 +159,29 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   var loopIterationCount = 0
   var masterHealthState = MasterHealthState()
   var specWaitingLogged = false
+  var recoveryAttemptedForCommit = ""
+  let syncCfg = cfg.remoteSync
+  var lastSyncTime = 0.0
   while shouldRun:
     if maxTicks >= 0 and ticks >= maxTicks:
       break
     try:
       idle = false
       logDebug(&"tick {ticks}")
+
+      # Step 0: Remote sync — fetch from remotes and merge from primary.
+      if syncCfg.enabled:
+        let syncElapsed = epochTime() - lastSyncTime
+        if syncCfg.syncIntervalSeconds <= 0 or syncElapsed >= syncCfg.syncIntervalSeconds.float:
+          try:
+            let syncResult = syncRemotes(repoPath, syncCfg)
+            lastSyncTime = epochTime()
+            if syncResult.mergeResult != smrUpToDate:
+              logInfo(&"remote sync: merge={syncResult.mergeResult} fetched={syncResult.fetchedRemotes} pushed={syncResult.pushedRemotes}")
+            else:
+              logDebug("remote sync: up to date")
+          except CatchableError as e:
+            logWarn(&"remote sync failed: {e.msg}")
 
       # Step 1: Poll completed agents (managers + coders).
       let completions = checkCompletedAgents()
@@ -215,95 +235,88 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo(&"master is healthy again (commit {masterHealthState.head})")
           masterHealthState.lastHealthLogged = false
 
+        var architectStatus = "skipped"
+        var managerStatus = "skipped"
+        var codingStatus = "idle"
+        var mergeStatus = "idle"
+        var codingDidWork = false
+        var architectChanged = false
+        var managerChanged = false
+
+        # When healthy, run the normal pipeline: architect → managers → coders.
+        # When unhealthy, skip new ticket work but allow merge queue + recovery below.
         if not healthy:
           idle = true
         elif not shouldRun:
           discard
-        else:
-          var architectStatus = "skipped"
-          var managerStatus = "skipped"
-          var codingStatus = "idle"
-          var mergeStatus = "idle"
-          var codingDidWork = false
-          var architectChanged = false
-          var managerChanged = false
-
-          if hasRunnableSpec(repoPath):
-            specWaitingLogged = false
-            # Step 3: Run architect (sequential, must complete before managers).
-            logDebug("architect: generating areas from spec")
-            t0 = epochTime()
-            architectChanged = runArchitectAreas(repoPath, runner)
-            let architectElapsed = epochTime() - t0
-            logDebug(&"tick {ticks}: architect took {architectElapsed:.1f}s, changed={architectChanged}")
-            if architectChanged:
-              logInfo("architect: areas updated")
-              architectStatus = "updated"
-            else:
-              architectStatus = "no-op"
-
-            if not shouldRun: break
-
-            # Step 4+5: Read areas needing tickets and start managers.
-            # Managers are prioritized over coders: they run first to fill slots.
-            logDebug("manager: generating tickets")
-            t0 = epochTime()
-            if maxAgents <= 1:
-              managerChanged = runManagerForAreas(repoPath, runner)
-            else:
-              discard withPlanWorktree(repoPath, proc(planPath: string): int =
-                if not hasRunnableSpecInPlanPath(planPath): return 0
-                let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
-                for areaRelPath in areasToProcess:
-                  if emptySlotCount(maxAgents) <= 0: break
-                  let areaId = areaIdFromAreaPath(areaRelPath)
-                  if isManagerRunningForArea(areaId): continue
-                  let areaContent = readFile(planPath / areaRelPath)
-                  let nextId = nextTicketId(planPath)
-                  startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, maxAgents, managerAgentWorkerThread)
-                0
-              )
-            let managerElapsed = epochTime() - t0
-            logDebug(&"tick {ticks}: manager took {managerElapsed:.1f}s, changed={managerChanged}")
-            if managerChanged:
-              logInfo("manager: tickets created")
-              managerStatus = "updated"
-              discard withPlanWorktree(repoPath, proc(planPath: string): int =
-                discard detectAndLogCycles(planPath)
-                0
-              )
-            else:
-              managerStatus = "no-op"
-
-            if not shouldRun: break
+        elif hasRunnableSpec(repoPath):
+          specWaitingLogged = false
+          # Step 3: Run architect (sequential, must complete before managers).
+          logDebug("architect: generating areas from spec")
+          t0 = epochTime()
+          architectChanged = runArchitectAreas(repoPath, runner)
+          let architectElapsed = epochTime() - t0
+          logDebug(&"tick {ticks}: architect took {architectElapsed:.1f}s, changed={architectChanged}")
+          if architectChanged:
+            logInfo("architect: areas updated")
+            architectStatus = "updated"
           else:
-            if not specWaitingLogged:
-              logInfo(WaitingNoSpecMessage)
-              specWaitingLogged = true
-            else:
-              logDebug(WaitingNoSpecMessage)
-            idle = true
+            architectStatus = "no-op"
+
+          if not shouldRun: break
+
+          # Step 4+5: Read areas needing tickets and start managers.
+          # Managers are prioritized over coders: they run first to fill slots.
+          logDebug("manager: generating tickets")
+          t0 = epochTime()
+          if maxAgents <= 1:
+            managerChanged = runManagerForAreas(repoPath, runner)
+          else:
+            discard withPlanWorktree(repoPath, proc(planPath: string): int =
+              if not hasRunnableSpecInPlanPath(planPath): return 0
+              let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
+              for areaRelPath in areasToProcess:
+                if emptySlotCount(maxAgents) <= 0: break
+                let areaId = areaIdFromAreaPath(areaRelPath)
+                if isManagerRunningForArea(areaId): continue
+                let areaContent = readFile(planPath / areaRelPath)
+                let nextId = nextTicketId(planPath)
+                startManagerAgentAsync(repoPath, areaId, areaContent, planPath, nextId, maxAgents, managerAgentWorkerThread)
+              0
+            )
+          let managerElapsed = epochTime() - t0
+          logDebug(&"tick {ticks}: manager took {managerElapsed:.1f}s, changed={managerChanged}")
+          if managerChanged:
+            logInfo("manager: tickets created")
+            managerStatus = "updated"
+            discard withPlanWorktree(repoPath, proc(planPath: string): int =
+              discard detectAndLogCycles(planPath)
+              0
+            )
+          else:
+            managerStatus = "no-op"
+
+          if not shouldRun: break
 
           # Step 6: Start coding agents (use remaining slots after managers).
           let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
           if isTokenBudgetExceeded(tokenBudgetMB):
             codingStatus = "budget-exceeded"
           elif maxAgents <= 1:
-            if hasRunnableSpec(repoPath):
-              t0 = epochTime()
-              let agentResult = executeOldestOpenTicket(repoPath, runner)
-              let codingWallTime = epochTime() - t0
-              logDebug(&"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
+            t0 = epochTime()
+            let agentResult = executeOldestOpenTicket(repoPath, runner)
+            let codingWallTime = epochTime() - t0
+            logDebug(&"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
 
-              if agentResult.command.len > 0:
-                codingDidWork = true
-                let codingDuration = formatDuration(codingWallTime)
-                if agentResult.timeoutKind != "none":
-                  codingStatus = &"{agentResult.ticketId}(stalled, {codingDuration})"
-                elif agentResult.submitted:
-                  codingStatus = &"{agentResult.ticketId}(submitted, {codingDuration})"
-                else:
-                  codingStatus = &"{agentResult.ticketId}(failed, {codingDuration})"
+            if agentResult.command.len > 0:
+              codingDidWork = true
+              let codingDuration = formatDuration(codingWallTime)
+              if agentResult.timeoutKind != "none":
+                codingStatus = &"{agentResult.ticketId}(stalled, {codingDuration})"
+              elif agentResult.submitted:
+                codingStatus = &"{agentResult.ticketId}(submitted, {codingDuration})"
+              else:
+                codingStatus = &"{agentResult.ticketId}(failed, {codingDuration})"
           else:
             let slotsAvailable = emptySlotCount(maxAgents)
             if slotsAvailable > 0:
@@ -317,83 +330,101 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               codingStatus = &"{running}/{maxAgents} agents"
 
           if not shouldRun: break
-
-          # Step 7: Process at most one merge-queue item.
-          logDebug("merge queue: processing")
-          t0 = epochTime()
-          let mergeProcessed = processMergeQueue(repoPath)
-          let mergeElapsed = epochTime() - t0
-          logDebug(&"tick {ticks}: merge queue took {mergeElapsed:.1f}s, processed={mergeProcessed}")
-          if mergeProcessed:
-            logInfo("merge queue: item processed")
-            mergeStatus = "processing"
-            let cleaned = cleanupStaleTicketWorktrees(repoPath)
-            for path in cleaned:
-              logInfo(&"worktree cleaned after merge: {path}")
-
-          if maxAgents <= 1:
-            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
-              logDebug(&"tick {ticks}: idle")
-              idle = true
+        else:
+          if not specWaitingLogged:
+            logInfo(WaitingNoSpecMessage)
+            specWaitingLogged = true
           else:
-            if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
-              logDebug(&"tick {ticks}: idle")
-              idle = true
+            logDebug(WaitingNoSpecMessage)
+          idle = true
 
-          discard withPlanWorktree(repoPath, proc(planPath: string): int =
-            scanForCycleBlockedTickets(planPath)
-            0
+        # --- Steps below run regardless of health state ---
+
+        if not shouldRun: break
+
+        # Step 7: Process at most one merge-queue item.
+        logDebug("merge queue: processing")
+        t0 = epochTime()
+        let mergeProcessed = processMergeQueue(repoPath)
+        let mergeElapsed = epochTime() - t0
+        logDebug(&"tick {ticks}: merge queue took {mergeElapsed:.1f}s, processed={mergeProcessed}")
+        if mergeProcessed:
+          logInfo("merge queue: item processed")
+          mergeStatus = "processing"
+          let cleaned = cleanupStaleTicketWorktrees(repoPath)
+          for path in cleaned:
+            logInfo(&"worktree cleaned after merge: {path}")
+          # Push merged changes to all remotes immediately.
+          if syncCfg.enabled:
+            try:
+              pushToAllRemotes(repoPath, syncCfg)
+            except CatchableError as e:
+              logWarn(&"remote push after merge failed: {e.msg}")
+
+        if not architectChanged and not managerChanged and not codingDidWork and not mergeProcessed:
+          logDebug(&"tick {ticks}: idle")
+          idle = true
+
+        discard withPlanWorktree(repoPath, proc(planPath: string): int =
+          scanForCycleBlockedTickets(planPath)
+          0
+        )
+
+        # Step 7b: Recover stuck tickets that can be retried.
+        let recoveredCount = recoverStuckTickets(repoPath)
+        if recoveredCount > 0:
+          logInfo(&"recovered {recoveredCount} stuck ticket(s)")
+
+        # Step 7c: Recovery agent for unhealthy main branch.
+        if not healthy and masterHealthState.head != recoveryAttemptedForCommit:
+          recoveryAttemptedForCommit = masterHealthState.head
+          logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")
+          runRecoveryAgent(repoPath, runner, masterHealthState.testOutput, masterHealthState.head)
+
+        # Step 8: Loop system — feedback cycle when queue is drained.
+        if loopCfg.enabled and loopCfg.feedback.len > 0:
+          let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
+            isQueueDrained(planPath)
           )
-
-          # Step 7b: Recover stuck tickets that can be retried.
-          let recoveredCount = recoverStuckTickets(repoPath)
-          if recoveredCount > 0:
-            logInfo(&"recovered {recoveredCount} stuck ticket(s)")
-
-          # Step 8: Loop system — feedback cycle when queue is drained.
-          if loopCfg.enabled and loopCfg.feedback.len > 0:
-            let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
-              isQueueDrained(planPath)
-            )
-            if drained and runningAgentCount() == 0:
-              if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
-                let maxIter = loopCfg.maxIterations
-                logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")
+          if drained and runningAgentCount() == 0:
+            if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
+              let maxIter = loopCfg.maxIterations
+              logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")
+            else:
+              inc loopIterationCount
+              let cycleT0 = epochTime()
+              logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
+              logInfo(&"loop: running feedback command...")
+              let feedbackT0 = epochTime()
+              let feedbackResult = runFeedbackCommand(repoPath, loopCfg.feedback, loopCfg.feedbackTimeoutMs)
+              let feedbackElapsed = epochTime() - feedbackT0
+              if feedbackResult.timedOut:
+                logWarn(&"loop: feedback command timed out ({feedbackElapsed:.1f}s)")
+              elif feedbackResult.exitCode != 0:
+                let exitCode = feedbackResult.exitCode
+                logWarn(&"loop: feedback command exited with code {exitCode} ({feedbackElapsed:.1f}s)")
               else:
-                inc loopIterationCount
-                let cycleT0 = epochTime()
-                logInfo(&"loop: queue drained, starting feedback cycle (iteration {loopIterationCount})")
-                logInfo(&"loop: running feedback command...")
-                let feedbackT0 = epochTime()
-                let feedbackResult = runFeedbackCommand(repoPath, loopCfg.feedback, loopCfg.feedbackTimeoutMs)
-                let feedbackElapsed = epochTime() - feedbackT0
-                if feedbackResult.timedOut:
-                  logWarn(&"loop: feedback command timed out ({feedbackElapsed:.1f}s)")
-                elif feedbackResult.exitCode != 0:
-                  let exitCode = feedbackResult.exitCode
-                  logWarn(&"loop: feedback command exited with code {exitCode} ({feedbackElapsed:.1f}s)")
+                logInfo(&"loop: feedback command completed (exit 0, {feedbackElapsed:.1f}s)")
+              let feedbackOutput = formatFeedbackResult(feedbackResult)
+              try:
+                let specUpdated = runArchitectLoopIteration(repoPath, runner, feedbackOutput)
+                let cycleElapsed = epochTime() - cycleT0
+                if specUpdated:
+                  logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated (total {cycleElapsed:.1f}s)")
                 else:
-                  logInfo(&"loop: feedback command completed (exit 0, {feedbackElapsed:.1f}s)")
-                let feedbackOutput = formatFeedbackResult(feedbackResult)
-                try:
-                  let specUpdated = runArchitectLoopIteration(repoPath, runner, feedbackOutput)
-                  let cycleElapsed = epochTime() - cycleT0
-                  if specUpdated:
-                    logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated (total {cycleElapsed:.1f}s)")
-                  else:
-                    logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes (total {cycleElapsed:.1f}s)")
-                except CatchableError as e:
-                  let errMsg = e.msg
-                  let cycleElapsed = epochTime() - cycleT0
-                  logWarn(&"loop: architect iteration failed ({cycleElapsed:.1f}s): {errMsg}")
-                idle = false
+                  logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes (total {cycleElapsed:.1f}s)")
+              except CatchableError as e:
+                let errMsg = e.msg
+                let cycleElapsed = epochTime() - cycleT0
+                logWarn(&"loop: architect iteration failed ({cycleElapsed:.1f}s): {errMsg}")
+              idle = false
 
-          let ticketCounts = readOrchestratorStatus(repoPath)
-          let running = runningAgentCount()
-          let agentDesc = runningAgentSummary()
-          let stuck = ticketCounts.stuckTickets
-          let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents}({agentDesc}) open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
-          logInfo(summary)
+        let ticketCounts = readOrchestratorStatus(repoPath)
+        let running = runningAgentCount()
+        let agentDesc = runningAgentSummary()
+        let stuck = ticketCounts.stuckTickets
+        let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents}({agentDesc}) open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
+        logInfo(summary)
     except CatchableError as e:
       logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop

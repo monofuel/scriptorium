@@ -1,12 +1,15 @@
 ## Startup recovery sequence that runs before the first orchestrator tick.
+## Also contains the recovery agent for fixing unhealthy main branches.
 
 import
-  std/[os, osproc, posix, sets, strformat, strutils],
-  ./[git_ops, journal, lock_management, logging, merge_queue, shared_state, ticket_assignment, ticket_metadata]
+  std/[os, osproc, posix, sets, strformat, strutils, times],
+  ./[agent_runner, coding_agent, config, git_ops, journal, lock_management, logging, manager_agent, merge_queue, output_formatting, prompt_builders, shared_state, ticket_assignment, ticket_metadata]
 
 const
   RecoveryCommitMessage = "scriptorium: recovery commit (unclean shutdown)"
   RecoveryMergedCommitPrefix = "scriptorium: recovery — completed already-merged ticket"
+  RecoveryTicketCommitPrefix = "scriptorium: create recovery ticket"
+  MaxRecoveryTestOutputChars = 8000
 
 type
   RecoverySummary* = object
@@ -302,3 +305,58 @@ proc recoverFromCrash*(repoPath: string): RecoverySummary =
   else:
     let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets, reopened {result.orphanedReopened} orphaned tickets"
     logInfo(summaryLine)
+
+proc buildRecoveryTicketContent(testOutput: string, commitHash: string): string =
+  ## Build the markdown content for a recovery ticket.
+  let truncatedOutput = if testOutput.len > MaxRecoveryTestOutputChars:
+    testOutput[0 ..< MaxRecoveryTestOutputChars] & "\n\n(output truncated)"
+  else:
+    testOutput
+  let outputSection = if truncatedOutput.len > 0:
+    "## Test Failure Output\n\n```\n" & truncatedOutput & "\n```\n"
+  else:
+    "## Test Failure Output\n\nTest output unavailable (cached result). Run `make test` and `make integration-test` to reproduce the failure.\n"
+  result = "# Recovery: Fix Failing Tests on Main Branch\n\n" &
+    "**Area:** recovery\n\n" &
+    "The main branch tests are failing at commit " & commitHash & ". " &
+    "Diagnose the failure from the test output below and fix the root cause. " &
+    "Keep the fix minimal and targeted.\n\n" &
+    outputSection
+
+proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string, commitHash: string) =
+  ## Create a recovery ticket and execute it with a coding agent to fix unhealthy main.
+  ## Uses the architect model for higher quality fixes.
+  let cfg = loadConfig(repoPath)
+  let shortHash = if commitHash.len > 7: commitHash[0 ..< 7] else: commitHash
+  let ticketContent = buildRecoveryTicketContent(testOutput, shortHash)
+
+  # Create recovery ticket on plan branch.
+  let ticketFileName = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+    let ticketId = nextTicketId(planPath)
+    let idStr = align($ticketId, 4, '0')
+    let fileName = idStr & "-recovery-" & shortHash & ".md"
+    let ticketRelPath = PlanTicketsOpenDir / fileName
+    let ticketFullPath = planPath / ticketRelPath
+    writeFile(ticketFullPath, ticketContent)
+    gitRun(planPath, "add", ticketRelPath)
+    let commitMsg = RecoveryTicketCommitPrefix & " " & idStr
+    gitRun(planPath, "commit", "-m", commitMsg)
+    logInfo(&"recovery: created ticket {fileName}")
+    fileName
+  )
+
+  # Assign and execute. assignOldestOpenTicket picks up the recovery ticket.
+  let assignment = assignOldestOpenTicket(repoPath)
+  if assignment.inProgressTicket.len == 0:
+    logWarn("recovery: failed to assign recovery ticket")
+    return
+
+  let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+  logInfo(&"recovery: executing recovery agent for {ticketId} (model={cfg.agents.architect.model})")
+
+  # Execute with architect model config for higher quality.
+  let agentResult = executeAssignedTicket(repoPath, assignment, runner, cfg.agents.architect)
+  if agentResult.submitted:
+    logInfo(&"recovery: agent submitted fix for {ticketId}")
+  else:
+    logWarn(&"recovery: agent did not submit fix for {ticketId}")

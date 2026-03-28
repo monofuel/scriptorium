@@ -14,6 +14,7 @@ type
     healthy*: bool
     initialized*: bool
     lastHealthLogged*: bool
+    testOutput*: string
 
 proc readHealthCache*(planPath: string): Table[string, HealthCacheEntry] =
   ## Read health/cache.json from a plan worktree path and return the cache table.

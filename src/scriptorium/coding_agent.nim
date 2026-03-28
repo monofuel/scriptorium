@@ -128,8 +128,10 @@ proc executeAssignedTicket*(
   repoPath: string,
   assignment: TicketAssignment,
   runner: AgentRunner = runAgent,
+  agentConfigOverride: AgentConfig = AgentConfig(),
 ): AgentRunResult =
   ## Run the coding agent for an assigned in-progress ticket and persist run notes.
+  ## When agentConfigOverride has a non-empty model, it overrides the coding agent config.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
   if assignment.inProgressTicket.len == 0:
@@ -162,7 +164,8 @@ proc executeAssignedTicket*(
   var currentAttemptBase = DefaultAgentAttempt
   var totalAttemptsUsed = 0
   var submitSummary = ""
-  let model = cfg.agents.coding.model
+  let agentCfg = if agentConfigOverride.model.len > 0: agentConfigOverride else: cfg.agents.coding
+  let model = agentCfg.model
   let maxAttempts = cfg.timeouts.codingAgentMaxAttempts
 
   setActiveTicketWorktree(assignment.worktree, ticketId)
@@ -177,9 +180,9 @@ proc executeAssignedTicket*(
     let request = AgentRunRequest(
       prompt: currentPrompt,
       workingDir: assignment.worktree,
-      harness: cfg.agents.coding.harness,
-      model: cfg.agents.coding.model,
-      reasoningEffort: cfg.agents.coding.reasoningEffort,
+      harness: agentCfg.harness,
+      model: agentCfg.model,
+      reasoningEffort: agentCfg.reasoningEffort,
       mcpEndpoint: cfg.endpoints.local,
       ticketId: ticketId,
       attempt: currentAttemptBase,

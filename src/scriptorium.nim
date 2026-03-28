@@ -1,9 +1,9 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, orchestrator, output_formatting]
+  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, orchestrator, output_formatting, remote_sync]
 
 const
-  Version = "0.1.0"
+  Version = "18.1.0"
   Usage = """scriptorium - agent orchestration system
 
 Usage:
@@ -17,6 +17,7 @@ Usage:
   scriptorium audit            Run the audit agent
   scriptorium dashboard        Start the web dashboard
   scriptorium discord          Run the Discord bot
+  scriptorium sync             Run a single remote sync cycle (fetch/merge/push)
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
   scriptorium --help           Show this help"""
@@ -91,6 +92,18 @@ proc cmdDiscord() =
   ## Run the Discord bot.
   runDiscordBot(getCurrentDir())
 
+proc cmdSync() =
+  ## Run a single remote sync cycle: fetch, merge from primary, push to all.
+  let repoPath = getCurrentDir()
+  let cfg = loadConfig(repoPath)
+  if not cfg.remoteSync.enabled:
+    echo "scriptorium: remote sync is not enabled in scriptorium.json"
+    quit(1)
+  let syncResult = syncRemotes(repoPath, cfg.remoteSync)
+  echo fmt"Fetched: {syncResult.fetchedRemotes} remotes ({syncResult.fetchFailures} failures)"
+  echo fmt"Merge: {syncResult.mergeResult}"
+  echo fmt"Pushed: {syncResult.pushedRemotes} remotes ({syncResult.pushFailures} failures)"
+
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
   let worktrees = listActiveTicketWorktrees(getCurrentDir())
@@ -145,6 +158,8 @@ when isMainModule:
     cmdAudit()
   of "discord":
     cmdDiscord()
+  of "sync":
+    cmdSync()
   of "worktrees":
     cmdWorktrees()
   of "init", "--init":

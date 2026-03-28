@@ -55,6 +55,12 @@ type
     host*: string
     port*: int
 
+  RemoteSyncConfig* = object
+    enabled*: bool
+    primaryRemote*: string
+    remotes*: seq[string]
+    syncIntervalSeconds*: int
+
   ConcurrencyConfig* = object
     maxAgents*: int
     tokenBudgetMB*: int
@@ -73,6 +79,7 @@ type
     discord*: DiscordConfig
     loop*: LoopConfig
     dashboard*: DashboardConfig
+    remoteSync*: RemoteSyncConfig
     syncAgentsMd*: bool
     logLevel*: string
     fileLogLevel*: string
@@ -107,6 +114,12 @@ proc defaultConfig*(): Config =
       codingAgentNoOutputTimeoutMs: 300_000,
       codingAgentProgressTimeoutMs: 600_000,
       codingAgentMaxAttempts: 5,
+    ),
+    remoteSync: RemoteSyncConfig(
+      enabled: false,
+      primaryRemote: "gitea",
+      remotes: @[],
+      syncIntervalSeconds: 60,
     ),
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
@@ -200,6 +213,14 @@ proc loadConfig*(repoPath: string): Config =
       result.dashboard.host = parsed.dashboard.host
     if parsed.dashboard.port > 0:
       result.dashboard.port = parsed.dashboard.port
+  if raw.contains("\"remoteSync\""):
+    result.remoteSync.enabled = parsed.remoteSync.enabled
+    if parsed.remoteSync.primaryRemote.len > 0:
+      result.remoteSync.primaryRemote = parsed.remoteSync.primaryRemote
+    if parsed.remoteSync.remotes.len > 0:
+      result.remoteSync.remotes = parsed.remoteSync.remotes
+    if parsed.remoteSync.syncIntervalSeconds > 0:
+      result.remoteSync.syncIntervalSeconds = parsed.remoteSync.syncIntervalSeconds
   if raw.contains("\"syncAgentsMd\""):
     result.syncAgentsMd = parsed.syncAgentsMd
   if parsed.logLevel.len > 0:
