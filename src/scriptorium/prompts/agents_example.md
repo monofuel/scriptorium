@@ -1,5 +1,7 @@
 # Project Instructions
 
+Read `AGENTS.project.md` if it exists for additional project-specific rules.
+
 This repository uses Nim and keeps dependencies minimal.
 
 ## General
