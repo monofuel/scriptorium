@@ -21,15 +21,20 @@ graph TD
     Approved((approved?))
     MergeQueue((make test?))
     Master[("master branch")]
+    HealthCheck((master healthy?))
+    Recovery["🤖 Recovery Agent\nfixes failing tests"]
     Stuck[("tickets/stuck/")]
+    StuckRecovery((stuck retry?))
     Reopen((retry limit?))
     Drained((queues empty?))
     Feedback(("run eval command"))
+    RemoteSync["remote sync\nfetch/merge/push"]
 
     Human -->|"scriptorium plan"| Architect
     Human -->|"scriptorium ask (read-only)"| Architect
+    Human -->|"scriptorium do (full access)"| Coder
     Human -->|"scriptorium discord"| Discord
-    Discord --> Architect
+    Discord -->|"plan: / ask: / do:"| Architect
     Architect -->|"writes"| Spec
 
     Spec --> SpecChanged
@@ -46,10 +51,18 @@ graph TD
     MergeQueue -->|"make test fails"| Reopen
     Reopen -->|retry| Tickets
     Reopen -->|"too many failures"| Stuck
-    Master --> Drained
+    Stuck -->|"auto-retry"| StuckRecovery
+    StuckRecovery -->|"under limit"| Tickets
+    StuckRecovery -->|"permanently stuck"| Stuck
+    Master --> HealthCheck
+    HealthCheck -->|healthy| Drained
+    HealthCheck -->|"unhealthy"| Recovery
+    Recovery -->|"creates fix ticket"| MergeQueue
     Drained -->|"work pending"| Tickets
     Drained -->|"yes, loop enabled"| Feedback
     Feedback -->|"eval output"| Architect
+    Master -.->|"remote sync enabled"| RemoteSync
+    RemoteSync -.->|"fetch/push"| Master
 
     style Human fill:#4a9eff,stroke:#333,color:#fff
     style Discord fill:#7289da,stroke:#333,color:#fff
@@ -58,12 +71,16 @@ graph TD
     style Manager fill:#ff6b6b,stroke:#333,color:#fff
     style Coder fill:#ff6b6b,stroke:#333,color:#fff
     style Reviewer fill:#ff6b6b,stroke:#333,color:#fff
+    style Recovery fill:#ff6b6b,stroke:#333,color:#fff
     style SpecChanged fill:#ffd93d,stroke:#333,color:#333
     style Approved fill:#ffd93d,stroke:#333,color:#333
     style MergeQueue fill:#ffd93d,stroke:#333,color:#333
+    style HealthCheck fill:#ffd93d,stroke:#333,color:#333
     style Reopen fill:#ffd93d,stroke:#333,color:#333
+    style StuckRecovery fill:#ffd93d,stroke:#333,color:#333
     style Drained fill:#ffd93d,stroke:#333,color:#333
     style Feedback fill:#ffd93d,stroke:#333,color:#333
+    style RemoteSync fill:#7289da,stroke:#333,color:#fff
     style Spec fill:#6bcb77,stroke:#333,color:#333
     style Tickets fill:#6bcb77,stroke:#333,color:#333
     style Master fill:#6bcb77,stroke:#333,color:#333
@@ -78,14 +95,19 @@ Use `scriptorium plan` to talk to the **Architect** — the planning agent that 
 
 Use `scriptorium ask` for read-only questions to the Architect. It has the same context as `plan` but won't modify the spec — useful for asking about the codebase, checking status, or getting the Architect's perspective on a design question.
 
+Use `scriptorium do` for ad-hoc tasks that need full repo access — running tests, pushing to remotes, fixing one-off issues, or any work that doesn't belong in the spec. The Architect operates directly in the repo root with no write guards.
+
 Once your spec is ready, run `scriptorium run` in a terminal (or in tmux) to start the main orchestration loop. It watches the spec, generates tickets, assigns coding agents, reviews their work, and merges passing changes into `master`.
 
 ```bash
 # Tell the Architect what to build
 scriptorium plan
 
-# Or ask a one-off question
+# Ask a read-only question
 scriptorium ask "What areas of the codebase handle authentication?"
+
+# Run an ad-hoc task with full repo access
+scriptorium do "run make test and report the results"
 
 # Once the spec is ready, start the orchestration loop (eg. in tmux)
 scriptorium run
@@ -111,18 +133,21 @@ Path and workflow terminology is defined in `docs/terms.md`.
 ## Status
 
 Current features:
-- CLI commands: `init`, `run`, `status`, `plan`, `ask`, `audit`, `dashboard`, `discord`, `worktrees`, `--version`, `--help`
+- CLI commands: `init`, `run`, `status`, `plan`, `ask`, `do`, `audit`, `dashboard`, `discord`, `sync`, `worktrees`, `--version`, `--help`
 - Architect → Manager → Coding → Review agent workflow
+- `do` mode for ad-hoc tasks with full repo access (no ticket pipeline)
 - Parallel coding agents with area-based conflict avoidance
 - Ticket dependencies (`**Depends:**` field — tickets with unsatisfied deps are skipped)
 - Rate limit detection with exponential backoff and concurrency reduction
 - Token budget tracking to pause new assignments when stdout bytes exceed limit
-- Stuck ticket parking after repeated failures
+- Stuck ticket parking after repeated failures, with automatic retry recovery
+- Recovery agent: when master tests fail, the Architect creates and executes a fix ticket automatically
+- Remote sync: automatic fetch/merge/push to configured git remotes
 - Configurable timeouts, retry limits, and concurrency
 - Merge safety with test gates and merge queue
 - Loop system for feedback-driven iterative development (eval → architect → work → repeat)
 - Web dashboard for monitoring spec, tickets, agents, and logs
-- Discord bot integration for remote orchestrator interaction
+- Discord bot integration with mode prefixes (`ask:`, `plan:`, `do:`)
 - Claude Code, Codex, and typoi agent harnesses
 
 ## Core workflow
@@ -305,6 +330,13 @@ scriptorium discord
 
 Starts a Discord bot for remote interaction with the orchestrator. Requires the `DISCORD_TOKEN` environment variable.
 
+Messages support mode prefixes to control how the Architect processes them:
+- `plan: <message>` — edit `spec.md` (default when no prefix)
+- `ask: <message>` — read-only, no file modifications
+- `do: <message>` — full repo access for ad-hoc tasks
+
+Slash commands: `/status`, `/queue`, `/pause`, `/resume`.
+
 Configure in `scriptorium.json`:
 
 ```json
@@ -352,9 +384,12 @@ scriptorium status           Show ticket counts and active agent info
 scriptorium plan             Interactive Architect planning session
 scriptorium plan <prompt>    One-shot spec update
 scriptorium ask              Interactive read-only Q&A with the Architect
+scriptorium do               Interactive coding session with full repo access
+scriptorium do <prompt>      One-shot ad-hoc task with full repo access
 scriptorium audit            Run spec audit
 scriptorium dashboard        Start web dashboard
 scriptorium discord          Start Discord bot
+scriptorium sync             Run a single remote sync cycle (fetch/merge/push)
 scriptorium worktrees        List active ticket worktrees
 scriptorium --version        Print version
 scriptorium --help           Show help
