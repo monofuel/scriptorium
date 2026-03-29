@@ -165,6 +165,18 @@ suite "ticket dependency parsing":
     let content = "# Ticket\n\n**Depends:**  0045 , 0046 \n"
     check parseDependsFromTicketContent(content) == @["0045", "0046"]
 
+  test "parseDependsFromTicketContent filters non-numeric 'none'":
+    let content = "# Ticket\n\n**Depends:** none\n"
+    check parseDependsFromTicketContent(content).len == 0
+
+  test "parseDependsFromTicketContent filters non-numeric 'n/a'":
+    let content = "# Ticket\n\n**Depends:** n/a\n"
+    check parseDependsFromTicketContent(content).len == 0
+
+  test "parseDependsFromTicketContent filters mixed valid and invalid":
+    let content = "# Ticket\n\n**Depends:** 0045, none\n"
+    check parseDependsFromTicketContent(content) == @["0045"]
+
 suite "ticket dependency assignment":
   test "assignOldestOpenTicket skips ticket with unsatisfied dependency":
     let tmp = getTempDir() / "scriptorium_test_dep_unsatisfied"

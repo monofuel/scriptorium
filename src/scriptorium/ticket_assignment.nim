@@ -225,7 +225,13 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
       if allSatisfied:
         openTicket = ticket.rel
         break
+      else:
+        let unsatisfied = repairedDeps.filterIt(it notin doneIds)
+        logDebug(&"ticket {ticketId}: skipping assignment, unsatisfied deps: {unsatisfied}")
     if openTicket.len == 0:
+      if openTickets.len > 0:
+        let count = openTickets.len
+        logWarn(&"assignment: {count} open ticket(s) but none assignable (all have unsatisfied dependencies)")
       return TicketAssignment()
 
     let inProgressTicket = PlanTicketsInProgressDir / splitFile(openTicket).name & ".md"
@@ -288,6 +294,8 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
       let ticketId = ticketIdFromTicketPath(ticket.rel)
       let repairedDeps = repairedGraph.getOrDefault(ticketId, @[])
       if not repairedDeps.allIt(it in doneIds):
+        let unsatisfied = repairedDeps.filterIt(it notin doneIds)
+        logDebug(&"ticket {ticketId}: skipping assignment, unsatisfied deps: {unsatisfied}")
         continue
 
       let inProgressTicket = PlanTicketsInProgressDir / splitFile(ticket.rel).name & ".md"

@@ -72,8 +72,13 @@ proc parseAreaFromTicketContent*(ticketContent: string): string =
       result = trimmed[AreaFieldPrefix.len..^1].strip()
       break
 
+proc isValidTicketId*(value: string): bool =
+  ## Return true when a string looks like a valid numeric ticket ID.
+  result = value.len > 0 and value.allCharsInSet(Digits)
+
 proc parseDependsFromTicketContent*(ticketContent: string): seq[string] =
   ## Extract dependency ticket IDs from a ticket markdown body.
+  ## Non-numeric values (e.g. "none", "n/a") are silently filtered out.
   for line in ticketContent.splitLines():
     let trimmed = line.strip()
     if trimmed.startsWith(DependsFieldPrefix):
@@ -81,7 +86,7 @@ proc parseDependsFromTicketContent*(ticketContent: string): seq[string] =
       if raw.len > 0:
         for part in raw.split(","):
           let id = part.strip()
-          if id.len > 0:
+          if isValidTicketId(id):
             result.add(id)
       break
 
