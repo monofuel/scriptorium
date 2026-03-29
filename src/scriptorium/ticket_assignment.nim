@@ -168,14 +168,27 @@ proc listActiveTicketWorktrees*(repoPath: string): seq[ActiveTicketWorktree] =
     listActiveTicketWorktreesInPlanPath(planPath)
   )
 
-proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string]] =
-  ## Return all open tickets sorted by numeric ID (ascending).
+proc priorityOrd(p: TicketPriority): int =
+  ## Return sort order for priority (higher value = runs first).
+  case p
+  of tpCritical: 3
+  of tpHigh: 2
+  of tpMedium: 1
+  of tpLow: 0
+
+proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string, priority: TicketPriority]] =
+  ## Return all open tickets sorted by priority (critical first) then numeric ID (ascending).
   for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
     let rel = relativePath(ticketPath, planPath).replace('\\', '/')
     let parsedId = parseInt(ticketIdFromTicketPath(rel))
-    result.add((id: parsedId, rel: rel))
-  result.sort(proc(a, b: tuple[id: int, rel: string]): int =
-    if a.id != b.id: a.id - b.id
+    let content = readFile(ticketPath)
+    let priority = parsePriorityFromTicketContent(content)
+    result.add((id: parsedId, rel: rel, priority: priority))
+  result.sort(proc(a, b: tuple[id: int, rel: string, priority: TicketPriority]): int =
+    let pa = priorityOrd(a.priority)
+    let pb = priorityOrd(b.priority)
+    if pa != pb: pb - pa
+    elif a.id != b.id: a.id - b.id
     else: cmp(a.rel, b.rel)
   )
 

@@ -69,7 +69,12 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
         prompt,
         DiscordChatTicketId,
       )
-      enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
+      enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+
+      # Commit any new tickets created by the architect.
+      gitRun(planPath, "add", PlanTicketsOpenDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
 
       let updatedSpec = loadSpecFromPlanPath(planPath)
       if updatedSpec != existingSpec:

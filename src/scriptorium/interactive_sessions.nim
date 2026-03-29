@@ -119,7 +119,12 @@ proc runInteractivePlanSession*(
         streamEventHandler,
         PlanHeartbeatIntervalMs,
       )
-      enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
+      enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+
+      # Commit any new tickets created by the architect.
+      gitRun(planPath, "add", PlanTicketsOpenDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
 
       var response = agentResult.lastMessage.strip()
       if response.len == 0:

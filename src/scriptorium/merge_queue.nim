@@ -577,6 +577,12 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       beginJournalTransition(planPath, "complete " & item.ticketId, doneSteps, doneCommitMsg)
       executeJournalSteps(planPath)
       completeJournalTransition(planPath)
+
+      # Check if the completed ticket had force eval set.
+      let ticketContent = readFile(planPath / doneRelPath)
+      if parseForceEvalFromTicketContent(ticketContent):
+        forceEvalPending = true
+        logInfo(&"ticket {item.ticketId}: force eval flag set, will trigger early eval")
       true
     else:
       let failureReason = if mergeMasterResult.exitCode != 0: "git merge conflict"

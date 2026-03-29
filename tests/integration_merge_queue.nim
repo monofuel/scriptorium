@@ -540,7 +540,7 @@ suite "orchestrator merge queue":
     let queueFiles = pendingQueueFiles(tmp)
     check queueFiles.len == 1
 
-  test "processMergeQueue auto-commits dirty worktree before merge":
+  test "processMergeQueue resets dirty worktree before merge":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_autocommit"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
@@ -556,9 +556,9 @@ suite "orchestrator merge queue":
     check processed
     check "tickets/done/0001-first.md" in files
 
-    let (masterFile, masterRc) = execCmdEx("git -C " & quoteShell(tmp) & " show master:uncommitted.txt")
-    check masterRc == 0
-    check masterFile.strip() == "dirty"
+    # Dirty files are reset (not committed) — uncommitted.txt should not be on master.
+    let (_, masterRc) = execCmdEx("git -C " & quoteShell(tmp) & " show master:uncommitted.txt")
+    check masterRc != 0
 
   test "processMergeQueue parks ticket after MaxMergeFailures":
     let tmp = getTempDir() / "scriptorium_test_merge_queue_stuck"

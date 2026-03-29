@@ -166,6 +166,7 @@ var
   timingsLock*: Lock
   timingsLockInitialized* = false
   agentRunnerOverride*: AgentRunner
+  forceEvalPending* {.volatile.} = false
 
 proc ensureSubmitPrLockInitialized*() {.gcsafe.} =
   ## Initialize the shared submit_pr lock once.

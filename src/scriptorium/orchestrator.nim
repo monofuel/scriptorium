@@ -381,12 +381,16 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")
           runRecoveryAgent(repoPath, runner, masterHealthState.testOutput, masterHealthState.head)
 
-        # Step 8: Loop system — feedback cycle when queue is drained.
+        # Step 8: Loop system — feedback cycle when queue is drained or force eval is pending.
         if loopCfg.enabled and loopCfg.feedback.len > 0:
           let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
             isQueueDrained(planPath)
           )
-          if drained and runningAgentCount() == 0:
+          let forceEval = forceEvalPending
+          if forceEval:
+            forceEvalPending = false
+            logInfo("loop: force eval triggered by completed ticket")
+          if (drained and runningAgentCount() == 0) or forceEval:
             if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
               let maxIter = loopCfg.maxIterations
               logInfo(&"loop: max iterations reached ({loopIterationCount}/{maxIter})")

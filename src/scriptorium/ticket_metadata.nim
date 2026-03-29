@@ -6,6 +6,15 @@ const
   AreaFieldPrefix* = "**Area:**"
   DependsFieldPrefix* = "**Depends:**"
   WorktreeFieldPrefix* = "**Worktree:**"
+  PriorityFieldPrefix* = "**Priority:**"
+  ForceEvalFieldPrefix* = "**Force Eval:**"
+
+type
+  TicketPriority* = enum
+    tpLow = "low"
+    tpMedium = "medium"
+    tpHigh = "high"
+    tpCritical = "critical"
 
 proc normalizeAreaPath*(rawPath: string): string =
   ## Validate and normalize a relative area path.
@@ -84,6 +93,29 @@ proc parseWorktreeFromTicketContent*(ticketContent: string): string =
       let value = trimmed[WorktreeFieldPrefix.len..^1].strip()
       if value.len > 0 and value != "—" and value != "-":
         result = value
+      break
+
+proc parsePriorityFromTicketContent*(ticketContent: string): TicketPriority =
+  ## Extract the priority level from a ticket markdown body. Default: tpMedium.
+  result = tpMedium
+  for line in ticketContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith(PriorityFieldPrefix):
+      let value = trimmed[PriorityFieldPrefix.len..^1].strip().toLowerAscii()
+      case value
+      of "low": result = tpLow
+      of "medium": result = tpMedium
+      of "high": result = tpHigh
+      of "critical": result = tpCritical
+      break
+
+proc parseForceEvalFromTicketContent*(ticketContent: string): bool =
+  ## Extract the force eval flag from a ticket markdown body. Default: false.
+  for line in ticketContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith(ForceEvalFieldPrefix):
+      let value = trimmed[ForceEvalFieldPrefix.len..^1].strip().toLowerAscii()
+      result = value == "true"
       break
 
 proc setTicketWorktree*(ticketContent: string, worktreePath: string): string =

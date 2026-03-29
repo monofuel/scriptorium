@@ -17,6 +17,10 @@ must wait for other tickets to complete before it can be started. Only add
 dependencies when there is a genuine build-on relationship. Most tickets
 should have no dependencies.
 
+Include `**Priority:** low|medium|high|critical` to set ticket urgency.
+Default to `medium` unless the area content indicates higher urgency.
+Critical tickets are processed before all others.
+
 Each ticket should be scoped so a coding agent can complete it in under one hour.
 Prefer smaller, focused tickets over large ones. If a task is too big, split it into
 multiple tickets that can be completed independently.
