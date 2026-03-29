@@ -344,6 +344,15 @@ proc runReviewAgent*(
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
       gitRun(planPath, "commit", "-m", ReviewAgentCommitPrefix & " " & item.ticketId)
 
+proc resetWorktreeState*(worktreePath: string, ticketId: string) =
+  ## Reset a worktree to a clean state after a failed rebase or merge.
+  ## Discards uncommitted changes and removes untracked files.
+  discard runCommandCapture(worktreePath, "git", @["checkout", "."])
+  discard runCommandCapture(worktreePath, "git", @["clean", "-fd"])
+  let dirtyCheck = runCommandCapture(worktreePath, "git", @["status", "--porcelain"])
+  if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
+    logWarn(&"ticket {ticketId}: worktree still dirty after reset")
+
 proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool =
   ## Process at most one merge queue item and apply success/failure transitions.
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
@@ -425,9 +434,8 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
 
     let dirtyCheck = runCommandCapture(item.worktree, "git", @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
-      logInfo(fmt"processMergeQueue: auto-committing dirty worktree for {item.ticketId}")
-      gitRun(item.worktree, "add", "-A")
-      gitRun(item.worktree, "commit", "-m", "scriptorium: auto-commit before merge")
+      logWarn(fmt"processMergeQueue: dirty worktree detected for {item.ticketId}, resetting")
+      resetWorktreeState(item.worktree, item.ticketId)
 
     # Run review agent before quality gates.
     let ticketContent = readFile(ticketPath)
@@ -464,8 +472,12 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       mergeMasterResult = (exitCode: 0, output: rebaseResult.output)
     else:
       discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+      resetWorktreeState(item.worktree, item.ticketId)
       logInfo(fmt"ticket {item.ticketId}: rebase failed, falling back to merge")
       mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", defaultBranch])
+      if mergeMasterResult.exitCode != 0:
+        discard runCommandCapture(item.worktree, "git", @["merge", "--abort"])
+        resetWorktreeState(item.worktree, item.ticketId)
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
       qualityCheckResult = runRequiredQualityChecks(item.worktree)
@@ -487,6 +499,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
         if noFfResult.exitCode != 0:
           discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+          resetWorktreeState(masterPath, item.ticketId)
           return noFfResult
 
         logInfo(fmt"ticket {item.ticketId}: --no-ff merge succeeded")
@@ -508,6 +521,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
               let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
               if noFfResult.exitCode != 0:
                 discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+                resetWorktreeState(masterPath, item.ticketId)
               return noFfResult
             )
             mergedToMaster = retryMerge.exitCode == 0
@@ -521,6 +535,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
             failureStep = &"make {retryQuality.failedTarget} (after rebase retry)"
         else:
           discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+          resetWorktreeState(item.worktree, item.ticketId)
           logInfo(fmt"ticket {item.ticketId}: rebase retry failed, proceeding with reopen")
           failureOutput = mergeToMasterResult.output
           failureStep = "git merge master (ff-only and no-ff both failed, rebase also failed)"
