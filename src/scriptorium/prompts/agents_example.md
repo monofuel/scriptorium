@@ -34,6 +34,7 @@ This repository uses Nim and keeps dependencies minimal.
 | JWT | jwtea | JSON Web Token signing and verification. |
 | 2D geometry | bumpy | Point, circle, rect, polygon intersection tests. |
 | 2D graphics | pixie | PNG/JPEG/SVG/fonts, path drawing, SIMD-accelerated. |
+| 3D graphics and models | https://github.com/treeform/gltf | GLTF 2.0 model loading (and rendering with opengl). |
 | Vector math | vmath | GLSL-style Vec2–Vec4, Mat3–Mat4, quaternions. |
 | Color | chroma | Color spaces, parsing, conversion. |
 | Windowing | windy | Cross-platform window and input management. |
