@@ -17,6 +17,7 @@ Prompt path terminology should stay aligned with `docs/terms.md`.
 - `manager_tickets.md`: Manager ticket generation prompt.
 - `agents_example.md`: generic example `AGENTS.md` content for generated fixture repositories.
 - `plan_scope.md`: shared plan worktree and read-scope context.
+- `tone.md`: shared communication tone directive (appended to all agent prompts).
 - `architect_plan_oneshot.md`: one-shot `scriptorium plan <prompt>` prompt.
 - `architect_plan_interactive.md`: per-turn interactive `scriptorium plan` prompt.
 - `codex_retry_continuation.md`: retry continuation prompt for codex harness.

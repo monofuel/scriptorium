@@ -3,7 +3,7 @@ import
   ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, orchestrator, output_formatting, remote_sync]
 
 const
-  Version = "18.3.1"
+  Version = "18.3.2"
   Usage = """scriptorium - agent orchestration system
 
 Usage:

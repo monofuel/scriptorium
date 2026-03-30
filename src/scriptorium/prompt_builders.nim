@@ -7,6 +7,10 @@ const
   StallContinuationText* = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
   StallTestOutputMaxBytes* = 8192
 
+proc withTone*(prompt: string): string =
+  ## Append the shared communication tone directive to a prompt.
+  result = prompt.strip() & "\n\n" & ToneTemplate.strip() & "\n"
+
 proc truncateTail*(value: string, maxChars: int): string =
   ## Return at most maxChars from the end of value.
   if maxChars < 1:
@@ -53,7 +57,7 @@ proc formatPlanStreamEvent*(event: AgentStreamEvent): string =
 proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string, priorWorkNote: string = ""): string =
   ## Build the coding-agent prompt from ticket context.
   ## When priorWorkNote is non-empty, it is appended to inform the agent of existing commits.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     CodingAgentTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -61,7 +65,7 @@ proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPa
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
-  )
+  ))
   if priorWorkNote.len > 0:
     result = result.strip() & "\n\n" & priorWorkNote
 
@@ -79,11 +83,12 @@ proc buildStallContinuationPrompt*(initialPrompt: string, ticketContent: string,
     "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\n\n" &
     "Ticket content:\n\n" & ticketContent.strip() & "\n\n" &
     StallContinuationText & "\n\n" &
-    testSection
+    testSection & "\n\n" &
+    ToneTemplate.strip()
 
 proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string, agentsContent: string, specContent: string): string =
   ## Build the review agent prompt from ticket, diff, area, summary, AGENTS.md, and spec context.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ReviewAgentTemplate,
     [
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
@@ -93,24 +98,24 @@ proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaCon
       (name: "SPEC_CONTENT", value: specContent.strip()),
       (name: "SUBMIT_SUMMARY", value: submitSummary.strip()),
     ],
-  )
+  ))
 
 proc buildArchitectAreasPrompt*(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectAreasTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "WORKTREE_PATH", value: planPath),
       (name: "CURRENT_SPEC", value: spec.strip()),
     ],
-  )
+  ))
 
 proc buildManagerTicketsPrompt*(repoPath: string,
     areaId: string, areaRelPath: string, areaContent: string, nextId: int): string =
   ## Build a single-area manager prompt using the ManagerTicketsTemplate.
   let startIdText = &"{nextId:04d}"
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ManagerTicketsTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -120,18 +125,18 @@ proc buildManagerTicketsPrompt*(repoPath: string,
       (name: "AREA_PATH", value: areaRelPath),
       (name: "AREA_CONTENT", value: areaContent.strip()),
     ],
-  )
+  ))
 
 proc buildPredictionPrompt*(ticketContent: string, areaContent: string, specSummary: string): string =
   ## Build the prediction prompt from ticket, area, and spec context.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     TicketPredictionTemplate,
     [
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
       (name: "AREA_CONTENT", value: areaContent.strip()),
       (name: "SPEC_SUMMARY", value: specSummary.strip()),
     ],
-  )
+  ))
 
 proc buildPlanScopePrompt*(repoPath: string, planPath: string): string =
   ## Build shared planning prompt context with read and write scope.
@@ -145,14 +150,14 @@ proc buildPlanScopePrompt*(repoPath: string, planPath: string): string =
 
 proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: string, currentSpec: string): string =
   ## Build the one-shot architect prompt that edits spec.md in place.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectPlanOneShotTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "USER_REQUEST", value: userPrompt.strip()),
       (name: "CURRENT_SPEC", value: currentSpec.strip()),
     ],
-  )
+  ))
 
 proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
@@ -162,7 +167,7 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectPlanInteractiveTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
@@ -170,7 +175,7 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  )
+  ))
 
 proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string, iterationLog: string, feedbackOutput: string, iterationNumber: int): string =
   ## Build the architect loop prompt containing goal, iteration log, feedback, and instructions.
@@ -207,17 +212,18 @@ Iteration {iterNum}
 - Plan worktree: {planPath}
 - You may write to: `spec.md`, `areas/`, `tickets/open/`, `iteration_log.md`
 """
+  result = withTone(result)
 
 proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string): string =
   ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "CONVERSATION_HISTORY", value: ""),
       (name: "USER_MESSAGE", value: userPrompt.strip()),
     ],
-  )
+  ))
 
 proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string): string =
   ## Build the multi-turn architect "do" prompt with conversation history.
@@ -227,14 +233,14 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  )
+  ))
 
 proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
@@ -244,7 +250,7 @@ proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = renderPromptTemplate(
+  result = withTone(renderPromptTemplate(
     ArchitectAskInteractiveTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
@@ -252,4 +258,4 @@ proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  )
+  ))
