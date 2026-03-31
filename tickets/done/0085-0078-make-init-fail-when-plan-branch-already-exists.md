@@ -66,3 +66,48 @@ All changes are correct and well-structured. The implementation:
 5. **Integration tests are fine** — `integration_scriptorium.nim:35` already expects `ValueError` on double init.
 6. **No dead code, no unrelated changes, no leftover artifacts.**
 Approved. The changes are minimal, correct, and fully aligned with the ticket requirements and spec. The early `ValueError` guard replaces the idempotent behavior cleanly, and both unit and integration tests correctly assert the new error behavior.
+
+## Merge Queue Success
+- Summary: Make `scriptorium init` fail with ValueError when scriptorium/plan branch already exists, instead of silently skipping. Updated tests to assert the new error behavior.\n
+### Quality Check Output
+```text
+nim/integration_merge_queue_d/@pjson.nim.c:2795:1: fatal error: error writing to /dev/shm/cclV1pbI.s: No space left on device
+[tests/integration_merge_queue.nim]  2795 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstrutils.nim.c:3311:1: fatal error: error writing to /dev/shm/cccy9NIk.s: No space left on device
+[tests/integration_merge_queue.nim]  3311 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstd@sprivate@sospaths2.nim.c:1474:1: fatal error: error writing to /dev/shm/ccQCOdln.s: No space left on device
+[tests/integration_merge_queue.nim]  1474 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@ptimes.nim.c:3707:1: fatal error: error writing to /dev/shm/ccuJz19t.s: No space left on device
+[tests/integration_merge_queue.nim]  3707 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@ptables.nim.c:7831:1: fatal error: error writing to /dev/shm/ccpOS4Y7.s: No space left on device
+[tests/integration_merge_queue.nim]  7831 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@psystem.nim.c:12144:1: fatal error: error writing to /dev/shm/ccd9PkQ8.s: No space left on device
+[tests/integration_merge_queue.nim] 12144 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 302
+- coding_wall_seconds: 149
+- test_wall_seconds: 14
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 200323
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 5m2s.
