@@ -69,3 +69,39 @@ The diff is clean, minimal, and matches all ticket requirements exactly:
 
 No convention violations: camelCase variables, no new procs needing doc comments, no unused imports, no dead code. The `##` comment is acceptable as a section marker within the test body.
 Approved. The change is minimal, correct, and satisfies all ticket requirements. No convention violations or spec contradictions.
+
+## Merge Queue Success
+- Summary: Added doAssert checks in e2e_euler_live.nim after initLiveRepo to verify that scriptorium init creates AGENTS.md (non-empty), Makefile (non-empty), scriptorium.json, and the scriptorium/plan branch before proceeding with the Euler flow.\n
+### Quality Check Output
+```text
+ess.nim] [Suite] integration claude-code harness
+[tests/integration_claude_code_harness.nim]   [OK] real claude-code one-shot smoke test
+[tests/integration_claude_code_harness.nim] [2026-03-31T03:53:58Z] [INFO] MCP server ready on 127.0.0.1:22217
+[tests/integration_claude_code_harness.nim] [2026-03-31T03:54:05Z] [INFO] ticket unknown: submit_pr accepted (quality checks run in merge queue)
+[tests/integration_claude_code_harness.nim] /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts/tests/integration_claude_code_harness.nim(132) integration_claude_code_harness
+[tests/integration_claude_code_harness.nim] /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts/src/scriptorium/harness_claude_code.nim(603) runClaudeCode
+[tests/integration_claude_code_harness.nim] /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts/src/scriptorium/harness_claude_code.nim(586) runClaudeCodeAttempt
+[tests/integration_claude_code_harness.nim] /usr/lib/nim/lib/std/syncio.nim(894) writeFile
+[tests/integration_claude_code_harness.nim] 
+[tests/integration_claude_code_harness.nim]     Unhandled exception: cannot open: /dev/shm/scriptorium_integration_claude_code_mcp_yithwKJI/logs/integration-claude-mcp/attempt-01.last_message.txt [IOError]
+[tests/integration_claude_code_harness.nim]   [FAILED] real claude-code MCP tool call against live server
+[tests/integration_claude_code_harness.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_claude_code_harness_d/integration_claude_code_harness_456871F5BF8451557421B60A13F288943597C962'
+[tests/integration_review_agent_live.nim] 
+[tests/integration_review_agent_live.nim] [Suite] integration review agent live
+[tests/integration_review_agent_live.nim]   [OK] IT-REVIEW-01 real review agent calls submit_review with a real model
+```
+
+## Metrics
+- wall_time_seconds: 123
+- coding_wall_seconds: 28
+- test_wall_seconds: 49
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 33712
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: overestimated
+- brief_summary: Predicted easy, actual was trivial with 1 attempt(s) in 2m3s.
