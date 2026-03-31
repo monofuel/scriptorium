@@ -381,3 +381,34 @@ No convention violations, no dead code, no spec contradictions.
 
 Regarding the recurring merge queue failure ("Your local changes to docker-compose.yml would be overwritten by merge") — this appears to be an infrastructure issue with the merge queue's worktree having a dirty state, not a problem with the code changes themselves. The branch is cleanly one commit ahead of master with no conflicts.
 Approved. All changes match the ticket requirements and follow project conventions. The recurring merge queue failure is an infrastructure issue (dirty worktree state), not a code problem — the diff merges cleanly against master.
+
+## Merge Queue Success
+- Summary: Register mattermost command in scriptorium.nim (import, cmdMattermost proc, dispatch case, aligned usage string), add mattermost service to docker-compose.yml mirroring discord, add MATTERMOST_TOKEN to .env.example, and include stub mattermost_bot.nim until dependency ticket 0076 merges.\n
+### Quality Check Output
+```text
+criptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/shared_state.nim(345) codingAgentWorkerThread
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/coding_agent.nim(245) executeAssignedTicket
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/lock_management.nim(174) withLockedPlanWorktree
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/lock_management.nim(87) withRepoLock
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/lock_management.nim(175) :anonymous
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/lock_management.nim(150) withPlanWorktreeImpl
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/coding_agent.nim(256) :anonymous
+[tests/integration_orchestrator_queue.nim] /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support/src/scriptorium/git_ops.nim(82) gitRun
+[tests/integration_orchestrator_queue.nim] Error: unhandled exception: git commit -m scriptorium: record agent run 0002-recovery-546b64a failed: fatal: unable to write loose object file: No space left on device [IOError]
+[tests/integration_orchestrator_queue.nim] Error: execution of an external program failed: '/home/scriptorium/.cache/nim/integration_orchestrator_queue_d/integration_orchestrator_queue_BE9E7D9102A21F222572C0595628ED2527FC2590'
+```
+
+## Metrics
+- wall_time_seconds: 672
+- coding_wall_seconds: 94
+- test_wall_seconds: 469
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 136161
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 11m12s.
