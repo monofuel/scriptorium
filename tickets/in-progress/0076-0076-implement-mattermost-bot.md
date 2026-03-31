@@ -46,3 +46,8 @@ const
 - Do not use try/catch unless absolutely necessary. Let errors bubble up.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0076-0076-implement-mattermost-bot
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: New file closely mirroring existing discord_bot.nim structure with a different library, plus docker-compose updates; pattern is clear but multi-file with moderate integration surface against mosty API.
