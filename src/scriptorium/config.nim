@@ -139,6 +139,10 @@ proc discordTokenPresent*(): bool =
   ## Return whether the DISCORD_TOKEN environment variable is set.
   getEnv("DISCORD_TOKEN").len > 0
 
+proc mattermostTokenPresent*(): bool =
+  ## Return whether the MATTERMOST_TOKEN environment variable is set.
+  getEnv("MATTERMOST_TOKEN").len > 0
+
 proc resolveModel*(model: string): string =
   ## Translate Anthropic-style model IDs to Bedrock format when
   ## CLAUDE_CODE_USE_BEDROCK is set. Non-claude models pass through unchanged.

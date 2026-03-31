@@ -272,6 +272,25 @@ proc testMattermostPartialConfig() =
   doAssert cfg.mattermost.allowedUserIds.len == 0
   echo "[OK] mattermost partial config works correctly"
 
+proc testMattermostTokenPresent() =
+  ## Verify mattermostTokenPresent returns correct boolean based on MATTERMOST_TOKEN env var.
+  let saved = getEnv("MATTERMOST_TOKEN")
+  defer:
+    if saved.len > 0:
+      putEnv("MATTERMOST_TOKEN", saved)
+    else:
+      delEnv("MATTERMOST_TOKEN")
+
+  delEnv("MATTERMOST_TOKEN")
+  doAssert mattermostTokenPresent() == false
+
+  putEnv("MATTERMOST_TOKEN", "some-token")
+  doAssert mattermostTokenPresent() == true
+
+  delEnv("MATTERMOST_TOKEN")
+  doAssert mattermostTokenPresent() == false
+  echo "[OK] mattermostTokenPresent reflects MATTERMOST_TOKEN env var"
+
 proc testInferHarness() =
   ## Verify inferHarness maps model prefixes to correct harnesses.
   doAssert inferHarness("claude-sonnet-4-6") == harnessClaudeCode
@@ -315,3 +334,4 @@ when isMainModule:
   testDefaultMattermostConfig()
   testMattermostConfigLoading()
   testMattermostPartialConfig()
+  testMattermostTokenPresent()
