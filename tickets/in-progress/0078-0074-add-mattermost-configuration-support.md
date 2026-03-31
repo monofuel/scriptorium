@@ -25,3 +25,5 @@ Add Mattermost notification configuration to the config system, mirroring the ex
 - Use `jsony` for JSON deserialization (already imported in config.nim).
 - Follow existing Discord config as the exact pattern to copy.
 - This ticket only covers config loading and tests. Mattermost bot implementation is a separate area.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0074-add-mattermost-configuration-support

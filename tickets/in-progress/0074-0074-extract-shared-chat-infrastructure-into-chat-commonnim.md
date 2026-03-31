@@ -36,3 +36,5 @@ Add `tests/test_chat_common.nim` with tests for:
 - Doc comments (`##`) on every proc.
 - Constants use PascalCase.
 - Use `&` for format strings, not `fmt`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-extract-shared-chat-infrastructure-into-chat-commonnim
