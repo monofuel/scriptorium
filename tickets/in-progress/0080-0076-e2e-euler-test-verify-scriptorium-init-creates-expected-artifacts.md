@@ -25,3 +25,8 @@ Per V11 §44, the E2E Euler test must verify that `scriptorium init` (called via
 - Use `std/os` `fileExists` and `readFile` for the checks (already imported in the test).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file change adding 4-5 doAssert lines in an existing test file using already-imported utilities, minimal logic complexity.
