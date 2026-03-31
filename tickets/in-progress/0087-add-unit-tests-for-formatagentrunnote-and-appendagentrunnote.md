@@ -22,3 +22,5 @@ Constants: `AgentMessagePreviewChars = 1200`, `AgentStdoutPreviewChars = 1200`.
 Imports needed: `scriptorium/[agent_runner, output_formatting, prompt_builders]`.
 
 Follow existing test patterns (see `tests/test_manager_agent.nim` for style).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote
