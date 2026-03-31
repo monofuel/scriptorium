@@ -302,3 +302,34 @@ Approved. All changes match the ticket requirements exactly:
 - `mattermost` service in `docker-compose.yml` mirroring `discord`
 - `MATTERMOST_TOKEN` in `.env.example`
 - Stub `mattermost_bot.nim` with doc comments and `quit(1)` pending ticket 0076
+
+## Merge Queue Failure
+- Summary: Register mattermost command in scriptorium.nim (import, cmdMattermost proc, dispatch case, aligned usage string), add mattermost service to docker-compose.yml mirroring discord, add MATTERMOST_TOKEN to .env.example, and include stub mattermost_bot.nim until dependency ticket 0076 merges.\n- Failed gate: git merge master (rebase retry also failed)\n
+### Merge Output
+```text
+Rebasing (1/1)Successfully rebased and updated refs/heads/scriptorium/ticket-0077.
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	docker-compose.yml
+Please commit your changes or stash them before you merge.
+Aborting
+Merge with strategy ort failed.
+```
+
+## Metrics
+- wall_time_seconds: 316
+- coding_wall_seconds: 220
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: parked
+- failure_reason: parked
+- model: claude-opus-4-6
+- stdout_bytes: 184198
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was complex with 1 attempt(s) in 5m16s.
