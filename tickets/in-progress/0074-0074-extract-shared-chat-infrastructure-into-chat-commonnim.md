@@ -38,3 +38,8 @@ Add `tests/test_chat_common.nim` with tests for:
 - Use `&` for format strings, not `fmt`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-extract-shared-chat-infrastructure-into-chat-commonnim
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Extracting existing procs into a new module with updated imports across two files plus new unit tests is straightforward multi-file refactoring with low integration risk, one attempt expected.
