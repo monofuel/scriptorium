@@ -30,3 +30,8 @@ Run `scriptorium plan` to build your spec with the Architect.
 4. Run `make test` to confirm all init tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-0074-update-specmd-placeholder-to-match-v11-43
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Simple string constant update in two files with a verification pass on an existing integration test, single attempt expected.
