@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote",
+  "timestamp": "2026-03-31T03:46:57Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote.md",
+      "destination": "tickets/in-progress/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote.md",
+      "content": "# Add unit tests for formatAgentRunNote and appendAgentRunNote\n\n**Area:** agent-execution\n\nThe `formatAgentRunNote` and `appendAgentRunNote` functions in `src/scriptorium/output_formatting.nim` produce the structured agent run notes appended to ticket markdown (backend, exit code, attempt, attempt count, timeout, log file, last-message file, last message tail, stdout tail). These are pure functions with zero test coverage anywhere in the test suite.\n\nCreate `tests/test_output_formatting.nim` with unit tests covering:\n\n- `formatAgentRunNote` produces markdown with all required fields (model, backend, exit code, attempt, attempt count, timeout kind, log file, last message file).\n- `formatAgentRunNote` includes last message preview section when `lastMessage` is non-empty.\n- `formatAgentRunNote` includes stdout tail section when `stdout` is non-empty.\n- `formatAgentRunNote` omits last message section when `lastMessage` is empty.\n- `formatAgentRunNote` omits stdout tail section when `stdout` is empty.\n- `formatAgentRunNote` truncates long stdout and lastMessage to `AgentStdoutPreviewChars` / `AgentMessagePreviewChars` respectively (uses `truncateTail` from `prompt_builders`).\n- `appendAgentRunNote` appends the run note to existing ticket content with proper separation.\n- `appendAgentRunNote` strips trailing whitespace from base content before appending.\n\nUse `AgentRunResult` from `scriptorium/agent_runner` to construct test inputs. These are pure function tests — no mocks, no git, no external services.\n\nRelevant source: `src/scriptorium/output_formatting.nim` lines 24–57.\nConstants: `AgentMessagePreviewChars = 1200`, `AgentStdoutPreviewChars = 1200`.\nImports needed: `scriptorium/[agent_runner, output_formatting, prompt_builders]`.\n\nFollow existing test patterns (see `tests/test_manager_agent.nim` for style).\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote\n",
+      "contentHash": "9C369B99C95D8A79DB472DDC305569B586DBDBCA"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote"
+}
