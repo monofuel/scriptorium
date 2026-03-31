@@ -9,7 +9,7 @@ const
   AgentsFileName = "AGENTS.md"
   AgentsTemplate = staticRead("prompts/agents_example.md")
   MakefileName = "Makefile"
-  MakefileTemplate = ".PHONY: test build integration-test e2e-test\n\ntest:\n\t@echo \"no tests configured\"\n\nbuild:\n\t@echo \"no build configured\"\n\nintegration-test:\n\t@echo \"no integration tests configured\"\n\ne2e-test:\n\t@echo \"no e2e tests configured\"\n"
+  MakefileTemplate = ".PHONY: test integration-test e2e-test build\n\ntest:\n\t@echo \"no tests configured\"\n\nintegration-test:\n\t@echo \"no integration tests configured\"\n\ne2e-test:\n\t@echo \"no e2e tests configured\"\n\nbuild:\n\t@echo \"no build configured\"\n"
   TestConfigNimsName = "tests" / "config.nims"
   TestConfigNimsContent = "--path:\"../src\"\n"
   ConfigFileName = "scriptorium.json"

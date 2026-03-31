@@ -139,8 +139,12 @@ suite "scriptorium CLI":
     check fileExists(makefilePath)
     let content = readFile(makefilePath)
     check content.contains("test:")
+    check content.contains("integration-test:")
+    check content.contains("e2e-test:")
     check content.contains("build:")
     check content.contains("no tests configured")
+    check content.contains("no integration tests configured")
+    check content.contains("no e2e tests configured")
     check content.contains("no build configured")
 
   test "init skips Makefile when it already exists":
