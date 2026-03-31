@@ -17,3 +17,8 @@ Warning: --init is deprecated, use `scriptorium init` instead.
 3. Run `make test` to confirm.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0086-0079-add-deprecation-warning-for-init-flag
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Two-file change adding a stderr warning line and updating an existing test assertion, straightforward with no integration risk.
