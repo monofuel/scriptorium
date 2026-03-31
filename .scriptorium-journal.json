@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0080",
+  "timestamp": "2026-03-31T03:53:03Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0080.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts.md\n**Ticket ID:** 0080\n**Branch:** scriptorium/ticket-0080\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts\n**Summary:** Added doAssert checks in e2e_euler_live.nim after initLiveRepo to verify that scriptorium init creates AGENTS.md (non-empty), Makefile (non-empty), scriptorium.json, and the scriptorium/plan branch before proceeding with the Euler flow.\n",
+      "contentHash": "976503CC9C1722F67954A738A6AAF875680086A9"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0080"
+}
