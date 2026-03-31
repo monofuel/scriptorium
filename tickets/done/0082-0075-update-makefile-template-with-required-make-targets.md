@@ -82,3 +82,51 @@ Resolved a rebase conflict where master had the targets in a different order (bu
 
 **Code quality:** No dead code, no unused imports, no leftover artifacts. Changes are minimal and focused.
 Approved. The change correctly reorders the `MakefileTemplate` to match the ticket's required target order (`test`, `integration-test`, `e2e-test`, `build`) and adds corresponding integration test assertions for the new targets.
+
+## Merge Queue Success
+- Summary: Add integration-test and e2e-test targets to Makefile template per V11 §39/§35. Updated MakefileTemplate in init.nim and added corresponding assertions in integration_cli.nim.\n
+### Quality Check Output
+```text
+ /dev/shm/ccqHmUSq.s: No space left on device
+[tests/integration_metrics.nim]  1539 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@pstrutils.nim.c:3024:1: fatal error: error writing to /dev/shm/ccwU5i8R.s: No space left on device
+[tests/integration_metrics.nim]  3024 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@ptimes.nim.c:3667:1: fatal error: error writing to /dev/shm/ccMihVbN.s: No space left on device
+[tests/integration_metrics.nim]  3667 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@ptables.nim.c:3976:1: fatal error: error writing to /dev/shm/cc6EVFGm.s: No space left on device
+[tests/integration_metrics.nim]  3976 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@psystem.nim.c:7815:1: fatal error: error writing to /dev/shm/ccSkuGhb.s: No space left on device
+[tests/integration_metrics.nim]  7815 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+rchestrator_queue.nim]  3761 | }
+[tests/integration_orchestrator_queue.nim]       | ^
+[tests/integration_orchestrator_queue.nim] compilation terminated.
+[tests/integration_orchestrator_queue.nim] /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/@psystem.nim.c:10496:1: fatal error: error writing to /dev/shm/ccB0Nw2Y.s: No space left on device
+[tests/integration_orchestrator_queue.nim] 10496 | }
+[tests/integration_orchestrator_queue.nim]       | ^
+[tests/integration_orchestrator_queue.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 245
+- coding_wall_seconds: 135
+- test_wall_seconds: 14
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 179553
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: overestimated
+- brief_summary: Predicted easy, actual was trivial with 1 attempt(s) in 4m5s.
