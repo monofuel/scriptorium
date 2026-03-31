@@ -51,3 +51,28 @@ Done. Changes:
 ```text
 n- **`src/scriptorium/init.nim`**: Added per-artifact echo messages inline with each creation block (§38, §39, §40). Replaced the summary block with descriptive artifact listings and numbered next steps per §42.\n- **`tests/integration_cli.nim`**: Updated the \"init output lists created files and next steps\" test to check for the new per-artifact messages and numbered next steps format.","stop_reason":"end_turn","session_id":"764c3ac2-a9c0-48eb-b111-6eee395be033","total_cost_usd":0.7339754999999998,"usage":{"input_tokens":28,"cache_creation_input_tokens":35504,"cache_read_input_tokens":714271,"output_tokens":6192,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":35504},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":28,"outputTokens":6192,"cacheReadInputTokens":714271,"cacheCreationInputTokens":35504,"webSearchRequests":0,"costUSD":0.7339754999999998,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"d12a05d9-fdc9-4150-9f44-d0ee9b51d406"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m5s
+
+**Review Reasoning:** I need to review the changes. Let me first fetch the necessary tools and examine the code more closely.
+Let me verify the source file for proper placement of the per-artifact messages.
+The implementation looks correct. Let me verify the integration test as well.
+Everything checks out. Here's my review summary:
+
+**Per-artifact messages (§38/§39/§40):** Correctly placed inline after each artifact's creation block, guarded by `not quiet`. Messages match spec wording exactly.
+
+**Summary section (§42):** Matches the spec format — descriptive artifact listings in "Created" section, numbered "Next steps". Artifacts that already exist are correctly skipped via conditional checks. The ordering (AGENTS.md, Makefile, scriptorium.json, plan branch, then auxiliary items) matches the §42 example, with additional items (tests/config.nims, src/, docs/) appropriately listed since they are real created artifacts.
+
+**Dynamic step numbering:** The next steps are conditionally numbered based on what was created, which correctly implements "Only list next steps relevant to what was created."
+
+**Integration test:** Updated to verify per-artifact messages, summary section contents, and numbered next steps. Covers the key artifacts.
+
+**Conventions:** No violations — uses `&` for format strings, `var stepNum` is appropriately `var` (mutated), no dead code, no unrelated changes.
+
+
+Review approved. The changes correctly implement V11 §42 post-init guidance: per-artifact creation messages match §38/§39/§40 wording exactly, the summary section lists created artifacts with descriptions and conditional numbered next steps, and the integration test covers all key output elements. No convention violations or spec deviations found.
