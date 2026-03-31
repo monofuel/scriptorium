@@ -47,3 +47,32 @@ Done. Updated the `SpecPlaceholder` constant in both `src/scriptorium/init.nim` 
 ```text
 type":"result","subtype":"success","is_error":false,"duration_ms":49403,"duration_api_ms":43663,"num_turns":14,"result":"Done. Updated the `SpecPlaceholder` constant in both `src/scriptorium/init.nim` and `tests/test_init.nim` to include the new \"This is a new project. See AGENTS.md for project conventions.\" line. All tests pass, including the integration test that verifies spec.md references AGENTS.md.","stop_reason":"end_turn","session_id":"359d1aa6-ebef-4ce0-9955-843768eafd2c","total_cost_usd":0.24002924999999994,"usage":{"input_tokens":13,"cache_creation_input_tokens":14823,"cache_read_input_tokens":194141,"output_tokens":2010,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":14823,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":13,"outputTokens":2010,"cacheReadInputTokens":194141,"cacheCreationInputTokens":14823,"webSearchRequests":0,"costUSD":0.24002924999999994,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"2cd4a206-fd78-4b8b-ba6b-899df849cae4"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 21s
+
+**Review Reasoning:** I need to verify the `submit_review` MCP tool is available, then review the diff.
+
+
+The diff is minimal and correct. Let me verify against all review criteria:
+
+**Ticket requirements:** Both files updated (`src/scriptorium/init.nim` and `tests/test_init.nim`), agent confirmed tests pass. All 4 tasks complete.
+
+**Spec compliance (V11 §43):** The new constant produces exactly:
+```
+# Spec
+
+This is a new project. See AGENTS.md for project conventions.
+
+Run `scriptorium plan` to build your spec with the Architect.
+```
+This matches the spec verbatim.
+
+**Convention enforcement:** Only string constant values changed. No new procs, imports, or variables — nothing to flag.
+
+**Code quality:** Clean, minimal change. No dead code, no unrelated changes, no leftover artifacts.
+Approved. The change is a straightforward, spec-compliant string constant update in both source and test files.
