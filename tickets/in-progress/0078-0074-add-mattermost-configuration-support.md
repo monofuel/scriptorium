@@ -27,3 +27,8 @@ Add Mattermost notification configuration to the config system, mirroring the ex
 - This ticket only covers config loading and tests. Mattermost bot implementation is a separate area.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0074-add-mattermost-configuration-support
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Straightforward pattern-copy from existing Discord config: add one object type, one field, one default, one merge block in config.nim, plus three simple tests in test_config.nim — all following an explicit existing template.
