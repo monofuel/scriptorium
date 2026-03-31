@@ -31,3 +31,5 @@ Target files:
 - `tests/test_shared_state.nim` (new) — cleanupTicketTimings, submit_pr state, active ticket worktree, token budget tracking, health cache persistence
 
 **Depends:** 0074
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files
