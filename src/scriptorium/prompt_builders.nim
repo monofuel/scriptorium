@@ -214,6 +214,19 @@ Iteration {iterNum}
 """
   result = withTone(result)
 
+proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failureClassification: string, gitStatus: string, recentCommits: string): string =
+  ## Build the architect prompt for investigating a stuck ticket.
+  result = withTone(renderPromptTemplate(
+    ArchitectInvestigateStuckTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "TICKET_CONTENT", value: ticketContent.strip()),
+      (name: "FAILURE_CLASSIFICATION", value: failureClassification.strip()),
+      (name: "GIT_STATUS", value: gitStatus.strip()),
+      (name: "RECENT_COMMITS", value: recentCommits.strip()),
+    ],
+  ))
+
 proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string): string =
   ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
   result = withTone(renderPromptTemplate(

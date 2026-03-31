@@ -3,7 +3,7 @@ import
   guildy,
   jsony,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, lock_management,
-     prompt_builders]
+     prompt_builders, shared_state]
 
 const
   DiscordMessageLimit = 2000

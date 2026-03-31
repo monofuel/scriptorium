@@ -17,6 +17,7 @@ const
   AgentsExampleTemplate* = staticRead(PromptDirectory & "agents_example.md")
   AuditAgentTemplate* = staticRead(PromptDirectory & "audit_agent.md")
   ArchitectDoTemplate* = staticRead(PromptDirectory & "architect_do.md")
+  ArchitectInvestigateStuckTemplate* = staticRead(PromptDirectory & "architect_investigate_stuck.md")
   ToneTemplate* = staticRead(PromptDirectory & "tone.md")
 
 type

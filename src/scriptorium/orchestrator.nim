@@ -1,10 +1,10 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag
+  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag, stuck_investigation
 
 const
   IdleSleepMs = 200
@@ -370,8 +370,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           0
         )
 
-        # Step 7b: Recover stuck tickets that can be retried.
-        let recoveredCount = recoverStuckTickets(repoPath)
+        # Step 7b: Investigate and recover stuck tickets.
+        let recoveredCount = investigateAndRecoverStuckTickets(repoPath, runner)
         if recoveredCount > 0:
           logInfo(&"recovered {recoveredCount} stuck ticket(s)")
 
