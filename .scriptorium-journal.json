@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0088",
+  "timestamp": "2026-03-31T03:54:22Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0088.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0088-add-unit-tests-for-buildrecoveryticketcontent.md\n**Ticket ID:** 0088\n**Branch:** scriptorium/ticket-0088\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0088-add-unit-tests-for-buildrecoveryticketcontent\n**Summary:** Add unit tests for buildRecoveryTicketContent in tests/test_recovery.nim. Exported the proc and MaxRecoveryTestOutputChars constant. Tests cover: title, area, commit hash, fenced code block, truncation beyond 8000 chars, exact boundary not truncated, and empty output fallback.\n",
+      "contentHash": "4B5DC57BDF4BCA2B98491838B2FF01C4AD624714"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0088"
+}
