@@ -42,3 +42,8 @@ Add tests to `tests/test_config.nim` for:
 - Use `jsony` for JSON deserialization (already imported in config.nim).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-0075-add-mattermostconfig-to-confignim
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Single-file addition of a config type, field, proc, and default mirroring an existing pattern (DiscordConfig), plus straightforward unit tests in one test file — one attempt expected.
