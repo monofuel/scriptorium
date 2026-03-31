@@ -233,6 +233,7 @@ suite "scriptorium CLI":
 
     let (output, rc) = runCliInRepo(tmp, "--init")
     check rc == 0
+    check output.contains("Warning: --init is deprecated, use `scriptorium init` instead.")
     check output.contains("Initialized scriptorium workspace.")
     # Verify plan branch was created.
     let (_, branchRc) = execCmdEx("git -C " & tmp & " rev-parse --verify scriptorium/plan")

@@ -175,7 +175,11 @@ when isMainModule:
     cmdSync()
   of "worktrees":
     cmdWorktrees()
-  of "init", "--init":
+  of "init":
+    let path = if args.len > 1: args[1] else: ""
+    cmdInit(path)
+  of "--init":
+    stderr.writeLine "Warning: --init is deprecated, use `scriptorium init` instead."
     let path = if args.len > 1: args[1] else: ""
     cmdInit(path)
   of "--version":
