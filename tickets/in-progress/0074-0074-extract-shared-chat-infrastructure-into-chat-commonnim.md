@@ -61,3 +61,23 @@ Work complete. The PR has been submitted to the merge queue.
 ```text
 handleResume`\n- **Updated `src/scriptorium/discord_bot.nim`** — imports from `chat_common`, removed moved code, local `truncateMessage` wrapper calls `chat_common.truncateMessage(msg, DiscordMessageLimit)`\n- **New `tests/test_chat_common.nim`** — 10 tests covering all `parseChatMode` cases (prefixes, default, case insensitivity, whitespace) and `truncateMessage` (under/at/over limit, custom limit)","stop_reason":"end_turn","session_id":"f675b72c-638a-4f89-8982-a8f72bb73ac2","total_cost_usd":1.1953779999999998,"usage":{"input_tokens":35,"cache_creation_input_tokens":45502,"cache_read_input_tokens":1208631,"output_tokens":12260,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":45502,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":35,"outputTokens":12260,"cacheReadInputTokens":1208631,"cacheCreationInputTokens":45502,"webSearchRequests":0,"costUSD":1.1953779999999998,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"12a0d918-d392-4cb2-849f-e5c98d72d69e"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 51s
+
+**Review Reasoning:** Let me review the changes against the ticket requirements and project conventions.
+The changes look clean. Let me verify the review is complete by checking one more thing — whether `discord_bot.nim` still uses all its remaining imports.
+All imports are still used. The review is complete — this is a clean, faithful extraction.
+
+
+**Review summary:**
+
+- **Convention compliance:** All conventions followed — single import block with bracket syntax, std/ first then local, PascalCase constants, camelCase variables, doc comments on every proc with complete sentences and punctuation, grouped const/let/var blocks.
+- **Spec compliance:** All 7 items from the ticket extracted correctly (ChatMode, parseChatMode, truncateMessage with limit parameter, formatStatusMessage, formatQueueMessage, handlePause, handleResume). Discord wrapper calls `chat_common.truncateMessage(msg, DiscordMessageLimit)` as specified. Discord-specific code remains in `discord_bot.nim`.
+- **Code quality:** No unused imports, no dead code, no leftover artifacts. The extraction is a faithful move with no behavioral changes. `TruncatedMarker` correctly exported for test and future Mattermost use.
+- **Tests:** All required cases covered — parseChatMode (all prefixes, default, case insensitivity, whitespace) and truncateMessage (under/at/over limit, custom limit for Mattermost).
+Review approved. The extraction is clean, complete, and follows all project conventions.
