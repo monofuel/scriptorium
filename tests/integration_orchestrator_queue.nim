@@ -190,7 +190,7 @@ suite "integration orchestrator merge queue":
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       writeOrchestratorEndpointConfig(repoPath, 1)
 
-      runOrchestratorForTicks(repoPath, 1)
+      runOrchestratorForTicks(repoPath, 1, noopRunner)
 
       let files = planTreeFiles(repoPath)
       check "tickets/open/0001-first.md" in files
@@ -211,7 +211,7 @@ suite "integration orchestrator merge queue":
 
       addFailingMakefile(repoPath)
       writeOrchestratorEndpointConfig(repoPath, 2)
-      runOrchestratorForTicks(repoPath, 1)
+      runOrchestratorForTicks(repoPath, 1, noopRunner)
 
       var files = planTreeFiles(repoPath)
       check "tickets/in-progress/0001-first.md" in files
@@ -219,7 +219,7 @@ suite "integration orchestrator merge queue":
       check pendingQueueFiles(repoPath).len == 1
 
       addPassingMakefile(repoPath)
-      runOrchestratorForTicks(repoPath, 1)
+      runOrchestratorForTicks(repoPath, 1, noopRunner)
 
       files = planTreeFiles(repoPath)
       check "tickets/done/0001-first.md" in files
@@ -234,7 +234,7 @@ suite "integration orchestrator merge queue":
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       writeOrchestratorEndpointConfig(repoPath, 3)
 
-      runOrchestratorForTicks(repoPath, 1)
+      runOrchestratorForTicks(repoPath, 1, noopRunner)
 
       let files = planTreeFiles(repoPath)
       check "tickets/open/0001-first.md" in files
