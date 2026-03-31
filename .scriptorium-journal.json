@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0086-0079-add-deprecation-warning-for-init-flag",
+  "timestamp": "2026-03-31T05:30:40Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0086-0079-add-deprecation-warning-for-init-flag.md",
+      "destination": "tickets/in-progress/0086-0079-add-deprecation-warning-for-init-flag.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0086-0079-add-deprecation-warning-for-init-flag.md",
+      "content": "# 0079 Add deprecation warning for --init flag\n\n**Area:** cli-init\n\n## Description\n\nPer V11 §37, `scriptorium init [path]` is the canonical subcommand. The `--init` flag is kept as a deprecated alias. When `--init` is used, print a deprecation warning before running init:\n\n```\nWarning: --init is deprecated, use `scriptorium init` instead.\n```\n\n## Tasks\n\n1. In `src/scriptorium.nim`, in the `--init` case branch (around line 179), add a stderr warning before calling `cmdInit`.\n2. Update `tests/integration_cli.nim` test \"--init flag works as alias for init subcommand\" to also check for the deprecation warning in the output.\n3. Run `make test` to confirm.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0086-0079-add-deprecation-warning-for-init-flag\n",
+      "contentHash": "36506C492CB720C11EA4BADE2BFBDF6686B9D245"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0086-0079-add-deprecation-warning-for-init-flag"
+}
