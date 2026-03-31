@@ -46,3 +46,41 @@ All tests pass.
 ```text
 on_api_ms":70711,"num_turns":21,"result":"Done. Changes:\n\n- **`src/scriptorium/recovery.nim`**: Exported `buildRecoveryTicketContent*` and `MaxRecoveryTestOutputChars*` for test access.\n- **`tests/test_recovery.nim`**: 7 unit tests covering all ticket requirements — title, area tag, commit hash, fenced code block, truncation at 8000 chars, exact boundary, and empty output fallback.\n\nAll tests pass.","stop_reason":"end_turn","session_id":"472257fd-c1d8-41ee-98e5-24404e4b0fc2","total_cost_usd":0.39242275000000004,"usage":{"input_tokens":17,"cache_creation_input_tokens":22087,"cache_read_input_tokens":340488,"output_tokens":3362,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22087,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":17,"outputTokens":3362,"cacheReadInputTokens":340488,"cacheCreationInputTokens":22087,"webSearchRequests":0,"costUSD":0.39242275000000004,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a0ae5cd7-3a26-4bb7-a2e4-53b9770102ab"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 41s
+
+**Review Reasoning:** The changes look clean. Let me verify against the ticket requirements:
+
+**Ticket requirements checklist:**
+1. Title (`# Recovery: Fix Failing Tests on Main Branch`) — covered (line 10)
+2. Area (`**Area:** recovery`) — covered (line 14)
+3. Commit hash — covered (line 18)
+4. Fenced code block under `## Test Failure Output` — covered (lines 22-23)
+5. Truncation beyond 8000 chars with `(output truncated)` — covered (lines 26-29)
+6. Exactly 8000 chars not truncated — covered (lines 31-35)
+7. Empty test output fallback — covered (lines 38-40)
+8. Commit hash in description text — covered by test 3
+
+**Convention check:**
+- Import style: single block, bracket syntax, std/ first then local — correct.
+- File-level doc comment present — good.
+- No proc definitions in test file needing doc comments.
+- PascalCase constant `MaxRecoveryTestOutputChars` — correct.
+- camelCase variables — correct.
+- No try/catch, no boolean success patterns — clean.
+- `strutils` is used (`repeat`) — no unused imports.
+
+**Export changes:**
+- `buildRecoveryTicketContent*` and `MaxRecoveryTestOutputChars*` exported — the ticket explicitly noted this was needed for testing. Minimal and appropriate.
+
+**Code quality:**
+- No dead code, no TODOs, no commented-out code, no unrelated changes.
+- Tests are pure function tests as specified — no mocks, no git operations.
+
+Everything is clean and matches requirements.
+Approved. All 7 ticket requirements are covered, conventions are followed, exports are minimal and necessary, and no issues found.
