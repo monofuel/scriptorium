@@ -20,3 +20,5 @@ Existing directories must not be overwritten (same idempotent pattern as AGENTS.
    - Init creates `src/` and `docs/` directories.
    - Init skips them if they already exist.
 6. Run `make test` to confirm.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-0076-init-creates-src-and-docs-directories-on-default-branch
