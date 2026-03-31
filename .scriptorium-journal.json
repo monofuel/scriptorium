@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files",
+  "timestamp": "2026-03-31T05:19:20Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files.md",
+      "destination": "tickets/in-progress/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files.md",
+      "content": "# Relocate pure-function tests from integration files to unit test files\n\n**Area:** agent-execution\n\nPer AGENTS.md conventions: \"If it uses a mock, fake, or stub for a core dependency, it is a unit test. Put it in `tests/test_*.nim`.\" and \"Do not put mocked tests in integration test files. Do not call real services in unit test files.\"\n\nSeveral test suites in integration test files are pure-function tests that do not call real external services. They should be in `tests/test_*.nim` files:\n\n1. **`tests/integration_logging.nim`** — the `formatDuration` suite (lines ~352–366) tests a pure function from `output_formatting.nim`. Move to `tests/test_output_formatting.nim` (create if it doesn't exist from ticket 0074, or add to it).\n\n2. **`tests/integration_metrics.nim`** — the following suites test pure functions or in-memory state with no external service calls:\n   - `parseMetricField` suite (lines 9–29)\n   - `per-ticket metrics` suite (lines 31–127): `formatMetricsNote`, `appendMetricsNote`, `cleanupTicketTimings`\n   - `ticket difficulty prediction` suite (lines 129–312): `parsePredictionResponse`, `formatPredictionNote`, `appendPredictionNote`, `buildPredictionPrompt`, `parsePredictionFromContent`, `classifyActualDifficulty`, `compareDifficulty`, `formatPostAnalysisNote`, `appendPostAnalysisNote`, `runPostAnalysis`\n   - `health cache persistence` suite (lines 314–393): `readHealthCache`, `writeHealthCache`\n   - `per-ticket submit_pr state` suite (lines 395–450): `consumeSubmitPrSummary`, `recordSubmitPrSummary`, `setActiveTicketWorktree`, `clearActiveTicketWorktree`, `getActiveTicketWorktree`\n   - `agent slot types` suite (lines 452–476)\n   - `token budget tracking` suite (lines 484–523)\n\n   Exception: `runTicketPrediction` tests (lines 261–312) use a fake runner with plan branch operations — these are proper integration tests and should stay.\n\nFor each relocated suite:\n- Move the test code to the appropriate `tests/test_*.nim` file.\n- Remove the moved suite from the integration file.\n- Ensure imports are correct in the new location.\n- Verify both `make test` and `make integration-test` still pass after the move.\n\nTarget files:\n- `tests/test_output_formatting.nim` — formatDuration, formatMetricsNote, appendMetricsNote, formatPredictionNote, formatPostAnalysisNote, appendPostAnalysisNote, parseMetricField\n- `tests/test_ticket_analysis.nim` (new) — parsePredictionResponse, parsePredictionFromContent, classifyActualDifficulty, compareDifficulty, runPostAnalysis, buildPredictionPrompt\n- `tests/test_shared_state.nim` (new) — cleanupTicketTimings, submit_pr state, active ticket worktree, token budget tracking, health cache persistence\n\n**Depends:** 0074\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files\n",
+      "contentHash": "09D686B8DBBE2A644BBC90515AE320E3EA10EDBC"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files"
+}
