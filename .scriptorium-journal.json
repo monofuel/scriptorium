@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0078",
+  "timestamp": "2026-03-31T03:43:10Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0078.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0078-0074-add-mattermost-configuration-support.md\n**Ticket ID:** 0078\n**Branch:** scriptorium/ticket-0078\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0078-0074-add-mattermost-configuration-support\n**Summary:** Add MattermostConfig object type (enabled, url, channelId, allowedUserIds) to config system, mirroring the Discord config pattern. Includes default initialization, merge logic in loadConfig, and three new tests (default values, full loading, partial config).\n",
+      "contentHash": "D418ADC993B3DA82EAC2F42E386516BB9915659B"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0078"
+}
