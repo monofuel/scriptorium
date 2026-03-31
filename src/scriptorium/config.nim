@@ -44,6 +44,12 @@ type
     channelId*: string
     allowedUserIds*: seq[string]
 
+  MattermostConfig* = object
+    enabled*: bool
+    url*: string
+    channelId*: string
+    allowedUserIds*: seq[string]
+
   LoopConfig* = object
     enabled*: bool
     feedback*: string
@@ -77,6 +83,7 @@ type
     concurrency*: ConcurrencyConfig
     timeouts*: TimeoutConfig
     discord*: DiscordConfig
+    mattermost*: MattermostConfig
     loop*: LoopConfig
     dashboard*: DashboardConfig
     remoteSync*: RemoteSyncConfig
@@ -122,6 +129,7 @@ proc defaultConfig*(): Config =
       syncIntervalSeconds: 60,
     ),
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
+    mattermost: MattermostConfig(enabled: false, url: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,
@@ -198,6 +206,14 @@ proc loadConfig*(repoPath: string): Config =
       result.discord.channelId = parsed.discord.channelId
     if parsed.discord.allowedUserIds.len > 0:
       result.discord.allowedUserIds = parsed.discord.allowedUserIds
+  if raw.contains("\"mattermost\""):
+    result.mattermost.enabled = parsed.mattermost.enabled
+    if parsed.mattermost.url.len > 0:
+      result.mattermost.url = parsed.mattermost.url
+    if parsed.mattermost.channelId.len > 0:
+      result.mattermost.channelId = parsed.mattermost.channelId
+    if parsed.mattermost.allowedUserIds.len > 0:
+      result.mattermost.allowedUserIds = parsed.mattermost.allowedUserIds
   if raw.contains("\"loop\""):
     result.loop.enabled = parsed.loop.enabled
     if parsed.loop.feedback.len > 0:

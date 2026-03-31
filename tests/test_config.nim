@@ -231,6 +231,47 @@ proc testDashboardPartialConfig() =
   doAssert cfg.dashboard.host == "127.0.0.1"
   echo "[OK] dashboard partial config works correctly"
 
+proc testDefaultMattermostConfig() =
+  ## Verify defaultConfig returns expected default values for mattermost fields.
+  let cfg = defaultConfig()
+  doAssert cfg.mattermost.enabled == false
+  doAssert cfg.mattermost.url == ""
+  doAssert cfg.mattermost.channelId == ""
+  doAssert cfg.mattermost.allowedUserIds.len == 0
+  echo "[OK] defaultConfig returns expected mattermost defaults"
+
+proc testMattermostConfigLoading() =
+  ## Verify mattermost section fields are loaded correctly from JSON.
+  let tmpDir = getTempDir() / "test_config_mattermost"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"mattermost": {"enabled": true, "url": "https://mm.example.com", "channelId": "ch-abc", "allowedUserIds": ["u1", "u2"]}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.mattermost.enabled == true
+  doAssert cfg.mattermost.url == "https://mm.example.com"
+  doAssert cfg.mattermost.channelId == "ch-abc"
+  doAssert cfg.mattermost.allowedUserIds == @["u1", "u2"]
+  echo "[OK] mattermost config fields loaded correctly"
+
+proc testMattermostPartialConfig() =
+  ## Verify partial mattermost JSON only overrides specified fields.
+  let tmpDir = getTempDir() / "test_config_mattermost_partial"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"mattermost": {"enabled": true, "url": "https://mm.example.com"}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.mattermost.enabled == true
+  doAssert cfg.mattermost.url == "https://mm.example.com"
+  doAssert cfg.mattermost.channelId == ""
+  doAssert cfg.mattermost.allowedUserIds.len == 0
+  echo "[OK] mattermost partial config works correctly"
+
 proc testInferHarness() =
   ## Verify inferHarness maps model prefixes to correct harnesses.
   doAssert inferHarness("claude-sonnet-4-6") == harnessClaudeCode
@@ -271,3 +312,6 @@ when isMainModule:
   testInferHarness()
   testDashboardConfigLoading()
   testDashboardPartialConfig()
+  testDefaultMattermostConfig()
+  testMattermostConfigLoading()
+  testMattermostPartialConfig()
