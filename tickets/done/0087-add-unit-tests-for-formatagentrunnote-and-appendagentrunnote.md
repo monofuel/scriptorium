@@ -62,3 +62,50 @@ One very minor observation: the source file uses `fmt` for format strings (line 
 
 The test file itself has no issues — it's well-structured, follows existing test patterns (matches `test_manager_agent.nim` style), and covers all cases specified in the ticket.
 Approved. The test file is clean, covers all 8 ticket requirements across 9 tests, follows project conventions (import style, doc comments, no mocks, pure function tests), and correctly exercises both the happy paths and edge cases (truncation, omission, whitespace stripping).
+
+## Merge Queue Success
+- Summary: Add tests/test_output_formatting.nim with 9 unit tests covering formatAgentRunNote (all fields, last message/stdout inclusion/omission, truncation) and appendAgentRunNote (appending with separation, trailing whitespace stripping).\n
+### Quality Check Output
+```text
+integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@pstd@sprivate@sospaths2.nim.c:1474:1: fatal error: error writing to /dev/shm/ccsRuexg.s: No space left on device
+[tests/integration_review.nim]  1474 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@pjson.nim.c:2795:1: fatal error: error writing to /dev/shm/ccZCYVzR.s: No space left on device
+[tests/integration_review.nim]  2795 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@ptimes.nim.c:3707:1: fatal error: error writing to /dev/shm/ccfdH3Yy.s: No space left on device
+[tests/integration_review.nim]  3707 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@pstrutils.nim.c:3220:1: fatal error: error writing to /dev/shm/ccGM7B3R.s: No space left on device
+[tests/integration_review.nim]  3220 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@ptables.nim.c:7795:1: fatal error: error writing to /dev/shm/ccoMlFwt.s: No space left on device
+[tests/integration_review.nim]  7795 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+[tests/integration_review.nim] /home/scriptorium/.cache/nim/integration_review_d/@psystem.nim.c:12093:1: fatal error: error writing to /dev/shm/ccB966Tr.s: No space left on device
+[tests/integration_review.nim] 12093 | }
+[tests/integration_review.nim]       | ^
+[tests/integration_review.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 240
+- coding_wall_seconds: 60
+- test_wall_seconds: 16
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 70493
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: overestimated
+- brief_summary: Predicted easy, actual was trivial with 1 attempt(s) in 4m0s.
