@@ -31,3 +31,8 @@ The current output in `src/scriptorium/init.nim` lines 166-197 uses unnumbered b
 3. Run `make test` to confirm.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0077-update-init-output-to-match-v11-post-init-guidance
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Straightforward string/output formatting changes in one source file plus updating one integration test to match new expected output, single attempt expected.
