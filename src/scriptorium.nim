@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, orchestrator, output_formatting, remote_sync]
+  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
   Version = "18.3.2"
@@ -19,6 +19,7 @@ Usage:
   scriptorium audit            Run the audit agent
   scriptorium dashboard        Start the web dashboard
   scriptorium discord          Run the Discord bot
+  scriptorium mattermost       Run the Mattermost bot
   scriptorium sync             Run a single remote sync cycle (fetch/merge/push)
   scriptorium worktrees        List active git worktrees and their tickets
   scriptorium --version        Print version
@@ -102,6 +103,10 @@ proc cmdDiscord() =
   ## Run the Discord bot.
   runDiscordBot(getCurrentDir())
 
+proc cmdMattermost() =
+  ## Run the Mattermost bot.
+  runMattermostBot(getCurrentDir())
+
 proc cmdSync() =
   ## Run a single remote sync cycle: fetch, merge from primary, push to all.
   let repoPath = getCurrentDir()
@@ -171,6 +176,8 @@ when isMainModule:
     cmdAudit()
   of "discord":
     cmdDiscord()
+  of "mattermost":
+    cmdMattermost()
   of "sync":
     cmdSync()
   of "worktrees":
