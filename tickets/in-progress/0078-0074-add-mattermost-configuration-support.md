@@ -47,3 +47,27 @@ Done. Changes:
 ```text
 nim`**: Added `MattermostConfig` type with `enabled`, `url`, `channelId`, `allowedUserIds` fields. Added `mattermost` field to `Config`, initialized in `defaultConfig()`, and added merge logic in `loadConfig` guarded by `raw.contains(\"\\\"mattermost\\\"\")`.\n- **`tests/test_config.nim`**: Added `testDefaultMattermostConfig`, `testMattermostConfigLoading`, and `testMattermostPartialConfig` — all passing.","stop_reason":"end_turn","session_id":"9d31320c-a0b3-4ada-915e-731864cb003f","total_cost_usd":0.5149669999999998,"usage":{"input_tokens":18,"cache_creation_input_tokens":30152,"cache_read_input_tokens":479104,"output_tokens":3475,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":30152,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":18,"outputTokens":3475,"cacheReadInputTokens":479104,"cacheCreationInputTokens":30152,"webSearchRequests":0,"costUSD":0.5149669999999998,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"71a12aeb-d8df-43aa-bdce-d37059661d39"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 22s
+
+**Review Reasoning:** I'll review the diff against the ticket requirements, conventions, and spec.
+
+Let me first verify the `submit_review` tool is available, and also check the existing Discord config pattern to confirm the implementation mirrors it correctly.
+
+
+The implementation looks correct. Let me verify the tests are properly structured.
+The implementation is clean and correct. Here's my assessment:
+
+**Ticket requirements:** All four requirements are met — `MattermostConfig` type with correct fields, `mattermost` field on `Config`, `defaultConfig()` initialization, merge logic guarded by `raw.contains("\"mattermost\"")`, and all three test procs registered in `isMainModule`.
+
+**Convention compliance:** PascalCase type name, camelCase fields, doc comments on all procs (complete sentences with punctuation), follows the existing Discord pattern exactly.
+
+**Spec compliance:** Matches section 46 config structure (`enabled`, `url`, `channelId`, `allowedUserIds`) and the area context listing `mattermost.{enabled, url, channelId, allowedUserIds}`.
+
+**Code quality:** No dead code, no unused imports, no unrelated changes. The merge logic correctly mirrors the Discord pattern (with `url` instead of `serverId`, matching the spec).
+Review: **approved**. The implementation is a clean, correct mirror of the Discord config pattern. All ticket requirements are satisfied, conventions are followed, and the code matches the spec.
