@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0083-0076-init-creates-src-and-docs-directories-on-default-branch",
+  "timestamp": "2026-03-31T03:49:22Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0083-0076-init-creates-src-and-docs-directories-on-default-branch.md",
+      "destination": "tickets/in-progress/0083-0076-init-creates-src-and-docs-directories-on-default-branch.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0083-0076-init-creates-src-and-docs-directories-on-default-branch.md",
+      "content": "# 0076 Init creates src/ and docs/ directories on default branch\n\n**Area:** cli-init\n\n## Description\n\nPer V11 §35 (Project Opinions), scriptorium requires `src/`, `tests/`, `docs/` directories. Init already creates `tests/` (via `tests/config.nims`), but does not create `src/` or `docs/`. Init should create these directories with `.gitkeep` files and commit them if they don't already exist.\n\nExisting directories must not be overwritten (same idempotent pattern as AGENTS.md and Makefile).\n\n## Tasks\n\n1. In `src/scriptorium/init.nim`, after the Makefile creation block and before the `scriptorium.json` creation block, add logic to:\n   - Check if `src/` exists; if not, create it with a `.gitkeep`, `git add`, and commit.\n   - Check if `docs/` exists; if not, create it with a `.gitkeep`, `git add`, and commit.\n2. Track `createdSrc` and `createdDocs` booleans for the post-init output.\n3. Include these in the \"Created\" output section and update the \"already initialized\" check.\n4. Add a unit test in `tests/test_init.nim` verifying `src/.gitkeep` and `docs/.gitkeep` exist after init.\n5. Add integration tests in `tests/integration_cli.nim` verifying:\n   - Init creates `src/` and `docs/` directories.\n   - Init skips them if they already exist.\n6. Run `make test` to confirm.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-0076-init-creates-src-and-docs-directories-on-default-branch\n",
+      "contentHash": "34C4C445A530C9D56672C6FB1CA9D5B0A3E5B55B"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0083-0076-init-creates-src-and-docs-directories-on-default-branch"
+}
