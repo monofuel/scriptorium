@@ -40,3 +40,5 @@ Add tests to `tests/test_config.nim` for:
 - Follow Nim import style: one block, bracket syntax, std/ first.
 - Doc comments (`##`) on every proc.
 - Use `jsony` for JSON deserialization (already imported in config.nim).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-0075-add-mattermostconfig-to-confignim
