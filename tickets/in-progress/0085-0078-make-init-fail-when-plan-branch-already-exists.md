@@ -22,3 +22,5 @@ Note: The default-branch artifact creation (AGENTS.md, Makefile, etc.) should re
    - `testDoubleInitIdempotent` → update to assert the second init raises `ValueError`.
 5. Update `tests/integration_cli.nim` if any tests rely on double-init succeeding.
 6. Run `make test` to confirm.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-0078-make-init-fail-when-plan-branch-already-exists
