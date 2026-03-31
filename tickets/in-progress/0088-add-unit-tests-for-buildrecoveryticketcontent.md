@@ -24,3 +24,8 @@ Import needed: `scriptorium/recovery`.
 Note: `buildRecoveryTicketContent` is not exported (no `*` suffix). Either add `*` to export it for testing, or if the project prefers testing unexported procs, use `include` instead of `import` in the test file. Check `tests/config.nims` for the `--path` setting that enables direct imports.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0088-add-unit-tests-for-buildrecoveryticketcontent
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single test file creation for a pure function with no mocks needed, straightforward assertions against known markdown output, one attempt expected.
