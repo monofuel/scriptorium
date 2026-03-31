@@ -22,3 +22,8 @@ The `scriptorium init` command creates a starter Makefile with only `test` and `
 - Existing repos that already ran init will not be affected (init skips files that already exist).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file const string extension in init.nim plus a straightforward test addition in test_init.nim, minimal logic complexity, one attempt expected.
