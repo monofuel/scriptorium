@@ -22,3 +22,8 @@ Existing directories must not be overwritten (same idempotent pattern as AGENTS.
 6. Run `make test` to confirm.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0083-0076-init-creates-src-and-docs-directories-on-default-branch
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Well-scoped single-file change following an existing idempotent pattern (AGENTS.md/Makefile), with straightforward test additions to existing test files — one attempt expected.
