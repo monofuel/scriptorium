@@ -358,3 +358,26 @@ Done. Changes across 4 files:
 ```text
 :\n\n1. **`src/scriptorium.nim`** — Added `mattermost_bot` import, `cmdMattermost` proc, `\"mattermost\"` dispatch case, and aligned usage line.\n2. **`docker-compose.yml`** — Added `mattermost` service mirroring `discord`.\n3. **`.env.example`** — Added `MATTERMOST_TOKEN=` with comment.\n4. **`src/scriptorium/mattermost_bot.nim`** — Stub module with `runMattermostBot` proc until ticket 0076 merges.","stop_reason":"end_turn","session_id":"73c4c1e4-7f69-4430-b0eb-235d3c3a6f17","total_cost_usd":0.7259395,"usage":{"input_tokens":885,"cache_creation_input_tokens":78278,"cache_read_input_tokens":254454,"output_tokens":4202,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":78278},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":885,"outputTokens":4202,"cacheReadInputTokens":254454,"cacheCreationInputTokens":78278,"webSearchRequests":0,"costUSD":0.7259395,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"ac001489-3f37-4282-a128-46a0d5165afc"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m32s
+
+**Review Reasoning:** I need to review the diff carefully. Let me fetch my tools and check the actual files, particularly since this ticket has failed the merge queue 3 times due to `docker-compose.yml` conflicts.
+Let me check the discord service in docker-compose.yml on master to see if the mattermost service is truly mirroring it.
+Let me check what the merge queue failure looks like by simulating it.
+The code changes are clean and correct. Let me verify the usage string alignment precisely.
+All four files check out. The changes are correct and match the ticket requirements exactly:
+
+1. **`src/scriptorium.nim`** — Import alphabetically placed, `cmdMattermost` proc with doc comment, dispatch case, and usage line with descriptions aligned at the same column as other entries.
+2. **`docker-compose.yml`** — Mattermost service mirrors discord exactly (same volumes, env_file, environment vars, entrypoint pattern).
+3. **`.env.example`** — `MATTERMOST_TOKEN=` with descriptive comment.
+4. **`src/scriptorium/mattermost_bot.nim`** — Clean stub with module-level doc comment, proc doc comment, clear error message, and `quit(1)`.
+
+No convention violations, no dead code, no spec contradictions.
+
+Regarding the recurring merge queue failure ("Your local changes to docker-compose.yml would be overwritten by merge") — this appears to be an infrastructure issue with the merge queue's worktree having a dirty state, not a problem with the code changes themselves. The branch is cleanly one commit ahead of master with no conflicts.
+Approved. All changes match the ticket requirements and follow project conventions. The recurring merge queue failure is an infrastructure issue (dirty worktree state), not a code problem — the diff merges cleanly against master.
