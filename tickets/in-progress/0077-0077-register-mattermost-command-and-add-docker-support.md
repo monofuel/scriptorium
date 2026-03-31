@@ -55,3 +55,20 @@ MATTERMOST_TOKEN=
 - predicted_difficulty: easy
 - predicted_duration_minutes: 10
 - reasoning: Straightforward boilerplate additions across 3 files (scriptorium.nim, docker-compose.yml, .env.example) with no complex logic, mirroring existing discord patterns exactly.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0077/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0077/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+All changes are committed and submitted. Summary of what was done:
+
+1. **`src/scriptorium.nim`** — Added `mattermost_bot` import, `cmdMattermost` proc, `"mattermost"` case in command dispatch, and usage line.
+2. **`docker-compose.yml`** — Added `mattermost` service mirroring the `discord` service.
+3. **`.env.example`** — Added `MATTERMOST_TOKEN=` with comment.
+4. **`src/scriptorium/mattermost_bot.nim`** — Stub module with `runMattermostBot` proc until ticket 0076 merges.
+```
+
+### Agent Stdout Tail
+```text
+riptorium.nim`** — Added `mattermost_bot` import, `cmdMattermost` proc, `\"mattermost\"` case in command dispatch, and usage line.\n2. **`docker-compose.yml`** — Added `mattermost` service mirroring the `discord` service.\n3. **`.env.example`** — Added `MATTERMOST_TOKEN=` with comment.\n4. **`src/scriptorium/mattermost_bot.nim`** — Stub module with `runMattermostBot` proc until ticket 0076 merges.","stop_reason":"end_turn","session_id":"f655b344-b101-4340-8702-7e36940775c2","total_cost_usd":0.50176775,"usage":{"input_tokens":758,"cache_creation_input_tokens":23887,"cache_read_input_tokens":463968,"output_tokens":4668,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":23887},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":758,"outputTokens":4668,"cacheReadInputTokens":463968,"cacheCreationInputTokens":23887,"webSearchRequests":0,"costUSD":0.50176775,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b645e920-d47a-4ba0-a607-97de978bd1e2"}
+```
