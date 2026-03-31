@@ -336,3 +336,8 @@ Merge with strategy ort failed.
 - brief_summary: Predicted easy, actual was complex with 1 attempt(s) in 5m16s.
 
 ## Investigation Count: 1
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: The code changes are straightforward boilerplate mirroring existing discord patterns across 3-4 files; the recurring merge-queue failure is caused by uncommitted local changes to docker-compose.yml in the worktree (an environment issue, not code complexity), which the agent should resolve by ensuring a clean working tree before the merge gate runs.
