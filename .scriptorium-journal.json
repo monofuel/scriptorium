@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0087",
+  "timestamp": "2026-03-31T03:49:08Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0087.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote.md\n**Ticket ID:** 0087\n**Branch:** scriptorium/ticket-0087\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote\n**Summary:** Add tests/test_output_formatting.nim with 9 unit tests covering formatAgentRunNote (all fields, last message/stdout inclusion/omission, truncation) and appendAgentRunNote (appending with separation, trailing whitespace stripping).\n",
+      "contentHash": "E3141ECB4F9E7A838973469AAC0FB0414C5D8866"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0087"
+}
