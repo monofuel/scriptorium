@@ -44,3 +44,5 @@ const
 - Doc comments (`##`) on every proc.
 - Use `&` for format strings, not `fmt`.
 - Do not use try/catch unless absolutely necessary. Let errors bubble up.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0076-0076-implement-mattermost-bot

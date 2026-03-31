@@ -23,3 +23,5 @@ Per V11 §44, the E2E Euler test must verify that `scriptorium init` (called via
 - `initLiveRepo` already calls `scriptorium init` via the CLI binary. The test just needs explicit assertions that the artifacts exist.
 - The test then continues to overwrite the Makefile with `addEulerMakefile` for the Euler-specific quality gates — that is expected and correct.
 - Use `std/os` `fileExists` and `readFile` for the checks (already imported in the test).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0080-0076-e2e-euler-test-verify-scriptorium-init-creates-expected-artifacts
