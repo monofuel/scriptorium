@@ -39,3 +39,5 @@ build:
 1. Update `MakefileTemplate` in `src/scriptorium/init.nim` to include `integration-test` and `e2e-test` targets.
 2. Update the integration test in `tests/integration_cli.nim` ("init creates Makefile with placeholder targets when missing") to also check for `integration-test:` and `e2e-test:` in the generated content.
 3. Run `make test` to confirm tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0082-0075-update-makefile-template-with-required-make-targets
