@@ -11,6 +11,7 @@ services:
       - ~/.claude:/home/scriptorium/.claude
       - ~/.claude.json:/home/scriptorium/.claude.json
       - ~/.aws:/home/scriptorium/.aws:ro
+      - ~/.ssh:/home/scriptorium/.ssh:ro
     working_dir: /workspace
     environment:
       # Unset direct API keys — Bedrock auth uses AWS credentials only.
