@@ -9,7 +9,7 @@ const
   RecoveryCommitMessage = "scriptorium: recovery commit (unclean shutdown)"
   RecoveryMergedCommitPrefix = "scriptorium: recovery — completed already-merged ticket"
   RecoveryTicketCommitPrefix = "scriptorium: create recovery ticket"
-  MaxRecoveryTestOutputChars = 8000
+  MaxRecoveryTestOutputChars* = 8000
 
 type
   RecoverySummary* = object
@@ -306,7 +306,7 @@ proc recoverFromCrash*(repoPath: string): RecoverySummary =
     let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets, reopened {result.orphanedReopened} orphaned tickets"
     logInfo(summaryLine)
 
-proc buildRecoveryTicketContent(testOutput: string, commitHash: string): string =
+proc buildRecoveryTicketContent*(testOutput: string, commitHash: string): string =
   ## Build the markdown content for a recovery ticket.
   let truncatedOutput = if testOutput.len > MaxRecoveryTestOutputChars:
     testOutput[0 ..< MaxRecoveryTestOutputChars] & "\n\n(output truncated)"
