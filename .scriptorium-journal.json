@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0088-add-unit-tests-for-buildrecoveryticketcontent",
+  "timestamp": "2026-03-31T03:51:11Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0088-add-unit-tests-for-buildrecoveryticketcontent.md",
+      "destination": "tickets/in-progress/0088-add-unit-tests-for-buildrecoveryticketcontent.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0088-add-unit-tests-for-buildrecoveryticketcontent.md",
+      "content": "# Add unit tests for buildRecoveryTicketContent\n\n**Area:** agent-execution\n\nThe `buildRecoveryTicketContent` proc in `src/scriptorium/recovery.nim` (line 309) generates the markdown content for recovery tickets created when main branch tests fail. It handles test output truncation at `MaxRecoveryTestOutputChars = 8000` characters and produces a specific markdown structure. This function has zero test coverage.\n\nCreate `tests/test_recovery.nim` with unit tests covering:\n\n- Output contains the expected title (`# Recovery: Fix Failing Tests on Main Branch`).\n- Output contains `**Area:** recovery`.\n- Output contains the provided commit hash.\n- Output includes the test output in a fenced code block under `## Test Failure Output`.\n- Test output longer than 8000 characters is truncated with `(output truncated)` marker.\n- Test output exactly at 8000 characters is not truncated.\n- Empty test output produces a fallback message about running `make test` and `make integration-test`.\n- The commit hash appears in the description text.\n\nThis is a pure function test — construct test inputs directly, no mocks or git operations needed.\n\nRelevant source: `src/scriptorium/recovery.nim` lines 309–324.\nConstant: `MaxRecoveryTestOutputChars = 8000`.\nImport needed: `scriptorium/recovery`.\n\nNote: `buildRecoveryTicketContent` is not exported (no `*` suffix). Either add `*` to export it for testing, or if the project prefers testing unexported procs, use `include` instead of `import` in the test file. Check `tests/config.nims` for the `--path` setting that enables direct imports.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0088-add-unit-tests-for-buildrecoveryticketcontent\n",
+      "contentHash": "8006D3734E37EA38749948E45047B92086203A6B"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0088-add-unit-tests-for-buildrecoveryticketcontent"
+}
