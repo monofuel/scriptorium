@@ -29,3 +29,20 @@ Note: `buildRecoveryTicketContent` is not exported (no `*` suffix). Either add `
 - predicted_difficulty: easy
 - predicted_duration_minutes: 10
 - reasoning: Single test file creation for a pure function with no mocks needed, straightforward assertions against known markdown output, one attempt expected.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0088/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0088/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. Changes:
+
+- **`src/scriptorium/recovery.nim`**: Exported `buildRecoveryTicketContent*` and `MaxRecoveryTestOutputChars*` for test access.
+- **`tests/test_recovery.nim`**: 7 unit tests covering all ticket requirements — title, area tag, commit hash, fenced code block, truncation at 8000 chars, exact boundary, and empty output fallback.
+
+All tests pass.
+```
+
+### Agent Stdout Tail
+```text
+on_api_ms":70711,"num_turns":21,"result":"Done. Changes:\n\n- **`src/scriptorium/recovery.nim`**: Exported `buildRecoveryTicketContent*` and `MaxRecoveryTestOutputChars*` for test access.\n- **`tests/test_recovery.nim`**: 7 unit tests covering all ticket requirements — title, area tag, commit hash, fenced code block, truncation at 8000 chars, exact boundary, and empty output fallback.\n\nAll tests pass.","stop_reason":"end_turn","session_id":"472257fd-c1d8-41ee-98e5-24404e4b0fc2","total_cost_usd":0.39242275000000004,"usage":{"input_tokens":17,"cache_creation_input_tokens":22087,"cache_read_input_tokens":340488,"output_tokens":3362,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22087,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":17,"outputTokens":3362,"cacheReadInputTokens":340488,"cacheCreationInputTokens":22087,"webSearchRequests":0,"costUSD":0.39242275000000004,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"a0ae5cd7-3a26-4bb7-a2e4-53b9770102ab"}
+```
