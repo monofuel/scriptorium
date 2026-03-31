@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0089",
+  "timestamp": "2026-03-31T05:31:58Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0089.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files.md\n**Ticket ID:** 0089\n**Branch:** scriptorium/ticket-0089\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files\n**Summary:** Relocated pure-function tests from integration files to unit test files: moved formatDuration, parseMetricField, metrics/prediction/post-analysis formatting to test_output_formatting.nim; created test_ticket_analysis.nim for prediction parsing, difficulty classification, and post-analysis; created test_shared_state.nim for ticket timings cleanup, health cache, submit_pr state, agent slots, and token budget tracking. Only runTicketPrediction tests (with plan branch operations) remain in integration_metrics.nim.\n",
+      "contentHash": "905C412C7316CAD3EDA3EA49C2AC83993C3A7FEC"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0089"
+}
