@@ -17,7 +17,7 @@ This spec describes behavior that is present in the code and covered by current 
 
 ### 1. CLI Surface And Initialization
 
-- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `worktrees`, `--version`, `--help`.
+- The CLI must support: `--init`, `run`, `status`, `plan`, `ask`, `do`, `audit`, `dashboard`, `discord`, `mattermost`, `sync`, `worktrees`, `--version`, `--help`.
 - `scriptorium --init [path]` must:
   - fail if target is not a git repository,
   - fail if `scriptorium/plan` already exists,
@@ -1193,3 +1193,128 @@ This spec describes behavior that is present in the code and covered by current 
 - Post-init output provides comprehensive setup guidance.
 - The spec placeholder references `AGENTS.md` for new projects.
 - The e2e test uses `scriptorium init` and proves a fresh repo can run without manual scaffolding.
+
+## V12 Features — Chat Bot Integrations
+
+### 45. Discord Bot (Current State)
+
+- `scriptorium discord` runs a Discord bot that acts as a frontend to the Architect.
+- The bot uses the `guildy` library for Discord gateway connections.
+- Chat modes are selected by message prefix:
+  - `plan:` — planning mode, can modify `spec.md` and create tickets on the plan branch (default when no prefix).
+  - `ask:` — read-only Q&A with the Architect, no plan branch writes.
+  - `do:` — full repo access mode for ad-hoc coding tasks.
+- Slash commands (no LLM calls, read/write orchestrator state directly):
+  - `/status` — ticket counts, active agents, in-progress elapsed times, blocked/waiting tickets, pause state.
+  - `/queue` — merge queue contents and ticket lists.
+  - `/pause` — write a pause flag; orchestrator stops picking up new work.
+  - `/resume` — remove the pause flag.
+- Configuration in `scriptorium.json` under `discord`:
+  - `enabled`: boolean.
+  - `serverId`: Discord guild ID for guild-scoped slash command registration.
+  - `channelId`: scopes the bot to a single channel.
+  - `allowedUserIds`: list of Discord user IDs; messages from others are ignored.
+- `DISCORD_TOKEN` environment variable is required; never stored in config.
+- Each chat message spawns a background thread to avoid blocking the gateway event loop.
+- Responses are truncated to 2000 characters (Discord limit).
+- The bot is a standalone process — the orchestrator does not know about Discord.
+
+### 46. Mattermost Bot
+
+- `scriptorium mattermost` runs a Mattermost bot that acts as a frontend to the Architect, mirroring the Discord bot's functionality.
+- The bot uses the `mosty` library (`monofuel/mosty`) for Mattermost WebSocket gateway connections and REST API.
+
+#### Chat Modes
+
+- Chat modes are identical to the Discord bot, selected by message prefix:
+  - `plan:` — planning mode, can modify `spec.md` and create tickets (default when no prefix).
+  - `ask:` — read-only Q&A with the Architect, no plan branch writes.
+  - `do:` — full repo access mode for ad-hoc coding tasks.
+- The existing `parseChatMode` proc must be reused (it is transport-agnostic).
+
+#### Slash Commands
+
+- The Mattermost bot must support the same slash commands as the Discord bot:
+  - `/status` — ticket counts, active agents, in-progress elapsed times, blocked/waiting tickets, pause state.
+  - `/queue` — merge queue contents and ticket lists.
+  - `/pause` — write a pause flag.
+  - `/resume` — remove the pause flag.
+- Mattermost slash commands are registered as custom slash commands on the Mattermost server, or the bot detects `/command` messages in the channel and responds inline.
+- The bot must detect messages starting with `/status`, `/queue`, `/pause`, or `/resume` and handle them directly without invoking the Architect.
+
+#### Message Handling
+
+- The bot connects to the Mattermost WebSocket gateway via `mosty.startGateway`.
+- Incoming posts are filtered by:
+  - Channel ID (must match configured `channelId`).
+  - Allowed user IDs (messages from other users are ignored).
+  - Bot's own messages are ignored (prevent self-reply loops).
+- Each chat message spawns a background thread to avoid blocking the gateway event loop.
+- Responses are posted back to the channel via `mosty.createPost`.
+- Mattermost has a 16383 character post limit; responses must be truncated to fit.
+
+#### Configuration
+
+- Configuration in `scriptorium.json` under `mattermost`:
+  ```json
+  {
+    "mattermost": {
+      "enabled": false,
+      "url": "",
+      "channelId": "",
+      "allowedUserIds": []
+    }
+  }
+  ```
+  - `enabled`: boolean.
+  - `url`: Mattermost server base URL (e.g., `https://mattermost.example.com`).
+  - `channelId`: scopes the bot to a single channel.
+  - `allowedUserIds`: list of Mattermost user IDs; messages from others are ignored.
+- `MATTERMOST_TOKEN` environment variable provides the bot access token; never stored in config.
+
+#### Implementation Structure
+
+- Source file: `src/scriptorium/mattermost_bot.nim`.
+- The module must follow the same structure as `discord_bot.nim`:
+  - Reuse `parseChatMode` from `discord_bot.nim` (or extract to a shared chat module).
+  - Reuse `handleChatMessage`, `handleAskMessage`, `handleDoMessage` logic — the core Architect invocation is transport-agnostic.
+  - Reuse `formatStatusMessage`, `formatQueueMessage`, `handlePause`, `handleResume` for slash command responses.
+- Shared chat logic (mode parsing, status/queue formatting, pause/resume handlers) should be extracted to a `chat_common.nim` module that both `discord_bot.nim` and `mattermost_bot.nim` import.
+- The `runMattermostBot` proc is the entry point, called from `cmdMattermost` in `scriptorium.nim`.
+
+#### Docker Support
+
+- A `mattermost` service must be added to `docker-compose.yml`, mirroring the `discord` service structure.
+- The service must mount the workspace and credentials, load `.env` for `MATTERMOST_TOKEN`, and run `entrypoint.sh mattermost`.
+
+#### Environment File
+
+- `.env.example` must include `MATTERMOST_TOKEN=` alongside the existing `DISCORD_TOKEN=`.
+
+- Acceptance criteria:
+  - `scriptorium mattermost` starts a gateway connection to the configured Mattermost server.
+  - Chat messages from allowed users invoke the Architect in the correct mode (plan/ask/do).
+  - Slash commands (`/status`, `/queue`, `/pause`, `/resume`) return orchestrator state without LLM calls.
+  - Responses are posted to the configured channel and truncated to 16383 characters.
+  - The bot ignores messages from non-allowed users, other channels, and its own posts.
+  - Shared chat logic is extracted so Discord and Mattermost bots share mode parsing, status formatting, and pause/resume handlers.
+  - Configuration is in `scriptorium.json` under `mattermost` with `url`, `channelId`, `allowedUserIds`.
+  - `MATTERMOST_TOKEN` is read from the environment.
+  - Docker compose includes a `mattermost` service.
+
+## V12 Known Limitations
+
+- The Mattermost bot is a standalone process like the Discord bot — it does not integrate with the orchestrator event loop.
+- Mattermost slash commands are detected by message prefix, not registered as server-side custom commands — this avoids requiring Mattermost admin access but means they are not discoverable via Mattermost's slash command UI.
+- Each message is stateless — no conversation history is carried between messages (same as Discord).
+- The bot connects to a single channel only; multi-channel support is out of scope.
+- The `mosty` library is early-stage — API changes may require updates to the bot.
+
+## V12 Acceptance Criteria
+
+- All v1, v2, v3, v4, v5, v7, v8, and v11 acceptance criteria remain.
+- `scriptorium mattermost` starts a Mattermost bot with the same chat modes and slash commands as the Discord bot.
+- Shared chat logic is extracted to avoid duplication between Discord and Mattermost bots.
+- Configuration lives in `scriptorium.json` under `mattermost`.
+- `MATTERMOST_TOKEN` environment variable provides authentication.
+- Docker compose supports a `mattermost` service.
