@@ -212,3 +212,34 @@ Approved. All four changes match the ticket requirements exactly:
 - Stub `mattermost_bot.nim` with clear message and `quit(1)` pending ticket 0076
 
 The previous alignment warning has been fixed — descriptions now align at a consistent column.
+
+## Merge Queue Failure
+- Summary: Register mattermost command in scriptorium.nim (import, cmdMattermost proc, dispatch case, usage string), add mattermost service to docker-compose.yml mirroring discord, add MATTERMOST_TOKEN to .env.example, and include stub mattermost_bot.nim until dependency ticket 0076 merges.\n- Failed gate: git merge master (rebase retry also failed)\n
+### Merge Output
+```text
+Rebasing (1/1)Successfully rebased and updated refs/heads/scriptorium/ticket-0077.
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	docker-compose.yml
+Please commit your changes or stash them before you merge.
+Aborting
+Merge with strategy ort failed.
+```
+
+## Metrics
+- wall_time_seconds: 232
+- coding_wall_seconds: 137
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 134480
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 3m52s.
