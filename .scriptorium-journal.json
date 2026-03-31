@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0074",
+  "timestamp": "2026-03-31T03:46:42Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0074.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0074-0074-extract-shared-chat-infrastructure-into-chat-commonnim.md\n**Ticket ID:** 0074\n**Branch:** scriptorium/ticket-0074\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0074-0074-extract-shared-chat-infrastructure-into-chat-commonnim\n**Summary:** Extract shared chat infrastructure (ChatMode, parseChatMode, truncateMessage, formatStatusMessage, formatQueueMessage, handlePause, handleResume) from discord_bot.nim into new chat_common.nim module. truncateMessage now accepts a limit parameter for reuse by Mattermost (16383) and Discord (2000). Added unit tests for parseChatMode and truncateMessage.\n",
+      "contentHash": "AAC1E68DE130B4B9DBB7630705C185A27E70A08D"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0074"
+}
