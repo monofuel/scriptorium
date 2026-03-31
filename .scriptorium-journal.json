@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0081",
+  "timestamp": "2026-03-31T03:43:49Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0081.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0081-0074-update-specmd-placeholder-to-match-v11-43.md\n**Ticket ID:** 0081\n**Branch:** scriptorium/ticket-0081\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-0074-update-specmd-placeholder-to-match-v11-43\n**Summary:** Updated SpecPlaceholder constant in src/scriptorium/init.nim and tests/test_init.nim to include \"This is a new project. See AGENTS.md for project conventions.\" line per V11 §43. All tests pass.\n",
+      "contentHash": "1F786C12AC6ECD2D23A7D91A236697851DEB2FED"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0081"
+}
