@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0075",
+  "timestamp": "2026-03-31T03:50:57Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0075.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0075-0075-add-mattermostconfig-to-confignim.md\n**Ticket ID:** 0075\n**Branch:** scriptorium/ticket-0075\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0075-0075-add-mattermostconfig-to-confignim\n**Summary:** Added mattermostTokenPresent proc to config.nim (mirrors discordTokenPresent) and corresponding unit tests in test_config.nim. The MattermostConfig type, Config field, default values, and loadConfig merging were already in place.\n",
+      "contentHash": "F3FF25F3A70592FA7E3089075A7417D84A90BA2E"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0075"
+}
