@@ -76,3 +76,50 @@ Everything checks out. Here's my review summary:
 
 
 Review approved. The changes correctly implement V11 §42 post-init guidance: per-artifact creation messages match §38/§39/§40 wording exactly, the summary section lists created artifacts with descriptions and conditional numbered next steps, and the integration test covers all key output elements. No convention violations or spec deviations found.
+
+## Merge Queue Success
+- Summary: Updated init output to match V11 §42 post-init guidance: added per-artifact creation messages (§38/§39/§40), descriptive artifact listings in Created section, and numbered next steps. Updated integration test to match.\n
+### Quality Check Output
+```text
+| ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@pstd@sprivate@sospaths2.nim.c:1062:1: fatal error: error writing to /dev/shm/ccx5Ot6H.s: No space left on device
+[tests/integration_metrics.nim]  1062 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@pjson.nim.c:1959:1: fatal error: error writing to /dev/shm/ccrVdX7x.s: No space left on device
+[tests/integration_metrics.nim]  1959 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@pstrutils.nim.c:3024:1: fatal error: error writing to /dev/shm/ccxrp5kk.s: No space left on device
+[tests/integration_metrics.nim]  3024 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@ptimes.nim.c:3667:1: fatal error: error writing to /dev/shm/ccehyaND.s: No space left on device
+[tests/integration_metrics.nim]  3667 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@ptables.nim.c:3976:1: fatal error: error writing to /dev/shm/cclpiHFz.s: No space left on device
+[tests/integration_metrics.nim]  3976 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+[tests/integration_metrics.nim] /home/scriptorium/.cache/nim/integration_metrics_d/@psystem.nim.c:7815:1: fatal error: error writing to /dev/shm/ccU5KkUg.s: No space left on device
+[tests/integration_metrics.nim]  7815 | }
+[tests/integration_metrics.nim]       | ^
+[tests/integration_metrics.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 276
+- coding_wall_seconds: 191
+- test_wall_seconds: 14
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 199817
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: overestimated
+- brief_summary: Predicted easy, actual was trivial with 1 attempt(s) in 4m36s.
