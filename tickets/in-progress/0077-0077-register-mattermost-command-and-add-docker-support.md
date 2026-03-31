@@ -48,3 +48,5 @@ Add `MATTERMOST_TOKEN=` line with a comment:
 # Mattermost bot access token
 MATTERMOST_TOKEN=
 ```
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support
