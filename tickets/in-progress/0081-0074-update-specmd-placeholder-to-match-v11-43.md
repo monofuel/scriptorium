@@ -28,3 +28,5 @@ Run `scriptorium plan` to build your spec with the Architect.
 2. Update the `SpecPlaceholder` constant in `tests/test_init.nim` (line 6) to match.
 3. Update `tests/integration_cli.nim` test "init spec.md references AGENTS.md" — it already checks for `AGENTS.md` in spec content, so it should still pass, but verify.
 4. Run `make test` to confirm all init tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0081-0074-update-specmd-placeholder-to-match-v11-43
