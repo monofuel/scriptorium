@@ -33,3 +33,8 @@ Target files:
 **Depends:** 0074
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0089-relocate-pure-function-tests-from-integration-files-to-unit-test-files
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Mechanical test relocation across multiple files with no logic changes, but touches many suites and requires creating new files with correct imports — moderate volume, low complexity, one attempt expected.
