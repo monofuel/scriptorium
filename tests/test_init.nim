@@ -132,6 +132,24 @@ proc testInitNoRemote() =
   doAssert branchRc == 0, "scriptorium/plan branch should exist"
   echo "[OK] init works on repo with no remote"
 
+proc testMakefileContainsAllTargets() =
+  ## Verify the Makefile created by runInit contains all four required targets.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  let content = readFile(repo / "Makefile")
+  const RequiredTargets = ["test", "build", "integration-test", "e2e-test"]
+  for target in RequiredTargets:
+    let targetLine = target & ":"
+    doAssert targetLine in content, "Makefile missing target: " & target
+  doAssert ".PHONY:" in content, "Makefile missing .PHONY declaration"
+  for target in RequiredTargets:
+    let phonyLine = content.splitLines()[0]
+    doAssert target in phonyLine, ".PHONY missing target: " & target
+  echo "[OK] Makefile contains all four required targets"
+
 when isMainModule:
   testNotAGitRepo()
   testAlreadyInitializedDoesNotCrash()
@@ -139,3 +157,4 @@ when isMainModule:
   testSpecPlaceholderContent()
   testDoubleInitIdempotent()
   testInitNoRemote()
+  testMakefileContainsAllTargets()
