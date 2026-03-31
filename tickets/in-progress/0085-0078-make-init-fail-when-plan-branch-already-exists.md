@@ -24,3 +24,8 @@ Note: The default-branch artifact creation (AGENTS.md, Makefile, etc.) should re
 6. Run `make test` to confirm.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0085-0078-make-init-fail-when-plan-branch-already-exists
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Straightforward guard clause addition in one source file plus updating two existing test cases to expect errors instead of success, minimal integration risk.
