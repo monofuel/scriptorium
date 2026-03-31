@@ -50,3 +50,8 @@ MATTERMOST_TOKEN=
 ```
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0077-0077-register-mattermost-command-and-add-docker-support
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Straightforward boilerplate additions across 3 files (scriptorium.nim, docker-compose.yml, .env.example) with no complex logic, mirroring existing discord patterns exactly.
