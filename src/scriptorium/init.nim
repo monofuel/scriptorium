@@ -89,13 +89,15 @@ proc hasOriginRemote(repoPath: string): bool =
 
 proc runInit*(path: string, quiet: bool = false) =
   ## Initialize a new scriptorium workspace in the given git repository.
-  ## Idempotent: safe to run multiple times. Skips steps that are already done.
+  ## Raises ValueError if the plan branch already exists.
   let target = if path.len > 0: absolutePath(path) else: getCurrentDir()
 
   if gitCheck(target, "rev-parse", "--git-dir") != 0:
     raise newException(ValueError, &"{target} is not a git repository")
 
   let planBranchExists = gitCheck(target, "rev-parse", "--verify", PlanBranch) == 0
+  if planBranchExists:
+    raise newException(ValueError, "scriptorium/plan branch already exists — workspace is already initialized")
 
   # Detect default branch. Fall back to "master" if detection fails (no remote, unusual naming).
   var defaultBranch = "master"
@@ -161,61 +163,56 @@ proc runInit*(path: string, quiet: bool = false) =
     if not quiet:
       echo "Created scriptorium.json — configure agent models and harnesses."
 
-  # Create plan branch only if it does not already exist.
-  if not planBranchExists:
-    let tmpPlan = target / ".scriptorium" / "plan_init"
+  # Create plan branch.
+  let tmpPlan = target / ".scriptorium" / "plan_init"
 
-    # Clean up stale worktree from a previous interrupted init.
-    discard gitCheck(target, "worktree", "remove", "--force", tmpPlan)
-    discard gitCheck(target, "worktree", "prune")
-    if dirExists(tmpPlan):
-      removeDir(tmpPlan)
+  # Clean up stale worktree from a previous interrupted init.
+  discard gitCheck(target, "worktree", "remove", "--force", tmpPlan)
+  discard gitCheck(target, "worktree", "prune")
+  if dirExists(tmpPlan):
+    removeDir(tmpPlan)
 
-    gitRun(target, "worktree", "add", "--orphan", "-b", PlanBranch, tmpPlan)
-    defer:
-      discard execCmdEx(
-        "git -C " & quoteShell(target) & " worktree remove --force " & quoteShell(tmpPlan)
-      )
+  gitRun(target, "worktree", "add", "--orphan", "-b", PlanBranch, tmpPlan)
+  defer:
+    discard execCmdEx(
+      "git -C " & quoteShell(target) & " worktree remove --force " & quoteShell(tmpPlan)
+    )
 
-    for d in PlanDirs:
-      createDir(tmpPlan / d)
-      writeFile(tmpPlan / d / ".gitkeep", "")
-    writeFile(tmpPlan / "spec.md", SpecPlaceholder)
+  for d in PlanDirs:
+    createDir(tmpPlan / d)
+    writeFile(tmpPlan / d / ".gitkeep", "")
+  writeFile(tmpPlan / "spec.md", SpecPlaceholder)
 
-    gitRun(tmpPlan, "add", ".")
-    gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
+  gitRun(tmpPlan, "add", ".")
+  gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
 
   if not quiet:
-    if planBranchExists and not createdAgents and not createdMakefile and not createdTestConfig and not createdSrc and not createdDocs and not createdConfig:
-      echo "scriptorium: workspace already initialized, nothing to do."
-    else:
-      echo ""
-      echo "Initialized scriptorium workspace."
-      echo ""
-      echo "Created:"
-      if createdAgents:
-        echo "  AGENTS.md           — project conventions for coding agents (edit to fit)"
-      if createdMakefile:
-        echo "  Makefile            — placeholder test targets (replace with real commands)"
-      if createdConfig:
-        echo "  scriptorium.json    — agent configuration (set your models and API keys)"
-      if not planBranchExists:
-        echo &"  {PlanBranch}    — plan branch with spec, areas, and tickets"
-      if createdTestConfig:
-        echo "  tests/config.nims   — test path configuration"
-      if createdSrc:
-        echo "  src/                — source directory"
-      if createdDocs:
-        echo "  docs/               — documentation directory"
-      echo ""
-      echo "Next steps:"
-      var stepNum = 1
-      if createdConfig:
-        echo &"  {stepNum}. Edit scriptorium.json to configure your agent models and harnesses"
-        stepNum += 1
-      if createdAgents:
-        echo &"  {stepNum}. Edit AGENTS.md to describe your project conventions"
-        stepNum += 1
-      echo &"  {stepNum}. Run `scriptorium plan` to build your spec with the Architect"
+    echo ""
+    echo "Initialized scriptorium workspace."
+    echo ""
+    echo "Created:"
+    if createdAgents:
+      echo "  AGENTS.md           — project conventions for coding agents (edit to fit)"
+    if createdMakefile:
+      echo "  Makefile            — placeholder test targets (replace with real commands)"
+    if createdConfig:
+      echo "  scriptorium.json    — agent configuration (set your models and API keys)"
+    echo &"  {PlanBranch}    — plan branch with spec, areas, and tickets"
+    if createdTestConfig:
+      echo "  tests/config.nims   — test path configuration"
+    if createdSrc:
+      echo "  src/                — source directory"
+    if createdDocs:
+      echo "  docs/               — documentation directory"
+    echo ""
+    echo "Next steps:"
+    var stepNum = 1
+    if createdConfig:
+      echo &"  {stepNum}. Edit scriptorium.json to configure your agent models and harnesses"
       stepNum += 1
-      echo &"  {stepNum}. Run `scriptorium run` to start the orchestrator"
+    if createdAgents:
+      echo &"  {stepNum}. Edit AGENTS.md to describe your project conventions"
+      stepNum += 1
+    echo &"  {stepNum}. Run `scriptorium plan` to build your spec with the Architect"
+    stepNum += 1
+    echo &"  {stepNum}. Run `scriptorium run` to start the orchestrator"
