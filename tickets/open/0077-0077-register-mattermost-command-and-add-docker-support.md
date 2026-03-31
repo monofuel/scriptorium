@@ -111,3 +111,34 @@ Everything else is correct:
 - `.env.example` has the token with comment
 - Stub `mattermost_bot.nim` is reasonable given the 0076 dependency
 Review submitted with a minor warning about the usage string alignment. All substantive changes are correct and match the ticket requirements.
+
+## Merge Queue Failure
+- Summary: Register mattermost command in scriptorium.nim (import, cmdMattermost proc, dispatch case, usage string), add mattermost service to docker-compose.yml mirroring discord, and add MATTERMOST_TOKEN to .env.example. Includes stub mattermost_bot.nim until dependency ticket 0076 merges.\n- Failed gate: git merge master (rebase retry also failed)\n
+### Merge Output
+```text
+Current branch scriptorium/ticket-0077 is up to date.
+```
+
+### Quality Check Output
+```text
+error: Your local changes to the following files would be overwritten by merge:
+	docker-compose.yml
+Please commit your changes or stash them before you merge.
+Aborting
+Merge with strategy ort failed.
+```
+
+## Metrics
+- wall_time_seconds: 286
+- coding_wall_seconds: 150
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: test_failure
+- model: claude-opus-4-6
+- stdout_bytes: 120094
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 4m46s.
