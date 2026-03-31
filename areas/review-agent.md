@@ -13,7 +13,7 @@ Scope:
 - When the orchestrator processes a pending merge queue item, before running quality gates and merging, it must run a review agent session in the ticket's worktree.
 - Review agent prompt includes:
   - Full ticket content (intent and requirements).
-  - Diff of changes against `master` (via `git diff master...ticket-branch`).
+  - Diff of changes against the default branch (via `git diff <default-branch>...ticket-branch`).
   - Relevant area content.
   - Submit summary from the coding agent.
 - The review agent has access to a `submit_review` MCP tool with two actions:
@@ -22,7 +22,7 @@ Scope:
 - The review agent must call `submit_review` to signal its decision.
 
 **Review outcomes:**
-- Approved: merge queue proceeds with existing quality gate flow (merge master, run tests, fast-forward merge).
+- Approved: merge queue proceeds with existing quality gate flow (merge default branch, run tests, fast-forward merge).
 - Changes requested:
   - Pending merge queue item is removed.
   - Ticket remains in `tickets/in-progress/`.

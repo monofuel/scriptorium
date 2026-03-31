@@ -33,7 +33,7 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
 - Review agent execution (V4, §21):
   - New agent role under `agents.reviewer` in `scriptorium.json`.
   - Runs in the ticket's worktree when a pending merge queue item is processed.
-  - Prompt includes ticket content, diff against `master`, area content, and submit summary.
+  - Prompt includes ticket content, diff against the default branch, area content, and submit summary.
   - Has access to `submit_review` MCP tool with `approve` and `request_changes` actions.
   - Approved: merge proceeds. Changes requested: coding agent restarted with review feedback.
   - Stall defaults to approval. Detail in review-agent area.
@@ -58,8 +58,8 @@ Covers agent-driven area generation, ticket generation, coding agent runs, and p
   - The retry agent receives the worktree in a known-good state with all prior work committed.
 
 - Detect committed-but-not-submitted work (V8, §34):
-  - At the start of each coding agent attempt (including the first), check whether the ticket branch has commits ahead of `master` not submitted via `submit_pr`.
-  - Detection: compare ticket branch HEAD against `master` using `git log master..<branch> --oneline`.
+  - At the start of each coding agent attempt (including the first), check whether the ticket branch has commits ahead of the default branch not submitted via `submit_pr`.
+  - Detection: compare ticket branch HEAD against the default branch using `git log <default-branch>..<branch> --oneline`.
   - When prior work detected: log `ticket <id>: found <n> committed changes from prior attempt, agent will continue from branch tip`.
   - Include a note in the agent prompt informing the agent that prior work exists and it should review existing changes before proceeding.
   - Do not reset the branch — the agent works from the branch tip, building on prior commits.

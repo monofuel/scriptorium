@@ -41,8 +41,8 @@ V3 feature: tick summary lines, ticket lifecycle logging, and session summary on
   - Pre-submit test gate log point (V4, §20):
     - `ticket <id>: submit_pr pre-check: <PASS|FAIL> (exit=<code>, wall=<duration>)`
   - Health cache log points (V4, §22):
-    - `master health: cached healthy for <commit-hash>`
-    - `master health: cached unhealthy for <commit-hash>`
+    - `<default-branch> health: cached healthy for <commit-hash>`
+    - `<default-branch> health: cached unhealthy for <commit-hash>`
   - All lines include ticket ID for correlation.
   - Durations are human-readable.
 

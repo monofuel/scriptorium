@@ -1,25 +1,48 @@
 # Orchestrator Run Loop
 
-Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
+Covers the `scriptorium run` main polling loop, gating logic, tick ordering, default branch resolution, and pre-flight validation.
 
 ## Scope
 
 - `scriptorium run` starts the orchestrator polling loop, MCP HTTP server, and repository-backed logging.
 - MCP endpoint from `scriptorium.json` `endpoints.local`, defaulting to `http://127.0.0.1:8097`.
 - Continuous polling with idle sleep between ticks.
+
+**Default branch detection (V11, §36):**
+- The orchestrator must not hardcode `master` or `main`. It must resolve the default branch dynamically.
+- Resolution order:
+  1. Check `refs/remotes/origin/HEAD` — if set, use that.
+  2. If not set, probe for common names (`master`, `main`, `develop`) and use whichever exists locally.
+  3. During `scriptorium init`, once resolved, run `git remote set-head origin <branch>` so future runs skip the probe.
+  4. If nothing works, error with a clear message asking the user to set the default branch.
+- All hardcoded `master` references in the orchestrator, merge queue, and init code must be replaced with the resolved default branch.
+
+**Pre-flight validation (V11, §41):**
+- Before launching the polling loop, `scriptorium run` must perform upfront validation with clear, actionable error messages:
+  - `scriptorium/plan` branch exists (already done).
+  - `AGENTS.md` exists on the default branch — warn if missing.
+  - Makefile exists on the default branch — error if missing (orchestrator cannot function without quality gates).
+  - `make test` and `make integration-test` targets exist (dry-run via `make -n`) — warn if either fails.
+  - Agent binary is available (`codex`, `claude`, or `typoi` depending on configured harness) — error if missing.
+  - Agent auth is available (API keys or OAuth credentials for configured harness) — error if missing.
+- Error messages must suggest corrective action (e.g., `Error: Makefile not found. Run 'scriptorium init' or create a Makefile with 'test' and 'integration-test' targets.`).
+
+**Work gating:**
 - Work gated by:
   - Existence of `scriptorium/plan` branch.
-  - Healthy `master` (required quality targets `make test` and `make integration-test` pass in order on a `master` worktree).
+  - Healthy default branch (required quality targets `make test` and `make integration-test` pass in order on a default-branch worktree).
   - Runnable `spec.md` (not blank, not the init placeholder).
 - Non-runnable spec logs: `WAITING: no spec — run 'scriptorium plan'`.
-- Tick order:
-  1. Architect area generation (content-hash driven, see agent-execution area).
-  2. Manager ticket generation for eligible areas (content-hash driven, see agent-execution area).
-  3. Assign and execute open tickets (parallel when concurrency > 1, see parallel-execution area).
-  4. Process at most one merge-queue item.
+
+**Tick order:**
+1. Architect area generation (content-hash driven, see agent-execution area).
+2. Manager ticket generation for eligible areas (content-hash driven, see agent-execution area).
+3. Assign and execute open tickets (parallel when concurrency > 1, see parallel-execution area).
+4. Process at most one merge-queue item.
+
 - Tick must not block on a single agent completing when running in parallel mode — check for completable agents, start new agents, and continue other tick phases (V5, §24, detail in parallel-execution area).
-- `master` health cached by `master` HEAD commit, recomputed only when `master` changes.
-- `master` health cache persisted to `health/cache.json` on the plan branch for cross-session persistence (V4, §22, see health-cache area).
+- Default-branch health cached by HEAD commit, recomputed only when HEAD changes.
+- Default-branch health cache persisted to `health/cache.json` on the plan branch for cross-session persistence (V4, §22, see health-cache area).
 - Tick summary line: at the end of each tick, log a single INFO-level summary capturing full system state (see observability area).
 - Session summary: on shutdown (signal or idle exit), log aggregate session metrics (see observability area).
 
@@ -44,7 +67,7 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 
 **Startup recovery sequence (V8, §31):**
 - On orchestrator start, before the first tick, run `recoverFromCrash` to detect and reconcile stale state from a previous crash or unclean shutdown.
-- Recovery steps: clean orphaned worktrees, detect stale agent processes, reconcile dirty plan branch (via journal replay if applicable), validate merge queue vs master HEAD, log recovery summary.
+- Recovery steps: clean orphaned worktrees, detect stale agent processes, reconcile dirty plan branch (via journal replay if applicable), validate merge queue vs default-branch HEAD, log recovery summary.
 - Detail in crash-recovery area.
 
 ## Spec References
@@ -57,3 +80,5 @@ Covers the `scriptorium run` main polling loop, gating logic, and tick ordering.
 - Section 27: Orchestrator Module Split (V7).
 - Section 28: SIGSEGV Shutdown Fix (V7).
 - Section 31: Startup Recovery Sequence (V8, detail in crash-recovery area).
+- Section 36: Default Branch Detection (V11).
+- Section 41: Pre-Flight Validation In `scriptorium run` (V11).

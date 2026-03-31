@@ -8,9 +8,9 @@ Covers the single-flight merge queue, quality gates, and ticket state transition
 - Queue processing flow:
   1. Ensure queue metadata exists.
   2. Set `queue/merge/active.md` to the currently processed pending item.
-  3. Merge `master` into the ticket branch worktree.
+  3. Merge the default branch into the ticket branch worktree (V11, §36 — uses dynamically resolved default branch, not hardcoded `master`).
   4. Run required quality targets in the ticket worktree: `make test`, `make integration-test`.
-  5. On success: fast-forward merge ticket branch into `master`, append merge success note, move ticket `in-progress -> done`.
+  5. On success: fast-forward merge ticket branch into the default branch, append merge success note, move ticket `in-progress -> done`.
   6. On failure: append merge failure note, move ticket `in-progress -> open`.
 - Queue metadata cleaned up after success, failure, or stale-item cleanup.
 - Stale queue items (ticket already moved to `open` or `done`) removed with active metadata cleared.
@@ -33,7 +33,7 @@ Covers the single-flight merge queue, quality gates, and ticket state transition
   - Multiple agents may call `submit_pr` independently, creating multiple pending merge queue entries.
   - Pending items processed in submission order (FIFO by queue item ID).
   - Failed merges do not affect other in-flight agents or pending queue items.
-  - After successful merge changes `master`, existing merge queue logic handles merging `master` into ticket branches before quality gates.
+  - After successful merge changes the default branch, existing merge queue logic handles merging the default branch into ticket branches before quality gates.
   - Detail in parallel-execution area.
 
 ## V4 Known Limitations
@@ -51,3 +51,4 @@ Covers the single-flight merge queue, quality gates, and ticket state transition
 - Section 20: Pre-Submit Test Gate (V4).
 - Section 21: Review Agent (V4, detail in review-agent area).
 - Section 25: Merge Queue Ordering With Parallel Agents (V5, detail in parallel-execution area).
+- Section 36: Default Branch Detection (V11, dynamic resolution replaces hardcoded `master`).

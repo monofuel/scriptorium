@@ -30,7 +30,7 @@ Covers parallel ticket assignment, concurrent agent execution, merge queue order
   - Pending items processed in submission order (FIFO by queue item ID).
   - Review agent flow (§21) applies to each merge queue item individually.
   - Failed merges do not affect other in-flight agents or pending queue items.
-  - After successful merge changes `master`, all other in-progress ticket worktrees merge `master` into their branch before next `submit_pr` pre-check or merge queue processing (handled by existing merge queue logic in §7).
+  - After successful merge changes the default branch, all other in-progress ticket worktrees merge the default branch into their branch before next `submit_pr` pre-check or merge queue processing (handled by existing merge queue logic in §7).
 - Resource management (V5, §26):
   - Monitor and respect API rate limits and token budgets across all parallel agents.
   - Backpressure: delay new agent starts when approaching rate limits rather than failing running agents.

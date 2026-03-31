@@ -1,6 +1,6 @@
 Commit Health Cache
 
-V4 feature: persistent `master` health check cache on the plan branch that survives container restarts and session boundaries.
+V4 feature: persistent default-branch health check cache on the plan branch that survives container restarts and session boundaries.
 
 Scope:
 
@@ -15,15 +15,15 @@ Scope:
   - `integration_test_wall_seconds`: integer.
 
 **Cache lookup and write flow:**
-- On startup or after a merge changes `master` HEAD, the orchestrator must:
-  1. Look up the current `master` HEAD commit in `health/cache.json`.
-  2. If found and healthy: skip the health check entirely, log `master health: cached healthy for <commit-hash>`.
-  3. If found and unhealthy: skip the health check, mark master as unhealthy, log `master health: cached unhealthy for <commit-hash>`.
+- On startup or after a merge changes the default branch HEAD, the orchestrator must:
+  1. Look up the current default branch HEAD commit in `health/cache.json`.
+  2. If found and healthy: skip the health check entirely, log `<default-branch> health: cached healthy for <commit-hash>`.
+  3. If found and unhealthy: skip the health check, mark as unhealthy, log `<default-branch> health: cached unhealthy for <commit-hash>`.
   4. If not found: run `make test` and `make integration-test` as before, then write the result to the cache and commit.
 - Cache writes committed to plan branch with message: `scriptorium: update health cache`.
 
 **Relationship to in-memory cache:**
-- The existing in-memory `MasterHealthState` cache continues to work within a session.
+- The existing in-memory health state cache continues to work within a session.
 - The plan-branch cache augments it for cross-session persistence.
 - Cache entries are keyed by commit hash and naturally immutable — no invalidation needed.
 
