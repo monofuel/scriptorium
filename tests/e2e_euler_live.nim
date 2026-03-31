@@ -13,6 +13,24 @@ suite "integration e2e euler live":
 
     withTempLiveRepo("scriptorium_integration_live_euler_", proc(repoPath: string) =
       initLiveRepo(repoPath)
+
+      ## Verify scriptorium init created expected artifacts.
+      let agentsPath = repoPath / "AGENTS.md"
+      doAssert fileExists(agentsPath), "scriptorium init did not create AGENTS.md"
+      doAssert readFile(agentsPath).len > 0, "scriptorium init created an empty AGENTS.md"
+
+      let makefilePath = repoPath / "Makefile"
+      doAssert fileExists(makefilePath), "scriptorium init did not create Makefile"
+      doAssert readFile(makefilePath).len > 0, "scriptorium init created an empty Makefile"
+
+      doAssert fileExists(repoPath / "scriptorium.json"),
+        "scriptorium init did not create scriptorium.json"
+
+      let (_, planBranchRc) = execCmdEx(
+        "git -C " & quoteShell(repoPath) & " rev-parse --verify scriptorium/plan"
+      )
+      doAssert planBranchRc == 0, "scriptorium init did not create scriptorium/plan branch"
+
       addEulerMakefile(repoPath)
 
       let
