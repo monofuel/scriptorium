@@ -29,3 +29,5 @@ The current output in `src/scriptorium/init.nim` lines 166-197 uses unnumbered b
    - The specific per-artifact messages from §38, §39, §40.
    - Numbered next steps.
 3. Run `make test` to confirm.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0077-update-init-output-to-match-v11-post-init-guidance
