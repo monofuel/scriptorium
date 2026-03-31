@@ -84,3 +84,47 @@ on_api_ms":70711,"num_turns":21,"result":"Done. Changes:\n\n- **`src/scriptorium
 
 Everything is clean and matches requirements.
 Approved. All 7 ticket requirements are covered, conventions are followed, exports are minimal and necessary, and no issues found.
+
+## Merge Queue Success
+- Summary: Add unit tests for buildRecoveryTicketContent in tests/test_recovery.nim. Exported the proc and MaxRecoveryTestOutputChars constant. Tests cover: title, area, commit hash, fenced code block, truncation beyond 8000 chars, exact boundary not truncated, and empty output fallback.\n
+### Quality Check Output
+```text
+strator_flow.nim]  1145 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pstrutils.nim.c:3537:1: fatal error: error writing to /dev/shm/ccJ5sOL4.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3537 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptimes.nim.c:3801:1: fatal error: error writing to /dev/shm/ccSII5wR.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3801 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pjson.nim.c:2883:1: fatal error: error writing to /dev/shm/ccg1tNw0.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  2883 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptables.nim.c:8698:1: fatal error: error writing to /dev/shm/ccCt2MPh.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  8698 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@psystem.nim.c:14352:1: fatal error: error writing to /dev/shm/cc9AuXWg.s: No space left on device
+[tests/integration_orchestrator_flow.nim] 14352 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 0
+- coding_wall_seconds: 0
+- test_wall_seconds: 16
+- attempt_count: 0
+- outcome: done
+- failure_reason: 
+- model: unknown
+- stdout_bytes: 0
+
+## Post-Analysis
+- actual_difficulty: complex
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was complex with 0 attempt(s) in 0s.
