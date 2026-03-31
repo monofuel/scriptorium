@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0084",
+  "timestamp": "2026-03-31T05:23:49Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0084.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0084-0077-update-init-output-to-match-v11-post-init-guidance.md\n**Ticket ID:** 0084\n**Branch:** scriptorium/ticket-0084\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0084-0077-update-init-output-to-match-v11-post-init-guidance\n**Summary:** Updated init output to match V11 §42 post-init guidance: added per-artifact creation messages (§38/§39/§40), descriptive artifact listings in Created section, and numbered next steps. Updated integration test to match.\n",
+      "contentHash": "288112595C081447AC364D5918860EDCAF5CAE2A"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0084"
+}
