@@ -41,3 +41,8 @@ build:
 3. Run `make test` to confirm tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0082-0075-update-makefile-template-with-required-make-targets
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Two-file change with exact before/after provided: update a string constant in init.nim and add two substring checks in the integration test, single attempt expected.
