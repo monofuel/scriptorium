@@ -15,3 +15,5 @@ Warning: --init is deprecated, use `scriptorium init` instead.
 1. In `src/scriptorium.nim`, in the `--init` case branch (around line 179), add a stderr warning before calling `cmdInit`.
 2. Update `tests/integration_cli.nim` test "--init flag works as alias for init subcommand" to also check for the deprecation warning in the output.
 3. Run `make test` to confirm.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0086-0079-add-deprecation-warning-for-init-flag
