@@ -43,3 +43,40 @@ Done. Changes:
 ```text
 dirExists` checks for idempotency. Updated the \"already initialized\" condition and output section to include `createdSrc`/`createdDocs`.\n- **`tests/test_init.nim`**: Added `testSrcAndDocsCreated` verifying both `.gitkeep` files exist after init.\n- **`tests/integration_cli.nim`**: Added two tests — one verifying init creates `src/` and `docs/`, another verifying it skips them when they already exist.","stop_reason":"end_turn","session_id":"fd79c556-5d22-45b8-b6d1-255acf1e5d31","total_cost_usd":1.1827329999999998,"usage":{"input_tokens":39,"cache_creation_input_tokens":41654,"cache_read_input_tokens":1430401,"output_tokens":8280,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":41654,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":39,"outputTokens":8280,"cacheReadInputTokens":1430401,"cacheCreationInputTokens":41654,"webSearchRequests":0,"costUSD":1.1827329999999998,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"9328a13c-1c33-44d6-bace-7e54807ef966"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 34s
+
+**Review Reasoning:** Let me read the surrounding code in `init.nim` to verify the pattern is followed correctly.
+The code is clean and follows the existing patterns well. Let me verify the ticket requirements against the implementation:
+
+**Ticket task checklist:**
+1. **Add src/ and docs/ creation logic** - Done at `init.nim:136-150`, placed after test config block and before scriptorium.json block. Uses `dirExists` for idempotency.
+2. **Track `createdSrc` and `createdDocs` booleans** - Done at lines 137 and 145.
+3. **Include in output and "already initialized" check** - Done at lines 183 and 199-205.
+4. **Unit test** - Done in `test_init.nim:153-162`.
+5. **Integration tests (create + skip)** - Done in `integration_cli.nim:384-409`.
+6. **`make test`** - Agent reports exit code 0.
+
+**Convention checks:**
+- Naming: `createdSrc`, `createdDocs`, `srcKeep`, `docsKeep` — camelCase, correct.
+- `let` used appropriately (no `var` where `let` suffices).
+- Doc comment on `testSrcAndDocsCreated` — present.
+- No try/catch, no boolean error returns.
+- Format strings use `&` where needed.
+
+**Spec compliance:**
+- V11 §35 requires `src/`, `docs/` directories — this implements that.
+- Idempotent pattern (skip if exists) matches the spec: "Existing files are never overwritten by init."
+
+**Code quality:**
+- No dead code, no unused imports, no commented-out code.
+- Changes are tightly scoped to the ticket goal.
+- The skip test properly verifies existing content is preserved AND `.gitkeep` is not added.
+
+Everything looks correct and well-implemented.
+The implementation is clean and correct. All six ticket tasks are addressed, the idempotent pattern matches existing AGENTS.md/Makefile blocks, conventions are followed, and both unit and integration tests cover creation and skip-if-exists scenarios.
