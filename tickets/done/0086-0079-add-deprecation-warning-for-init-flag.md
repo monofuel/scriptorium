@@ -55,3 +55,47 @@ Done. Changes:
 
 4. **Code quality**: No dead code, no unused imports, no leftover artifacts. The change is minimal and focused.
 Review approved. The change is minimal, correct, and matches the ticket requirements exactly.
+
+## Merge Queue Success
+- Summary: Add deprecation warning to stderr when --init flag is used, directing users to `scriptorium init` instead. Updated integration test to verify the warning is present.\n
+### Quality Check Output
+```text
+strator_flow.nim]  1474 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pjson.nim.c:2883:1: fatal error: error writing to /dev/shm/ccQnL0xv.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  2883 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptimes.nim.c:3801:1: fatal error: error writing to /dev/shm/cce7aP7E.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3801 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pstrutils.nim.c:3537:1: fatal error: error writing to /dev/shm/ccKvvByI.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3537 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptables.nim.c:8698:1: fatal error: error writing to /dev/shm/ccqk8SEd.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  8698 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@psystem.nim.c:14352:1: fatal error: error writing to /dev/shm/ccDEJb90.s: No space left on device
+[tests/integration_orchestrator_flow.nim] 14352 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 226
+- coding_wall_seconds: 91
+- test_wall_seconds: 14
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 71000
+
+## Post-Analysis
+- actual_difficulty: trivial
+- prediction_accuracy: overestimated
+- brief_summary: Predicted easy, actual was trivial with 1 attempt(s) in 3m46s.
