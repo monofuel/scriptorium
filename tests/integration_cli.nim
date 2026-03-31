@@ -381,6 +381,33 @@ suite "scriptorium CLI":
 
     check readFile(tmp / "AGENTS.md") == customContent
 
+  test "init creates src/ and docs/ directories":
+    let tmp = getTempDir() / "scriptorium_test_cli_src_docs_create"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    check fileExists(tmp / "src" / ".gitkeep")
+    check fileExists(tmp / "docs" / ".gitkeep")
+
+  test "init skips src/ and docs/ when they already exist":
+    let tmp = getTempDir() / "scriptorium_test_cli_src_docs_skip"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    createDir(tmp / "src")
+    writeFile(tmp / "src" / "main.nim", "echo \"hello\"\n")
+    createDir(tmp / "docs")
+    writeFile(tmp / "docs" / "guide.md", "# Guide\n")
+    runCmdOrDie("git -C " & tmp & " add src docs")
+    runCmdOrDie("git -C " & tmp & " commit -m add-src-docs")
+
+    runInit(tmp, quiet = true)
+
+    check readFile(tmp / "src" / "main.nim") == "echo \"hello\"\n"
+    check readFile(tmp / "docs" / "guide.md") == "# Guide\n"
+    check not fileExists(tmp / "src" / ".gitkeep")
+    check not fileExists(tmp / "docs" / ".gitkeep")
+
   test "dashboard command prints stub message and exits 0":
     let tmp = getTempDir() / "scriptorium_test_cli_dashboard"
     makeInitializedTestRepo(tmp)

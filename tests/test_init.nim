@@ -150,6 +150,17 @@ proc testMakefileContainsAllTargets() =
     doAssert target in phonyLine, ".PHONY missing target: " & target
   echo "[OK] Makefile contains all four required targets"
 
+proc testSrcAndDocsCreated() =
+  ## Verify runInit creates src/.gitkeep and docs/.gitkeep.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  doAssert fileExists(repo / "src" / ".gitkeep"), "src/.gitkeep should exist"
+  doAssert fileExists(repo / "docs" / ".gitkeep"), "docs/.gitkeep should exist"
+  echo "[OK] runInit creates src/.gitkeep and docs/.gitkeep"
+
 when isMainModule:
   testNotAGitRepo()
   testAlreadyInitializedDoesNotCrash()
@@ -158,3 +169,4 @@ when isMainModule:
   testDoubleInitIdempotent()
   testInitNoRemote()
   testMakefileContainsAllTargets()
+  testSrcAndDocsCreated()

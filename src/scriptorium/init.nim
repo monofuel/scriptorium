@@ -133,6 +133,22 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(target, "add", TestConfigNimsName)
     gitRun(target, "commit", "-m", "scriptorium: add tests/config.nims")
 
+  let srcKeep = "src" / ".gitkeep"
+  let createdSrc = not dirExists(target / "src")
+  if createdSrc:
+    createDir(target / "src")
+    writeFile(target / srcKeep, "")
+    gitRun(target, "add", srcKeep)
+    gitRun(target, "commit", "-m", "scriptorium: add src/ directory")
+
+  let docsKeep = "docs" / ".gitkeep"
+  let createdDocs = not dirExists(target / "docs")
+  if createdDocs:
+    createDir(target / "docs")
+    writeFile(target / docsKeep, "")
+    gitRun(target, "add", docsKeep)
+    gitRun(target, "commit", "-m", "scriptorium: add docs/ directory")
+
   let configPath = target / ConfigFileName
   let createdConfig = not fileExists(configPath)
   if createdConfig:
@@ -164,7 +180,7 @@ proc runInit*(path: string, quiet: bool = false) =
     gitRun(tmpPlan, "commit", "-m", "scriptorium: initialize plan branch")
 
   if not quiet:
-    if planBranchExists and not createdAgents and not createdMakefile and not createdTestConfig and not createdConfig:
+    if planBranchExists and not createdAgents and not createdMakefile and not createdTestConfig and not createdSrc and not createdDocs and not createdConfig:
       echo "scriptorium: workspace already initialized, nothing to do."
     else:
       echo "Initialized scriptorium workspace."
@@ -183,6 +199,10 @@ proc runInit*(path: string, quiet: bool = false) =
         echo &"  {MakefileName}"
       if createdTestConfig:
         echo &"  {TestConfigNimsName}"
+      if createdSrc:
+        echo "  src/"
+      if createdDocs:
+        echo "  docs/"
       if createdConfig:
         echo &"  {ConfigFileName}"
       echo ""
