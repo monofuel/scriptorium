@@ -20,3 +20,5 @@ The `scriptorium init` command creates a starter Makefile with only `test` and `
 - The Makefile template is a `const` string in init.nim. Just extend it with the new targets.
 - Keep the template minimal — placeholder echo commands only.
 - Existing repos that already ran init will not be affected (init skips files that already exist).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template
