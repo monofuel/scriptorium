@@ -72,3 +72,42 @@ All changes are committed and submitted. Summary of what was done:
 ```text
 riptorium.nim`** — Added `mattermost_bot` import, `cmdMattermost` proc, `\"mattermost\"` case in command dispatch, and usage line.\n2. **`docker-compose.yml`** — Added `mattermost` service mirroring the `discord` service.\n3. **`.env.example`** — Added `MATTERMOST_TOKEN=` with comment.\n4. **`src/scriptorium/mattermost_bot.nim`** — Stub module with `runMattermostBot` proc until ticket 0076 merges.","stop_reason":"end_turn","session_id":"f655b344-b101-4340-8702-7e36940775c2","total_cost_usd":0.50176775,"usage":{"input_tokens":758,"cache_creation_input_tokens":23887,"cache_read_input_tokens":463968,"output_tokens":4668,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":23887},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"us.anthropic.claude-opus-4-6-v1":{"inputTokens":758,"outputTokens":4668,"cacheReadInputTokens":463968,"cacheCreationInputTokens":23887,"webSearchRequests":0,"costUSD":0.50176775,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b645e920-d47a-4ba0-a607-97de978bd1e2"}
 ```
+
+## Review
+**Review:** approved with warnings
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 40s
+
+**Warnings:** Minor: The usage string alignment for `scriptorium mattermost` (line 22 of scriptorium.nim) is 2 spaces short of the column used by surrounding entries. `mattermost` + 5 spaces vs `discord` + 10 spaces / `dashboard` + 8 spaces. Should be `scriptorium mattermost       Run the Mattermost bot` (7 spaces) to align with the other descriptions.
+
+**Review Reasoning:** n the Discord bot
+  scriptorium mattermost     Run the Mattermost bot
+  scriptorium sync             Run a single remote sync cycle (fetch/merge/push)
+  scriptorium worktrees        List active git worktrees and their tickets
+```
+
+The description column appears to start at a consistent position for other lines. `dashboard` (9 chars) + spaces = aligned. `discord` (7 chars) + spaces = aligned. `mattermost` (10 chars) + 5 spaces = misaligned. The descriptions for other commands start around column 28-30. Let me count more precisely:
+
+- `  scriptorium dashboard        Start` — "dashboard" is 9 chars, then 8 spaces
+- `  scriptorium discord          Run` — "discord" is 7 chars, then 10 spaces  
+- `  scriptorium mattermost     Run` — "mattermost" is 10 chars, then 5 spaces
+
+The descriptions should align. "dashboard" + 8 spaces = 17 chars after "scriptorium ". "discord" + 10 spaces = 17 chars. "mattermost" + 5 spaces = 15 chars. So the mattermost line is misaligned by 2 spaces.
+
+This is a minor style issue. Now let me submit my review.
+
+
+The changes are clean and match the ticket requirements. Let me check one minor alignment issue.
+
+The usage string for `mattermost` on line 22 has 5 spaces between the command name and description, while other lines align descriptions to a consistent column (e.g., `discord` has 10 spaces, `dashboard` has 8 spaces). This is a minor cosmetic misalignment — 2 spaces short of the column used by the other entries.
+
+Everything else is correct:
+- Import added in alphabetical order within the bracket syntax
+- `cmdMattermost` proc has a doc comment, follows the same pattern as `cmdDiscord`
+- Command dispatch case added correctly
+- Docker compose `mattermost` service mirrors `discord` exactly
+- `.env.example` has the token with comment
+- Stub `mattermost_bot.nim` is reasonable given the 0076 dependency
+Review submitted with a minor warning about the usage string alignment. All substantive changes are correct and match the ticket requirements.
