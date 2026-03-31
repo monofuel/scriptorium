@@ -307,7 +307,8 @@ Approved. All changes match the ticket requirements exactly:
 - Summary: Register mattermost command in scriptorium.nim (import, cmdMattermost proc, dispatch case, aligned usage string), add mattermost service to docker-compose.yml mirroring discord, add MATTERMOST_TOKEN to .env.example, and include stub mattermost_bot.nim until dependency ticket 0076 merges.\n- Failed gate: git merge master (rebase retry also failed)\n
 ### Merge Output
 ```text
-Rebasing (1/1)Successfully rebased and updated refs/heads/scriptorium/ticket-0077.
+Rebasing (1/1)
+Successfully rebased and updated refs/heads/scriptorium/ticket-0077.
 ```
 
 ### Quality Check Output
