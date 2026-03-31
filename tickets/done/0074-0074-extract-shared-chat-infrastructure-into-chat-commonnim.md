@@ -81,3 +81,47 @@ All imports are still used. The review is complete — this is a clean, faithful
 - **Code quality:** No unused imports, no dead code, no leftover artifacts. The extraction is a faithful move with no behavioral changes. `TruncatedMarker` correctly exported for test and future Mattermost use.
 - **Tests:** All required cases covered — parseChatMode (all prefixes, default, case insensitivity, whitespace) and truncateMessage (under/at/over limit, custom limit for Mattermost).
 Review approved. The extraction is clean, complete, and follows all project conventions.
+
+## Merge Queue Success
+- Summary: Extract shared chat infrastructure (ChatMode, parseChatMode, truncateMessage, formatStatusMessage, formatQueueMessage, handlePause, handleResume) from discord_bot.nim into new chat_common.nim module. truncateMessage now accepts a limit parameter for reuse by Mattermost (16383) and Discord (2000). Added unit tests for parseChatMode and truncateMessage.\n
+### Quality Check Output
+```text
+et_assignment.nim]  1470 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@pjson.nim.c:2308:1: fatal error: error writing to /dev/shm/ccYuB6pQ.s: No space left on device
+[tests/integration_ticket_assignment.nim]  2308 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@ptables.nim.c:2746:1: fatal error: error writing to /dev/shm/ccGGtP8a.s: No space left on device
+[tests/integration_ticket_assignment.nim]  2746 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@pstrutils.nim.c:2978:1: fatal error: error writing to /dev/shm/ccYPBbW1.s: No space left on device
+[tests/integration_ticket_assignment.nim]  2978 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@ptimes.nim.c:3667:1: fatal error: error writing to /dev/shm/ccH4YZ1h.s: No space left on device
+[tests/integration_ticket_assignment.nim]  3667 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@psystem.nim.c:9043:1: fatal error: error writing to /dev/shm/ccOtqJsg.s: No space left on device
+[tests/integration_ticket_assignment.nim]  9043 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 394
+- coding_wall_seconds: 256
+- test_wall_seconds: 16
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 289832
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 6m34s.
