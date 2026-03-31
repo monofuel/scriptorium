@@ -24,3 +24,8 @@ Imports needed: `scriptorium/[agent_runner, output_formatting, prompt_builders]`
 Follow existing test patterns (see `tests/test_manager_agent.nim` for style).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0087-add-unit-tests-for-formatagentrunnote-and-appendagentrunnote
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single new test file with pure function tests against well-defined interfaces, no mocks or external dependencies, straightforward pattern-matching from existing test style.
