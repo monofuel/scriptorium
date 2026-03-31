@@ -75,3 +75,47 @@ Only `runTicketPrediction` tests remain in `integration_metrics.nim` as they use
 
 One minor note: `formatPredictionNote`, `appendPredictionNote`, `formatPostAnalysisNote`, and `appendPostAnalysisNote` tests were moved from the original "ticket difficulty prediction" suite into the "per-ticket metrics" suite in `test_output_formatting.nim`. This is a slight suite reorganization but doesn't affect correctness and the target file matches the ticket spec.
 Review approved. Clean mechanical relocation with correct target files, proper import updates, and no behavioral changes.
+
+## Merge Queue Success
+- Summary: Relocated pure-function tests from integration files to unit test files: moved formatDuration, parseMetricField, metrics/prediction/post-analysis formatting to test_output_formatting.nim; created test_ticket_analysis.nim for prediction parsing, difficulty classification, and post-analysis; created test_shared_state.nim for ticket timings cleanup, health cache, submit_pr state, agent slots, and token budget tracking. Only runTicketPrediction tests (with plan branch operations) remain in integration_metrics.nim.\n
+### Quality Check Output
+```text
+on_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@ptables.nim.c:2746:1: fatal error: error writing to /dev/shm/cc0z7m8a.s: No space left on device
+[tests/integration_ticket_assignment.nim]  2746 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@pstrutils.nim.c:2978:1: fatal error: error writing to /dev/shm/ccMlnjPD.s: No space left on device
+[tests/integration_ticket_assignment.nim]  2978 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@ptimes.nim.c:3667:1: fatal error: error writing to /dev/shm/ccdSrDV1.s: No space left on device
+[tests/integration_ticket_assignment.nim]  3667 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+[tests/integration_ticket_assignment.nim] /home/scriptorium/.cache/nim/integration_ticket_assignment_d/@psystem.nim.c:9043:1: fatal error: error writing to /dev/shm/cc2ki7C3.s: No space left on device
+[tests/integration_ticket_assignment.nim]  9043 | }
+[tests/integration_ticket_assignment.nim]       | ^
+[tests/integration_ticket_assignment.nim] compilation terminated.
+_mcp_submit_pr_live.nim]  3812 | }
+[tests/integration_mcp_submit_pr_live.nim]       | ^
+[tests/integration_mcp_submit_pr_live.nim] compilation terminated.
+[tests/integration_mcp_submit_pr_live.nim] /home/scriptorium/.cache/nim/integration_mcp_submit_pr_live_d/@psystem.nim.c:12040:1: fatal error: error writing to /dev/shm/cclUizg8.s: No space left on device
+[tests/integration_mcp_submit_pr_live.nim] 12040 | }
+[tests/integration_mcp_submit_pr_live.nim]       | ^
+[tests/integration_mcp_submit_pr_live.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 846
+- coding_wall_seconds: 645
+- test_wall_seconds: 14
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 451278
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 14m6s.
