@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template",
+  "timestamp": "2026-03-31T03:44:05Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template.md",
+      "destination": "tickets/in-progress/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template.md",
+      "content": "# 0075 Add integration-test and e2e-test targets to init Makefile template\n\n**Area:** config-testing\n\n## Summary\n\nThe `scriptorium init` command creates a starter Makefile with only `test` and `build` targets. Per V11 §35, all managed projects must also have `integration-test` and optionally `e2e-test` make targets.\n\n## Requirements\n\n1. In `src/scriptorium/init.nim`, update the `MakefileTemplate` constant to include:\n   - `integration-test` target (with placeholder `@echo \"no integration tests configured\"`).\n   - `e2e-test` target (with placeholder `@echo \"no e2e tests configured\"`).\n   - Add all four targets to the `.PHONY` declaration.\n\n2. In `tests/test_init.nim`, add or update a test that verifies the Makefile created by `runInit` contains all four required targets: `test`, `build`, `integration-test`, `e2e-test`.\n\n## Notes\n\n- The Makefile template is a `const` string in init.nim. Just extend it with the new targets.\n- Keep the template minimal — placeholder echo commands only.\n- Existing repos that already ran init will not be affected (init skips files that already exist).\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template\n",
+      "contentHash": "70B2345E3D4DB4B13E871AE28CEE09B89320E781"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0079-0075-add-integration-test-and-e2e-test-targets-to-init-makefile-template"
+}
