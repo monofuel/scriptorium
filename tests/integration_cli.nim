@@ -246,19 +246,20 @@ suite "scriptorium CLI":
     let (output, rc) = runCliInRepo(tmp, "init")
     check rc == 0
     check output.contains("Initialized scriptorium workspace.")
-    # Created files section.
-    check output.contains("Branch: scriptorium/plan")
-    check output.contains("spec.md")
+    # Per-artifact messages.
+    check output.contains("Created AGENTS.md — edit to match your project conventions.")
+    check output.contains("Created Makefile with placeholder targets — replace with real build commands.")
+    check output.contains("Created scriptorium.json — configure agent models and harnesses.")
+    # Created summary section.
     check output.contains("AGENTS.md")
     check output.contains("Makefile")
-    check output.contains("tests" / "config.nims")
     check output.contains("scriptorium.json")
-    # Next steps section.
-    check output.contains("Edit AGENTS.md to describe your project.")
-    check output.contains("Edit scriptorium.json to configure models and harness.")
-    check output.contains("Edit Makefile to set up real test/build targets.")
-    check output.contains("Run `scriptorium plan` to build your spec.")
-    check output.contains("Run `scriptorium run` to start the orchestrator.")
+    check output.contains("scriptorium/plan")
+    # Numbered next steps.
+    check output.contains("1. Edit scriptorium.json to configure your agent models and harnesses")
+    check output.contains("2. Edit AGENTS.md to describe your project conventions")
+    check output.contains("3. Run `scriptorium plan` to build your spec with the Architect")
+    check output.contains("4. Run `scriptorium run` to start the orchestrator")
 
   test "init spec.md references AGENTS.md":
     let tmp = getTempDir() / "scriptorium_test_cli_spec_ref"

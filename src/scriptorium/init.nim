@@ -117,6 +117,8 @@ proc runInit*(path: string, quiet: bool = false) =
     writeFile(agentsPath, AgentsTemplate)
     gitRun(target, "add", AgentsFileName)
     gitRun(target, "commit", "-m", "scriptorium: add AGENTS.md from template")
+    if not quiet:
+      echo "Created AGENTS.md — edit to match your project conventions."
 
   let makefilePath = target / MakefileName
   let createdMakefile = not fileExists(makefilePath)
@@ -124,6 +126,8 @@ proc runInit*(path: string, quiet: bool = false) =
     writeFile(makefilePath, MakefileTemplate)
     gitRun(target, "add", MakefileName)
     gitRun(target, "commit", "-m", "scriptorium: add starter Makefile")
+    if not quiet:
+      echo "Created Makefile with placeholder targets — replace with real build commands."
 
   let testConfigPath = target / TestConfigNimsName
   let createdTestConfig = not fileExists(testConfigPath)
@@ -154,6 +158,8 @@ proc runInit*(path: string, quiet: bool = false) =
   if createdConfig:
     let configJson = defaultConfig().toJson()
     writeFile(configPath, configJson & "\n")
+    if not quiet:
+      echo "Created scriptorium.json — configure agent models and harnesses."
 
   # Create plan branch only if it does not already exist.
   if not planBranchExists:
@@ -183,35 +189,33 @@ proc runInit*(path: string, quiet: bool = false) =
     if planBranchExists and not createdAgents and not createdMakefile and not createdTestConfig and not createdSrc and not createdDocs and not createdConfig:
       echo "scriptorium: workspace already initialized, nothing to do."
     else:
+      echo ""
       echo "Initialized scriptorium workspace."
       echo ""
       echo "Created:"
-      if not planBranchExists:
-        echo &"  Branch: {PlanBranch}"
-        let dirsStr = PlanDirs.join(", ")
-        echo &"    Directories: {dirsStr}"
-        echo "    spec.md"
-      else:
-        echo &"  Branch: {PlanBranch} (already exists)"
       if createdAgents:
-        echo &"  {AgentsFileName}"
+        echo "  AGENTS.md           — project conventions for coding agents (edit to fit)"
       if createdMakefile:
-        echo &"  {MakefileName}"
-      if createdTestConfig:
-        echo &"  {TestConfigNimsName}"
-      if createdSrc:
-        echo "  src/"
-      if createdDocs:
-        echo "  docs/"
+        echo "  Makefile            — placeholder test targets (replace with real commands)"
       if createdConfig:
-        echo &"  {ConfigFileName}"
+        echo "  scriptorium.json    — agent configuration (set your models and API keys)"
+      if not planBranchExists:
+        echo &"  {PlanBranch}    — plan branch with spec, areas, and tickets"
+      if createdTestConfig:
+        echo "  tests/config.nims   — test path configuration"
+      if createdSrc:
+        echo "  src/                — source directory"
+      if createdDocs:
+        echo "  docs/               — documentation directory"
       echo ""
       echo "Next steps:"
-      if createdAgents:
-        echo &"  Edit {AgentsFileName} to describe your project."
+      var stepNum = 1
       if createdConfig:
-        echo &"  Edit {ConfigFileName} to configure models and harness."
-      if createdMakefile:
-        echo &"  Edit {MakefileName} to set up real test/build targets."
-      echo "  Run `scriptorium plan` to build your spec."
-      echo "  Run `scriptorium run` to start the orchestrator."
+        echo &"  {stepNum}. Edit scriptorium.json to configure your agent models and harnesses"
+        stepNum += 1
+      if createdAgents:
+        echo &"  {stepNum}. Edit AGENTS.md to describe your project conventions"
+        stepNum += 1
+      echo &"  {stepNum}. Run `scriptorium plan` to build your spec with the Architect"
+      stepNum += 1
+      echo &"  {stepNum}. Run `scriptorium run` to start the orchestrator"
