@@ -29,3 +29,8 @@ The area spec requires `discord.{enabled, serverId, channelId, allowedUserIds}` 
 - New unit tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-0090-add-enabled-field-to-discordconfig-and-mattermostconfig
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single-file type addition with explicit field merging in config loader, plus straightforward unit tests in one test file — minimal logic complexity, one attempt expected.
