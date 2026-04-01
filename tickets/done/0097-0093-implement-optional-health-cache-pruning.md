@@ -75,3 +75,50 @@ The implementation is clean and fully meets the ticket requirements. Let me conf
 - **Spec compliance**: `pruneHealthCache` accepts `Table[string, HealthCacheEntry]` and `maxEntries: int`, returns the most recent N by timestamp using lexicographic sort, returns unchanged if under limit. `MaxHealthCacheEntries = 100`. Called in `isMasterHealthy` just before `writeHealthCache`. All three required test cases present.
 - **Code quality**: No dead code, no unused imports (`algorithm` for `sort`, `sequtils` for `toSeq`, `strformat` for `&` in tests). No leftover artifacts. Changes are tightly scoped to the ticket.
 Review approved. The implementation is minimal, correct, and well-aligned with both the ticket requirements and project conventions.
+
+## Merge Queue Success
+- Summary: Add pruneHealthCache proc to health_checks.nim that keeps only the most recent N entries by timestamp (default MaxHealthCacheEntries=100). Called in isMasterHealthy before writeHealthCache. Includes 3 unit tests covering under-limit, over-limit, and empty table cases.\n
+### Quality Check Output
+```text
+i_harness.nim]  1058 | }
+[tests/integration_typoi_harness.nim]       | ^
+[tests/integration_typoi_harness.nim] compilation terminated.
+[tests/integration_typoi_harness.nim] /home/scriptorium/.cache/nim/integration_typoi_harness_d/@ptimes.nim.c:3812:1: fatal error: error writing to /dev/shm/ccpSk7i1.s: No space left on device
+[tests/integration_typoi_harness.nim]  3812 | }
+[tests/integration_typoi_harness.nim]       | ^
+[tests/integration_typoi_harness.nim] compilation terminated.
+[tests/integration_typoi_harness.nim] /home/scriptorium/.cache/nim/integration_typoi_harness_d/@psystem.nim.c:11762:1: fatal error: error writing to /dev/shm/ccot43Gc.s: No space left on device
+[tests/integration_typoi_harness.nim] 11762 | }
+[tests/integration_typoi_harness.nim]       | ^
+[tests/integration_typoi_harness.nim] compilation terminated.
+queue.nim]  3761 | }
+[tests/integration_orchestrator_queue.nim]       | ^
+[tests/integration_orchestrator_queue.nim] compilation terminated.
+[tests/integration_orchestrator_queue.nim] /home/scriptorium/.cache/nim/integration_orchestrator_queue_d/@psystem.nim.c:10900:1: fatal error: error writing to /dev/shm/ccbjrOLA.s: No space left on device
+[tests/integration_orchestrator_queue.nim] 10900 | }
+[tests/integration_orchestrator_queue.nim]       | ^
+[tests/integration_orchestrator_queue.nim] compilation terminated.
+im.c:3812:1: fatal error: error writing to /dev/shm/ccIVZ6tI.s: No space left on device
+[tests/integration_claude_code_harness.nim]  3812 | }
+[tests/integration_claude_code_harness.nim]       | ^
+[tests/integration_claude_code_harness.nim] compilation terminated.
+[tests/integration_claude_code_harness.nim] /home/scriptorium/.cache/nim/integration_claude_code_harness_d/@psystem.nim.c:11927:1: fatal error: error writing to /dev/shm/ccBL8UgZ.s: No space left on device
+[tests/integration_claude_code_harness.nim] 11927 | }
+[tests/integration_claude_code_harness.nim]       | ^
+[tests/integration_claude_code_harness.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 311
+- coding_wall_seconds: 82
+- test_wall_seconds: 17
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 189453
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 5m11s.
