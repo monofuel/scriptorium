@@ -71,3 +71,29 @@ The changes are clean and well-implemented. Let me verify against each check:
 
 **Code quality:** No dead code, no unused imports, no unrelated changes. The implementation is minimal and focused.
 Review approved. The implementation is correct, minimal, and well-tested.
+
+## Merge Queue Failure
+- Summary: Add hardTimeout, noOutputTimeout, and progressTimeout fields to AgentConfig with role-specific defaults (architect: 7.2M/600K/0, coding: 14.4M/300K/600K, manager: 3.6M/300K/0, reviewer: 3.6M/300K/0, audit: 0/0/0). Updated mergeAgentConfig to merge timeout fields when > 0. Added unit tests for default values, JSON override, and zero-value preservation.\n
+### Merge Output
+```text
+Auto-merging src/scriptorium/config.nim
+CONFLICT (content): Merge conflict in src/scriptorium/config.nim
+Auto-merging tests/test_config.nim
+CONFLICT (content): Merge conflict in tests/test_config.nim
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+## Metrics
+- wall_time_seconds: 394
+- coding_wall_seconds: 141
+- test_wall_seconds: 0
+- attempt_count: 1
+- outcome: reopened
+- failure_reason: merge_conflict
+- model: claude-opus-4-6
+- stdout_bytes: 369327
+
+## Post-Analysis
+- actual_difficulty: hard
+- prediction_accuracy: underestimated
+- brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 6m34s.
