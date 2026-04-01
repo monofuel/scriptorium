@@ -44,3 +44,8 @@ Add unit tests in `tests/test_log_forwarding.nim` for the `forwardAgentEvent` an
 - No real agent processes or external services are invoked.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single new test file with straightforward assert-based unit tests against two pure procs, using an existing captureLogs mechanism — no cross-module integration risk, one attempt expected.
