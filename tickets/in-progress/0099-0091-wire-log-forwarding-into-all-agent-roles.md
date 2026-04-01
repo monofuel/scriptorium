@@ -109,3 +109,27 @@ All done. The merge request has been enqueued. Here's a summary of what was chan
 ```text
 orwardAgentEvent(\"manager\", areaId, event)`\n- **architect_agent.nim**: Replaced inline `logDebug` for tool events with `forwardAgentEvent(\"architect\", \"areas\", event)`\n- **merge_queue.nim**: Replaced tool logging with `forwardAgentEvent(\"review\", item.ticketId, event)` while preserving the `agentEventMessage` reasoning-capture logic\n- Added `log_forwarding` to the import block of all four files","stop_reason":"end_turn","session_id":"d5331ec1-aef0-43a6-9f7a-25a4610fce38","total_cost_usd":0.42068174999999997,"usage":{"input_tokens":17,"cache_creation_input_tokens":24275,"cache_read_input_tokens":316206,"output_tokens":4431,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":24275,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":17,"outputTokens":4431,"cacheReadInputTokens":316206,"cacheCreationInputTokens":24275,"webSearchRequests":0,"costUSD":0.42068174999999997,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"53f87600-e8b4-428d-a819-cb38e94dfea3"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 59s
+
+**Review Reasoning:**  need updating.
+Lines 37 and 66 are in helper procs that accept `onEvent` as a parameter. Only line 499 is an inline handler definition. The other call sites pass `onEvent` through from callers — those callers would need to provide `forwardAgentEvent` themselves. Let me check who calls those procs.
+Those are pass-through parameters for interactive sessions (plan/ask/do) — not the ad-hoc logging callbacks targeted by this ticket. The only inline handler in `architect_agent.nim` is the one in `runArchitectAreas` at line 499, which was correctly updated.
+
+Everything checks out:
+
+- **Imports**: All four files add `log_forwarding` in alphabetical order within the bracket syntax, maintaining the single-import-block convention.
+- **Coding agent**: Replaced inline `logDebug` for tool/status events with `forwardAgentEvent("coding", ticketId, event)`.
+- **Manager agent**: Replaced inline `logDebug` for tool events with `forwardAgentEvent("manager", areaId, event)`.
+- **Architect agent**: Replaced inline `logDebug` for tool events with `forwardAgentEvent("architect", "areas", event)`. Only one call site exists in this file.
+- **Review agent**: Replaced tool logging with `forwardAgentEvent("review", item.ticketId, event)` while correctly preserving the `agentEventMessage` reasoning-capture logic.
+- **Log level**: `forwardAgentEvent` uses `logInfo` (not `logDebug`), satisfying the acceptance criterion for INFO-level logging.
+- **File activity**: `forwardAgentEvent` calls `extractFileActivity` and logs file read/write lines for tool events.
+- **No behavioral changes**: Agent execution logic is untouched — only logging changed.
+- **No unused imports, dead code, or leftover artifacts.**
+The changes are clean and correct. All four agent roles now use the shared `forwardAgentEvent` proc, imports follow conventions, the review agent preserves its reasoning-capture logic, and log output is elevated to INFO level with role+identifier prefixes and file activity detection. Approved.
