@@ -36,3 +36,8 @@ The health cache (`health/cache.json`) grows unboundedly as new commits are chec
 - Keep the implementation simple — no need for date parsing.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0097-0093-implement-optional-health-cache-pruning
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Straightforward single-proc addition with simple sort logic across two source files and one test file, well-specified with no integration risk, one attempt expected.
