@@ -65,3 +65,41 @@ Done. Changes submitted:
 ```text
 mitted:\n\n- **`src/scriptorium/config.nim`**: Added `hardTimeout`, `noOutputTimeout`, `progressTimeout` fields to `AgentConfig`. Set defaults in `defaultAgentConfig` (14.4M, 300K, 600K ms). Added non-zero merge logic in `mergeAgentConfig`. Global `TimeoutConfig` left untouched.\n- **`tests/test_config.nim`**: Added `testPerAgentTimeoutDefaults`, `testPerAgentTimeoutOverride`, and `testPerAgentTimeoutFullOverride` — all passing.","stop_reason":"end_turn","session_id":"21bf0a56-433c-400a-a0de-559053e95721","total_cost_usd":0.5443,"usage":{"input_tokens":20,"cache_creation_input_tokens":28952,"cache_read_input_tokens":537000,"output_tokens":3790,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":28952,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":3790,"cacheReadInputTokens":537000,"cacheCreationInputTokens":28952,"webSearchRequests":0,"costUSD":0.5443,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"395df553-3f80-4f5e-99b2-4b739fa71f93"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 29s
+
+**Review Reasoning:** Let me review the changes carefully.
+Now let me check the mergeAgentConfig context more fully.
+The implementation looks clean and correct. Let me verify the `submit_review` tool is available before proceeding.
+
+
+The diff is clean and straightforward. Let me verify all checklist items:
+
+**Ticket requirements:**
+- Fields added to `AgentConfig`: `hardTimeout`, `noOutputTimeout`, `progressTimeout` — yes.
+- Defaults in `defaultAgentConfig` match global TimeoutConfig values (14.4M, 300K, 600K) — yes.
+- `mergeAgentConfig` merges non-zero values — yes.
+- Global `TimeoutConfig` preserved — yes, untouched.
+- Three unit tests added and registered in `when isMainModule` — yes.
+
+**Convention enforcement:**
+- camelCase field names — correct.
+- Doc comments on all new procs — the new test procs have `##` doc comments with complete sentences and punctuation. Good.
+- No new imports needed. No forward declarations. No try/catch.
+- Variable grouping: uses `let` appropriately in tests.
+
+**Spec compliance:**
+- Section 9 lists `agents.{architect,coding,manager,reviewer}.{hardTimeout,noOutputTimeout,progressTimeout}` as supported config keys. The implementation adds these to `AgentConfig` which covers all four roles (plus `audit`). Matches spec.
+
+**Code quality:**
+- No dead code, no unused imports, no TODOs, no commented-out code.
+- No unrelated changes.
+- Tests are well-structured: defaults test iterates all roles, override test checks partial application, full override test checks all three fields on a single role.
+
+Everything looks correct and clean.
+Review approved. The implementation is correct, complete, and follows all project conventions.
