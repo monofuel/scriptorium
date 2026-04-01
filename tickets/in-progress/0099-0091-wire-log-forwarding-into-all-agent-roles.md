@@ -84,3 +84,5 @@ Add `log_forwarding` to the import block of each modified file. Use bracket synt
 - All agents include both role and identifier in log prefixes.
 - File activity lines appear for file-related tool events in all agent roles.
 - No behavioral changes beyond log level and format — agent execution logic is untouched.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0091-wire-log-forwarding-into-all-agent-roles
