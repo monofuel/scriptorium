@@ -41,3 +41,20 @@ Done. Changed `maxAgents` default from 4 to 1 in `src/scriptorium/config.nim` an
 use_id":null,"session_id":"31ff9353-7679-4c23-b567-64c759096e72","uuid":"cac3c98a-5727-42d7-b3c6-72089a90afbb"}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":63420,"duration_api_ms":56346,"num_turns":18,"result":"Done. Changed `maxAgents` default from 4 to 1 in `src/scriptorium/config.nim` and updated 4 test assertions across `tests/test_config.nim` and `tests/integration_scriptorium.nim`. All tests pass.","stop_reason":"end_turn","session_id":"31ff9353-7679-4c23-b567-64c759096e72","total_cost_usd":0.382854,"usage":{"input_tokens":14,"cache_creation_input_tokens":26726,"cache_read_input_tokens":287993,"output_tokens":2870,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":26726,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":14,"outputTokens":2870,"cacheReadInputTokens":287993,"cacheCreationInputTokens":26726,"webSearchRequests":0,"costUSD":0.382854,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"665ebd72-51e5-4cd1-8b5b-3bfbc9121b9e"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 16s
+
+**Review Reasoning:** The diff is straightforward and correct:
+
+1. **Config change**: `maxAgents: 4` → `maxAgents: 1` in `defaultConfig()` — matches spec V5 Section 24.
+2. **Test updates**: All 4 assertions updated (`test_config.nim` × 3, `integration_scriptorium.nim` × 1).
+3. **No convention violations**, no dead code, no unrelated changes.
+4. **Agent confirmed tests pass**.
+
+Clean mechanical change that matches the ticket exactly.
+Review approved. The change correctly aligns `concurrency.maxAgents` default with the spec.
