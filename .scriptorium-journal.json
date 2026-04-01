@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0092-0092-wire-per-agent-timeouts-into-coding-agent-execution",
+  "timestamp": "2026-04-01T19:34:04Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution.md",
+      "destination": "tickets/in-progress/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution.md",
+      "content": "# 0092 Wire per-agent timeouts into coding agent execution\n\n**Area:** config-testing\n**Priority:** medium\n**Depends:** 0091\n\n## Context\n\nAfter ticket 0091 adds per-agent timeout fields to `AgentConfig`, the coding agent execution path needs to read timeouts from `config.agents.coding` instead of the global `config.timeouts` fields. This completes the per-agent timeout migration for the coding role.\n\n## Task\n\n1. In `src/scriptorium/agent_runner.nim` (and any other files that read `config.timeouts.codingAgentHardTimeoutMs`, `config.timeouts.codingAgentNoOutputTimeoutMs`, or `config.timeouts.codingAgentProgressTimeoutMs`), update references to read from `config.agents.coding.hardTimeout`, `config.agents.coding.noOutputTimeout`, and `config.agents.coding.progressTimeout` instead.\n   - Use `grep` to find all references to `codingAgentHardTimeoutMs`, `codingAgentNoOutputTimeoutMs`, `codingAgentProgressTimeoutMs` across `src/`.\n2. Keep `config.timeouts.codingAgentMaxAttempts` as-is — max attempts is not part of the per-agent timeout spec.\n3. Update any tests in `tests/` that reference the global timeout fields to use the per-agent fields where appropriate.\n4. Run `make test` and confirm all tests pass.\n\n## Acceptance criteria\n\n- Coding agent execution reads timeouts from `config.agents.coding.{hardTimeout, noOutputTimeout, progressTimeout}`.\n- No remaining references to global `codingAgentHardTimeoutMs` / `codingAgentNoOutputTimeoutMs` / `codingAgentProgressTimeoutMs` in the execution path (config loading can keep them for backward compat).\n- All unit tests pass.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution\n",
+      "contentHash": "9CE452EE53D547B6BEAC370973DEBFDE1A8D0797"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0092-0092-wire-per-agent-timeouts-into-coding-agent-execution"
+}
