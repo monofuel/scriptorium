@@ -86,3 +86,8 @@ Add `log_forwarding` to the import block of each modified file. Use bracket synt
 - No behavioral changes beyond log level and format — agent execution logic is untouched.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0091-wire-log-forwarding-into-all-agent-roles
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Straightforward find-and-replace of callback implementations across four files with an import addition each; the replacement code is fully specified and no new logic is needed, just one attempt expected.
