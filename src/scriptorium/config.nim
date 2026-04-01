@@ -27,6 +27,9 @@ type
     harness*: Harness
     model*: string
     reasoningEffort*: string
+    hardTimeout*: int
+    noOutputTimeout*: int
+    progressTimeout*: int
 
   AgentConfigs* = object
     architect*: AgentConfig
@@ -97,6 +100,9 @@ proc defaultAgentConfig(model: string): AgentConfig =
     harness: DefaultHarness,
     model: model,
     reasoningEffort: DefaultReasoningEffort,
+    hardTimeout: 14_400_000,
+    noOutputTimeout: 300_000,
+    progressTimeout: 600_000,
   )
 
 proc defaultConfig*(): Config =
@@ -169,6 +175,12 @@ proc mergeAgentConfig(base: var AgentConfig, parsed: AgentConfig) =
     base.model = parsed.model
   if parsed.reasoningEffort.len > 0:
     base.reasoningEffort = parsed.reasoningEffort
+  if parsed.hardTimeout > 0:
+    base.hardTimeout = parsed.hardTimeout
+  if parsed.noOutputTimeout > 0:
+    base.noOutputTimeout = parsed.noOutputTimeout
+  if parsed.progressTimeout > 0:
+    base.progressTimeout = parsed.progressTimeout
   let parsedHarnessStr = $parsed.harness
   if parsedHarnessStr.len > 0 and parsedHarnessStr != $DefaultHarness:
     base.harness = parsed.harness

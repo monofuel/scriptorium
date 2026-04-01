@@ -361,6 +361,49 @@ proc testMattermostEnabledField() =
   doAssert cfg2.mattermost.enabled == false
   echo "[OK] mattermost enabled field loaded correctly"
 
+proc testPerAgentTimeoutDefaults() =
+  ## Verify defaultConfig sets per-agent timeout fields to expected defaults for all roles.
+  let cfg = defaultConfig()
+  for agent in [cfg.agents.coding, cfg.agents.architect, cfg.agents.manager, cfg.agents.reviewer, cfg.agents.audit]:
+    doAssert agent.hardTimeout == 14_400_000
+    doAssert agent.noOutputTimeout == 300_000
+    doAssert agent.progressTimeout == 600_000
+  echo "[OK] per-agent timeout defaults are correct for all roles"
+
+proc testPerAgentTimeoutOverride() =
+  ## Verify a partial config overrides one agent timeout while others keep defaults.
+  let tmpDir = getTempDir() / "test_config_agent_timeout_override"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"coding": {"hardTimeout": 5000}}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.agents.coding.hardTimeout == 5000
+  doAssert cfg.agents.coding.noOutputTimeout == 300_000
+  doAssert cfg.agents.coding.progressTimeout == 600_000
+  doAssert cfg.agents.architect.hardTimeout == 14_400_000
+  doAssert cfg.agents.manager.hardTimeout == 14_400_000
+  doAssert cfg.agents.reviewer.hardTimeout == 14_400_000
+  echo "[OK] per-agent timeout override works for single field"
+
+proc testPerAgentTimeoutFullOverride() =
+  ## Verify all three timeout fields load correctly when set on architect.
+  let tmpDir = getTempDir() / "test_config_agent_timeout_full"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"architect": {"hardTimeout": 1000, "noOutputTimeout": 2000, "progressTimeout": 3000}}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.agents.architect.hardTimeout == 1000
+  doAssert cfg.agents.architect.noOutputTimeout == 2000
+  doAssert cfg.agents.architect.progressTimeout == 3000
+  doAssert cfg.agents.coding.hardTimeout == 14_400_000
+  echo "[OK] per-agent timeout full override on architect works correctly"
+
 when isMainModule:
   testParseLogLevel()
   testDefaultConfigValues()
@@ -381,3 +424,6 @@ when isMainModule:
   testMattermostTokenPresent()
   testDiscordEnabledField()
   testMattermostEnabledField()
+  testPerAgentTimeoutDefaults()
+  testPerAgentTimeoutOverride()
+  testPerAgentTimeoutFullOverride()
