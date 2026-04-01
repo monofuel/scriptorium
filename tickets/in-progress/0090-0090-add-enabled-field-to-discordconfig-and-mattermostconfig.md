@@ -27,3 +27,5 @@ The area spec requires `discord.{enabled, serverId, channelId, allowedUserIds}` 
 - `loadConfig` correctly reads `enabled` from JSON for both sections.
 - Default value is `false` for both.
 - New unit tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0090-0090-add-enabled-field-to-discordconfig-and-mattermostconfig
