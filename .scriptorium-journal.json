@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0100",
+  "timestamp": "2026-04-01T19:47:40Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0007-0100.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction.md\n**Ticket ID:** 0100\n**Branch:** scriptorium/ticket-0100\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction\n**Summary:** Unit tests for log_forwarding module already exist in tests/test_log_forwarding.nim with full coverage of extractFileActivity (Read, Edit, Write, edit_file, write_file, Bash, unknown tool, empty/unrecognizable input) and forwardAgentEvent (tool, status, heartbeat/reasoning/message silent, file activity logging). All 23 tests compile and pass using captureLogs mechanism.\n",
+      "contentHash": "1F9DC083D42AC7270137B8442DB3F3BEDF8F8AD2"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0100"
+}
