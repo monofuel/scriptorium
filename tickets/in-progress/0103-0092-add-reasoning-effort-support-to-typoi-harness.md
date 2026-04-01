@@ -20,3 +20,5 @@ The codex and claude-code harnesses both support reasoning-effort normalization 
    - `buildTypoiExecArgs` with empty `reasoningEffort` does not include `--reasoning-effort` in the output.
 
 Use `jsony` for JSON parsing (already in use).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0103-0092-add-reasoning-effort-support-to-typoi-harness
