@@ -63,6 +63,7 @@ services:
     volumes:
       - .:/workspace
       - ~/.aws:/home/scriptorium/.aws:ro
+      - ~/.ssh:/home/scriptorium/.ssh:ro
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     working_dir: /workspace
     env_file: .env
