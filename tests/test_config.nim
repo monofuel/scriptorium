@@ -16,7 +16,6 @@ proc testDefaultConfigValues() =
   doAssert cfg.concurrency.maxAgents == 4
   doAssert cfg.concurrency.tokenBudgetMB == 0
   doAssert cfg.loop.enabled == false
-  doAssert cfg.discord.enabled == false
   doAssert cfg.discord.serverId == ""
   doAssert cfg.discord.channelId == ""
   doAssert cfg.discord.allowedUserIds.len == 0
@@ -37,7 +36,6 @@ proc testMissingConfigFile() =
   doAssert cfg.agents.architect.model == def.agents.architect.model
   doAssert cfg.concurrency.maxAgents == def.concurrency.maxAgents
   doAssert cfg.loop.enabled == def.loop.enabled
-  doAssert cfg.discord.enabled == def.discord.enabled
   echo "[OK] loadConfig returns defaults when config file is missing"
 
 proc testPartialJsonMerge() =
@@ -54,7 +52,6 @@ proc testPartialJsonMerge() =
   doAssert cfg.agents.coding.harness == harnessTypoi  # inferHarness("custom-model")
   doAssert cfg.agents.architect.model == "claude-opus-4-6"
   doAssert cfg.concurrency.maxAgents == 4
-  doAssert cfg.discord.enabled == false
   echo "[OK] partial JSON overrides only specified field"
 
 proc testFullJsonMerge() =
@@ -80,7 +77,7 @@ proc testFullJsonMerge() =
       "codingAgentMaxAttempts": 10
     },
     "loop": {"enabled": true, "feedback": "echo ok", "goal": "ship it", "maxIterations": 5},
-    "discord": {"enabled": true, "serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["alice", "bob"]},
+    "discord": {"serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["alice", "bob"]},
     "dashboard": {"port": 9999, "host": "0.0.0.0"}
   }"""
   writeFile(tmpDir / "scriptorium.json", json)
@@ -103,7 +100,6 @@ proc testFullJsonMerge() =
   doAssert cfg.loop.feedback == "echo ok"
   doAssert cfg.loop.goal == "ship it"
   doAssert cfg.loop.maxIterations == 5
-  doAssert cfg.discord.enabled == true
   doAssert cfg.discord.serverId == "srv-1"
   doAssert cfg.discord.channelId == "12345"
   doAssert cfg.discord.allowedUserIds == @["alice", "bob"]
@@ -149,11 +145,10 @@ proc testDiscordConfigLoading() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"discord": {"enabled": true, "serverId": "srv-42", "channelId": "ch-999", "allowedUserIds": ["user1", "user2", "user3"]}}"""
+  let json = """{"discord": {"serverId": "srv-42", "channelId": "ch-999", "allowedUserIds": ["user1", "user2", "user3"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
-  doAssert cfg.discord.enabled == true
   doAssert cfg.discord.serverId == "srv-42"
   doAssert cfg.discord.channelId == "ch-999"
   doAssert cfg.discord.allowedUserIds == @["user1", "user2", "user3"]
@@ -234,7 +229,6 @@ proc testDashboardPartialConfig() =
 proc testDefaultMattermostConfig() =
   ## Verify defaultConfig returns expected default values for mattermost fields.
   let cfg = defaultConfig()
-  doAssert cfg.mattermost.enabled == false
   doAssert cfg.mattermost.url == ""
   doAssert cfg.mattermost.channelId == ""
   doAssert cfg.mattermost.allowedUserIds.len == 0
@@ -246,11 +240,10 @@ proc testMattermostConfigLoading() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"mattermost": {"enabled": true, "url": "https://mm.example.com", "channelId": "ch-abc", "allowedUserIds": ["u1", "u2"]}}"""
+  let json = """{"mattermost": {"url": "https://mm.example.com", "channelId": "ch-abc", "allowedUserIds": ["u1", "u2"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
-  doAssert cfg.mattermost.enabled == true
   doAssert cfg.mattermost.url == "https://mm.example.com"
   doAssert cfg.mattermost.channelId == "ch-abc"
   doAssert cfg.mattermost.allowedUserIds == @["u1", "u2"]
@@ -262,11 +255,10 @@ proc testMattermostPartialConfig() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"mattermost": {"enabled": true, "url": "https://mm.example.com"}}"""
+  let json = """{"mattermost": {"url": "https://mm.example.com"}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
-  doAssert cfg.mattermost.enabled == true
   doAssert cfg.mattermost.url == "https://mm.example.com"
   doAssert cfg.mattermost.channelId == ""
   doAssert cfg.mattermost.allowedUserIds.len == 0

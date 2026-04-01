@@ -26,9 +26,13 @@
     "host": "0.0.0.0"
   },
   "discord": {
-    "enabled": true,
     "serverId": "1180587895921328158",
     "channelId": "1486502923486757055",
     "allowedUserIds": ["215660018010161152"]
+  },
+  "mattermost": {
+    "url": "https://mattermost.solution-nine.monofuel.dev",
+    "channelId": "715q1ioiwjfabn9wpu14c916ww",
+    "allowedUserIds": ["14bbqjnm63dq3nwk3tsjkfe9sh"]
   }
 }
