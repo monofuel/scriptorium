@@ -34,3 +34,5 @@ The health cache (`health/cache.json`) grows unboundedly as new commits are chec
 - Use `std/[algorithm, sequtils]` for sorting. Use `&` for format strings.
 - Since timestamps are ISO 8601, lexicographic string sort gives correct chronological order.
 - Keep the implementation simple — no need for date parsing.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0097-0093-implement-optional-health-cache-pruning
