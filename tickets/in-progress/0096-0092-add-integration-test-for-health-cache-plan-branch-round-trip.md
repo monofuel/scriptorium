@@ -31,3 +31,8 @@ Add an integration test that verifies the health cache can be written to and rea
 - Use `std/[tables, os, osproc, unittest]`.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Single new integration test file requiring real git repo setup, health cache write/commit/read round-trip, and cleanup — moderate complexity from git operations and import wiring, but well-scoped with clear acceptance criteria and one attempt expected.
