@@ -23,3 +23,8 @@ After ticket 0091 adds per-agent timeout fields to `AgentConfig`, the coding age
 - All unit tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Straightforward find-and-replace of three timeout field references from global config to per-agent config paths, plus corresponding test updates, all within a single module with low integration risk.
