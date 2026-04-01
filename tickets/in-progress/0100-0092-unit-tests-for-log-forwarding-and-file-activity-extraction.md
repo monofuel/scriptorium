@@ -42,3 +42,5 @@ Add unit tests in `tests/test_log_forwarding.nim` for the `forwardAgentEvent` an
 - Tests use `captureLogs` from logging module (no mocking of log output).
 - Test file follows naming convention `tests/test_log_forwarding.nim`.
 - No real agent processes or external services are invoked.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction
