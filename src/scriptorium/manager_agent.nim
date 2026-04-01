@@ -76,6 +76,9 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
     attempt: DefaultAgentAttempt,
     skipGitRepoCheck: true,
     logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / areaId),
+    noOutputTimeoutMs: cfg.agents.manager.noOutputTimeout,
+    hardTimeoutMs: cfg.agents.manager.hardTimeout,
+    progressTimeoutMs: cfg.agents.manager.progressTimeout,
     maxAttempts: DefaultAgentMaxAttempts,
     onEvent: proc(event: AgentStreamEvent) =
       forwardAgentEvent("manager", areaId, event),

@@ -270,8 +270,8 @@ proc runReviewAgent*(
     ticketId: item.ticketId,
     attempt: 1,
     skipGitRepoCheck: true,
-    noOutputTimeoutMs: ReviewAgentNoOutputTimeoutMs,
-    hardTimeoutMs: ReviewAgentHardTimeoutMs,
+    noOutputTimeoutMs: cfg.agents.reviewer.noOutputTimeout,
+    hardTimeoutMs: cfg.agents.reviewer.hardTimeout,
     maxAttempts: 1,
     onEvent: proc(event: AgentStreamEvent) =
       forwardAgentEvent("review", item.ticketId, event)
