@@ -97,3 +97,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 - actual_difficulty: hard
 - prediction_accuracy: underestimated
 - brief_summary: Predicted easy, actual was hard with 1 attempt(s) in 6m34s.
+
+## Prediction
+- predicted_difficulty: medium
+- predicted_duration_minutes: 18
+- reasoning: Reopened due to merge conflicts — the agent must reconcile 2 files (config.nim, test_config.nim) against a changed base that already includes related timeout work (commit e5234f4), adding integration risk beyond the straightforward field additions.
