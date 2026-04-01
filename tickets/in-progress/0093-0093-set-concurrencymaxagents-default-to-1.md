@@ -21,3 +21,5 @@ The spec (V5, Section 24) defines `concurrency.maxAgents` with a default of 1. T
 
 - `defaultConfig().concurrency.maxAgents == 1`.
 - All unit tests updated and passing.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0093-0093-set-concurrencymaxagents-default-to-1
