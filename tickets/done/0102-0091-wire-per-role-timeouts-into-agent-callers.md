@@ -72,3 +72,47 @@ All four files check out:
 
 No convention violations, no spec contradictions, no dead code or unrelated changes.
 Approved. The changes are a clean mechanical substitution — each caller now reads timeouts from the per-role `AgentConfig` fields as the spec requires, with no extraneous modifications.
+
+## Merge Queue Success
+- Summary: Wire per-role timeouts into agent callers: architect reads from agentCfg.noOutputTimeout/hardTimeout instead of PlanNoOutputTimeoutMs/PlanHardTimeoutMs constants, manager adds noOutputTimeoutMs/hardTimeoutMs/progressTimeoutMs from cfg.agents.manager, and reviewer reads from cfg.agents.reviewer instead of ReviewAgent* constants. Coding agent was already wired from ticket 0090.\n
+### Quality Check Output
+```text
+strator_flow.nim]  1555 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pjson.nim.c:2883:1: fatal error: error writing to /dev/shm/cctVQ3Ry.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  2883 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pstrutils.nim.c:3537:1: fatal error: error writing to /dev/shm/cccV5s6y.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3537 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptimes.nim.c:3801:1: fatal error: error writing to /dev/shm/cc46eXYy.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3801 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptables.nim.c:8698:1: fatal error: error writing to /dev/shm/cc86kPkG.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  8698 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@psystem.nim.c:14454:1: fatal error: error writing to /dev/shm/ccr7FGOo.s: No space left on device
+[tests/integration_orchestrator_flow.nim] 14454 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 400
+- coding_wall_seconds: 76
+- test_wall_seconds: 17
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 277742
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 6m40s.
