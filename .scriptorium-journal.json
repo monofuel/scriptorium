@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0093",
+  "timestamp": "2026-04-01T19:43:28Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0005-0093.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0093-0093-set-concurrencymaxagents-default-to-1.md\n**Ticket ID:** 0093\n**Branch:** scriptorium/ticket-0093\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0093-0093-set-concurrencymaxagents-default-to-1\n**Summary:** Changed concurrency.maxAgents default from 4 to 1 in defaultConfig() to match spec V5 Section 24. Updated all related assertions in test_config.nim (3 occurrences) and integration_scriptorium.nim (1 occurrence).\n",
+      "contentHash": "683D3F5C9F33B40546453AAC4CF1BE10352C6B10"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0093"
+}
