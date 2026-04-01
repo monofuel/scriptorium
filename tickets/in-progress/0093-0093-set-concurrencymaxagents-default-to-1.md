@@ -23,3 +23,8 @@ The spec (V5, Section 24) defines `concurrency.maxAgents` with a default of 1. T
 - All unit tests updated and passing.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0093-0093-set-concurrencymaxagents-default-to-1
+
+## Prediction
+- predicted_difficulty: trivial
+- predicted_duration_minutes: 5
+- reasoning: Single constant change from 4 to 1 in config plus updating three test assertions to match — purely mechanical find-and-replace with no logic changes.
