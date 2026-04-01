@@ -46,3 +46,5 @@ Create a reusable proc in a new module `src/scriptorium/log_forwarding.nim` that
 - Status events produce an INFO log line.
 - Heartbeat, reasoning, and message events are silently skipped.
 - No new event types are invented — only existing `AgentStreamEventKind` values are used.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection

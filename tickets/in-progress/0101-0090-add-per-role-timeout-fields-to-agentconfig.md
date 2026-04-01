@@ -29,3 +29,5 @@ The spec (Section 9) requires each agent role to support `hardTimeout`, `noOutpu
    - Zero-value timeouts in JSON do not override non-zero defaults.
 
 Use `jsony` for JSON parsing (already in use).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-0090-add-per-role-timeout-fields-to-agentconfig

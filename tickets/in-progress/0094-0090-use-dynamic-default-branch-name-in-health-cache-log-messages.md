@@ -22,3 +22,5 @@ The `isMasterHealthy` proc in `src/scriptorium/orchestrator.nim` hardcodes "mast
 ## Notes
 
 - `resolveDefaultBranch` is already imported via `git_ops`. Use `&` format strings per project convention.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages
