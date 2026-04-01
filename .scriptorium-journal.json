@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0091",
+  "timestamp": "2026-04-01T19:31:37Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0091.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0091-0091-add-per-agent-timeout-fields-to-agentconfig.md\n**Ticket ID:** 0091\n**Branch:** scriptorium/ticket-0091\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0091-0091-add-per-agent-timeout-fields-to-agentconfig\n**Summary:** Add hardTimeout, noOutputTimeout, and progressTimeout int fields to AgentConfig with defaults matching global TimeoutConfig. Update mergeAgentConfig to merge non-zero values. Added three unit tests verifying defaults, partial override, and full override. Global TimeoutConfig preserved.\n",
+      "contentHash": "163CE605AE14EA2DDFA4BF2EC57BE9D7D3BD0CAD"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0091"
+}
