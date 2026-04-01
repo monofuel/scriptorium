@@ -55,3 +55,31 @@ Done. The integration test in `tests/integration_health_cache.nim`:
 ```text
 "num_turns":19,"result":"Done. The integration test in `tests/integration_health_cache.nim`:\n\n1. Creates a temp git repo with a `scriptorium/plan` branch\n2. Writes a `HealthCacheEntry` via `writeHealthCache`\n3. Commits via `commitHealthCache`\n4. Simulates restart by checking out the file from HEAD\n5. Reads back with `readHealthCache` and asserts all 6 fields round-trip correctly\n6. Cleans up temp directories via `defer`","stop_reason":"end_turn","session_id":"6de39386-48a7-4d17-8bab-7eb9c6864319","total_cost_usd":0.376707,"usage":{"input_tokens":16,"cache_creation_input_tokens":22418,"cache_read_input_tokens":323829,"output_tokens":2984,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":22418,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":16,"outputTokens":2984,"cacheReadInputTokens":323829,"cacheCreationInputTokens":22418,"webSearchRequests":0,"costUSD":0.376707,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"fce58f9e-a2d6-402b-b183-0c30948443c9"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 1m19s
+
+**Review Reasoning:** Let me review the integration test implementation.
+The implementation looks clean. Let me verify it matches all acceptance criteria:
+
+- **Temp git repo with `scriptorium/plan` branch**: `makeTestRepo` creates this correctly.
+- **Writes `HealthCacheEntry` via `writeHealthCache`**: Done at line 44.
+- **Commits via `commitHealthCache`**: Done at line 45.
+- **Simulates restart by re-reading from plan branch**: `git checkout HEAD -- ...` at line 53 proves the file comes from the commit, then `readHealthCache` at line 55 re-reads.
+- **Asserts all 6 fields round-trip**: Lines 60-65 check all fields.
+- **Real git operations, no mocks**: Confirmed — this is a proper integration test.
+- **Cleanup via `defer`**: Line 26-27.
+
+**Convention check**:
+- Import style: Single block, bracket syntax, std/ first then local.
+- Doc comment on `makeTestRepo`.
+- camelCase variables, no grouping issues.
+- No try/catch, no boolean success patterns.
+- No unused imports (`osproc` used for `execCmdEx`, `os` for path ops and `dirExists`/`createDir`/`removeDir`, `tables` for `initTable`/`hasKey`, `unittest` for test framework).
+
+**Note on `execCmdEx` vs `gitRun`**: The ticket notes suggest using `gitRun` from `git_ops`, but the established pattern across all other integration tests (`integration_journal.nim`, `integration_recovery.nim`, etc.) is `discard execCmdEx(...)` for git setup. The implementation follows the existing codebase convention, which is fine.
+The integration test is well-written and meets all acceptance criteria. It correctly exercises the full health cache persistence path (write → commit → re-read from committed state) using real git operations, verifies all 6 fields round-trip, and cleans up after itself. Approved.
