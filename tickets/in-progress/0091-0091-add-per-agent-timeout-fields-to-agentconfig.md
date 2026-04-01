@@ -50,3 +50,18 @@ The area spec lists `agents.architect.{hardTimeout, noOutputTimeout, progressTim
 - predicted_difficulty: easy
 - predicted_duration_minutes: 11
 - reasoning: Single-file type addition with three int fields, a merge helper update, and three straightforward unit tests — all in well-established patterns with no cross-module risk.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0091/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0091/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. Changes submitted:
+
+- **`src/scriptorium/config.nim`**: Added `hardTimeout`, `noOutputTimeout`, `progressTimeout` fields to `AgentConfig`. Set defaults in `defaultAgentConfig` (14.4M, 300K, 600K ms). Added non-zero merge logic in `mergeAgentConfig`. Global `TimeoutConfig` left untouched.
+- **`tests/test_config.nim`**: Added `testPerAgentTimeoutDefaults`, `testPerAgentTimeoutOverride`, and `testPerAgentTimeoutFullOverride` — all passing.
+```
+
+### Agent Stdout Tail
+```text
+mitted:\n\n- **`src/scriptorium/config.nim`**: Added `hardTimeout`, `noOutputTimeout`, `progressTimeout` fields to `AgentConfig`. Set defaults in `defaultAgentConfig` (14.4M, 300K, 600K ms). Added non-zero merge logic in `mergeAgentConfig`. Global `TimeoutConfig` left untouched.\n- **`tests/test_config.nim`**: Added `testPerAgentTimeoutDefaults`, `testPerAgentTimeoutOverride`, and `testPerAgentTimeoutFullOverride` — all passing.","stop_reason":"end_turn","session_id":"21bf0a56-433c-400a-a0de-559053e95721","total_cost_usd":0.5443,"usage":{"input_tokens":20,"cache_creation_input_tokens":28952,"cache_read_input_tokens":537000,"output_tokens":3790,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":28952,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":20,"outputTokens":3790,"cacheReadInputTokens":537000,"cacheCreationInputTokens":28952,"webSearchRequests":0,"costUSD":0.5443,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"395df553-3f80-4f5e-99b2-4b739fa71f93"}
+```
