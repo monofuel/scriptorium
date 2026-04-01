@@ -56,6 +56,7 @@ proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int
 proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   ## Return cached master health, refreshing only when the master commit changes.
   ## Checks in-memory cache first, then file cache on plan branch, then runs checks.
+  let branchName = resolveDefaultBranch(repoPath)
   let currentHead = defaultBranchHeadCommit(repoPath)
   if state.initialized and state.head == currentHead:
     return state.healthy
@@ -74,9 +75,9 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
       state.healthy = cachedEntry.entry.healthy
       state.initialized = true
       if cachedEntry.entry.healthy:
-        logInfo(&"master health: cached healthy for {currentHead}")
+        logInfo(&"{branchName} health: cached healthy for {currentHead}")
       else:
-        logInfo(&"master health: cached unhealthy for {currentHead}")
+        logInfo(&"{branchName} health: cached unhealthy for {currentHead}")
       return state.healthy
 
   # Cache miss — run health checks.
@@ -223,16 +224,17 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         logDebug("waiting: no plan branch")
         idle = true
       else:
-        logDebug(&"tick {ticks}: checking master health")
+        let defaultBranch = resolveDefaultBranch(repoPath)
+        logDebug(&"tick {ticks}: checking {defaultBranch} health")
         var t0 = epochTime()
         let healthy = isMasterHealthy(repoPath, masterHealthState)
         let healthElapsed = epochTime() - t0
-        logDebug(&"tick {ticks}: master health check took {healthElapsed:.1f}s, healthy={healthy}")
+        logDebug(&"tick {ticks}: {defaultBranch} health check took {healthElapsed:.1f}s, healthy={healthy}")
         if not healthy and not masterHealthState.lastHealthLogged:
-          logWarn("master is unhealthy — skipping tick")
+          logWarn(&"{defaultBranch} is unhealthy — skipping tick")
           masterHealthState.lastHealthLogged = true
         elif healthy and masterHealthState.lastHealthLogged:
-          logInfo(&"master is healthy again (commit {masterHealthState.head})")
+          logInfo(&"{defaultBranch} is healthy again (commit {masterHealthState.head})")
           masterHealthState.lastHealthLogged = false
 
         var architectStatus = "skipped"
