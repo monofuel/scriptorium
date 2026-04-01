@@ -22,3 +22,8 @@ The codex and claude-code harnesses both support reasoning-effort normalization 
 Use `jsony` for JSON parsing (already in use).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0103-0092-add-reasoning-effort-support-to-typoi-harness
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Straightforward addition of a single field to a struct, a conditional flag in an arg builder, a field pass-through in the runner, and two simple unit tests — all following existing patterns in the codebase.
