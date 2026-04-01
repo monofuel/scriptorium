@@ -365,12 +365,27 @@ proc testMattermostEnabledField() =
   echo "[OK] mattermost enabled field loaded correctly"
 
 proc testPerAgentTimeoutDefaults() =
-  ## Verify defaultConfig sets per-agent timeout fields to expected defaults for all roles.
+  ## Verify defaultConfig sets per-agent timeout fields to expected role-specific defaults.
   let cfg = defaultConfig()
-  for agent in [cfg.agents.coding, cfg.agents.architect, cfg.agents.manager, cfg.agents.reviewer, cfg.agents.audit]:
-    doAssert agent.hardTimeout == 14_400_000
-    doAssert agent.noOutputTimeout == 300_000
-    doAssert agent.progressTimeout == 600_000
+  doAssert cfg.agents.architect.hardTimeout == 7_200_000
+  doAssert cfg.agents.architect.noOutputTimeout == 600_000
+  doAssert cfg.agents.architect.progressTimeout == 0
+
+  doAssert cfg.agents.coding.hardTimeout == 14_400_000
+  doAssert cfg.agents.coding.noOutputTimeout == 300_000
+  doAssert cfg.agents.coding.progressTimeout == 600_000
+
+  doAssert cfg.agents.manager.hardTimeout == 3_600_000
+  doAssert cfg.agents.manager.noOutputTimeout == 300_000
+  doAssert cfg.agents.manager.progressTimeout == 0
+
+  doAssert cfg.agents.reviewer.hardTimeout == 3_600_000
+  doAssert cfg.agents.reviewer.noOutputTimeout == 300_000
+  doAssert cfg.agents.reviewer.progressTimeout == 0
+
+  doAssert cfg.agents.audit.hardTimeout == 0
+  doAssert cfg.agents.audit.noOutputTimeout == 0
+  doAssert cfg.agents.audit.progressTimeout == 0
   echo "[OK] per-agent timeout defaults are correct for all roles"
 
 proc testPerAgentTimeoutOverride() =
@@ -386,9 +401,9 @@ proc testPerAgentTimeoutOverride() =
   doAssert cfg.agents.coding.hardTimeout == 5000
   doAssert cfg.agents.coding.noOutputTimeout == 300_000
   doAssert cfg.agents.coding.progressTimeout == 600_000
-  doAssert cfg.agents.architect.hardTimeout == 14_400_000
-  doAssert cfg.agents.manager.hardTimeout == 14_400_000
-  doAssert cfg.agents.reviewer.hardTimeout == 14_400_000
+  doAssert cfg.agents.architect.hardTimeout == 7_200_000
+  doAssert cfg.agents.manager.hardTimeout == 3_600_000
+  doAssert cfg.agents.reviewer.hardTimeout == 3_600_000
   echo "[OK] per-agent timeout override works for single field"
 
 proc testPerAgentTimeoutFullOverride() =
@@ -406,6 +421,21 @@ proc testPerAgentTimeoutFullOverride() =
   doAssert cfg.agents.architect.progressTimeout == 3000
   doAssert cfg.agents.coding.hardTimeout == 14_400_000
   echo "[OK] per-agent timeout full override on architect works correctly"
+
+proc testZeroTimeoutDoesNotOverride() =
+  ## Verify that zero-value timeouts in JSON do not override non-zero defaults.
+  let tmpDir = getTempDir() / "test_config_zero_timeout"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"coding": {"hardTimeout": 0, "noOutputTimeout": 0, "progressTimeout": 0}}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.agents.coding.hardTimeout == 14_400_000
+  doAssert cfg.agents.coding.noOutputTimeout == 300_000
+  doAssert cfg.agents.coding.progressTimeout == 600_000
+  echo "[OK] zero-value timeouts do not override non-zero defaults"
 
 when isMainModule:
   testParseLogLevel()
@@ -430,3 +460,4 @@ when isMainModule:
   testPerAgentTimeoutDefaults()
   testPerAgentTimeoutOverride()
   testPerAgentTimeoutFullOverride()
+  testZeroTimeoutDoesNotOverride()

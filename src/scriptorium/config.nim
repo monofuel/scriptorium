@@ -94,25 +94,30 @@ type
     logLevel*: string
     fileLogLevel*: string
 
-proc defaultAgentConfig(model: string): AgentConfig =
-  ## Return an AgentConfig populated with default values for a given model.
+proc defaultAgentConfig(model: string, hardTimeout: int = 0,
+    noOutputTimeout: int = 0, progressTimeout: int = 0): AgentConfig =
+  ## Return an AgentConfig populated with default values for a given model and timeouts.
   AgentConfig(
     harness: DefaultHarness,
     model: model,
     reasoningEffort: DefaultReasoningEffort,
-    hardTimeout: 14_400_000,
-    noOutputTimeout: 300_000,
-    progressTimeout: 600_000,
+    hardTimeout: hardTimeout,
+    noOutputTimeout: noOutputTimeout,
+    progressTimeout: progressTimeout,
   )
 
 proc defaultConfig*(): Config =
   ## Return a Config populated with default values.
   Config(
     agents: AgentConfigs(
-      architect: defaultAgentConfig(DefaultArchitectModel),
-      coding: defaultAgentConfig(DefaultCodingModel),
-      manager: defaultAgentConfig(DefaultManagerModel),
-      reviewer: defaultAgentConfig(DefaultReviewerModel),
+      architect: defaultAgentConfig(DefaultArchitectModel,
+        hardTimeout = 7_200_000, noOutputTimeout = 600_000),
+      coding: defaultAgentConfig(DefaultCodingModel,
+        hardTimeout = 14_400_000, noOutputTimeout = 300_000, progressTimeout = 600_000),
+      manager: defaultAgentConfig(DefaultManagerModel,
+        hardTimeout = 3_600_000, noOutputTimeout = 300_000),
+      reviewer: defaultAgentConfig(DefaultReviewerModel,
+        hardTimeout = 3_600_000, noOutputTimeout = 300_000),
       audit: defaultAgentConfig(DefaultAuditModel),
     ),
     endpoints: Endpoints(
