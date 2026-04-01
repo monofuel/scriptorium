@@ -103,6 +103,7 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
       discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
         var cache = readHealthCache(planPath)
         cache[currentHead] = newEntry
+        cache = pruneHealthCache(cache, MaxHealthCacheEntries)
         writeHealthCache(planPath, cache)
         commitHealthCache(planPath)
         result = true

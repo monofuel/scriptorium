@@ -1,5 +1,5 @@
 import
-  std/[json, os, strformat, tables, times],
+  std/[algorithm, json, os, sequtils, strformat, tables, times],
   ./[git_ops, logging, shared_state]
 
 const
@@ -7,6 +7,7 @@ const
   HealthCacheFileName* = "cache.json"
   HealthCacheRelPath* = "health/cache.json"
   HealthCacheCommitMessage* = "scriptorium: update health cache"
+  MaxHealthCacheEntries* = 100
 
 type
   MasterHealthState* = object
@@ -15,6 +16,18 @@ type
     initialized*: bool
     lastHealthLogged*: bool
     testOutput*: string
+
+proc pruneHealthCache*(cache: Table[string, HealthCacheEntry], maxEntries: int): Table[string, HealthCacheEntry] =
+  ## Return a pruned copy of the cache keeping only the most recent maxEntries by timestamp.
+  if cache.len <= maxEntries:
+    return cache
+  var entries = toSeq(cache.pairs)
+  entries.sort(proc(a, b: (string, HealthCacheEntry)): int =
+    cmp(b[1].timestamp, a[1].timestamp)
+  )
+  result = initTable[string, HealthCacheEntry]()
+  for i in 0 ..< maxEntries:
+    result[entries[i][0]] = entries[i][1]
 
 proc readHealthCache*(planPath: string): Table[string, HealthCacheEntry] =
   ## Read health/cache.json from a plan worktree path and return the cache table.

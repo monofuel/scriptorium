@@ -1,7 +1,7 @@
 ## Unit tests for the three-tier health cache lookup logic used by isMasterHealthy.
 
 import
-  std/[json, os, tables, tempfiles, unittest],
+  std/[json, os, strformat, tables, tempfiles, unittest],
   scriptorium/[health_checks, shared_state]
 
 suite "MasterHealthState in-memory cache":
@@ -177,3 +177,33 @@ suite "cache miss writes result to file cache":
     check reloaded["old111"].healthy == true
     check "new222" in reloaded
     check reloaded["new222"].healthy == false
+
+suite "pruneHealthCache":
+  test "table with fewer entries than max is returned unchanged":
+    var cache = initTable[string, HealthCacheEntry]()
+    cache["a"] = HealthCacheEntry(healthy: true, timestamp: "2026-01-01T00:00:00Z")
+    cache["b"] = HealthCacheEntry(healthy: false, timestamp: "2026-01-02T00:00:00Z")
+    let pruned = pruneHealthCache(cache, 5)
+    check pruned.len == 2
+    check "a" in pruned
+    check "b" in pruned
+
+  test "table with more entries than max retains only the N most recent by timestamp":
+    var cache = initTable[string, HealthCacheEntry]()
+    for i in 0 ..< 5:
+      let ts = &"2026-01-0{i + 1}T00:00:00Z"
+      let key = &"commit_{i}"
+      cache[key] = HealthCacheEntry(healthy: true, timestamp: ts)
+    let pruned = pruneHealthCache(cache, 3)
+    check pruned.len == 3
+    # The three most recent are commits 2, 3, 4 (Jan 3, 4, 5).
+    check "commit_2" in pruned
+    check "commit_3" in pruned
+    check "commit_4" in pruned
+    check "commit_0" notin pruned
+    check "commit_1" notin pruned
+
+  test "empty table returns empty":
+    let cache = initTable[string, HealthCacheEntry]()
+    let pruned = pruneHealthCache(cache, 10)
+    check pruned.len == 0
