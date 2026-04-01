@@ -45,3 +45,8 @@ The area spec lists `agents.architect.{hardTimeout, noOutputTimeout, progressTim
 - New unit tests pass.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0091-0091-add-per-agent-timeout-fields-to-agentconfig
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 11
+- reasoning: Single-file type addition with three int fields, a merge helper update, and three straightforward unit tests — all in well-established patterns with no cross-module risk.
