@@ -58,3 +58,48 @@ use_id":null,"session_id":"31ff9353-7679-4c23-b567-64c759096e72","uuid":"cac3c98
 
 Clean mechanical change that matches the ticket exactly.
 Review approved. The change correctly aligns `concurrency.maxAgents` default with the spec.
+
+## Merge Queue Success
+- Summary: Changed concurrency.maxAgents default from 4 to 1 in defaultConfig() to match spec V5 Section 24. Updated all related assertions in test_config.nim (3 occurrences) and integration_scriptorium.nim (1 occurrence).\n
+### Quality Check Output
+```text
+iting to /dev/shm/cc42z8j6.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  1555 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptimes.nim.c:3801:1: fatal error: error writing to /dev/shm/cc4yvM2e.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3801 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptables.nim.c:8698:1: fatal error: error writing to /dev/shm/ccVwJhDG.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  8698 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@psystem.nim.c:14454:1: fatal error: error writing to /dev/shm/ccRcbiqC.s: No space left on device
+[tests/integration_orchestrator_flow.nim] 14454 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+arness_d/@ptimes.nim.c:3812:1: fatal error: error writing to /dev/shm/ccgyTYTQ.s: No space left on device
+[tests/integration_claude_code_harness.nim]  3812 | }
+[tests/integration_claude_code_harness.nim]       | ^
+[tests/integration_claude_code_harness.nim] compilation terminated.
+[tests/integration_claude_code_harness.nim] /home/scriptorium/.cache/nim/integration_claude_code_harness_d/@psystem.nim.c:11927:1: fatal error: error writing to /dev/shm/ccy1sfx3.s: No space left on device
+[tests/integration_claude_code_harness.nim] 11927 | }
+[tests/integration_claude_code_harness.nim]       | ^
+[tests/integration_claude_code_harness.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 324
+- coding_wall_seconds: 64
+- test_wall_seconds: 16
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 214810
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: underestimated
+- brief_summary: Predicted trivial, actual was easy with 1 attempt(s) in 5m24s.
