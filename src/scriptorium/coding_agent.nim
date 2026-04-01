@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -194,10 +194,7 @@ proc executeAssignedTicket*(
       maxAttempts: attemptsForThisCall,
       continuationPromptBuilder: buildAgentsReinjectPrompt,
       onEvent: proc(event: AgentStreamEvent) =
-        if event.kind == agentEventTool:
-          logDebug(fmt"coding[{ticketId}]: {event.text}")
-        elif event.kind == agentEventStatus:
-          logDebug(fmt"coding[{ticketId}]: status {event.text}"),
+        forwardAgentEvent("coding", ticketId, event),
     )
     discard consumeSubmitPrSummary(ticketId)
 

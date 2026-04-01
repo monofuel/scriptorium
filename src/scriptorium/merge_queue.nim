@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, architect_agent, config, git_ops, journal, lock_management, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, architect_agent, config, git_ops, journal, lock_management, log_forwarding, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -274,9 +274,8 @@ proc runReviewAgent*(
     hardTimeoutMs: ReviewAgentHardTimeoutMs,
     maxAttempts: 1,
     onEvent: proc(event: AgentStreamEvent) =
-      if event.kind == agentEventTool:
-        logDebug(fmt"review[{item.ticketId}]: {event.text}")
-      elif event.kind == agentEventMessage:
+      forwardAgentEvent("review", item.ticketId, event)
+      if event.kind == agentEventMessage:
         if reviewReasoning.len > 0:
           reviewReasoning &= "\n"
         reviewReasoning &= event.text,

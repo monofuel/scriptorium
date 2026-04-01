@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils, tables],
-  ./[agent_pool, agent_runner, architect_agent, config, git_ops, lock_management, logging, prompt_builders, shared_state, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, config, git_ops, lock_management, log_forwarding, logging, prompt_builders, shared_state, ticket_metadata]
 
 const
   TicketCommitMessage = "scriptorium: create tickets from areas"
@@ -78,8 +78,7 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
     logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / areaId),
     maxAttempts: DefaultAgentMaxAttempts,
     onEvent: proc(event: AgentStreamEvent) =
-      if event.kind == agentEventTool:
-        logDebug(&"manager[{areaId}]: {event.text}"),
+      forwardAgentEvent("manager", areaId, event),
   ))
 
   # Consume tickets submitted via the MCP tool.
