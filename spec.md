@@ -240,12 +240,27 @@ This spec describes behavior that is present in the code and covered by current 
   - `agents.architect.harness`
   - `agents.architect.model`
   - `agents.architect.reasoningEffort`
+  - `agents.architect.hardTimeout`
+  - `agents.architect.noOutputTimeout`
+  - `agents.architect.progressTimeout`
   - `agents.coding.harness`
   - `agents.coding.model`
   - `agents.coding.reasoningEffort`
+  - `agents.coding.hardTimeout`
+  - `agents.coding.noOutputTimeout`
+  - `agents.coding.progressTimeout`
   - `agents.manager.harness`
   - `agents.manager.model`
   - `agents.manager.reasoningEffort`
+  - `agents.manager.hardTimeout`
+  - `agents.manager.noOutputTimeout`
+  - `agents.manager.progressTimeout`
+  - `agents.reviewer.harness`
+  - `agents.reviewer.model`
+  - `agents.reviewer.reasoningEffort`
+  - `agents.reviewer.hardTimeout`
+  - `agents.reviewer.noOutputTimeout`
+  - `agents.reviewer.progressTimeout`
   - `endpoints.local`
   - `logLevel`
 - `SCRIPTORIUM_LOG_LEVEL` must override config-file `logLevel` when present.
@@ -279,38 +294,45 @@ This spec describes behavior that is present in the code and covered by current 
 
 ## V2 Features
 
-### 10. Coding Agent Log Forwarding
+### 10. Agent Log Forwarding
 
-- During coding agent execution, the orchestrator must forward meaningful stream events from the agent harness to orchestrator logs in real time.
+- During all agent execution (coding, manager, architect, and review), the orchestrator must forward meaningful stream events from the agent harness to orchestrator logs in real time.
 - For both claude-code (stream-json) and codex (--json) harnesses, the following event types must be surfaced:
   - Tool calls: log the tool name and a summary of arguments (e.g., "agent: tool edit_file src/foo.nim").
   - File activity: log file reads and writes detected from tool events.
   - Status changes: log agent status transitions (e.g., "agent: thinking", "agent: executing tool").
 - The orchestrator must use the existing AgentEventHandler callback to receive parsed stream events during agent execution.
-- Log output must be prefixed with the ticket ID for correlation.
+- Log output must be prefixed with the agent role and relevant identifier (ticket ID, area ID, etc.) for correlation.
 - Acceptance criteria:
-  - When a coding agent runs, the orchestrator logs show tool calls and file activity as they happen.
-  - Log lines include ticket ID prefix.
+  - When any agent runs, the orchestrator logs show tool calls and file activity as they happen.
+  - Log lines include agent role and identifier prefix.
   - No new event types need to be invented — use existing heartbeat, reasoning, tool, status, and message event categories.
 
 ### 11. Stall Detection And Automatic Continuation
 
-- A "stall" is defined as: a coding agent turn completes (process exits) without having called the submit_pr MCP tool.
+- Stall detection applies to **all** agent roles — coding, manager, architect, and review agents. Every agent execution must be monitored for stalls.
+- A "stall" is defined per role as: an agent turn completes (process exits) without having called its expected completion signal:
+  - **Coding agent:** exits without calling the `submit_pr` MCP tool.
+  - **Review agent:** exits without calling the `submit_review` MCP tool (see section 21 for review-specific stall policy).
+  - **Manager agent:** exits without producing any ticket files in `tickets/open/`, or exceeds its hard timeout.
+  - **Architect agent:** exits without producing or updating any area files in `areas/`, or exceeds its hard timeout.
 - When a stall is detected, the orchestrator must automatically retry the agent with a continuation prompt that includes:
-  - The full original ticket content.
-  - A reminder to continue working and call submit_pr when done.
+  - The full original prompt content (ticket content for coding/review, area list for manager, spec for architect).
+  - A reminder to continue working and complete the expected action.
 - Stall-driven retries must use the existing bounded retry mechanism (maxAttempts in AgentRunRequest).
 - The continuation prompt must be distinct from the initial prompt — it must indicate this is a retry after a stall.
-- Each stall retry must be logged with the attempt number.
+- Each stall retry must be logged with the attempt number and agent role.
+- Hard timeout and no-output timeout apply to all agent roles as baseline safety nets, not just coding agents. These timeouts are configurable per role via `agents.<role>.hardTimeout` and `agents.<role>.noOutputTimeout` in `scriptorium.json`.
 - Acceptance criteria:
-  - When a coding agent exits without calling submit_pr, the orchestrator retries with the continuation prompt.
+  - When any agent exits without completing its expected action, the orchestrator retries with the continuation prompt.
   - Retries stop after maxAttempts is reached.
-  - Each retry is logged with attempt number and ticket ID.
-  - The continuation prompt includes the original ticket content.
+  - Each retry is logged with attempt number, agent role, and relevant identifier (ticket ID, area ID, etc.).
+  - The continuation prompt includes the original prompt content.
+  - Manager and architect stalls are detected and retried, not just coding agent stalls.
 
 ### 12. Test-Aware Stall Detection
 
-- When a stall is detected (turn ended, no submit_pr called), before sending the continuation prompt the orchestrator must:
+- When a coding agent stall is detected (turn ended, no submit_pr called), before sending the continuation prompt the orchestrator must:
   - Run make test in the agent's worktree.
   - Capture the exit code and output.
 - If tests fail, the continuation prompt must include:
@@ -319,17 +341,18 @@ This spec describes behavior that is present in the code and covered by current 
 - If tests pass, the continuation prompt must still include:
   - A note that tests are passing.
   - A directive to continue working and submit the PR.
+- Test-aware stall detection is specific to coding agents — manager and architect agents operate on the plan branch and do not have a meaningful `make test` gate. Review agents also skip this step.
 - Acceptance criteria:
-  - On stall, make test runs in the agent worktree before retry.
+  - On coding agent stall, make test runs in the agent worktree before retry.
   - Test failure output is included in the continuation prompt when tests fail.
   - Test pass status is included in the continuation prompt when tests pass.
   - The existing stall detection behavior from section 11 is preserved — test-aware detection augments it, not replaces it.
 
 ## V2 Known Limitations
 
-- Stall detection is per-turn only — it does not detect agents that are running but making no progress within a turn.
+- Stall detection is per-turn only — it does not detect agents that are running but making no progress within a turn (addressed in v8, section 34).
 - Test-aware stall detection runs make test only, not make integration-test.
-- Coding agent promotions and manager-driven retries are out of scope for v2.
+- Manager and architect stall detection checks for output file creation, which may miss partial or malformed output — the orchestrator does not validate content quality at the stall detection level.
 
 ## V3 Features — Observability And Metrics
 
@@ -941,13 +964,14 @@ This spec describes behavior that is present in the code and covered by current 
 
 #### Progress-Based Stall Detection
 
-- In addition to the existing no-output timeout (which triggers when the agent produces no stdout for a configured interval), the orchestrator must implement progress-based stall detection.
-- "Progress" is defined as the agent calling an MCP tool or producing a tool-call stream event within a configurable window (`agents.coding.progressTimeout` in `scriptorium.json`, default 10 minutes).
+- In addition to the existing no-output timeout (which triggers when the agent produces no stdout for a configured interval), the orchestrator must implement progress-based stall detection for all agent roles.
+- "Progress" is defined as the agent calling an MCP tool or producing a tool-call stream event within a configurable window (`agents.<role>.progressTimeout` in `scriptorium.json`, default 10 minutes).
+- Progress-based stall detection applies to all agent roles (coding, manager, architect, review), consistent with the universal stall detection policy in section 11.
 - If the agent produces stdout output (e.g., reasoning tokens, status messages) but makes no tool calls within the progress timeout window, the orchestrator must treat this as a stall.
 - On progress-based stall detection:
-  - Log: `ticket <id>: agent stalled — output active but no tool calls for <duration>`.
+  - Log: `<role> <id>: agent stalled — output active but no tool calls for <duration>`.
   - Terminate the agent process.
-  - Proceed with the existing stall continuation flow (section 11): run pre-retry tests (section 12), send continuation prompt with test results.
+  - Proceed with the existing stall continuation flow (section 11): for coding agents, run pre-retry tests (section 12) then send continuation prompt; for other roles, send the role-appropriate continuation prompt directly.
 - The no-output timeout and hard timeout remain as independent safety nets — progress-based detection is an additional layer.
 - Progress tracking must use the existing `AgentEventHandler` callback: tool-type events reset the progress timer, other event types do not.
 
