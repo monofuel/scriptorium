@@ -30,3 +30,5 @@ Update the following files to read timeouts from `AgentConfig` timeout fields:
 - Change to read from `cfg.agents.reviewer.noOutputTimeout` and `cfg.agents.reviewer.hardTimeout`.
 
 Ensure existing unit and integration tests still pass (`make test`).
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-0091-wire-per-role-timeouts-into-agent-callers
