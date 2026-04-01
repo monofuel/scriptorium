@@ -74,3 +74,48 @@ The diff is clean and correct. Let me summarize my findings:
 
 5. **Code quality**: No dead code, no unused imports, no leftover artifacts, no unrelated changes.
 Review approved. The changes are minimal, correct, and well-tested — a straightforward field reference update that matches the ticket requirements exactly.
+
+## Merge Queue Success
+- Summary: Wire per-agent timeouts into coding agent execution: updated coding_agent.nim to read hardTimeout, noOutputTimeout, and progressTimeout from config.agents.coding instead of the global config.timeouts fields. Added unit test coverage for per-agent timeout loading.\n
+### Quality Check Output
+```text
+nim/integration_merge_queue_d/@pstd@sprivate@sospaths2.nim.c:1474:1: fatal error: error writing to /dev/shm/cc7M0kvL.s: No space left on device
+[tests/integration_merge_queue.nim]  1474 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pjson.nim.c:2795:1: fatal error: error writing to /dev/shm/cc5LE6vT.s: No space left on device
+[tests/integration_merge_queue.nim]  2795 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstrutils.nim.c:3311:1: fatal error: error writing to /dev/shm/ccz6Kkia.s: No space left on device
+[tests/integration_merge_queue.nim]  3311 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@ptimes.nim.c:3707:1: fatal error: error writing to /dev/shm/cczRlh1u.s: No space left on device
+[tests/integration_merge_queue.nim]  3707 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@ptables.nim.c:7831:1: fatal error: error writing to /dev/shm/ccyIBcMz.s: No space left on device
+[tests/integration_merge_queue.nim]  7831 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@psystem.nim.c:12144:1: fatal error: error writing to /dev/shm/ccq2Ps9g.s: No space left on device
+[tests/integration_merge_queue.nim] 12144 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 393
+- coding_wall_seconds: 150
+- test_wall_seconds: 28
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 250156
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 6m33s.
