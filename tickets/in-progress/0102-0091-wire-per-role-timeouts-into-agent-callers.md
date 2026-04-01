@@ -32,3 +32,8 @@ Update the following files to read timeouts from `AgentConfig` timeout fields:
 Ensure existing unit and integration tests still pass (`make test`).
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-0091-wire-per-role-timeouts-into-agent-callers
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Four files need mechanical substitution of hardcoded constants/global config reads with already-available AgentConfig fields — no new logic, no new types, and the parameter plumbing is already in place from ticket 0090.
