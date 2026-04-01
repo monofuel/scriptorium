@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0102-0091-wire-per-role-timeouts-into-agent-callers",
+  "timestamp": "2026-04-01T19:42:06Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0102-0091-wire-per-role-timeouts-into-agent-callers.md",
+      "destination": "tickets/in-progress/0102-0091-wire-per-role-timeouts-into-agent-callers.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0102-0091-wire-per-role-timeouts-into-agent-callers.md",
+      "content": "# 0091 — Wire per-role timeouts into agent callers\n\n**Area:** harness-backends\n**Priority:** medium\n**Depends:** 0090\n\n## Problem\n\nEach agent caller currently uses either hardcoded constants or the global `cfg.timeouts` object for timeout values instead of reading from the per-role `agents.<role>` config. The spec requires per-role timeout configuration.\n\n## Task\n\nUpdate the following files to read timeouts from `AgentConfig` timeout fields:\n\n### 1. `src/scriptorium/architect_agent.nim`\n- `runPlanArchitectRequest` and `runDoArchitectRequest` currently use hardcoded `PlanNoOutputTimeoutMs` and `PlanHardTimeoutMs` constants.\n- Change these to read from `agentCfg.noOutputTimeout` and `agentCfg.hardTimeout` (the `agentCfg: AgentConfig` parameter is already passed in).\n- Keep the constants as fallback defaults in `config.nim` (ticket 0090 handles that).\n\n### 2. `src/scriptorium/coding_agent.nim`\n- `executeAssignedTicket` currently reads `cfg.timeouts.codingAgentNoOutputTimeoutMs`, `cfg.timeouts.codingAgentHardTimeoutMs`, `cfg.timeouts.codingAgentProgressTimeoutMs`.\n- Change to read from `agentCfg.noOutputTimeout`, `agentCfg.hardTimeout`, `agentCfg.progressTimeout` where `agentCfg` comes from `cfg.agents.coding`.\n\n### 3. `src/scriptorium/manager_agent.nim`\n- `runManagerTicketGeneration` currently sets no timeout fields on the `AgentRunRequest`.\n- Add `noOutputTimeoutMs: cfg.agents.manager.noOutputTimeout`, `hardTimeoutMs: cfg.agents.manager.hardTimeout`, `progressTimeoutMs: cfg.agents.manager.progressTimeout`.\n\n### 4. `src/scriptorium/merge_queue.nim`\n- The review agent request currently uses hardcoded `ReviewAgentNoOutputTimeoutMs` and `ReviewAgentHardTimeoutMs`.\n- Change to read from `cfg.agents.reviewer.noOutputTimeout` and `cfg.agents.reviewer.hardTimeout`.\n\nEnsure existing unit and integration tests still pass (`make test`).\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-0091-wire-per-role-timeouts-into-agent-callers\n",
+      "contentHash": "741A318AED173B1D418005B7981C639CA7D593E2"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0102-0091-wire-per-role-timeouts-into-agent-callers"
+}
