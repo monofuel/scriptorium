@@ -117,3 +117,32 @@ Done. The changes set role-specific timeout defaults per the spec:
 ```text
 now accepts `hardTimeout`, `noOutputTimeout`, `progressTimeout` parameters (defaulting to 0). `defaultConfig()` passes the correct per-role values: architect (7.2M/600K/0), coding (14.4M/300K/600K), manager/reviewer (3.6M/300K/0), audit (0/0/0).\n- **`tests/test_config.nim`**: Updated `testPerAgentTimeoutDefaults` to verify each role individually. Fixed expected values in override tests. Added `testZeroTimeoutDoesNotOverride`.","stop_reason":"end_turn","session_id":"71c41d00-cd0e-4188-aca7-0dc8661dad11","total_cost_usd":0.560936,"usage":{"input_tokens":18,"cache_creation_input_tokens":31752,"cache_read_input_tokens":499942,"output_tokens":4497,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":31752,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":18,"outputTokens":4497,"cacheReadInputTokens":499942,"cacheCreationInputTokens":31752,"webSearchRequests":0,"costUSD":0.560936,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"67414146-c881-4c55-a3c2-22db9051755c"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 34s
+
+**Review Reasoning:** I've reviewed the diff against the ticket requirements, spec, and project conventions. Let me verify the key points:
+
+**Convention enforcement:** All clean — camelCase parameters, doc comment updated on `defaultAgentConfig`, no new imports needed, variable grouping is proper.
+
+**Spec compliance:** Role-specific defaults match the ticket spec exactly:
+- architect: hardTimeout=7,200,000, noOutputTimeout=600,000, progressTimeout=0
+- coding: hardTimeout=14,400,000, noOutputTimeout=300,000, progressTimeout=600,000
+- manager: hardTimeout=3,600,000, noOutputTimeout=300,000, progressTimeout=0
+- reviewer: hardTimeout=3,600,000, noOutputTimeout=300,000, progressTimeout=0
+- audit: all 0
+
+The `mergeAgentConfig` update was already handled in the prior commit (e5234f4) that's on master — this branch correctly builds on that.
+
+**Tests:** All four required test scenarios are covered:
+1. `testPerAgentTimeoutDefaults` — verifies each role individually with correct values
+2. `testPerAgentTimeoutOverride` — verifies JSON overrides with corrected expected values for non-overridden roles
+3. `testPerAgentTimeoutFullOverride` — existing test with correct values
+4. `testZeroTimeoutDoesNotOverride` — verifies zero values in JSON preserve non-zero defaults
+
+**Code quality:** No dead code, no unused imports, no unrelated changes. The implementation is minimal and focused.
+Review approved. The implementation is correct, minimal, and well-tested. The merge conflict from the prior attempt has been cleanly resolved, with the diff now properly building on the timeout fields already added to master.
