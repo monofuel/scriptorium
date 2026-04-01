@@ -28,3 +28,8 @@ The `isMasterHealthy` proc in `src/scriptorium/orchestrator.nim` implements a th
 - Use `std/[tables, os, json]` for table operations and temp directory creation. Use `&` for format strings.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0095-0091-add-unit-tests-for-ismasterhealthy-three-tier-cache-lookup
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 12
+- reasoning: Single new test file creation with well-defined acceptance criteria, testing pure cache lookup logic using existing imports and conventions — straightforward one-attempt task.
