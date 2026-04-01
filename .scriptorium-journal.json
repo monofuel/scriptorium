@@ -1,0 +1,40 @@
+{
+  "operation": "assign 0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages, 0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection, 0101-0090-add-per-role-timeout-fields-to-agentconfig",
+  "timestamp": "2026-04-01T19:27:55Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages.md",
+      "destination": "tickets/in-progress/0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages.md",
+      "content": "# 0090 Use dynamic default branch name in health cache log messages\n\n**Area:** health-cache\n**Priority:** medium\n\n## Summary\n\nThe `isMasterHealthy` proc in `src/scriptorium/orchestrator.nim` hardcodes \"master\" in its log messages (e.g., `master health: cached healthy for ...`, `master is unhealthy — skipping tick`). The spec requires these messages to use the actual resolved default branch name (which may be `main`, `develop`, etc.).\n\n## Acceptance criteria\n\n- Call `resolveDefaultBranch(repoPath)` (from `git_ops`) once at the start of `isMasterHealthy` and use the result in all log messages.\n- The log lines in `isMasterHealthy` should read e.g. `main health: cached healthy for <hash>` when the default branch is `main`.\n- Also update the log lines at orchestrator.nim lines 232 and 235 that say \"master is unhealthy\" / \"master is healthy again\" to use the dynamic branch name.\n- Update the debug log at line 226 (`checking master health`) similarly.\n- Do not rename the proc or the `MasterHealthState` type — only change the string literals in log calls.\n\n## Files to modify\n\n- `src/scriptorium/orchestrator.nim`\n\n## Notes\n\n- `resolveDefaultBranch` is already imported via `git_ops`. Use `&` format strings per project convention.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages\n",
+      "contentHash": "D6CEB31DA76FC2FC309205C296DFFD0D42C46916"
+    },
+    {
+      "action": "move",
+      "source": "tickets/open/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection.md",
+      "destination": "tickets/in-progress/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection.md",
+      "content": "# 0090 Shared agent log-forwarding helper with file activity detection\n\n**Area:** log-forwarding\n**Priority:** medium\n\n## Summary\n\nCreate a reusable proc in a new module `src/scriptorium/log_forwarding.nim` that all agent roles can call from their `onEvent` callbacks to forward meaningful stream events to orchestrator logs with a consistent format.\n\n## Requirements\n\n1. **Create `src/scriptorium/log_forwarding.nim`** with a public proc:\n   ```nim\n   proc forwardAgentEvent*(role: string, identifier: string, event: AgentStreamEvent)\n   ```\n   - `role`: agent role string (e.g. `\"coding\"`, `\"manager\"`, `\"architect\"`, `\"review\"`)\n   - `identifier`: correlation ID (ticket ID, area ID, etc.)\n   - `event`: the normalized `AgentStreamEvent` from `agent_runner.nim`\n\n2. **Event handling logic:**\n   - `agentEventTool`: Log at INFO level with prefix `{role}[{identifier}]: tool {event.text}`. Additionally, parse `event.text` to detect file activity (see below) and log a separate file activity line.\n   - `agentEventStatus`: Log at INFO level with prefix `{role}[{identifier}]: status {event.text}`.\n   - `agentEventHeartbeat`: Skip (do not log — these are high-frequency).\n   - `agentEventReasoning`: Skip (too verbose for orchestrator logs).\n   - `agentEventMessage`: Skip (final output, not a forwarding concern).\n\n3. **File activity detection from tool events:**\n   - Create a helper proc `extractFileActivity*(toolText: string): string` that examines tool event text and returns a file activity summary, or empty string if none detected.\n   - Detect common tool patterns: `Read`, `Edit`, `Write`, `Bash` (with file-related args), `edit_file`, `read_file`, `write_file`, `create_file`.\n   - For recognized file tools, extract the file path from the argument summary and log: `{role}[{identifier}]: file {read|write} {path}`.\n   - Keep extraction best-effort — if the path cannot be parsed, log the tool call only (no file activity line).\n\n4. **Use `logInfo` from `logging.nim`** for forwarded events (not `logDebug`), so they appear in orchestrator logs by default.\n\n5. **Use `&` for format strings** per project conventions. Assign values to variables before interpolation.\n\n6. **Imports:** Use bracket syntax, std/ first, then local modules (`./[agent_runner, logging]`).\n\n7. **Doc comments (`##`)** on every proc.\n\n## Acceptance Criteria\n\n- Module compiles and exports `forwardAgentEvent` and `extractFileActivity`.\n- Tool events produce an INFO log line with role and identifier prefix.\n- File-related tool events produce an additional file activity log line.\n- Status events produce an INFO log line.\n- Heartbeat, reasoning, and message events are silently skipped.\n- No new event types are invented — only existing `AgentStreamEventKind` values are used.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection\n",
+      "contentHash": "5FEAB0D2D4D8C5932AE4F7CE2C08C8A1C6EB3E95"
+    },
+    {
+      "action": "move",
+      "source": "tickets/open/0101-0090-add-per-role-timeout-fields-to-agentconfig.md",
+      "destination": "tickets/in-progress/0101-0090-add-per-role-timeout-fields-to-agentconfig.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0101-0090-add-per-role-timeout-fields-to-agentconfig.md",
+      "content": "# 0090 — Add per-role timeout fields to AgentConfig\n\n**Area:** harness-backends\n**Priority:** medium\n\n## Problem\n\nThe spec (Section 9) requires each agent role to support `hardTimeout`, `noOutputTimeout`, and `progressTimeout` fields in `scriptorium.json` under `agents.<role>`. Currently `AgentConfig` in `src/scriptorium/config.nim` only has `harness`, `model`, and `reasoningEffort`. Timeouts are stored in a separate global `TimeoutConfig` object that is coding-agent-specific.\n\n## Task\n\n1. Add three new fields to the `AgentConfig` type in `src/scriptorium/config.nim`:\n   - `hardTimeout*: int` (milliseconds, 0 = no timeout)\n   - `noOutputTimeout*: int` (milliseconds, 0 = no timeout)\n   - `progressTimeout*: int` (milliseconds, 0 = no timeout)\n\n2. Update `defaultAgentConfig` to accept timeout defaults as parameters, or update `defaultConfig()` to set role-specific timeout defaults:\n   - **architect**: noOutputTimeout 600000, hardTimeout 7200000, progressTimeout 0\n   - **coding**: noOutputTimeout 300000, hardTimeout 14400000, progressTimeout 600000\n   - **manager**: noOutputTimeout 300000, hardTimeout 3600000, progressTimeout 0\n   - **reviewer**: noOutputTimeout 300000, hardTimeout 3600000, progressTimeout 0\n   - **audit**: keep at 0 (unchanged behavior)\n\n3. Update `mergeAgentConfig` to merge parsed timeout fields when they are > 0.\n\n4. Add unit tests in `tests/test_config.nim` verifying:\n   - Default config has the expected per-role timeout values.\n   - Loading a `scriptorium.json` with per-role timeouts correctly overrides defaults.\n   - Zero-value timeouts in JSON do not override non-zero defaults.\n\nUse `jsony` for JSON parsing (already in use).\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0101-0090-add-per-role-timeout-fields-to-agentconfig\n",
+      "contentHash": "FBECEE063F45400095E2D3D7B35EEC7C8A57CCCC"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0094-0090-use-dynamic-default-branch-name-in-health-cache-log-messages, 0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection, 0101-0090-add-per-role-timeout-fields-to-agentconfig"
+}
