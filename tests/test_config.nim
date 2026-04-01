@@ -65,7 +65,7 @@ proc testFullJsonMerge() =
   let json = """{
     "agents": {
       "architect": {"model": "custom-arch", "harness": "codex"},
-      "coding": {"model": "custom-code"},
+      "coding": {"model": "custom-code", "hardTimeout": 5000, "noOutputTimeout": 6000, "progressTimeout": 7000},
       "manager": {"model": "custom-mgr"},
       "reviewer": {"model": "custom-rev"},
       "audit": {"model": "custom-audit"}
@@ -98,6 +98,9 @@ proc testFullJsonMerge() =
   doAssert cfg.timeouts.codingAgentNoOutputTimeoutMs == 2000
   doAssert cfg.timeouts.codingAgentProgressTimeoutMs == 3000
   doAssert cfg.timeouts.codingAgentMaxAttempts == 10
+  doAssert cfg.agents.coding.hardTimeout == 5000
+  doAssert cfg.agents.coding.noOutputTimeout == 6000
+  doAssert cfg.agents.coding.progressTimeout == 7000
   doAssert cfg.loop.enabled == true
   doAssert cfg.loop.feedback == "echo ok"
   doAssert cfg.loop.goal == "ship it"

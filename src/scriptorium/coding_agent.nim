@@ -188,9 +188,9 @@ proc executeAssignedTicket*(
       attempt: currentAttemptBase,
       logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "coder",
       skipGitRepoCheck: true,
-      noOutputTimeoutMs: cfg.timeouts.codingAgentNoOutputTimeoutMs,
-      hardTimeoutMs: cfg.timeouts.codingAgentHardTimeoutMs,
-      progressTimeoutMs: cfg.timeouts.codingAgentProgressTimeoutMs,
+      noOutputTimeoutMs: agentCfg.noOutputTimeout,
+      hardTimeoutMs: agentCfg.hardTimeout,
+      progressTimeoutMs: agentCfg.progressTimeout,
       maxAttempts: attemptsForThisCall,
       continuationPromptBuilder: buildAgentsReinjectPrompt,
       onEvent: proc(event: AgentStreamEvent) =
