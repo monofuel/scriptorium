@@ -41,6 +41,7 @@ type
     prompt*: string
     workingDir*: string
     model*: string
+    reasoningEffort*: string
     mcpEndpoint*: string
     ticketId*: string
     attempt*: int
@@ -200,6 +201,11 @@ proc buildTypoiExecArgs*(request: TypoiRunRequest, lastMessagePath: string): seq
       result.add("--provider")
       result.add("anthropic")
 
+  let cleanEffort = request.reasoningEffort.strip()
+  if cleanEffort.len > 0:
+    result.add("--reasoning-effort")
+    result.add(cleanEffort)
+
 proc buildTypoiStreamEvent(line: string): TypoiStreamEvent =
   ## Parse one typoi JSONL line and normalize it into a stream event.
   result = TypoiStreamEvent(kind: typoiEventStatus, text: "", rawLine: line)
@@ -335,6 +341,7 @@ proc runTypoiAttempt(request: TypoiRunRequest, prompt: string, attemptValue: int
   let args = buildTypoiExecArgs(
     TypoiRunRequest(
       model: request.model,
+      reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,
     ),
     lastMessagePath,

@@ -90,6 +90,24 @@ suite "harness typoi":
     let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
     check "--mcp-server-url" notin args
 
+  test "buildTypoiExecArgs includes reasoning-effort when set":
+    let request = TypoiRunRequest(
+      model: "test-model",
+      reasoningEffort: "high",
+    )
+
+    let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
+    check "--reasoning-effort" in args
+    check "high" in args
+
+  test "buildTypoiExecArgs omits reasoning-effort when empty":
+    let request = TypoiRunRequest(
+      model: "test-model",
+    )
+
+    let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
+    check "--reasoning-effort" notin args
+
   test "runTypoi captures output log and last message":
     withTempHarnessDir(proc(tmpDir: string) =
       let typoiPath = tmpDir / "fake-typoi-success.sh"

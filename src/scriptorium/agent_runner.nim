@@ -192,6 +192,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       prompt: request.prompt,
       workingDir: request.workingDir,
       model: request.model,
+      reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,
       ticketId: request.ticketId,
       attempt: request.attempt,
