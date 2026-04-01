@@ -29,3 +29,5 @@ Add an integration test that verifies the health cache can be written to and rea
 - Use `git init`, `git checkout -b scriptorium/plan`, etc. via `gitRun` from `scriptorium/git_ops` to set up the test repo.
 - Import from `scriptorium/[health_checks, shared_state, git_ops]`.
 - Use `std/[tables, os, osproc, unittest]`.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip
