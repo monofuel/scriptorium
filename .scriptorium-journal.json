@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0103",
+  "timestamp": "2026-04-01T19:51:21Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0001-0103.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0103-0092-add-reasoning-effort-support-to-typoi-harness.md\n**Ticket ID:** 0103\n**Branch:** scriptorium/ticket-0103\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0103-0092-add-reasoning-effort-support-to-typoi-harness\n**Summary:** Add reasoning-effort support to typoi harness: new reasoningEffort field on TypoiRunRequest, --reasoning-effort flag emission in buildTypoiExecArgs, pass-through in agent_runner's harnessTypoi branch, and two unit tests.\n",
+      "contentHash": "3C0C14BCCE1F4CD5E5C2ADB308CFC0DD7B8494C3"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0103"
+}
