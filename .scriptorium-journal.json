@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0102",
+  "timestamp": "2026-04-01T19:45:25Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0006-0102.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0102-0091-wire-per-role-timeouts-into-agent-callers.md\n**Ticket ID:** 0102\n**Branch:** scriptorium/ticket-0102\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0102-0091-wire-per-role-timeouts-into-agent-callers\n**Summary:** Wire per-role timeouts into agent callers: architect reads from agentCfg.noOutputTimeout/hardTimeout instead of PlanNoOutputTimeoutMs/PlanHardTimeoutMs constants, manager adds noOutputTimeoutMs/hardTimeoutMs/progressTimeoutMs from cfg.agents.manager, and reviewer reads from cfg.agents.reviewer instead of ReviewAgent* constants. Coding agent was already wired from ticket 0090.\n",
+      "contentHash": "CFEEF2DC17474FA1967E85C6B30CC47EEF0D429C"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0102"
+}
