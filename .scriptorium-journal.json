@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip",
+  "timestamp": "2026-04-01T19:39:16Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip.md",
+      "destination": "tickets/in-progress/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip.md",
+      "content": "# 0092 Add integration test for health cache plan-branch round-trip\n\n**Area:** health-cache\n**Priority:** medium\n**Depends:** 0091\n\n## Summary\n\nAdd an integration test that verifies the health cache can be written to and read from the plan branch, surviving a simulated orchestrator restart. This tests the full persistence path: write cache → commit to plan branch → read back from plan branch.\n\n## Acceptance criteria\n\n- Add a new test file `tests/integration_health_cache.nim`.\n- The test should:\n  1. Set up a temporary git repo with a `scriptorium/plan` branch.\n  2. Write a `HealthCacheEntry` to `health/cache.json` using `writeHealthCache`.\n  3. Commit using `commitHealthCache`.\n  4. Simulate a \"restart\" by re-reading the plan branch from scratch (e.g., reset the worktree and call `readHealthCache` again).\n  5. Assert the entry round-trips correctly with all fields preserved.\n- This is an integration test — it must use real git operations (no mocks). Put it in `tests/integration_health_cache.nim`.\n- Clean up temp directories after the test.\n\n## Files to create\n\n- `tests/integration_health_cache.nim`\n\n## Notes\n\n- Use `git init`, `git checkout -b scriptorium/plan`, etc. via `gitRun` from `scriptorium/git_ops` to set up the test repo.\n- Import from `scriptorium/[health_checks, shared_state, git_ops]`.\n- Use `std/[tables, os, osproc, unittest]`.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip\n",
+      "contentHash": "56686318CF4D6E3EF0685DD4AE299CC38BC68E2D"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0096-0092-add-integration-test-for-health-cache-plan-branch-round-trip"
+}
