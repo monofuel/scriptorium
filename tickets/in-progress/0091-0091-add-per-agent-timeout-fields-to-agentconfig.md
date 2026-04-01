@@ -43,3 +43,5 @@ The area spec lists `agents.architect.{hardTimeout, noOutputTimeout, progressTim
 - Default values match current global timeout defaults.
 - Global `TimeoutConfig` is preserved (not removed).
 - New unit tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0091-0091-add-per-agent-timeout-fields-to-agentconfig
