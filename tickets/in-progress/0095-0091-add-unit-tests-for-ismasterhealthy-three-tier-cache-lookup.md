@@ -26,3 +26,5 @@ The `isMasterHealthy` proc in `src/scriptorium/orchestrator.nim` implements a th
 - Import from `scriptorium/health_checks` and `scriptorium/shared_state`.
 - The `tests/config.nims` file already has `--path:"../src"` so imports will resolve.
 - Use `std/[tables, os, json]` for table operations and temp directory creation. Use `&` for format strings.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0095-0091-add-unit-tests-for-ismasterhealthy-three-tier-cache-lookup
