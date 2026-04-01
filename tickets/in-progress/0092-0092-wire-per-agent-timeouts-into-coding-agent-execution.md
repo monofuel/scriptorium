@@ -21,3 +21,5 @@ After ticket 0091 adds per-agent timeout fields to `AgentConfig`, the coding age
 - Coding agent execution reads timeouts from `config.agents.coding.{hardTimeout, noOutputTimeout, progressTimeout}`.
 - No remaining references to global `codingAgentHardTimeoutMs` / `codingAgentNoOutputTimeoutMs` / `codingAgentProgressTimeoutMs` in the execution path (config loading can keep them for backward compat).
 - All unit tests pass.
+
+**Worktree:** /workspace/.scriptorium/worktrees/tickets/0092-0092-wire-per-agent-timeouts-into-coding-agent-execution
