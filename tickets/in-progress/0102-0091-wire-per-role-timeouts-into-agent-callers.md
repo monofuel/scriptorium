@@ -54,3 +54,21 @@ Done. All four files updated to read timeouts from `AgentConfig` fields instead 
 ```text
 uest` and `runDoArchitectRequest` now use `agentCfg.noOutputTimeout` / `agentCfg.hardTimeout`\n- **coding_agent.nim**: Already wired from ticket 0090 — no changes needed\n- **manager_agent.nim**: `executeManagerForArea` now sets all three timeout fields from `cfg.agents.manager`\n- **merge_queue.nim**: Review request now reads from `cfg.agents.reviewer` instead of `ReviewAgentNoOutputTimeoutMs` / `ReviewAgentHardTimeoutMs`","stop_reason":"end_turn","session_id":"0ccde468-1b37-405e-9d70-815bbbaf84d2","total_cost_usd":0.5191745,"usage":{"input_tokens":14,"cache_creation_input_tokens":38902,"cache_read_input_tokens":396234,"output_tokens":3114,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":38902,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":14,"outputTokens":3114,"cacheReadInputTokens":396234,"cacheCreationInputTokens":38902,"webSearchRequests":0,"costUSD":0.5191745,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"becac88c-8caa-4301-bde9-aa9d59b6e74a"}
 ```
+
+## Review
+**Review:** approved
+- Model: claude-opus-4-6
+- Backend: claude-code
+- Exit Code: 0
+- Wall Time: 32s
+
+**Review Reasoning:** Let me verify the coding agent claim and inspect the changed files for correctness.
+All four files check out:
+
+1. **architect_agent.nim** — Correctly reads `agentCfg.noOutputTimeout` / `agentCfg.hardTimeout` instead of `PlanNoOutputTimeoutMs` / `PlanHardTimeoutMs`.
+2. **coding_agent.nim** — Already wired from ticket 0090 (confirmed: lines 191-193 use `agentCfg.*` fields). No changes needed.
+3. **manager_agent.nim** — Correctly adds all three timeout fields from `cfg.agents.manager`.
+4. **merge_queue.nim** — Correctly reads from `cfg.agents.reviewer` instead of `ReviewAgent*` constants.
+
+No convention violations, no spec contradictions, no dead code or unrelated changes.
+Approved. The changes are a clean mechanical substitution — each caller now reads timeouts from the per-role `AgentConfig` fields as the spec requires, with no extraneous modifications.
