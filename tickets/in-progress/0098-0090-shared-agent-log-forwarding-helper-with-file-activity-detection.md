@@ -48,3 +48,8 @@ Create a reusable proc in a new module `src/scriptorium/log_forwarding.nim` that
 - No new event types are invented — only existing `AgentStreamEventKind` values are used.
 
 **Worktree:** /workspace/.scriptorium/worktrees/tickets/0098-0090-shared-agent-log-forwarding-helper-with-file-activity-detection
+
+## Prediction
+- predicted_difficulty: easy
+- predicted_duration_minutes: 10
+- reasoning: Single new module with straightforward pattern-matching logic on existing event types, no cross-module integration risk, one attempt expected.
