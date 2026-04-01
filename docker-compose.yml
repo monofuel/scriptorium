@@ -63,7 +63,7 @@ services:
     volumes:
       - .:/workspace
       - ~/.aws:/home/scriptorium/.aws:ro
-      - /tmp/combined-ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     working_dir: /workspace
     env_file: .env
     environment:
