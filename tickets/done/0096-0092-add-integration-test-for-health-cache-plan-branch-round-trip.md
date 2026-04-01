@@ -83,3 +83,47 @@ The implementation looks clean. Let me verify it matches all acceptance criteria
 
 **Note on `execCmdEx` vs `gitRun`**: The ticket notes suggest using `gitRun` from `git_ops`, but the established pattern across all other integration tests (`integration_journal.nim`, `integration_recovery.nim`, etc.) is `discard execCmdEx(...)` for git setup. The implementation follows the existing codebase convention, which is fine.
 The integration test is well-written and meets all acceptance criteria. It correctly exercises the full health cache persistence path (write → commit → re-read from committed state) using real git operations, verifies all 6 fields round-trip, and cleans up after itself. Approved.
+
+## Merge Queue Success
+- Summary: Added integration test for health cache plan-branch round-trip in tests/integration_health_cache.nim. The test sets up a temp git repo with a scriptorium/plan branch, writes a HealthCacheEntry, commits it, then re-reads from the committed state and asserts all fields are preserved.\n
+### Quality Check Output
+```text
+strator_flow.nim]  1188 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pjson.nim.c:2883:1: fatal error: error writing to /dev/shm/ccrU1ZaP.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  2883 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@pstrutils.nim.c:3537:1: fatal error: error writing to /dev/shm/cc9z9QWg.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3537 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptimes.nim.c:3801:1: fatal error: error writing to /dev/shm/cchEpHxy.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  3801 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@ptables.nim.c:8698:1: fatal error: error writing to /dev/shm/cc57OpnY.s: No space left on device
+[tests/integration_orchestrator_flow.nim]  8698 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+[tests/integration_orchestrator_flow.nim] /home/scriptorium/.cache/nim/integration_orchestrator_flow_d/@psystem.nim.c:14454:1: fatal error: error writing to /dev/shm/ccospeMD.s: No space left on device
+[tests/integration_orchestrator_flow.nim] 14454 | }
+[tests/integration_orchestrator_flow.nim]       | ^
+[tests/integration_orchestrator_flow.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 368
+- coding_wall_seconds: 66
+- test_wall_seconds: 17
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 102389
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: overestimated
+- brief_summary: Predicted medium, actual was easy with 1 attempt(s) in 6m8s.
