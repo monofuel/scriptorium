@@ -5,7 +5,7 @@ Covers role-based agent configuration, model-prefix harness inference, and backe
 ## Scope
 
 - Role-based config in `scriptorium.json` under `agents.architect`, `agents.coding`, `agents.manager`, `agents.reviewer`.
-- Each role supports: `harness`, `model`, `reasoningEffort`.
+- Each role supports: `harness`, `model`, `reasoningEffort`, `hardTimeout`, `noOutputTimeout`, `progressTimeout`.
 - Model-prefix harness inference:
   - `claude-*` -> `claude-code`
   - `codex-*` and `gpt-*` -> `codex`

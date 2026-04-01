@@ -6,15 +6,14 @@ Covers runtime configuration, log level handling, test commands, CI workflows, a
 
 - Runtime config file: `scriptorium.json`.
 - Supported config keys:
-  - `agents.architect.{harness, model, reasoningEffort}`
-  - `agents.coding.{harness, model, reasoningEffort}`
-  - `agents.manager.{harness, model, reasoningEffort}`
-  - `agents.reviewer.{harness, model, reasoningEffort}`
+  - `agents.architect.{harness, model, reasoningEffort, hardTimeout, noOutputTimeout, progressTimeout}`
+  - `agents.coding.{harness, model, reasoningEffort, hardTimeout, noOutputTimeout, progressTimeout}`
+  - `agents.manager.{harness, model, reasoningEffort, hardTimeout, noOutputTimeout, progressTimeout}`
+  - `agents.reviewer.{harness, model, reasoningEffort, hardTimeout, noOutputTimeout, progressTimeout}`
   - `endpoints.local`
   - `logLevel`
   - `concurrency.maxAgents` (V5, integer, default 1)
   - `concurrency.tokenBudgetMB` (V5, optional integer megabytes)
-  - `agents.coding.progressTimeout` (V8, integer minutes, default 10)
   - `discord.{enabled, serverId, channelId, allowedUserIds}` (V12)
   - `mattermost.{enabled, url, channelId, allowedUserIds}` (V12)
 - `SCRIPTORIUM_LOG_LEVEL` environment variable overrides config-file `logLevel`.

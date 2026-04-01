@@ -1,8 +1,8 @@
-Review Agent
+# Review Agent
 
 V4 feature: a dedicated review agent that reviews coding agent submissions before merge queue processing.
 
-Scope:
+## Scope
 
 **Review agent role:**
 - New agent role with configuration under `agents.reviewer` in `scriptorium.json`.
@@ -62,8 +62,14 @@ Scope:
   - Verify the review agent calls `submit_review` with either `approve` or `request_changes`.
   - Use a real diff against a real branch, not synthetic input.
 
-**Known Limitations:**
+## Known Limitations
+
 - Single-pass reviewer — no back-and-forth dialogue with the coding agent.
 - Change requests restart the coding agent from scratch rather than resuming the previous session.
 - Stall-default-to-approve policy prioritizes throughput over review quality — future versions may retry the reviewer instead.
 - Review agent live integration tests require API credentials and a running model, so they only run in `make integration-test`, not `make test`.
+
+## Spec References
+
+- Section 21: Review Agent (V4).
+- Section 30: Review Agent Test Coverage (V7).
