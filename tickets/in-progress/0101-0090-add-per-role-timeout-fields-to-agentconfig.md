@@ -36,3 +36,18 @@ Use `jsony` for JSON parsing (already in use).
 - predicted_difficulty: easy
 - predicted_duration_minutes: 12
 - reasoning: Single-file type extension with default value wiring and a test file update; straightforward field additions to an existing config struct with no cross-module integration risk.
+
+## Agent Run
+- Model: claude-opus-4-6\n- Backend: claude-code\n- Exit Code: 0\n- Attempt: 1\n- Attempt Count: 1\n- Timeout: none\n- Log File: /workspace/.scriptorium/logs/coder/0101/attempt-01.jsonl\n- Last Message File: /workspace/.scriptorium/logs/coder/0101/attempt-01.last_message.txt\n
+### Agent Last Message
+```text
+Done. Changes submitted:
+
+- **`src/scriptorium/config.nim`**: Added `hardTimeout`, `noOutputTimeout`, `progressTimeout` fields to `AgentConfig`. Updated `defaultAgentConfig` to accept timeout parameters. Set role-specific defaults in `defaultConfig()`. Extended `mergeAgentConfig` to merge timeout fields when > 0.
+- **`tests/test_config.nim`**: Added timeout assertions to `testDefaultConfigValues`, plus two new tests: `testPerRoleTimeoutOverride` and `testZeroTimeoutDoesNotOverride`.
+```
+
+### Agent Stdout Tail
+```text
+**: Added `hardTimeout`, `noOutputTimeout`, `progressTimeout` fields to `AgentConfig`. Updated `defaultAgentConfig` to accept timeout parameters. Set role-specific defaults in `defaultConfig()`. Extended `mergeAgentConfig` to merge timeout fields when > 0.\n- **`tests/test_config.nim`**: Added timeout assertions to `testDefaultConfigValues`, plus two new tests: `testPerRoleTimeoutOverride` and `testZeroTimeoutDoesNotOverride`.","stop_reason":"end_turn","session_id":"c0a58e90-603d-4f22-9a60-c50f17592b69","total_cost_usd":0.943169,"usage":{"input_tokens":27,"cache_creation_input_tokens":47106,"cache_read_input_tokens":953393,"output_tokens":6877,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":47106,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":27,"outputTokens":6877,"cacheReadInputTokens":953393,"cacheCreationInputTokens":47106,"webSearchRequests":0,"costUSD":0.943169,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"8d13a4fe-62a4-4b1f-a474-550d13b565e4"}
+```
