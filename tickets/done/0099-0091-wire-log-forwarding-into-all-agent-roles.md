@@ -133,3 +133,48 @@ Everything checks out:
 - **No behavioral changes**: Agent execution logic is untouched — only logging changed.
 - **No unused imports, dead code, or leftover artifacts.**
 The changes are clean and correct. All four agent roles now use the shared `forwardAgentEvent` proc, imports follow conventions, the review agent preserves its reasoning-capture logic, and log output is elevated to INFO level with role+identifier prefixes and file activity detection. Approved.
+
+## Merge Queue Success
+- Summary: Replaced ad-hoc onEvent callbacks in all four agent roles (coding, manager, architect, review) with calls to the shared forwardAgentEvent proc from log_forwarding.nim. Added log_forwarding to each file's import block. Review agent retains its agentEventMessage reasoning-capture logic alongside the shared forwarding. All tests pass.\n
+### Quality Check Output
+```text
+im/integration_merge_queue_d/@phashes.nim.c:951:1: fatal error: error writing to /dev/shm/cctqTEYJ.s: No space left on device
+[tests/integration_merge_queue.nim]   951 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstd@sprivate@sosdirs.nim.c:1188:1: fatal error: error writing to /dev/shm/ccBJCYTw.s: No space left on device
+[tests/integration_merge_queue.nim]  1188 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstreams.nim.c:1145:1: fatal error: error writing to /dev/shm/ccRevWS7.s: No space left on device
+[tests/integration_merge_queue.nim]  1145 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@pstrutils.nim.c:3311:1: fatal error: error writing to /dev/shm/ccBDwXj0.s: No space left on device
+[tests/integration_merge_queue.nim]  3311 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@ptables.nim.c:7831:1: fatal error: error writing to /dev/shm/ccXXBrn6.s: No space left on device
+[tests/integration_merge_queue.nim]  7831 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+[tests/integration_merge_queue.nim] /home/scriptorium/.cache/nim/integration_merge_queue_d/@psystem.nim.c:12144:1: fatal error: error writing to /dev/shm/ccOsaCnx.s: No space left on device
+[tests/integration_merge_queue.nim] 12144 | }
+[tests/integration_merge_queue.nim]       | ^
+[tests/integration_merge_queue.nim] compilation terminated.
+```
+
+## Metrics
+- wall_time_seconds: 449
+- coding_wall_seconds: 90
+- test_wall_seconds: 17
+- attempt_count: 1
+- outcome: done
+- failure_reason: 
+- model: claude-opus-4-6
+- stdout_bytes: 282133
+
+## Post-Analysis
+- actual_difficulty: easy
+- prediction_accuracy: accurate
+- brief_summary: Predicted easy, actual was easy with 1 attempt(s) in 7m29s.
