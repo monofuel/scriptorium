@@ -1,0 +1,18 @@
+{
+  "operation": "assign 0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction",
+  "timestamp": "2026-04-01T19:43:42Z",
+  "steps": [
+    {
+      "action": "move",
+      "source": "tickets/open/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction.md",
+      "destination": "tickets/in-progress/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction.md"
+    },
+    {
+      "action": "write",
+      "path": "tickets/in-progress/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction.md",
+      "content": "# 0092 Unit tests for log forwarding and file activity extraction\n\n**Area:** log-forwarding\n**Priority:** medium\n**Depends:** 0090\n\n## Summary\n\nAdd unit tests in `tests/test_log_forwarding.nim` for the `forwardAgentEvent` and `extractFileActivity` procs from `log_forwarding.nim`.\n\n## Requirements\n\n1. **Create `tests/test_log_forwarding.nim`.**\n\n2. **Test `extractFileActivity`:**\n   - Tool text containing `Read` with a file path returns `\"read <path>\"`.\n   - Tool text containing `Edit` or `Write` with a file path returns `\"write <path>\"`.\n   - Tool text containing `edit_file` or `write_file` returns appropriate activity.\n   - Tool text with no file-related tool returns empty string.\n   - Tool text with unrecognizable format returns empty string (graceful fallback).\n\n3. **Test `forwardAgentEvent`:**\n   - Use the `captureLogs` mechanism from `logging.nim` (set `captureLogs = true`, check `capturedLogs` after calls).\n   - Tool event produces an INFO log line containing role, identifier, and tool text.\n   - Status event produces an INFO log line containing role, identifier, and status text.\n   - Heartbeat event produces no log output.\n   - Reasoning event produces no log output.\n   - Message event produces no log output.\n   - File-related tool event produces both a tool log line and a file activity log line.\n\n4. **Follow project test conventions:**\n   - File is a unit test (`test_*.nim`), no real services or harnesses.\n   - Uses `assert` or a lightweight check macro.\n   - Import with bracket syntax: `std/[...]` then local modules.\n   - The test file must have `tests/config.nims` path configuration (already exists).\n\n5. **Run with `nim r tests/test_log_forwarding.nim`** — verify it compiles and passes.\n\n## Acceptance Criteria\n\n- All listed test cases exist and pass.\n- Tests use `captureLogs` from logging module (no mocking of log output).\n- Test file follows naming convention `tests/test_log_forwarding.nim`.\n- No real agent processes or external services are invoked.\n\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction\n",
+      "contentHash": "755D198F419EDEB80D094BE4C0EF284EE7A39D83"
+    }
+  ],
+  "commit_message": "scriptorium: assign ticket 0100-0092-unit-tests-for-log-forwarding-and-file-activity-extraction"
+}
