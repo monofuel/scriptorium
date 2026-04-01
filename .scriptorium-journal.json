@@ -1,0 +1,13 @@
+{
+  "operation": "enqueue 0099",
+  "timestamp": "2026-04-01T19:39:02Z",
+  "steps": [
+    {
+      "action": "write",
+      "path": "queue/merge/pending/0003-0099.md",
+      "content": "# Merge Queue Item\n\n**Ticket:** tickets/in-progress/0099-0091-wire-log-forwarding-into-all-agent-roles.md\n**Ticket ID:** 0099\n**Branch:** scriptorium/ticket-0099\n**Worktree:** /workspace/.scriptorium/worktrees/tickets/0099-0091-wire-log-forwarding-into-all-agent-roles\n**Summary:** Replaced ad-hoc onEvent callbacks in all four agent roles (coding, manager, architect, review) with calls to the shared forwardAgentEvent proc from log_forwarding.nim. Added log_forwarding to each file's import block. Review agent retains its agentEventMessage reasoning-capture logic alongside the shared forwarding. All tests pass.\n",
+      "contentHash": "982854AFC632EDABC7FBC6E4FFC804BC5245DC8C"
+    }
+  ],
+  "commit_message": "scriptorium: enqueue merge request 0099"
+}
