@@ -16,9 +16,11 @@ proc testDefaultConfigValues() =
   doAssert cfg.concurrency.maxAgents == 4
   doAssert cfg.concurrency.tokenBudgetMB == 0
   doAssert cfg.loop.enabled == false
+  doAssert cfg.discord.enabled == false
   doAssert cfg.discord.serverId == ""
   doAssert cfg.discord.channelId == ""
   doAssert cfg.discord.allowedUserIds.len == 0
+  doAssert cfg.mattermost.enabled == false
   doAssert cfg.dashboard.port == 8098
   doAssert cfg.dashboard.host == "127.0.0.1"
   doAssert cfg.logLevel == ""
@@ -309,6 +311,56 @@ proc testParseLogLevel() =
   doAssert raised, "parseLogLevel should raise ValueError for invalid input"
   echo "[OK] parseLogLevel maps strings correctly"
 
+proc testDiscordEnabledField() =
+  ## Verify discord enabled field is loaded correctly from JSON.
+  let tmpDir = getTempDir() / "test_config_discord_enabled"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"discord": {"enabled": true, "serverId": "s1"}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.discord.enabled == true
+  doAssert cfg.discord.serverId == "s1"
+
+  # Verify default is false when not set.
+  let tmpDir2 = getTempDir() / "test_config_discord_enabled_default"
+  createDir(tmpDir2)
+  defer: removeDir(tmpDir2)
+
+  let json2 = """{"discord": {"serverId": "s2"}}"""
+  writeFile(tmpDir2 / "scriptorium.json", json2)
+
+  let cfg2 = loadConfig(tmpDir2)
+  doAssert cfg2.discord.enabled == false
+  echo "[OK] discord enabled field loaded correctly"
+
+proc testMattermostEnabledField() =
+  ## Verify mattermost enabled field is loaded correctly from JSON.
+  let tmpDir = getTempDir() / "test_config_mattermost_enabled"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"mattermost": {"enabled": true, "url": "https://mm.example.com"}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.mattermost.enabled == true
+  doAssert cfg.mattermost.url == "https://mm.example.com"
+
+  # Verify default is false when not set.
+  let tmpDir2 = getTempDir() / "test_config_mattermost_enabled_default"
+  createDir(tmpDir2)
+  defer: removeDir(tmpDir2)
+
+  let json2 = """{"mattermost": {"url": "https://mm2.example.com"}}"""
+  writeFile(tmpDir2 / "scriptorium.json", json2)
+
+  let cfg2 = loadConfig(tmpDir2)
+  doAssert cfg2.mattermost.enabled == false
+  echo "[OK] mattermost enabled field loaded correctly"
+
 when isMainModule:
   testParseLogLevel()
   testDefaultConfigValues()
@@ -327,3 +379,5 @@ when isMainModule:
   testMattermostConfigLoading()
   testMattermostPartialConfig()
   testMattermostTokenPresent()
+  testDiscordEnabledField()
+  testMattermostEnabledField()

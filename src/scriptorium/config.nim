@@ -39,11 +39,13 @@ type
     local*: string
 
   DiscordConfig* = object
+    enabled*: bool
     serverId*: string
     channelId*: string
     allowedUserIds*: seq[string]
 
   MattermostConfig* = object
+    enabled*: bool
     url*: string
     channelId*: string
     allowedUserIds*: seq[string]
@@ -126,8 +128,8 @@ proc defaultConfig*(): Config =
       remotes: @[],
       syncIntervalSeconds: 60,
     ),
-    discord: DiscordConfig(serverId: "", channelId: "", allowedUserIds: @[]),
-    mattermost: MattermostConfig(url: "", channelId: "", allowedUserIds: @[]),
+    discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
+    mattermost: MattermostConfig(enabled: false, url: "", channelId: "", allowedUserIds: @[]),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,
@@ -201,6 +203,7 @@ proc loadConfig*(repoPath: string): Config =
   if parsed.timeouts.codingAgentMaxAttempts > 0:
     result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
   if raw.contains("\"discord\""):
+    result.discord.enabled = parsed.discord.enabled
     if parsed.discord.serverId.len > 0:
       result.discord.serverId = parsed.discord.serverId
     if parsed.discord.channelId.len > 0:
@@ -208,6 +211,7 @@ proc loadConfig*(repoPath: string): Config =
     if parsed.discord.allowedUserIds.len > 0:
       result.discord.allowedUserIds = parsed.discord.allowedUserIds
   if raw.contains("\"mattermost\""):
+    result.mattermost.enabled = parsed.mattermost.enabled
     if parsed.mattermost.url.len > 0:
       result.mattermost.url = parsed.mattermost.url
     if parsed.mattermost.channelId.len > 0:
