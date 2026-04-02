@@ -59,6 +59,15 @@ Flag the following issues introduced by the PR:
 - Leftover artifacts: commented-out code, TODO comments for work that is already completed, assigned-but-unread variables.
 - Changes unrelated to the ticket goal. Use judgment here — legitimate incidental fixes (e.g. fixing a typo noticed while working nearby) are acceptable.
 
+### Test coverage
+
+Check whether the changed or added code paths have corresponding tests:
+- If the PR modifies runtime behavior and no tests cover the changed paths
+  (neither existing nor added by the PR), flag this as a substantive issue.
+- If the PR adds new functionality with no tests, flag this as a substantive issue.
+- Small refactors that do not change observable behavior (renames, formatting,
+  moving code) do not require new tests.
+
 ### Graduated severity
 
 Use severity to decide your action:

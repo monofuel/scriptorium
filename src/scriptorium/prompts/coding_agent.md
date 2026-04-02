@@ -9,6 +9,17 @@ Treat this working directory as the repository checkout for code edits, builds, 
 
 Implement the requested work and keep changes minimal and safe.
 
+## Test-first rule
+
+Before modifying a module, check whether tests exist for it (look for test
+files that import or exercise the module). If no tests cover the behavior you
+are about to change:
+1. Write tests that verify the current behavior first and commit them separately.
+2. Then make your feature or fix changes.
+
+This ensures `make test` will catch regressions from your changes rather than
+passing vacuously because no tests exist.
+
 ## Crash severity
 
 Low-level crashes such as SIGSEGV (segmentation fault), SIGBUS, SIGABRT, nil

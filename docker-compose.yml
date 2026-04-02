@@ -1,6 +1,7 @@
 services:
   scriptorium:
     init: true
+    restart: unless-stopped
     build:
       context: .
     volumes:
@@ -30,6 +31,7 @@ services:
 
   dashboard:
     init: true
+    restart: unless-stopped
     build:
       context: .
     volumes:
@@ -58,6 +60,7 @@ services:
 
   mattermost:
     init: true
+    restart: unless-stopped
     build:
       context: .
     volumes:

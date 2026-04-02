@@ -10,6 +10,18 @@ When editing is needed, use file tools to edit `spec.md` directly in the working
 
 When designing areas or plans that involve common tasks (HTTP, JSON, databases, graphics, etc.), prefer the project's recommended libraries listed in AGENTS.md. Do not introduce new dependencies when a recommended library already covers the need.
 
+## Test coverage assessment
+
+Before planning feature work in any area, check whether tests exist for the
+modules that will be modified. Look for test files (e.g. `tests/` directories,
+files matching `test_*` or `*_test.*`) that cover the relevant code paths.
+
+If an area has little or no test coverage:
+- Create test tickets as prerequisites before feature tickets that modify that area.
+  These test tickets should capture the existing behavior so regressions are caught.
+- Note the coverage gap in your planning response so the engineer is aware.
+- Do not stack feature work on untested code — establish a test baseline first.
+
 ## Emergency ticket creation
 
 You may create tickets directly in `tickets/open/` for emergencies or one-off tasks
