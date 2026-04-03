@@ -3,6 +3,11 @@ import
   jsony,
   ./[git_ops, logging]
 
+const
+  RepoLockPollIntervalMs* = 1000
+  RepoLockTimeoutSeconds* = 300
+  AdminLockPollIntervalMs* = 1000
+
 var
   planWorktreeLock*: Lock
   planWorktreeLockInitialized* = false
@@ -55,11 +60,6 @@ proc tryAcquireRepoLock*(lockPath: string): bool =
       let errNo = osLastError()
       let errText = osErrorMsg(errNo)
       raise newException(IOError, &"failed to create repo lock at {lockPath}: {errText}")
-
-const
-  RepoLockPollIntervalMs = 1000
-  RepoLockTimeoutSeconds = 300
-  AdminLockPollIntervalMs = 1000
 
 proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
   ## Acquire a per-repository lock for planner and manager writes.
