@@ -38,6 +38,8 @@ proc runInteractivePlanSession*(
     interactivePlanInterrupted = false
 
   let cfg = loadConfig(repoPath)
+  acquireAdminLock(repoPath)
+  defer: releaseAdminLock(repoPath)
   discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
     if not quiet:
       echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
@@ -162,6 +164,8 @@ proc runInteractiveAskSession*(
     interactivePlanInterrupted = false
 
   let cfg = loadConfig(repoPath)
+  acquireAdminLock(repoPath)
+  defer: releaseAdminLock(repoPath)
   discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
     if not quiet:
       echo "scriptorium: ask session (read-only, type /help for commands, /quit to exit)"
@@ -263,6 +267,8 @@ proc runOneShotDoSession*(
   ## Run a single ad-hoc task with the Architect using full repo access.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+  acquireAdminLock(repoPath)
+  defer: releaseAdminLock(repoPath)
   let cfg = loadConfig(repoPath)
   let builtPrompt = buildDoOneShotPrompt(repoPath, prompt)
   let agentResult = runDoArchitectRequest(
@@ -295,6 +301,8 @@ proc runInteractiveDoSession*(
       unsetControlCHook()
     interactivePlanInterrupted = false
 
+  acquireAdminLock(repoPath)
+  defer: releaseAdminLock(repoPath)
   let cfg = loadConfig(repoPath)
   if not quiet:
     echo "scriptorium: do session (full repo access, type /help for commands, /quit to exit)"

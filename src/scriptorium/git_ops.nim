@@ -14,6 +14,7 @@ const
   ManagedTicketWorktreeDirName* = "tickets"
   ManagedLockDirName* = "locks"
   ManagedRepoLockName* = "repo.lock"
+  ManagedAdminLockName* = "admin.lock"
   ManagedRepoLockPidFileName* = "pid"
   OrchestratorPidFileName* = "orchestrator.pid"
   TicketBranchPrefix* = "scriptorium/ticket-"
@@ -143,6 +144,10 @@ proc managedTicketWorktreeRootPath*(repoPath: string): string =
 proc managedRepoLockPath*(repoPath: string): string =
   ## Return the managed repository lock path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedRepoLockName
+
+proc managedAdminLockPath*(repoPath: string): string =
+  ## Return the admin lock path for one repository.
+  result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedAdminLockName
 
 proc orchestratorPidPath*(repoPath: string): string =
   ## Return the orchestrator PID file path for one repository.

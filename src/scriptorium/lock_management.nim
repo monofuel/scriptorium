@@ -56,8 +56,14 @@ proc tryAcquireRepoLock*(lockPath: string): bool =
       let errText = osErrorMsg(errNo)
       raise newException(IOError, &"failed to create repo lock at {lockPath}: {errText}")
 
+const
+  RepoLockPollIntervalMs = 1000
+  RepoLockTimeoutSeconds = 300
+  AdminLockPollIntervalMs = 1000
+
 proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
   ## Acquire a per-repository lock for planner and manager writes.
+  ## Waits with polling if another process holds the lock.
   let lockPath = managedRepoLockPath(repoPath)
   createDir(parentDir(lockPath))
 
@@ -70,8 +76,23 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
     acquired = tryAcquireRepoLock(lockPath)
 
   if not acquired:
+    let holderPid = lockHolderPid(lockPath)
     let normalizedRepoPath = normalizeAbsolutePath(repoPath)
-    raise newException(IOError, &"another planner/manager is active for {normalizedRepoPath}")
+    logInfo(&"waiting for repo lock held by PID {holderPid} on {normalizedRepoPath}...")
+    let deadline = epochTime() + float(RepoLockTimeoutSeconds)
+    while not acquired and epochTime() < deadline:
+      sleep(RepoLockPollIntervalMs)
+      if lockPathIsStale(lockPath):
+        let stalePid = lockHolderPid(lockPath)
+        logWarn(&"stealing stale repo lock at {lockPath} from dead PID {stalePid}")
+        if dirExists(lockPath):
+          removeDir(lockPath)
+      acquired = tryAcquireRepoLock(lockPath)
+
+  if not acquired:
+    let normalizedRepoPath = normalizeAbsolutePath(repoPath)
+    raise newException(IOError,
+      &"timed out after {RepoLockTimeoutSeconds}s waiting for repo lock on {normalizedRepoPath}")
 
   let pidPath = lockPath / ManagedRepoLockPidFileName
   let currentPid = getCurrentProcessId()
@@ -143,9 +164,61 @@ proc teardownPlanWorktree*(repoPath: string) =
       logWarn(&"plan worktree teardown prune failed (rc={pruneRc})")
     logDebug(&"plan worktree torn down: {planWorktree}")
 
+proc acquireAdminLock*(repoPath: string) =
+  ## Acquire the admin lock, signaling that an engineer is active.
+  ## Waits if another interactive session already holds it.
+  let lockPath = managedAdminLockPath(repoPath)
+  createDir(parentDir(lockPath))
+  var logged = false
+  while true:
+    let acquired = tryAcquireRepoLock(lockPath)
+    if acquired:
+      let pidPath = lockPath / ManagedRepoLockPidFileName
+      let currentPid = getCurrentProcessId()
+      writeFile(pidPath, &"{currentPid}\n")
+      logInfo("admin lock acquired")
+      return
+    if lockPathIsStale(lockPath):
+      let stalePid = lockHolderPid(lockPath)
+      logWarn(&"stealing stale admin lock from dead PID {stalePid}")
+      if dirExists(lockPath):
+        removeDir(lockPath)
+      continue
+    if not logged:
+      let holderPid = lockHolderPid(lockPath)
+      logInfo(&"waiting for admin lock held by PID {holderPid}...")
+      logged = true
+    sleep(AdminLockPollIntervalMs)
+
+proc releaseAdminLock*(repoPath: string) =
+  ## Release the admin lock.
+  let lockPath = managedAdminLockPath(repoPath)
+  let pidPath = lockPath / ManagedRepoLockPidFileName
+  if fileExists(pidPath):
+    removeFile(pidPath)
+  if dirExists(lockPath):
+    removeDir(lockPath)
+  logInfo("admin lock released")
+
+proc waitForAdminLock*(repoPath: string) =
+  ## Wait until the admin lock is free or held by this process.
+  let lockPath = managedAdminLockPath(repoPath)
+  var logged = false
+  while dirExists(lockPath):
+    if lockPathIsStale(lockPath):
+      return
+    let holderPid = lockHolderPid(lockPath)
+    if holderPid == getCurrentProcessId():
+      return
+    if not logged:
+      logInfo(&"waiting for admin lock held by PID {holderPid}...")
+      logged = true
+    sleep(AdminLockPollIntervalMs)
+
 proc withPlanWorktreeImpl*[T](repoPath: string, operation: proc(planPath: string): T): T =
   ## Provide the persistent plan worktree to the operation.
   ## Internal: callers must hold planWorktreeLock.
+  waitForAdminLock(repoPath)
   let planWorktree = ensurePlanWorktreeReady(repoPath)
   result = operation(planWorktree)
 
