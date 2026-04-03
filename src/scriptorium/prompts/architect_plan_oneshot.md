@@ -37,7 +37,7 @@ Required fields:
 
 Only create tickets directly for emergencies. Normal work flows through spec and areas.
 
-User request:
+[{{USERNAME}}]:
 {{USER_REQUEST}}
 
 Inline convenience copy of `spec.md` from the plan worktree:

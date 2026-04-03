@@ -40,4 +40,4 @@ Only create tickets directly for emergencies. Normal work flows through spec and
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}{{CONVERSATION_HISTORY}}
 
-[engineer]: {{USER_MESSAGE}}
+[{{USERNAME}}]: {{USER_MESSAGE}}

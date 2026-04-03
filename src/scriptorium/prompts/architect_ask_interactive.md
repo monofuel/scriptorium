@@ -6,4 +6,4 @@ You are in **read-only** mode. Answer the engineer's questions, discuss the proj
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}{{CONVERSATION_HISTORY}}
 
-[engineer]: {{USER_MESSAGE}}
+[{{USERNAME}}]: {{USER_MESSAGE}}

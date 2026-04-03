@@ -148,18 +148,19 @@ proc buildPlanScopePrompt*(repoPath: string, planPath: string): string =
     ],
   )
 
-proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: string, currentSpec: string): string =
+proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: string, currentSpec: string, username: string = "engineer"): string =
   ## Build the one-shot architect prompt that edits spec.md in place.
   result = withTone(renderPromptTemplate(
     ArchitectPlanOneShotTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
+      (name: "USERNAME", value: username),
       (name: "USER_REQUEST", value: userPrompt.strip()),
       (name: "CURRENT_SPEC", value: currentSpec.strip()),
     ],
   ))
 
-proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
+proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
   var conversationHistory = ""
   if history.len > 0:
@@ -173,6 +174,7 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "CURRENT_SPEC", value: spec.strip()),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
+      (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
   ))
@@ -227,18 +229,19 @@ proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failu
     ],
   ))
 
-proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string): string =
+proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: string = "engineer"): string =
   ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
   result = withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "CONVERSATION_HISTORY", value: ""),
+      (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userPrompt.strip()),
     ],
   ))
 
-proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string): string =
+proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Build the multi-turn architect "do" prompt with conversation history.
   var conversationHistory = ""
   if history.len > 0:
@@ -251,11 +254,12 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
+      (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
   ))
 
-proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string): string =
+proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
   var conversationHistory = ""
   if history.len > 0:
@@ -269,6 +273,7 @@ proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "CURRENT_SPEC", value: spec.strip()),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
+      (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
   ))

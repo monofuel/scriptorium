@@ -10,13 +10,13 @@ const
   MattermostChatTicketId = "mattermost-chat"
 
 type
-  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode]
+  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
   result = chat_common.truncateMessage(msg, MattermostMessageLimit)
 
-proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string) =
+proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
   ## Invoke the architect with a chat message and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var specChanged = false
@@ -24,7 +24,7 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let existingSpec = loadSpecFromPlanPath(planPath)
-      let prompt = buildArchitectPlanPrompt(repoPath, planPath, messageText, existingSpec)
+      let prompt = buildArchitectPlanPrompt(repoPath, planPath, messageText, existingSpec, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -64,14 +64,14 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 
-proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string) =
+proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
   ## Invoke the architect in read-only mode and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
-      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, @[], messageText)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, @[], messageText, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -97,13 +97,13 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 
-proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string) =
+proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
   ## Invoke the architect with full repo access and post the response to the channel.
   {.cast(gcsafe).}:
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      let prompt = buildDoOneShotPrompt(repoPath, messageText)
+      let prompt = buildDoOneShotPrompt(repoPath, messageText, username)
       let agentResult = runDoArchitectRequest(
         runAgent,
         repoPath,
@@ -127,13 +127,15 @@ proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, m
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
   let restClient = newMostyClient(args.url, args.token)
+  let user = restClient.getUser(args.userId)
+  let username = user.username
   case args.mode
   of chatModePlan:
-    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText)
+    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
   of chatModeAsk:
-    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText)
+    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
   of chatModeDo:
-    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText)
+    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
 
 proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
   ## Handle a !command prefix message and post the response.
@@ -202,7 +204,7 @@ proc runMattermostBot*(repoPath: string) =
     let (mode, text) = parseChatMode(content)
     echo &"scriptorium: mattermost message from {post.user_id} (mode={mode}): {text}"
     let threadPtr = create(Thread[ChatThreadArgs])
-    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode))
+    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id))
 
   echo "scriptorium: starting Mattermost bot"
   client.startGateway(onPost = onPost)
