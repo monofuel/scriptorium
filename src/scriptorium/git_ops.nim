@@ -308,21 +308,27 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
     raise newException(IOError, &"{cmdStr} timed out after {timeoutMs div 1000}s")
   result = (exitCode: exitCode, output: output)
 
-proc ensureScriptoriumIgnored*(repoPath: string) =
-  ## Ensure .scriptorium/ is gitignored in the target repository.
-  let managedDir = repoPath / ManagedStateDirName
-  createDir(managedDir)
-  let gitignorePath = repoPath / ".gitignore"
+proc ensureGitignoreEntry(gitignorePath: string, entry: string, matchPatterns: openArray[string]) =
+  ## Append entry to .gitignore if none of matchPatterns are already present.
   if fileExists(gitignorePath):
     let content = readFile(gitignorePath)
     for line in content.splitLines():
       let trimmed = line.strip()
-      if trimmed == ".scriptorium/" or trimmed == ".scriptorium" or trimmed == ".*":
-        return
+      for pattern in matchPatterns:
+        if trimmed == pattern:
+          return
     var newContent = content
     if newContent.len > 0 and not newContent.endsWith("\n"):
       newContent.add("\n")
-    newContent.add(".scriptorium/\n")
+    newContent.add(entry & "\n")
     writeFile(gitignorePath, newContent)
   else:
-    writeFile(gitignorePath, ".scriptorium/\n")
+    writeFile(gitignorePath, entry & "\n")
+
+proc ensureScriptoriumIgnored*(repoPath: string) =
+  ## Ensure .scriptorium/ and .env are gitignored in the target repository.
+  let managedDir = repoPath / ManagedStateDirName
+  createDir(managedDir)
+  let gitignorePath = repoPath / ".gitignore"
+  ensureGitignoreEntry(gitignorePath, ".scriptorium/", [".scriptorium/", ".scriptorium", ".*"])
+  ensureGitignoreEntry(gitignorePath, ".env", [".env", ".*"])
