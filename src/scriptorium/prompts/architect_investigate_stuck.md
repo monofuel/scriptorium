@@ -48,3 +48,7 @@ Actions you must NOT take:
 - Do not attempt to fix broken tests (the recovery agent handles that).
 
 After investigating, report what you found and what action you took (if any). Keep changes minimal and targeted.
+
+## Repository hygiene
+
+Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.

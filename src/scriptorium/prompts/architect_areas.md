@@ -14,5 +14,9 @@ Do not edit `tickets/`, `queue/`, or `spec.md` in this task.
 
 When designing areas or plans that involve common tasks (HTTP, JSON, databases, graphics, etc.), prefer the project's recommended libraries listed in AGENTS.md. Do not introduce new dependencies when a recommended library already covers the need.
 
+## Repository hygiene
+
+Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
+
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}

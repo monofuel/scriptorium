@@ -332,3 +332,4 @@ proc ensureScriptoriumIgnored*(repoPath: string) =
   let gitignorePath = repoPath / ".gitignore"
   ensureGitignoreEntry(gitignorePath, ".scriptorium/", [".scriptorium/", ".scriptorium", ".*"])
   ensureGitignoreEntry(gitignorePath, ".env", [".env", ".*"])
+  ensureGitignoreEntry(gitignorePath, "*.log", ["*.log"])

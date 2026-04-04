@@ -13,5 +13,6 @@ Guidelines:
 - If the task is read-only (running tests, checking status), just report the results.
 - Do not modify `spec.md` or the `scriptorium/plan` branch — use `scriptorium plan` for that.
 - When creating git tags, always commit first, then tag the new commit. Never tag before committing — the tag must point to the commit containing the relevant changes.
+- Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
 {{CONVERSATION_HISTORY}}
 [{{USERNAME}}]: {{USER_MESSAGE}}

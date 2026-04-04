@@ -10,8 +10,35 @@ const
   TicketAgentFailReopenCommitPrefix = "scriptorium: reopen failed ticket"
   SubmitPrTestOutputMaxChars = 2000
   PartialWorkCommitPrefix* = "scriptorium: save partial agent work (attempt "
+  MaxAutoCommitFileBytes* = 1_048_576
 
 export agent_pool
+
+proc gitAddFiltered*(worktreePath: string, maxFileBytes: int = MaxAutoCommitFileBytes) =
+  ## Stage all modified and untracked files except those exceeding maxFileBytes.
+  ## Logs a warning for each skipped file.
+  let result = runCommandCapture(worktreePath, "git", @["ls-files", "--others", "--modified", "--exclude-standard"])
+  if result.exitCode != 0 or result.output.strip().len == 0:
+    gitRun(worktreePath, "add", "-A")
+    return
+  var filesToAdd: seq[string] = @[]
+  for line in result.output.strip().splitLines():
+    let relPath = line.strip()
+    if relPath.len == 0:
+      continue
+    let fullPath = worktreePath / relPath
+    if not fileExists(fullPath):
+      filesToAdd.add(relPath)
+      continue
+    let size = getFileSize(fullPath)
+    if size > maxFileBytes:
+      let sizeMB = size div (1024 * 1024)
+      logWarn(&"skipping large file from auto-commit: {relPath} ({sizeMB}MB)")
+    else:
+      filesToAdd.add(relPath)
+  if filesToAdd.len > 0:
+    for f in filesToAdd:
+      gitRun(worktreePath, "add", f)
 
 proc detectPriorWork*(worktreePath: string, ticketId: string): int =
   ## Detect commits ahead of the default branch on the ticket branch.
@@ -36,7 +63,7 @@ proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: str
     addWorktreeWithRecovery(repoPath, worktreePath, branch)
   elif statusResult.output.strip().len > 0:
     let commitMsg = PartialWorkCommitPrefix & $attempt & ")"
-    gitRun(worktreePath, "add", "-A")
+    gitAddFiltered(worktreePath)
     gitRun(worktreePath, "commit", "-m", commitMsg)
     logInfo(&"ticket {ticketId}: saved uncommitted agent work before retry")
 
@@ -288,7 +315,7 @@ proc executeAssignedTicket*(
     let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
       logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
-      gitRun(assignment.worktree, "add", "-A")
+      gitAddFiltered(assignment.worktree)
       gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)

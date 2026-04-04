@@ -37,6 +37,10 @@ Required fields:
 
 Only create tickets directly for emergencies. Normal work flows through spec and areas.
 
+## Repository hygiene
+
+Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
+
 [{{USERNAME}}]:
 {{USER_REQUEST}}
 
