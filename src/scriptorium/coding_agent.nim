@@ -201,7 +201,7 @@ proc executeAssignedTicket*(
     logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{maxAttempts})")
     let agentResult = runner(request)
     result = agentResult
-    totalAttemptsUsed += agentResult.attemptCount
+    totalAttemptsUsed += max(agentResult.attemptCount, 1)
 
     let agentWallTime = epochTime() - agentStartTime
     let agentWallDuration = formatDuration(agentWallTime)

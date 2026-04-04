@@ -1,5 +1,5 @@
 import
-  std/[json, os, strformat, strutils],
+  std/[algorithm, json, os, strformat, strutils, tables],
   mosty,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, lock_management,
      prompt_builders, shared_state]
@@ -10,13 +10,42 @@ const
   MattermostChatTicketId = "mattermost-chat"
 
 type
-  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string]
+  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string, botUserId: string, chatHistoryCount: int]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
   result = chat_common.truncateMessage(msg, MattermostMessageLimit)
 
-proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
+proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, botUserId: string): seq[PlanTurn] =
+  ## Fetch recent channel posts and convert to PlanTurn history.
+  ## Returns messages in chronological order, excluding the most recent (current request).
+  if count <= 0:
+    return @[]
+  # Fetch count+1 so we can drop the most recent post (the current request).
+  let postList = client.getChannelPosts(channelId, 0, count + 1)
+  if postList.order.len <= 1:
+    return @[]
+  # Order is newest-first. Skip index 0 (current request).
+  var turns: seq[PlanTurn] = @[]
+  for i in 1 ..< postList.order.len:
+    let postId = postList.order[i]
+    if not postList.posts.hasKey(postId):
+      continue
+    let post = postList.posts[postId]
+    let text = post.message.strip()
+    if text.len == 0:
+      continue
+    let role =
+      if post.user_id == botUserId: "architect"
+      else:
+        let user = client.getUser(post.user_id)
+        user.username
+    turns.add(PlanTurn(role: role, text: text))
+  # Reverse to chronological order (oldest first).
+  turns.reverse()
+  result = turns
+
+proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with a chat message and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var specChanged = false
@@ -24,7 +53,7 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let existingSpec = loadSpecFromPlanPath(planPath)
-      let prompt = buildArchitectPlanPrompt(repoPath, planPath, messageText, existingSpec, username)
+      let prompt = buildInteractivePlanPrompt(repoPath, planPath, existingSpec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -64,14 +93,14 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 
-proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
+proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect in read-only mode and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
-      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, @[], messageText, username)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -97,13 +126,13 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 
-proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string) =
+proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with full repo access and post the response to the channel.
   {.cast(gcsafe).}:
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      let prompt = buildDoOneShotPrompt(repoPath, messageText, username)
+      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username)
       let agentResult = runDoArchitectRequest(
         runAgent,
         repoPath,
@@ -129,13 +158,14 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   let restClient = newMostyClient(args.url, args.token)
   let user = restClient.getUser(args.userId)
   let username = user.username
+  let history = fetchMattermostHistory(restClient, args.channelId, args.chatHistoryCount, args.botUserId)
   case args.mode
   of chatModePlan:
-    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
+    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
   of chatModeAsk:
-    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
+    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
   of chatModeDo:
-    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, username)
+    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
 
 proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
   ## Handle a !command prefix message and post the response.
@@ -187,6 +217,7 @@ proc runMattermostBot*(repoPath: string) =
     if post.user_id == botUserId:
       return
     if allowedUserIds.len > 0 and post.user_id notin allowedUserIds:
+      echo &"scriptorium: mattermost message ignored from non-allowlisted user ({post.user_id})"
       return
 
     let content = post.message.strip()
@@ -204,7 +235,8 @@ proc runMattermostBot*(repoPath: string) =
     let (mode, text) = parseChatMode(content)
     echo &"scriptorium: mattermost message from {post.user_id} (mode={mode}): {text}"
     let threadPtr = create(Thread[ChatThreadArgs])
-    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id))
+    let historyCount = cfg.mattermost.chatHistoryCount
+    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id, botUserId, historyCount))
 
   echo "scriptorium: starting Mattermost bot"
   client.startGateway(onPost = onPost)

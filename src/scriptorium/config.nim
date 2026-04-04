@@ -46,12 +46,14 @@ type
     serverId*: string
     channelId*: string
     allowedUserIds*: seq[string]
+    chatHistoryCount*: int
 
   MattermostConfig* = object
     enabled*: bool
     url*: string
     channelId*: string
     allowedUserIds*: seq[string]
+    chatHistoryCount*: int
 
   LoopConfig* = object
     enabled*: bool
@@ -139,8 +141,8 @@ proc defaultConfig*(): Config =
       remotes: @[],
       syncIntervalSeconds: 60,
     ),
-    discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[]),
-    mattermost: MattermostConfig(enabled: false, url: "", channelId: "", allowedUserIds: @[]),
+    discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[], chatHistoryCount: 8),
+    mattermost: MattermostConfig(enabled: false, url: "", channelId: "", allowedUserIds: @[], chatHistoryCount: 8),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,

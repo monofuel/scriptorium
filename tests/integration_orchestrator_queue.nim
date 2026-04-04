@@ -197,7 +197,7 @@ suite "integration orchestrator merge queue":
       check "tickets/in-progress/0001-first.md" notin files
     )
 
-  test "IT-10 global halt while red resumes after master health is restored":
+  test "IT-10 merge queue failure while red reopens ticket":
     withInitializedTempRepo("scriptorium_integration_it10_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n")
@@ -209,22 +209,19 @@ suite "integration orchestrator merge queue":
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m integration-ticket-output")
       discard enqueueMergeRequest(repoPath, assignment, "merge me")
 
+      # With a failing makefile the merge queue still processes (runs regardless of health).
+      # The merge fails and the ticket is reopened.
       addFailingMakefile(repoPath)
       writeOrchestratorEndpointConfig(repoPath, 2)
       runOrchestratorForTicks(repoPath, 1, noopRunner)
 
       var files = planTreeFiles(repoPath)
-      check "tickets/in-progress/0001-first.md" in files
-      check "tickets/done/0001-first.md" notin files
-      check pendingQueueFiles(repoPath).len == 1
-
-      addPassingMakefile(repoPath)
-      runOrchestratorForTicks(repoPath, 1, noopRunner)
-
-      files = planTreeFiles(repoPath)
-      check "tickets/done/0001-first.md" in files
+      check "tickets/open/0001-first.md" in files
       check "tickets/in-progress/0001-first.md" notin files
       check pendingQueueFiles(repoPath).len == 0
+
+      let ticketContent = readPlanFile(repoPath, "tickets/open/0001-first.md")
+      check "## Merge Queue Failure" in ticketContent
     )
 
   test "IT-11 integration-test failure on master blocks assignment of open tickets":

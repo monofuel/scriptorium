@@ -1,5 +1,5 @@
 import
-  std/[json, os, strformat, strutils],
+  std/[algorithm, json, os, strformat, strutils],
   guildy,
   jsony,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, lock_management,
@@ -12,7 +12,7 @@ const
   InteractionResponseMessage = 4
 
 type
-  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, username: string]
+  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, username: string, chatHistoryCount: int]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -30,7 +30,28 @@ proc registerSlashCommands(c: GuildyClient, serverId: string) =
   discard c.registerCommands(toJson(commands), serverId)
   echo "scriptorium: registered slash commands"
 
-proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string) =
+proc fetchDiscordHistory(client: GuildyClient, channelId: string, count: int): seq[PlanTurn] =
+  ## Fetch recent channel messages and convert to PlanTurn history.
+  ## Returns messages in chronological order, excluding the most recent (current request).
+  if count <= 0:
+    return @[]
+  # Fetch count+1 so we can drop the most recent message (the current request).
+  let messages = client.getChannelMessages(channelId, count + 1)
+  if messages.len <= 1:
+    return @[]
+  # Messages are newest-first from Discord API. Skip index 0 (current request).
+  var turns: seq[PlanTurn] = @[]
+  for i in 1 ..< messages.len:
+    let msg = messages[i]
+    let role = if msg.author.bot: "architect" else: msg.author.username
+    let text = msg.content.strip()
+    if text.len > 0:
+      turns.add(PlanTurn(role: role, text: text))
+  # Reverse to chronological order (oldest first).
+  turns.reverse()
+  result = turns
+
+proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with a chat message and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var specChanged = false
@@ -38,7 +59,7 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let existingSpec = loadSpecFromPlanPath(planPath)
-      let prompt = buildArchitectPlanPrompt(repoPath, planPath, messageText, existingSpec, username)
+      let prompt = buildInteractivePlanPrompt(repoPath, planPath, existingSpec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -77,14 +98,14 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
     response = response & SpecUpdatedNote
   discard client.postChannelMessage(channelId, response)
 
-proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string) =
+proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect in read-only mode and post the response to the channel.
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
     response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
-      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, @[], messageText, username)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
         runAgent,
         repoPath,
@@ -109,13 +130,13 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
 
   discard client.postChannelMessage(channelId, response)
 
-proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string) =
+proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with full repo access and post the response to the channel.
   {.cast(gcsafe).}:
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      let prompt = buildDoOneShotPrompt(repoPath, messageText, username)
+      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username)
       let agentResult = runDoArchitectRequest(
         runAgent,
         repoPath,
@@ -138,13 +159,14 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
   let restClient = newGuildyClient(args.token)
+  let history = fetchDiscordHistory(restClient, args.channelId, args.chatHistoryCount)
   case args.mode
   of chatModePlan:
-    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username)
+    handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
   of chatModeAsk:
-    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username)
+    handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
   of chatModeDo:
-    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username)
+    handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
 
 proc runDiscordBot*(repoPath: string) =
   ## Start the Discord bot gateway connection.
@@ -173,6 +195,9 @@ proc runDiscordBot*(repoPath: string) =
     if msg.author.bot:
       return
     if allowedUserIds.len > 0 and msg.author.id notin allowedUserIds:
+      let ignoredUser = msg.author.username
+      let ignoredId = msg.author.id
+      echo &"scriptorium: discord message ignored from non-allowlisted user {ignoredUser} ({ignoredId})"
       return
     let user = msg.author.username
     let content = msg.content
@@ -180,12 +205,14 @@ proc runDiscordBot*(repoPath: string) =
     echo &"scriptorium: discord message from {user} (mode={mode}): {text}"
     # Spawn background thread to avoid blocking the gateway event loop.
     let threadPtr = create(Thread[ChatThreadArgs])
-    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, user))
+    let historyCount = cfg.discord.chatHistoryCount
+    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, user, historyCount))
 
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:
       return
     if allowedUserIds.len > 0 and interaction.user_id notin allowedUserIds:
+      echo &"scriptorium: discord interaction ignored from non-allowlisted user ({interaction.user_id})"
       return
     let cmd = interaction.command_name
     echo &"scriptorium: slash command /{cmd}"
