@@ -10,31 +10,34 @@ const
   MattermostChatTicketId = "mattermost-chat"
 
 type
-  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string, botUserId: string, chatHistoryCount: int]
+  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string, botUserId: string, chatHistoryCount: int, postId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
   result = chat_common.truncateMessage(msg, MattermostMessageLimit)
 
-proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, botUserId: string): seq[PlanTurn] =
+proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, botUserId: string, currentPostId: string): seq[PlanTurn] =
   ## Fetch recent channel posts and convert to PlanTurn history.
-  ## Returns messages in chronological order, excluding the most recent (current request).
+  ## Excludes the current post by ID and filters to normal posts only.
   if count <= 0:
     return @[]
-  # Fetch count+1 so we can drop the most recent post (the current request).
+  # Fetch extra to account for filtering.
   let postList = client.getChannelPosts(channelId, 0, count + 1)
-  if postList.order.len <= 1:
-    return @[]
-  # Order is newest-first. Skip index 0 (current request).
+  # Order is newest-first.
   var turns: seq[PlanTurn] = @[]
-  for i in 1 ..< postList.order.len:
-    let postId = postList.order[i]
-    if not postList.posts.hasKey(postId):
+  for id in postList.order:
+    if id == currentPostId:
       continue
-    let post = postList.posts[postId]
+    if not postList.posts.hasKey(id):
+      continue
+    let post = postList.posts[id]
+    if post.post_type.len > 0:
+      continue
     let text = post.message.strip()
     if text.len == 0:
       continue
+    if turns.len >= count:
+      break
     let role =
       if post.user_id == botUserId: "architect"
       else:
@@ -158,7 +161,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   let restClient = newMostyClient(args.url, args.token)
   let user = restClient.getUser(args.userId)
   let username = user.username
-  let history = fetchMattermostHistory(restClient, args.channelId, args.chatHistoryCount, args.botUserId)
+  let history = fetchMattermostHistory(restClient, args.channelId, args.chatHistoryCount, args.botUserId, args.postId)
   case args.mode
   of chatModePlan:
     handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
@@ -236,7 +239,8 @@ proc runMattermostBot*(repoPath: string) =
     echo &"scriptorium: mattermost message from {post.user_id} (mode={mode}): {text}"
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.mattermost.chatHistoryCount
-    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id, botUserId, historyCount))
+    let currentPostId = post.id
+    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id, botUserId, historyCount, currentPostId))
 
   echo "scriptorium: starting Mattermost bot"
   client.startGateway(onPost = onPost)

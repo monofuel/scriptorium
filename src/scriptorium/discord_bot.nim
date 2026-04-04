@@ -12,7 +12,7 @@ const
   InteractionResponseMessage = 4
 
 type
-  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, username: string, chatHistoryCount: int]
+  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, username: string, chatHistoryCount: int, messageId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -30,22 +30,23 @@ proc registerSlashCommands(c: GuildyClient, serverId: string) =
   discard c.registerCommands(toJson(commands), serverId)
   echo "scriptorium: registered slash commands"
 
-proc fetchDiscordHistory(client: GuildyClient, channelId: string, count: int): seq[PlanTurn] =
+proc fetchDiscordHistory(client: GuildyClient, channelId: string, count: int, currentMessageId: string): seq[PlanTurn] =
   ## Fetch recent channel messages and convert to PlanTurn history.
-  ## Returns messages in chronological order, excluding the most recent (current request).
+  ## Excludes the current message by ID and filters to default message type only.
   if count <= 0:
     return @[]
-  # Fetch count+1 so we can drop the most recent message (the current request).
+  # Fetch extra to account for filtering.
   let messages = client.getChannelMessages(channelId, count + 1)
-  if messages.len <= 1:
-    return @[]
-  # Messages are newest-first from Discord API. Skip index 0 (current request).
+  # Messages are newest-first from Discord API.
   var turns: seq[PlanTurn] = @[]
-  for i in 1 ..< messages.len:
-    let msg = messages[i]
+  for msg in messages:
+    if msg.id == currentMessageId:
+      continue
+    if msg.`type` != 0:
+      continue
     let role = if msg.author.bot: "architect" else: msg.author.username
     let text = msg.content.strip()
-    if text.len > 0:
+    if text.len > 0 and turns.len < count:
       turns.add(PlanTurn(role: role, text: text))
   # Reverse to chronological order (oldest first).
   turns.reverse()
@@ -159,7 +160,7 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
   let restClient = newGuildyClient(args.token)
-  let history = fetchDiscordHistory(restClient, args.channelId, args.chatHistoryCount)
+  let history = fetchDiscordHistory(restClient, args.channelId, args.chatHistoryCount, args.messageId)
   case args.mode
   of chatModePlan:
     handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
@@ -206,7 +207,8 @@ proc runDiscordBot*(repoPath: string) =
     # Spawn background thread to avoid blocking the gateway event loop.
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.discord.chatHistoryCount
-    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, user, historyCount))
+    let msgId = msg.id
+    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, user, historyCount, msgId))
 
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:
