@@ -15,6 +15,8 @@ const
   ConfigFileName = "scriptorium.json"
   PlanDirs = [
     "areas",
+    "docs",
+    "docs/iterations",
     "tickets/open",
     "tickets/in-progress",
     "tickets/done",

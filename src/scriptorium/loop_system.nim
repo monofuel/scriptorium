@@ -1,9 +1,10 @@
 import
-  std/[os, strformat, strutils, times],
+  std/[algorithm, os, strformat, strutils, times],
   ./[agent_runner, architect_agent, config, git_ops, lock_management, logging, prompt_builders, shared_state, ticket_metadata]
 
 const
-  IterationLogPath* = "iteration_log.md"
+  IterationsDir* = "docs" / "iterations"
+  LegacyIterationLogPath* = "iteration_log.md"
 
 proc isQueueDrained*(planPath: string): bool =
   ## Check whether all ticket and merge queues are empty.
@@ -38,41 +39,79 @@ proc formatFeedbackResult*(fb: FeedbackResult): string =
   else:
     result = fb.output
 
-proc readIterationLog*(planPath: string): string =
-  ## Read the iteration log file content, returning empty string if missing.
-  let filePath = planPath / IterationLogPath
-  if fileExists(filePath):
-    result = readFile(filePath)
-  else:
-    result = ""
+proc ensureIterationsDir*(planPath: string) =
+  ## Create the iterations directory if it does not exist.
+  let dirPath = planPath / IterationsDir
+  if not dirExists(dirPath):
+    createDir(dirPath)
+
+proc iterationFilePath*(planPath: string, iteration: int): string =
+  ## Return the path for an iteration file.
+  planPath / IterationsDir / &"{iteration:03d}.md"
+
+proc listIterationFiles*(planPath: string): seq[string] =
+  ## Return sorted list of iteration file paths.
+  let dirPath = planPath / IterationsDir
+  if not dirExists(dirPath):
+    return @[]
+  var files: seq[string]
+  for f in walkFiles(dirPath / "*.md"):
+    files.add(f)
+  files.sort()
+  result = files
+
+proc readRecentIterations*(planPath: string, count: int = 2): string =
+  ## Read the most recent N iteration files, concatenated.
+  let files = listIterationFiles(planPath)
+  if files.len == 0:
+    return ""
+  let start = max(0, files.len - count)
+  var parts: seq[string]
+  for i in start..<files.len:
+    parts.add(readFile(files[i]))
+  result = parts.join("\n\n")
 
 proc nextIterationNumber*(planPath: string): int =
-  ## Parse the log to find the highest Iteration N heading and return N+1.
-  let content = readIterationLog(planPath)
-  if content.len == 0:
+  ## Return the next iteration number based on existing iteration files.
+  let files = listIterationFiles(planPath)
+  if files.len == 0:
+    # Check legacy iteration_log.md for migration.
+    let legacyPath = planPath / LegacyIterationLogPath
+    if fileExists(legacyPath):
+      let content = readFile(legacyPath)
+      var highest = 0
+      for line in content.splitLines():
+        if line.startsWith("## Iteration "):
+          let rest = line[len("## Iteration ")..^1].strip()
+          var numStr = ""
+          for ch in rest:
+            if ch in {'0'..'9'}:
+              numStr.add(ch)
+            else:
+              break
+          if numStr.len > 0:
+            let num = parseInt(numStr)
+            if num > highest:
+              highest = num
+      if highest > 0:
+        return highest + 1
     return 1
-  var highest = 0
-  for line in content.splitLines():
-    if line.startsWith("## Iteration "):
-      let rest = line[len("## Iteration ")..^1].strip()
-      var numStr = ""
-      for ch in rest:
-        if ch in {'0'..'9'}:
-          numStr.add(ch)
-        else:
-          break
-      if numStr.len == 0:
-        continue
-      let num = parseInt(numStr)
-      if num > highest:
-        highest = num
-  result = highest + 1
+  # Parse number from the last filename (e.g. "045.md" -> 45).
+  let lastFile = extractFilename(files[^1])
+  let base = lastFile.split('.')[0]
+  var numStr = ""
+  for ch in base:
+    if ch in {'0'..'9'}:
+      numStr.add(ch)
+  if numStr.len == 0:
+    return 1
+  result = parseInt(numStr) + 1
 
-proc appendIterationLogEntry*(planPath: string, iteration: int, feedbackOutput: string, assessment: string, strategy: string, tradeoffs: string) =
-  ## Append a formatted iteration entry to the log file.
-  let filePath = planPath / IterationLogPath
-  var entry = &"""
-## Iteration {iteration}
+proc writeIterationEntry*(planPath: string, iteration: int, feedbackOutput: string, assessment: string, strategy: string, tradeoffs: string) =
+  ## Write a formatted iteration entry to its own file.
+  ensureIterationsDir(planPath)
+  let filePath = iterationFilePath(planPath, iteration)
+  let entry = &"""## Iteration {iteration}
 
 **Feedback Output:**
 
@@ -89,26 +128,21 @@ proc appendIterationLogEntry*(planPath: string, iteration: int, feedbackOutput: 
 **Tradeoffs:**
 
 {tradeoffs}
-
 """
-  let existing = readIterationLog(planPath)
-  if existing.len > 0 and not existing.endsWith("\n"):
-    entry = "\n" & entry
-  let f = open(filePath, fmAppend)
-  f.write(entry)
-  f.close()
+  writeFile(filePath, entry)
 
-proc commitIterationLog*(planPath: string) =
-  ## Stage and commit iteration_log.md if it has changed.
-  let rc = gitCheck(planPath, "diff", "--quiet", IterationLogPath)
-  let untracked = gitCheck(planPath, "ls-files", "--error-unmatch", IterationLogPath)
-  if rc == 0 and untracked == 0:
+proc commitIterationEntry*(planPath: string, iteration: int) =
+  ## Stage and commit the iteration entry file.
+  let relPath = IterationsDir / &"{iteration:03d}.md"
+  let fullPath = planPath / relPath
+  if not fileExists(fullPath):
     return
-  gitRun(planPath, "add", IterationLogPath)
-  gitRun(planPath, "commit", "-m", "chore: update iteration log")
+  gitRun(planPath, "add", relPath)
+  if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+    gitRun(planPath, "commit", "-m", &"chore: add iteration {iteration} entry")
 
 const
-  LoopWriteAllowPrefixes = ["spec.md", "areas", "tickets/open", "iteration_log.md"]
+  LoopWriteAllowPrefixes = ["spec.md", "areas", "tickets/open", "docs"]
   LoopScopeName = "architect loop"
   LoopTicketId = "loop"
   MaxLoopRetries* = 2
@@ -133,9 +167,10 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
     return false
 
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-    let iterLog = readIterationLog(planPath)
+    ensureIterationsDir(planPath)
+    let recentIters = readRecentIterations(planPath)
     let iterNum = nextIterationNumber(planPath)
-    var prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, iterLog, feedbackOutput, iterNum)
+    var prompt = buildArchitectLoopPrompt(repoPath, planPath, goal, recentIters, feedbackOutput, iterNum)
     logInfo(&"loop: iteration {iterNum}, invoking architect")
 
     var specModified = false
@@ -164,14 +199,15 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
         specModified = true
         break
 
-    let nextNum = nextIterationNumber(planPath)
-    if nextNum == iterNum:
-      let assessment = if specModified: "Architect did not write an assessment."
+    # If the architect did not write its own iteration entry, write a fallback.
+    let expectedPath = iterationFilePath(planPath, iterNum)
+    if not fileExists(expectedPath):
+      let assessment = if specModified: "Architect did not write an iteration entry."
                        else: "Architect did not modify spec.md after " & $MaxLoopRetries & " attempts."
-      appendIterationLogEntry(planPath, iterNum, feedbackOutput,
+      writeIterationEntry(planPath, iterNum, feedbackOutput,
         assessment, "Architect did not write a strategy.", "None noted.")
 
-    commitIterationLog(planPath)
+    commitIterationEntry(planPath, iterNum)
 
     if not specModified:
       logWarn(&"loop: architect did not modify spec.md after {MaxLoopRetries} attempts")

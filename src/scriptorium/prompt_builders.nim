@@ -187,15 +187,15 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
     ],
   ))))
 
-proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string, iterationLog: string, feedbackOutput: string, iterationNumber: int): string =
-  ## Build the architect loop prompt containing goal, iteration log, feedback, and instructions.
+proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string, recentIterations: string, feedbackOutput: string, iterationNumber: int): string =
+  ## Build the architect loop prompt containing goal, recent iterations, feedback, and instructions.
   result = withMethod(withHygiene(withTone(renderPromptTemplate(
     ArchitectLoopTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
       (name: "GOAL", value: goal.strip()),
       (name: "ITERATION_NUMBER", value: $iterationNumber),
-      (name: "ITERATION_LOG", value: iterationLog.strip()),
+      (name: "RECENT_ITERATIONS", value: recentIterations.strip()),
       (name: "FEEDBACK_OUTPUT", value: feedbackOutput.strip()),
       (name: "REPO_PATH", value: repoPath),
       (name: "PLAN_PATH", value: planPath),

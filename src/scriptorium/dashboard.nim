@@ -56,16 +56,33 @@ proc formatUptime*(seconds: int64): string =
 
 proc parseIterationCount*(gitShowOutput: string): int =
   ## Parse the highest iteration number from iteration log content.
+  ## Works with both legacy monolithic format ("## Iteration N" headings)
+  ## and per-file directory listings (e.g. "003.md").
   var highest = 0
   for line in gitShowOutput.splitLines():
-    if line.startsWith("## Iteration "):
-      let numStr = line[len("## Iteration ")..^1].strip()
+    let trimmed = line.strip()
+    if trimmed.startsWith("## Iteration "):
+      let numStr = trimmed[len("## Iteration ")..^1].strip()
       try:
         let num = parseInt(numStr)
         if num > highest:
           highest = num
       except ValueError:
         discard
+    elif trimmed.endsWith(".md") and trimmed.len > 3:
+      let base = trimmed[0..^4]
+      var allDigits = true
+      for ch in base:
+        if ch notin {'0'..'9'}:
+          allDigits = false
+          break
+      if allDigits and base.len > 0:
+        try:
+          let num = parseInt(base)
+          if num > highest:
+            highest = num
+        except ValueError:
+          discard
   result = highest
 
 proc getApiStatus*(repoPath: string): DashboardStatus =
@@ -88,9 +105,13 @@ proc getApiStatus*(repoPath: string): DashboardStatus =
     except ValueError:
       discard
 
-  let iterResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":iteration_log.md"])
-  if iterResult.exitCode == 0:
-    status.loopIteration = parseIterationCount(iterResult.output)
+  let iterDirResult = runCommandCapture(repoPath, "git", @["ls-tree", "--name-only", PlanBranch & ":docs/iterations/"])
+  if iterDirResult.exitCode == 0 and iterDirResult.output.strip().len > 0:
+    status.loopIteration = parseIterationCount(iterDirResult.output)
+  else:
+    let iterResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":iteration_log.md"])
+    if iterResult.exitCode == 0:
+      status.loopIteration = parseIterationCount(iterResult.output)
 
   result = status
 
@@ -682,12 +703,24 @@ proc getApiHealth*(repoPath: string): HealthResponse =
   result = parseHealthCache(cacheResult.output)
 
 proc getApiIteration*(repoPath: string): IterationResponse =
-  ## Read iteration log from the plan branch and return current iteration and content.
-  let logRef = PlanBranch & ":iteration_log.md"
-  let logResult = runCommandCapture(repoPath, "git", @["show", logRef])
-  if logResult.exitCode == 0:
-    result.logContent = logResult.output
-    result.currentIteration = parseIterationCount(logResult.output)
+  ## Read iteration state from the plan branch. Prefers per-file format in docs/iterations/,
+  ## falls back to legacy iteration_log.md.
+  let iterDirResult = runCommandCapture(repoPath, "git", @["ls-tree", "--name-only", PlanBranch & ":docs/iterations/"])
+  if iterDirResult.exitCode == 0 and iterDirResult.output.strip().len > 0:
+    result.currentIteration = parseIterationCount(iterDirResult.output)
+    # Read the latest iteration file for logContent.
+    let files = iterDirResult.output.strip().splitLines()
+    if files.len > 0:
+      let latest = files[^1].strip()
+      let showResult = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":docs/iterations/" & latest])
+      if showResult.exitCode == 0:
+        result.logContent = showResult.output
+  else:
+    let logRef = PlanBranch & ":iteration_log.md"
+    let logResult = runCommandCapture(repoPath, "git", @["show", logRef])
+    if logResult.exitCode == 0:
+      result.logContent = logResult.output
+      result.currentIteration = parseIterationCount(logResult.output)
 
 proc healthHandler(request: Request) =
   ## Handle GET /api/health and return JSON with health cache status.

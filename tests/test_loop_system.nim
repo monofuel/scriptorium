@@ -97,96 +97,114 @@ proc testFormatFeedbackResultTimeout() =
   doAssert "timed out msg" in formatted
   echo "[OK] formatFeedbackResult includes timeout marker"
 
-proc testReadIterationLogMissing() =
-  ## Verify readIterationLog returns empty string when file does not exist.
+proc testReadRecentIterationsMissing() =
+  ## Verify readRecentIterations returns empty string when no iteration files exist.
   let tmpDir = getTempDir() / "test_loop_read_missing"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let content = readIterationLog(tmpDir)
+  let content = readRecentIterations(tmpDir)
   doAssert content == ""
-  echo "[OK] readIterationLog returns empty string when file missing"
+  echo "[OK] readRecentIterations returns empty string when no iteration files exist"
 
-proc testReadIterationLogExists() =
-  ## Verify readIterationLog returns file content when it exists.
+proc testReadRecentIterationsExists() =
+  ## Verify readRecentIterations returns content from iteration files.
   let tmpDir = getTempDir() / "test_loop_read_exists"
-  createDir(tmpDir)
+  createDir(tmpDir / "docs" / "iterations")
   defer: removeDir(tmpDir)
 
-  writeFile(tmpDir / "iteration_log.md", "## Iteration 1\nsome content\n")
-  let content = readIterationLog(tmpDir)
-  doAssert content == "## Iteration 1\nsome content\n"
-  echo "[OK] readIterationLog returns file content when present"
+  writeFile(tmpDir / "docs" / "iterations" / "001.md", "## Iteration 1\nsome content\n")
+  let content = readRecentIterations(tmpDir)
+  doAssert "## Iteration 1" in content
+  doAssert "some content" in content
+  echo "[OK] readRecentIterations returns content from iteration files"
 
 proc testNextIterationNumberEmpty() =
-  ## Verify nextIterationNumber returns 1 when no log exists.
+  ## Verify nextIterationNumber returns 1 when no iteration files exist.
   let tmpDir = getTempDir() / "test_loop_next_empty"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
   let num = nextIterationNumber(tmpDir)
   doAssert num == 1
-  echo "[OK] nextIterationNumber returns 1 when no log exists"
+  echo "[OK] nextIterationNumber returns 1 when no iteration files exist"
 
 proc testNextIterationNumberWithEntries() =
-  ## Verify nextIterationNumber returns highest N + 1.
+  ## Verify nextIterationNumber returns highest N + 1 from iteration files.
   let tmpDir = getTempDir() / "test_loop_next_entries"
+  createDir(tmpDir / "docs" / "iterations")
+  defer: removeDir(tmpDir)
+
+  writeFile(tmpDir / "docs" / "iterations" / "001.md", "## Iteration 1\n")
+  writeFile(tmpDir / "docs" / "iterations" / "003.md", "## Iteration 3\n")
+  let num = nextIterationNumber(tmpDir)
+  doAssert num == 4
+  echo "[OK] nextIterationNumber returns 4 after iteration file 003.md"
+
+proc testNextIterationNumberLegacyMigration() =
+  ## Verify nextIterationNumber reads legacy iteration_log.md when no iteration files exist.
+  let tmpDir = getTempDir() / "test_loop_next_legacy"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
   writeFile(tmpDir / "iteration_log.md", "## Iteration 1 — Baseline Assessment\nfoo\n\n## Iteration 3\nbar\n")
   let num = nextIterationNumber(tmpDir)
   doAssert num == 4
-  echo "[OK] nextIterationNumber returns 4 after iteration 3 (with suffixed heading)"
+  echo "[OK] nextIterationNumber returns 4 from legacy iteration_log.md migration"
 
-proc testAppendIterationLogEntry() =
-  ## Verify appendIterationLogEntry appends formatted entry.
-  let tmpDir = getTempDir() / "test_loop_append"
+proc testWriteIterationEntry() =
+  ## Verify writeIterationEntry writes a formatted per-file iteration entry.
+  let tmpDir = getTempDir() / "test_loop_write"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  appendIterationLogEntry(tmpDir, 1, "output1", "assess1", "strat1", "trade1")
-  let content = readIterationLog(tmpDir)
+  writeIterationEntry(tmpDir, 1, "output1", "assess1", "strat1", "trade1")
+  let filePath = tmpDir / "docs" / "iterations" / "001.md"
+  doAssert fileExists(filePath)
+  let content = readFile(filePath)
   doAssert "## Iteration 1" in content
   doAssert "output1" in content
   doAssert "assess1" in content
   doAssert "strat1" in content
   doAssert "trade1" in content
-  echo "[OK] appendIterationLogEntry writes formatted entry"
+  echo "[OK] writeIterationEntry writes formatted per-file entry"
 
-proc testAppendIterationLogEntryMultiple() =
-  ## Verify multiple appends produce increasing iteration headings.
-  let tmpDir = getTempDir() / "test_loop_append_multi"
+proc testWriteIterationEntryMultiple() =
+  ## Verify multiple iteration entries produce separate files with correct numbering.
+  let tmpDir = getTempDir() / "test_loop_write_multi"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  appendIterationLogEntry(tmpDir, 1, "out1", "a1", "s1", "t1")
-  appendIterationLogEntry(tmpDir, 2, "out2", "a2", "s2", "t2")
-  let content = readIterationLog(tmpDir)
-  doAssert "## Iteration 1" in content
-  doAssert "## Iteration 2" in content
+  writeIterationEntry(tmpDir, 1, "out1", "a1", "s1", "t1")
+  writeIterationEntry(tmpDir, 2, "out2", "a2", "s2", "t2")
+  doAssert fileExists(tmpDir / "docs" / "iterations" / "001.md")
+  doAssert fileExists(tmpDir / "docs" / "iterations" / "002.md")
+  let content1 = readFile(tmpDir / "docs" / "iterations" / "001.md")
+  let content2 = readFile(tmpDir / "docs" / "iterations" / "002.md")
+  doAssert "## Iteration 1" in content1
+  doAssert "## Iteration 2" in content2
   let num = nextIterationNumber(tmpDir)
   doAssert num == 3
-  echo "[OK] multiple appends produce correct iteration numbers"
+  echo "[OK] multiple iteration entries produce separate files with correct numbering"
 
 proc testBuildArchitectLoopPromptContents() =
-  ## Verify buildArchitectLoopPrompt includes goal, iteration log, feedback, iteration number, and instructions.
+  ## Verify buildArchitectLoopPrompt includes goal, recent iterations, feedback, iteration number, and instructions.
   let
     goal = "Reduce test flakiness below 1%"
-    iterLog = "## Iteration 1\nPrevious results here\n"
+    recentIters = "## Iteration 1\nPrevious results here\n"
     feedback = "3 tests still flaky"
-    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, iterLog, feedback, 2)
+    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, recentIters, feedback, 2)
   doAssert goal in prompt
-  doAssert iterLog in prompt
+  doAssert recentIters in prompt
   doAssert feedback in prompt
   doAssert "Iteration 2" in prompt
   doAssert "MUST update" in prompt
   doAssert "Assess previous results" in prompt
-  doAssert "Write the next iteration log entry" in prompt
+  doAssert "Previous iterations" in prompt
   doAssert "investigate rather than press forward" in prompt
   doAssert "hard constraints" in prompt
   doAssert "non-negotiable" in prompt
-  echo "[OK] buildArchitectLoopPrompt contains goal, log, feedback, iteration number, and instructions"
+  echo "[OK] buildArchitectLoopPrompt contains goal, recent iterations, feedback, iteration number, and instructions"
 
 proc testBuildArchitectLoopPromptWithMockRunner() =
   ## Verify a mock runner receives a prompt containing expected content.
@@ -197,14 +215,14 @@ proc testBuildArchitectLoopPromptWithMockRunner() =
 
   let
     goal = "Ship v2.0"
-    iterLog = "## Iteration 1\nFirst pass\n"
+    recentIters = "## Iteration 1\nFirst pass\n"
     feedback = "Build succeeded"
-    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, iterLog, feedback, 2)
+    prompt = buildArchitectLoopPrompt("/repo", "/plan", goal, recentIters, feedback, 2)
   discard mockRunner(AgentRunRequest(prompt: prompt, workingDir: "/plan"))
   doAssert goal in capturedPrompt
-  doAssert iterLog in capturedPrompt
+  doAssert recentIters in capturedPrompt
   doAssert feedback in capturedPrompt
-  echo "[OK] mock runner receives prompt with goal, iteration log, and feedback"
+  echo "[OK] mock runner receives prompt with goal, recent iterations, and feedback"
 
 proc makeDrainedPlanDir(tmpDir: string) =
   ## Create a fake plan directory with empty queues (drained state).
@@ -313,12 +331,13 @@ when isMainModule:
   testFormatFeedbackResultSuccess()
   testFormatFeedbackResultFailure()
   testFormatFeedbackResultTimeout()
-  testReadIterationLogMissing()
-  testReadIterationLogExists()
+  testReadRecentIterationsMissing()
+  testReadRecentIterationsExists()
   testNextIterationNumberEmpty()
   testNextIterationNumberWithEntries()
-  testAppendIterationLogEntry()
-  testAppendIterationLogEntryMultiple()
+  testNextIterationNumberLegacyMigration()
+  testWriteIterationEntry()
+  testWriteIterationEntryMultiple()
   testBuildArchitectLoopPromptContents()
   testBuildArchitectLoopPromptWithMockRunner()
   testLoopDisabledNoCycle()
