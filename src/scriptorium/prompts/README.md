@@ -19,6 +19,7 @@ Prompt path terminology should stay aligned with `docs/terms.md`.
 - `plan_scope.md`: shared plan worktree and read-scope context.
 - `tone.md`: shared communication tone directive (appended to all agent prompts).
 - `repo_hygiene.md`: shared repository hygiene directive (appended to all action-taking agent prompts).
+- `engineering_method.md`: shared engineering method directive (Five Whys, root cause analysis — appended to all agent prompts).
 - `architect_loop.md`: Architect loop-driven development cycle prompt.
 - `architect_plan_oneshot.md`: one-shot `scriptorium plan <prompt>` prompt.
 - `architect_plan_interactive.md`: per-turn interactive `scriptorium plan` prompt.
