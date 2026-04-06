@@ -1,6 +1,6 @@
 import
   std/strutils,
-  scriptorium/[intent_classifier, shared_state]
+  scriptorium/[agent_runner, config, intent_classifier, shared_state]
 
 proc testParseIntentIgnore() =
   doAssert parseIntent("ignore") == intentIgnore
@@ -83,6 +83,37 @@ proc testChatIntentEnumValues() =
   doAssert $intentDo == "do"
   echo "[OK] ChatIntent enum string values"
 
+proc testClassifyIntentWithMockRunner() =
+  ## Verify classifyIntent passes config to the runner and parses the response.
+  let mockRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+    doAssert request.model.len > 0, "model must be set in AgentRunRequest"
+    doAssert request.model == "test-model"
+    result = AgentRunResult(lastMessage: "plan")
+  let cfg = AgentConfig(model: "test-model", harness: harnessClaudeCode)
+  let intent = classifyIntent(mockRunner, "/tmp", "create a website", @[], "testuser", true, cfg)
+  doAssert intent == intentPlan
+  echo "[OK] classifyIntent passes config and parses response"
+
+proc testClassifyIntentFallbackOnError() =
+  ## Verify classifyIntent returns intentAsk on runner failure.
+  let failRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+    raise newException(ValueError, "simulated failure")
+  let cfg = AgentConfig(model: "test-model", harness: harnessClaudeCode)
+  let intent = classifyIntent(failRunner, "/tmp", "hello", @[], "testuser", true, cfg)
+  doAssert intent == intentAsk
+  echo "[OK] classifyIntent falls back to ask on error"
+
+proc testClassifyIntentPassesTimeouts() =
+  ## Verify classifyIntent forwards timeout config to the runner.
+  let mockRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+    doAssert request.noOutputTimeoutMs == 30000
+    doAssert request.hardTimeoutMs == 60000
+    result = AgentRunResult(lastMessage: "ignore")
+  let cfg = AgentConfig(model: "test-model", harness: harnessClaudeCode, noOutputTimeout: 30000, hardTimeout: 60000)
+  let intent = classifyIntent(mockRunner, "/tmp", "hey bob", @[], "testuser", false, cfg)
+  doAssert intent == intentIgnore
+  echo "[OK] classifyIntent forwards timeout config"
+
 when isMainModule:
   testParseIntentIgnore()
   testParseIntentChat()
@@ -95,3 +126,6 @@ when isMainModule:
   testBuildClassifierPromptWithoutDevops()
   testBuildClassifierPromptWithHistory()
   testChatIntentEnumValues()
+  testClassifyIntentWithMockRunner()
+  testClassifyIntentFallbackOnError()
+  testClassifyIntentPassesTimeouts()

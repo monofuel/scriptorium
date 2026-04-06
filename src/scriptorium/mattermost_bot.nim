@@ -219,7 +219,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   var mode = args.mode
   if not args.explicit:
     let cfg = loadConfig(args.repoPath)
-    let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, username, cfg.devops.enabled)
+    let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, username, cfg.devops.enabled, cfg.agents.architect)
     echo &"scriptorium: classified intent for {username}: {intent}"
     case intent
     of intentIgnore: mode = chatModeIgnore

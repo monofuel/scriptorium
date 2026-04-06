@@ -1,6 +1,6 @@
 import
   std/[strformat, strutils],
-  ./[agent_runner, prompt_catalog, shared_state]
+  ./[agent_runner, config, prompt_catalog, shared_state]
 
 type
   ChatIntent* = enum
@@ -45,7 +45,8 @@ proc parseIntent*(response: string): ChatIntent =
 
 proc classifyIntent*(runner: AgentRunner, repoPath: string,
                      message: string, history: seq[PlanTurn],
-                     username: string, devopsEnabled: bool): ChatIntent =
+                     username: string, devopsEnabled: bool,
+                     agentCfg: AgentConfig): ChatIntent =
   ## Classify a chat message intent using the configured agent runner.
   ## Returns intentAsk as a safe fallback on any error.
   {.cast(gcsafe).}:
@@ -54,10 +55,16 @@ proc classifyIntent*(runner: AgentRunner, repoPath: string,
       let agentResult = runner(AgentRunRequest(
         prompt: prompt,
         workingDir: repoPath,
+        harness: agentCfg.harness,
+        model: agentCfg.model,
+        reasoningEffort: agentCfg.reasoningEffort,
+        noOutputTimeoutMs: agentCfg.noOutputTimeout,
+        hardTimeoutMs: agentCfg.hardTimeout,
       ))
       let output = agentResult.lastMessage.strip()
       let fallback = agentResult.stdout.strip()
       let text = if output.len > 0: output else: fallback
       parseIntent(text)
-    except CatchableError:
+    except CatchableError as e:
+      echo &"scriptorium: intent classification failed: {e.msg}"
       intentAsk
