@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, architect_agent, config, git_ops, journal, lock_management, log_forwarding, logging, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, architect_agent, config, git_ops, journal, lock_management, log_forwarding, logging, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -582,6 +582,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       if parseForceEvalFromTicketContent(ticketContent):
         forceEvalPending = true
         logInfo(&"ticket {item.ticketId}: force eval flag set, will trigger early eval")
+      postNotification(repoPath, "merged", &"Ticket {item.ticketId} merged successfully.")
       true
     else:
       let failureReason = if mergeMasterResult.exitCode != 0: "git merge conflict"
@@ -619,6 +620,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
         beginJournalTransition(planPath, "park " & item.ticketId, stuckSteps, stuckCommitMsg)
         executeJournalSteps(planPath)
         completeJournalTransition(planPath)
+        postNotification(repoPath, "stuck", &"Ticket {item.ticketId} is stuck after {failureCount} merge failures. The architect is investigating — no action needed.")
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         sessionStats.ticketsReopened += 1

@@ -1,7 +1,7 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
   agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag, stuck_investigation
@@ -162,6 +162,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   var masterHealthState = MasterHealthState()
   var specWaitingLogged = false
   var recoveryAttemptedForCommit = ""
+  var queueDrainNotified = false
   let syncCfg = cfg.remoteSync
   var lastSyncTime = 0.0
   while shouldRun:
@@ -393,6 +394,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if forceEval:
             forceEvalPending = false
             logInfo("loop: force eval triggered by completed ticket")
+          if drained and runningAgentCount() == 0 and not queueDrainNotified:
+            queueDrainNotified = true
+            postNotification(repoPath, "queue-drained", "All tickets complete. Queue is empty.")
+          if not drained:
+            queueDrainNotified = false
           if (drained and runningAgentCount() == 0) or forceEval:
             if loopCfg.maxIterations > 0 and loopIterationCount >= loopCfg.maxIterations:
               let maxIter = loopCfg.maxIterations

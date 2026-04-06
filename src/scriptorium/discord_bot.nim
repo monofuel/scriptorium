@@ -3,7 +3,7 @@ import
   guildy,
   jsony,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
-     lock_management, prompt_builders, shared_state]
+     lock_management, notifications, prompt_builders, shared_state]
 
 const
   DiscordMessageLimit = 2000
@@ -19,6 +19,7 @@ var
 
 type
   ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, explicit: bool, username: string, chatHistoryCount: int, messageId: string]
+  NotificationPollerArgs = tuple[repoPath: string, token: string, channelId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -202,6 +203,18 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
 
     discard client.postChannelMessage(channelId, response)
 
+proc notificationPollerThread(args: NotificationPollerArgs) {.thread.} =
+  ## Poll for notification files and post them to the channel.
+  let client = newGuildyClient(args.token)
+  while true:
+    sleep(5000)
+    try:
+      let messages = consumeNotifications(args.repoPath)
+      for msg in messages:
+        discard client.postChannelMessage(args.channelId, msg)
+    except CatchableError as e:
+      echo &"scriptorium: notification poller error: {e.msg}"
+
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
   ## When the mode prefix was not explicit, runs intent classification first.
@@ -254,6 +267,10 @@ proc runDiscordBot*(repoPath: string) =
       registerSlashCommands(c, serverId)
 
   initLock(processedMessageLock)
+
+  clearNotifications(repoPath)
+  let pollerPtr = create(Thread[NotificationPollerArgs])
+  createThread(pollerPtr[], notificationPollerThread, (repoPath, token, channelId))
 
   let onMessage = proc(c: GuildyClient, msg: DiscordMessage) {.gcsafe.} =
     if msg.channel_id != channelId:

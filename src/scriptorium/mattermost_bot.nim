@@ -2,7 +2,7 @@ import
   std/[algorithm, json, os, strformat, strutils, tables],
   mosty,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
-     lock_management, prompt_builders, shared_state]
+     lock_management, notifications, prompt_builders, shared_state]
 
 const
   MattermostMessageLimit = 16383
@@ -11,6 +11,7 @@ const
 
 type
   ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, explicit: bool, userId: string, botUserId: string, chatHistoryCount: int, postId: string]
+  NotificationPollerArgs = tuple[repoPath: string, url: string, token: string, channelId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
@@ -193,6 +194,20 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
     let truncated = truncateMessage(response)
     discard client.createPost(channelId, truncated)
 
+proc notificationPollerThread(args: NotificationPollerArgs) {.thread.} =
+  ## Poll for notification files and post them to the channel.
+  {.cast(gcsafe).}:
+    enablePartialChainVerification()
+  let client = newMostyClient(args.url, args.token)
+  while true:
+    sleep(5000)
+    try:
+      let messages = consumeNotifications(args.repoPath)
+      for msg in messages:
+        discard client.createPost(args.channelId, msg)
+    except CatchableError as e:
+      echo &"scriptorium: notification poller error: {e.msg}"
+
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
   ## When the mode prefix was not explicit, runs intent classification first.
@@ -269,6 +284,10 @@ proc runMattermostBot*(repoPath: string) =
   let allowedUserIds = cfg.mattermost.allowedUserIds
   enablePartialChainVerification()
   let client = newMostyClient(url, token)
+
+  clearNotifications(repoPath)
+  let pollerPtr = create(Thread[NotificationPollerArgs])
+  createThread(pollerPtr[], notificationPollerThread, (repoPath, url, token, channelId))
 
   # Get the bot's own user ID so we can ignore our own messages.
   let me = client.getMe()
