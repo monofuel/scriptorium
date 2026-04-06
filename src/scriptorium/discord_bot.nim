@@ -1,18 +1,24 @@
 import
-  std/[algorithm, json, os, strformat, strutils],
+  std/[algorithm, json, locks, os, sets, strformat, strutils],
   guildy,
   jsony,
-  ./[agent_runner, architect_agent, chat_common, config, git_ops, lock_management,
-     prompt_builders, shared_state]
+  ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
+     lock_management, prompt_builders, shared_state]
 
 const
   DiscordMessageLimit = 2000
   SpecUpdatedNote = "\n[spec.md updated]"
   DiscordChatTicketId = "discord-chat"
   InteractionResponseMessage = 4
+  MaxProcessedMessageIds = 500
+
+var
+  processedMessageIds {.global.}: HashSet[string]
+  processedMessageIdQueue {.global.}: seq[string]
+  processedMessageLock {.global.}: Lock
 
 type
-  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, username: string, chatHistoryCount: int, messageId: string]
+  ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, explicit: bool, username: string, chatHistoryCount: int, messageId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
@@ -69,7 +75,10 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
         prompt,
         DiscordChatTicketId,
       )
-      enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+      if cfg.devops.enabled:
+        enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir, "services"], PlanWriteScopeName)
+      else:
+        enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
 
       # Commit any new tickets created by the architect.
       gitRun(planPath, "add", PlanTicketsOpenDir)
@@ -137,7 +146,7 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username)
+      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username, cfg.devops.enabled)
       let agentResult = runDoArchitectRequest(
         runAgent,
         repoPath,
@@ -157,17 +166,69 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
 
     discard client.postChannelMessage(channelId, response)
 
+proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
+  ## Handle casual chat messages using the architect in read-only ask mode.
+  ## No worktree locking, no plan branch writes — lightweight conversational response.
+  {.cast(gcsafe).}:
+    let cfg = loadConfig(repoPath)
+    var response = ""
+    try:
+      response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+        let spec = loadSpecFromPlanPath(planPath)
+        let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
+        let agentResult = runPlanArchitectRequest(
+          runAgent,
+          repoPath,
+          planPath,
+          cfg.agents.architect,
+          prompt,
+          DiscordChatTicketId,
+        )
+        enforceNoWrites(planPath, "scriptorium discord chat")
+
+        var reply = agentResult.lastMessage.strip()
+        if reply.len == 0:
+          reply = agentResult.stdout.strip()
+        if reply.len == 0:
+          reply = "(no response)"
+        reply
+      )
+    except CatchableError as e:
+      let errMsg = e.msg
+      echo &"scriptorium: discord chat error: {errMsg}"
+      response = &"Error: {errMsg}"
+
+    discard client.postChannelMessage(channelId, response)
+
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
+  ## When the mode prefix was not explicit, runs intent classification first.
   let restClient = newGuildyClient(args.token)
   let history = fetchDiscordHistory(restClient, args.channelId, args.chatHistoryCount, args.messageId)
-  case args.mode
+
+  var mode = args.mode
+  if not args.explicit:
+    let cfg = loadConfig(args.repoPath)
+    let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, args.username, cfg.devops.enabled)
+    echo &"scriptorium: classified intent for {args.username}: {intent}"
+    case intent
+    of intentIgnore: mode = chatModeIgnore
+    of intentChat: mode = chatModeChat
+    of intentAsk: mode = chatModeAsk
+    of intentPlan: mode = chatModePlan
+    of intentDo: mode = chatModeDo
+
+  case mode
   of chatModePlan:
     handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
   of chatModeAsk:
     handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
   of chatModeDo:
     handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
+  of chatModeChat:
+    handleChatResponse(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
+  of chatModeIgnore:
+    echo &"scriptorium: ignoring message from {args.username} (classified as human-to-human)"
 
 proc runDiscordBot*(repoPath: string) =
   ## Start the Discord bot gateway connection.
@@ -190,11 +251,25 @@ proc runDiscordBot*(repoPath: string) =
     if event.hasKey("t") and event["t"].getStr() == "READY":
       registerSlashCommands(c, serverId)
 
+  initLock(processedMessageLock)
+
   let onMessage = proc(c: GuildyClient, msg: DiscordMessage) {.gcsafe.} =
     if msg.channel_id != channelId:
       return
     if msg.author.bot:
       return
+    # Dedup: guildy fires onMessage for both MESSAGE_CREATE and MESSAGE_UPDATE.
+    # Discord link preview embeds trigger MESSAGE_UPDATE, causing duplicate processing.
+    {.cast(gcsafe).}:
+      withLock processedMessageLock:
+        if msg.id in processedMessageIds:
+          return
+        processedMessageIds.incl(msg.id)
+        processedMessageIdQueue.add(msg.id)
+        if processedMessageIdQueue.len > MaxProcessedMessageIds:
+          let oldest = processedMessageIdQueue[0]
+          processedMessageIdQueue.delete(0)
+          processedMessageIds.excl(oldest)
     if allowedUserIds.len > 0 and msg.author.id notin allowedUserIds:
       let ignoredUser = msg.author.username
       let ignoredId = msg.author.id
@@ -202,13 +277,13 @@ proc runDiscordBot*(repoPath: string) =
       return
     let user = msg.author.username
     let content = msg.content
-    let (mode, text) = parseChatMode(content)
+    let (mode, text, explicit) = parseChatMode(content)
     echo &"scriptorium: discord message from {user} (mode={mode}): {text}"
     # Spawn background thread to avoid blocking the gateway event loop.
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.discord.chatHistoryCount
     let msgId = msg.id
-    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, user, historyCount, msgId))
+    createThread(threadPtr[], chatWorkerThread, (repoPath, token, channelId, text, mode, explicit, user, historyCount, msgId))
 
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:

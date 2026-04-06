@@ -82,6 +82,9 @@ type
     codingAgentProgressTimeoutMs*: int
     codingAgentMaxAttempts*: int
 
+  DevopsConfig* = object
+    enabled*: bool
+
   Config* = object
     agents*: AgentConfigs
     endpoints*: Endpoints
@@ -91,6 +94,7 @@ type
     mattermost*: MattermostConfig
     loop*: LoopConfig
     dashboard*: DashboardConfig
+    devops*: DevopsConfig
     remoteSync*: RemoteSyncConfig
     syncAgentsMd*: bool
     logLevel*: string
@@ -144,6 +148,7 @@ proc defaultConfig*(): Config =
     discord: DiscordConfig(enabled: false, serverId: "", channelId: "", allowedUserIds: @[], chatHistoryCount: 8),
     mattermost: MattermostConfig(enabled: false, url: "", channelId: "", allowedUserIds: @[], chatHistoryCount: 8),
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
+    devops: DevopsConfig(enabled: false),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
     syncAgentsMd: true,
   )
@@ -252,6 +257,8 @@ proc loadConfig*(repoPath: string): Config =
       result.dashboard.host = parsed.dashboard.host
     if parsed.dashboard.port > 0:
       result.dashboard.port = parsed.dashboard.port
+  if raw.contains("\"devops\""):
+    result.devops.enabled = parsed.devops.enabled
   if raw.contains("\"remoteSync\""):
     result.remoteSync.enabled = parsed.remoteSync.enabled
     if parsed.remoteSync.primaryRemote.len > 0:

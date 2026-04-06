@@ -1,8 +1,8 @@
 import
   std/[algorithm, json, os, strformat, strutils, tables],
   mosty,
-  ./[agent_runner, architect_agent, chat_common, config, git_ops, lock_management,
-     prompt_builders, shared_state]
+  ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
+     lock_management, prompt_builders, shared_state]
 
 const
   MattermostMessageLimit = 16383
@@ -10,7 +10,7 @@ const
   MattermostChatTicketId = "mattermost-chat"
 
 type
-  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, userId: string, botUserId: string, chatHistoryCount: int, postId: string]
+  ChatThreadArgs = tuple[repoPath: string, url: string, token: string, channelId: string, messageText: string, mode: ChatMode, explicit: bool, userId: string, botUserId: string, chatHistoryCount: int, postId: string]
 
 proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
@@ -65,7 +65,10 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
         prompt,
         MattermostChatTicketId,
       )
-      enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+      if cfg.devops.enabled:
+        enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir, "services"], PlanWriteScopeName)
+      else:
+        enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
 
       # Commit any new tickets created by the architect.
       gitRun(planPath, "add", PlanTicketsOpenDir)
@@ -135,7 +138,7 @@ proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, m
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username)
+      let prompt = buildInteractiveDoPrompt(repoPath, history, messageText, username, cfg.devops.enabled)
       let agentResult = runDoArchitectRequest(
         runAgent,
         repoPath,
@@ -156,19 +159,71 @@ proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, m
     let truncated = truncateMessage(response)
     discard client.createPost(channelId, truncated)
 
+proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
+  ## Handle casual chat messages using the architect in read-only ask mode.
+  {.cast(gcsafe).}:
+    let cfg = loadConfig(repoPath)
+    var response = ""
+    try:
+      response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+        let spec = loadSpecFromPlanPath(planPath)
+        let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
+        let agentResult = runPlanArchitectRequest(
+          runAgent,
+          repoPath,
+          planPath,
+          cfg.agents.architect,
+          prompt,
+          MattermostChatTicketId,
+        )
+        enforceNoWrites(planPath, "scriptorium mattermost chat")
+
+        var reply = agentResult.lastMessage.strip()
+        if reply.len == 0:
+          reply = agentResult.stdout.strip()
+        if reply.len == 0:
+          reply = "(no response)"
+        reply
+      )
+    except CatchableError as e:
+      let errMsg = e.msg
+      echo &"scriptorium: mattermost chat error: {errMsg}"
+      response = &"Error: {errMsg}"
+
+    let truncated = truncateMessage(response)
+    discard client.createPost(channelId, truncated)
+
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
+  ## When the mode prefix was not explicit, runs intent classification first.
   let restClient = newMostyClient(args.url, args.token)
   let user = restClient.getUser(args.userId)
   let username = user.username
   let history = fetchMattermostHistory(restClient, args.channelId, args.chatHistoryCount, args.botUserId, args.postId)
-  case args.mode
+
+  var mode = args.mode
+  if not args.explicit:
+    let cfg = loadConfig(args.repoPath)
+    let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, username, cfg.devops.enabled)
+    echo &"scriptorium: classified intent for {username}: {intent}"
+    case intent
+    of intentIgnore: mode = chatModeIgnore
+    of intentChat: mode = chatModeChat
+    of intentAsk: mode = chatModeAsk
+    of intentPlan: mode = chatModePlan
+    of intentDo: mode = chatModeDo
+
+  case mode
   of chatModePlan:
     handleChatMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
   of chatModeAsk:
     handleAskMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
   of chatModeDo:
     handleDoMessage(args.repoPath, restClient, args.channelId, args.messageText, username, history)
+  of chatModeChat:
+    handleChatResponse(args.repoPath, restClient, args.channelId, args.messageText, username, history)
+  of chatModeIgnore:
+    echo &"scriptorium: ignoring message from {username} (classified as human-to-human)"
 
 proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
   ## Handle a !command prefix message and post the response.
@@ -235,12 +290,12 @@ proc runMattermostBot*(repoPath: string) =
       return
 
     # Parse chat mode and spawn background thread.
-    let (mode, text) = parseChatMode(content)
+    let (mode, text, explicit) = parseChatMode(content)
     echo &"scriptorium: mattermost message from {post.user_id} (mode={mode}): {text}"
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.mattermost.chatHistoryCount
     let currentPostId = post.id
-    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, post.user_id, botUserId, historyCount, currentPostId))
+    createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, explicit, post.user_id, botUserId, historyCount, currentPostId))
 
   echo "scriptorium: starting Mattermost bot"
   client.startGateway(onPost = onPost)

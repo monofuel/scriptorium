@@ -17,6 +17,7 @@ const
     "areas",
     "docs",
     "docs/iterations",
+    "services",
     "tickets/open",
     "tickets/in-progress",
     "tickets/done",

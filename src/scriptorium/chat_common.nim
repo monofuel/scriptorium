@@ -8,21 +8,22 @@ const
 
 type
   ChatMode* = enum
-    chatModePlan, chatModeAsk, chatModeDo
+    chatModePlan, chatModeAsk, chatModeDo, chatModeChat, chatModeIgnore
 
-proc parseChatMode*(message: string): tuple[mode: ChatMode, text: string] =
+proc parseChatMode*(message: string): tuple[mode: ChatMode, text: string, explicit: bool] =
   ## Parse an optional mode prefix from a chat message.
   ## Supported prefixes: "ask:", "plan:", "do:". Default: chatModePlan.
+  ## Returns explicit=true when a prefix was found, false when defaulting.
   let trimmed = message.strip()
   let lower = trimmed.toLowerAscii()
   if lower.startsWith("ask:"):
-    result = (chatModeAsk, trimmed[4..^1].strip())
+    result = (chatModeAsk, trimmed[4..^1].strip(), true)
   elif lower.startsWith("plan:"):
-    result = (chatModePlan, trimmed[5..^1].strip())
+    result = (chatModePlan, trimmed[5..^1].strip(), true)
   elif lower.startsWith("do:"):
-    result = (chatModeDo, trimmed[3..^1].strip())
+    result = (chatModeDo, trimmed[3..^1].strip(), true)
   else:
-    result = (chatModePlan, trimmed)
+    result = (chatModePlan, trimmed, false)
 
 proc truncateMessage*(msg: string, limit: int): string =
   ## Truncate a message to fit within the given character limit.

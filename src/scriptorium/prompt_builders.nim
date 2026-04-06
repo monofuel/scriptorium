@@ -19,6 +19,13 @@ proc withMethod*(prompt: string): string =
   ## Append the shared engineering method directive to a prompt.
   result = prompt.strip() & "\n\n" & EngineeringMethodTemplate.strip() & "\n"
 
+proc withDevops*(prompt: string, devopsEnabled: bool): string =
+  ## Append devops guidance when devops mode is enabled.
+  if devopsEnabled:
+    result = prompt.strip() & "\n\n" & DevopsGuidanceTemplate.strip() & "\n"
+  else:
+    result = prompt
+
 proc truncateTail*(value: string, maxChars: int): string =
   ## Return at most maxChars from the end of value.
   if maxChars < 1:
@@ -215,9 +222,9 @@ proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failu
     ],
   ))))
 
-proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: string = "engineer"): string =
+proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: string = "engineer", devopsEnabled: bool = false): string =
   ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
-  result = withMethod(withHygiene(withTone(renderPromptTemplate(
+  result = withDevops(withMethod(withHygiene(withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -225,9 +232,9 @@ proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: strin
       (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userPrompt.strip()),
     ],
-  ))))
+  )))), devopsEnabled)
 
-proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
+proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer", devopsEnabled: bool = false): string =
   ## Build the multi-turn architect "do" prompt with conversation history.
   var conversationHistory = ""
   if history.len > 0:
@@ -235,7 +242,7 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = withMethod(withHygiene(withTone(renderPromptTemplate(
+  result = withDevops(withMethod(withHygiene(withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -243,7 +250,7 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
       (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  ))))
+  )))), devopsEnabled)
 
 proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.
