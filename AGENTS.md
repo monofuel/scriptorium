@@ -199,7 +199,7 @@ echo &"Hello, {name}! You have {scoreString} points."
 
 ### Nim Imports
 
-One `import` block. Use bracket syntax. Order: std/ then libraries then local. No quotes on paths.
+One `import` block. Use bracket syntax. Order: std/ then libraries then local. No quotes on paths. Do not use `from` imports.
 
 WRONG:
 ```nim
@@ -207,6 +207,7 @@ import std/os
 import std/strutils
 import jsony
 import ./models
+from ./config import defaultConfig
 ```
 
 RIGHT:
@@ -214,7 +215,7 @@ RIGHT:
 import
   std/[os, strutils],
   jsony,
-  ./[models, logs]
+  ./[config, models, logs]
 ```
 
 ### Nim Procs

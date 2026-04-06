@@ -1,5 +1,5 @@
 import
-  std/[os],
+  std/[os, strutils],
   scriptorium/[config, logging]
 
 proc testDefaultConfigValues() =
@@ -422,8 +422,9 @@ proc testPerAgentTimeoutFullOverride() =
   doAssert cfg.agents.coding.hardTimeout == 14_400_000
   echo "[OK] per-agent timeout full override on architect works correctly"
 
-proc testZeroTimeoutDoesNotOverride() =
-  ## Verify that zero-value timeouts in JSON do not override non-zero defaults.
+proc testExplicitZeroTimeoutOverrides() =
+  ## Verify that explicit zero-value timeouts in JSON override non-zero defaults.
+  ## With deep merge, any key present in user JSON is treated as intentional.
   let tmpDir = getTempDir() / "test_config_zero_timeout"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
@@ -432,10 +433,50 @@ proc testZeroTimeoutDoesNotOverride() =
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
-  doAssert cfg.agents.coding.hardTimeout == 14_400_000
-  doAssert cfg.agents.coding.noOutputTimeout == 300_000
-  doAssert cfg.agents.coding.progressTimeout == 600_000
-  echo "[OK] zero-value timeouts do not override non-zero defaults"
+  doAssert cfg.agents.coding.hardTimeout == 0
+  doAssert cfg.agents.coding.noOutputTimeout == 0
+  doAssert cfg.agents.coding.progressTimeout == 0
+  echo "[OK] explicit zero-value timeouts override defaults"
+
+proc testConfigWriteBack() =
+  ## Verify loadConfig writes back pretty-printed JSON with all defaults filled in.
+  let tmpDir = getTempDir() / "test_config_writeback"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"architect": {"model": "claude-sonnet-4-6"}}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  discard loadConfig(tmpDir)
+
+  let written = readFile(tmpDir / "scriptorium.json")
+  # Pretty-printed: contains newlines and indentation.
+  doAssert "\n" in written
+  doAssert "  " in written
+  # New default fields appear.
+  doAssert "maxAgents" in written
+  doAssert "dashboard" in written
+  doAssert "devops" in written
+  # User value preserved.
+  doAssert "claude-sonnet-4-6" in written
+  echo "[OK] loadConfig writes back pretty-printed JSON with all defaults"
+
+proc testConfigStripsUnknownKeys() =
+  ## Verify unknown keys are stripped from the written-back file.
+  let tmpDir = getTempDir() / "test_config_strip_unknown"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"architect": {"model": "claude-opus-4-6"}}, "bogusKey": "should-be-removed", "anotherUnknown": 42}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  discard loadConfig(tmpDir)
+
+  let written = readFile(tmpDir / "scriptorium.json")
+  doAssert "bogusKey" notin written
+  doAssert "anotherUnknown" notin written
+  doAssert "should-be-removed" notin written
+  echo "[OK] unknown keys stripped from written-back config"
 
 when isMainModule:
   testParseLogLevel()
@@ -460,4 +501,6 @@ when isMainModule:
   testPerAgentTimeoutDefaults()
   testPerAgentTimeoutOverride()
   testPerAgentTimeoutFullOverride()
-  testZeroTimeoutDoesNotOverride()
+  testExplicitZeroTimeoutOverrides()
+  testConfigWriteBack()
+  testConfigStripsUnknownKeys()

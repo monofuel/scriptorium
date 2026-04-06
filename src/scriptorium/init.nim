@@ -1,7 +1,6 @@
-import std/[os, osproc, streams, strformat, strutils]
-import jsony
-from ./git_ops import ensureScriptoriumIgnored
-from ./config import defaultConfig
+import
+  std/[os, osproc, streams, strformat, strutils],
+  ./[config, git_ops]
 
 const
   PlanBranch = "scriptorium/plan"
@@ -161,8 +160,7 @@ proc runInit*(path: string, quiet: bool = false) =
   let configPath = target / ConfigFileName
   let createdConfig = not fileExists(configPath)
   if createdConfig:
-    let configJson = defaultConfig().toJson()
-    writeFile(configPath, configJson & "\n")
+    saveConfig(target, defaultConfig())
     if not quiet:
       echo "Created scriptorium.json — configure agent models and harnesses."
 

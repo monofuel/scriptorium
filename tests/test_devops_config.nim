@@ -1,6 +1,5 @@
 import
   std/[os, strutils],
-  jsony,
   scriptorium/[config, prompt_builders]
 
 proc testDevopsConfigDefault() =

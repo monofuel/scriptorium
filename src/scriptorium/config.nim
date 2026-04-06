@@ -1,5 +1,5 @@
 import
-  std/[os, strutils],
+  std/[json, os, strutils],
   jsony
 
 type
@@ -181,101 +181,54 @@ proc inferHarness*(model: string): Harness =
   else:
     harnessTypoi
 
-proc mergeAgentConfig(base: var AgentConfig, parsed: AgentConfig) =
-  ## Merge non-empty parsed fields into base.
-  if parsed.model.len > 0:
-    base.model = parsed.model
-  if parsed.reasoningEffort.len > 0:
-    base.reasoningEffort = parsed.reasoningEffort
-  if parsed.hardTimeout > 0:
-    base.hardTimeout = parsed.hardTimeout
-  if parsed.noOutputTimeout > 0:
-    base.noOutputTimeout = parsed.noOutputTimeout
-  if parsed.progressTimeout > 0:
-    base.progressTimeout = parsed.progressTimeout
-  let parsedHarnessStr = $parsed.harness
-  if parsedHarnessStr.len > 0 and parsedHarnessStr != $DefaultHarness:
-    base.harness = parsed.harness
-  elif parsed.model.len > 0 and parsedHarnessStr == $DefaultHarness:
-    base.harness = inferHarness(parsed.model)
+proc deepMerge(defaults: JsonNode, user: JsonNode): JsonNode =
+  ## Merge user values over defaults. Only keys present in defaults are kept.
+  if defaults.kind == JObject and user.kind == JObject:
+    result = copy(defaults)
+    for key, defaultVal in defaults.pairs:
+      if key in user:
+        result[key] = deepMerge(defaultVal, user[key])
+  else:
+    result = copy(user)
+
+proc fixupHarnesses(cfg: var Config, userJson: JsonNode) =
+  ## Infer harness from model when user set model but not harness.
+  template fixup(agent: var AgentConfig, agentKey: string) =
+    if userJson.hasKey("agents") and userJson["agents"].hasKey(agentKey):
+      let aj = userJson["agents"][agentKey]
+      if aj.hasKey("model") and not aj.hasKey("harness"):
+        agent.harness = inferHarness(agent.model)
+  fixup(cfg.agents.architect, "architect")
+  fixup(cfg.agents.coding, "coding")
+  fixup(cfg.agents.manager, "manager")
+  fixup(cfg.agents.reviewer, "reviewer")
+  fixup(cfg.agents.audit, "audit")
+
+proc saveConfig*(repoPath: string, cfg: Config) =
+  ## Write config as pretty-printed JSON.
+  let path = repoPath / ConfigFile
+  let jsonStr = parseJson(cfg.toJson()).pretty()
+  writeFile(path, jsonStr & "\n")
 
 proc loadConfig*(repoPath: string): Config =
-  ## Load scriptorium.json from repoPath, falling back to defaults for missing fields.
+  ## Load scriptorium.json, deep-merging with defaults.
+  ## New fields are added, unknown fields are stripped, and the file is pretty-printed on write-back.
+  ## Crashes on invalid JSON.
   let path = repoPath / ConfigFile
   if not fileExists(path):
     return defaultConfig()
   let raw = readFile(path)
-  result = defaultConfig()
-  let parsed = fromJson(raw, Config)
-  mergeAgentConfig(result.agents.architect, parsed.agents.architect)
-  mergeAgentConfig(result.agents.coding, parsed.agents.coding)
-  mergeAgentConfig(result.agents.manager, parsed.agents.manager)
-  mergeAgentConfig(result.agents.reviewer, parsed.agents.reviewer)
-  mergeAgentConfig(result.agents.audit, parsed.agents.audit)
-  if parsed.endpoints.local.len > 0:
-    result.endpoints.local = parsed.endpoints.local
-  if parsed.concurrency.maxAgents > 0:
-    result.concurrency.maxAgents = parsed.concurrency.maxAgents
-  if parsed.concurrency.tokenBudgetMB > 0:
-    result.concurrency.tokenBudgetMB = parsed.concurrency.tokenBudgetMB
-  if parsed.timeouts.codingAgentHardTimeoutMs > 0:
-    result.timeouts.codingAgentHardTimeoutMs = parsed.timeouts.codingAgentHardTimeoutMs
-  if parsed.timeouts.codingAgentNoOutputTimeoutMs > 0:
-    result.timeouts.codingAgentNoOutputTimeoutMs = parsed.timeouts.codingAgentNoOutputTimeoutMs
-  if parsed.timeouts.codingAgentProgressTimeoutMs > 0:
-    result.timeouts.codingAgentProgressTimeoutMs = parsed.timeouts.codingAgentProgressTimeoutMs
-  if parsed.timeouts.codingAgentMaxAttempts > 0:
-    result.timeouts.codingAgentMaxAttempts = parsed.timeouts.codingAgentMaxAttempts
-  if raw.contains("\"discord\""):
-    result.discord.enabled = parsed.discord.enabled
-    if parsed.discord.serverId.len > 0:
-      result.discord.serverId = parsed.discord.serverId
-    if parsed.discord.channelId.len > 0:
-      result.discord.channelId = parsed.discord.channelId
-    if parsed.discord.allowedUserIds.len > 0:
-      result.discord.allowedUserIds = parsed.discord.allowedUserIds
-  if raw.contains("\"mattermost\""):
-    result.mattermost.enabled = parsed.mattermost.enabled
-    if parsed.mattermost.url.len > 0:
-      result.mattermost.url = parsed.mattermost.url
-    if parsed.mattermost.channelId.len > 0:
-      result.mattermost.channelId = parsed.mattermost.channelId
-    if parsed.mattermost.allowedUserIds.len > 0:
-      result.mattermost.allowedUserIds = parsed.mattermost.allowedUserIds
-  if raw.contains("\"loop\""):
-    result.loop.enabled = parsed.loop.enabled
-    if parsed.loop.feedback.len > 0:
-      result.loop.feedback = parsed.loop.feedback
-    if parsed.loop.goal.len > 0:
-      result.loop.goal = parsed.loop.goal
-    if parsed.loop.maxIterations > 0:
-      result.loop.maxIterations = parsed.loop.maxIterations
-    if parsed.loop.feedbackTimeoutMs > 0:
-      result.loop.feedbackTimeoutMs = parsed.loop.feedbackTimeoutMs
-  if raw.contains("\"dashboard\""):
-    if parsed.dashboard.host.len > 0:
-      result.dashboard.host = parsed.dashboard.host
-    if parsed.dashboard.port > 0:
-      result.dashboard.port = parsed.dashboard.port
-  if raw.contains("\"devops\""):
-    result.devops.enabled = parsed.devops.enabled
-  if raw.contains("\"remoteSync\""):
-    result.remoteSync.enabled = parsed.remoteSync.enabled
-    if parsed.remoteSync.primaryRemote.len > 0:
-      result.remoteSync.primaryRemote = parsed.remoteSync.primaryRemote
-    if parsed.remoteSync.remotes.len > 0:
-      result.remoteSync.remotes = parsed.remoteSync.remotes
-    if parsed.remoteSync.syncIntervalSeconds > 0:
-      result.remoteSync.syncIntervalSeconds = parsed.remoteSync.syncIntervalSeconds
-  if raw.contains("\"syncAgentsMd\""):
-    result.syncAgentsMd = parsed.syncAgentsMd
-  if parsed.logLevel.len > 0:
-    result.logLevel = parsed.logLevel
-  if parsed.fileLogLevel.len > 0:
-    result.fileLogLevel = parsed.fileLogLevel
+  let userJson = parseJson(raw)
+  let defaultJson = parseJson(defaultConfig().toJson())
+  let merged = deepMerge(defaultJson, userJson)
+  result = fromJson($merged, Config)
+  fixupHarnesses(result, userJson)
+  # Apply env overrides.
   let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
   if envLogLevel.len > 0:
     result.logLevel = envLogLevel
   let envFileLogLevel = getEnv("SCRIPTORIUM_FILE_LOG_LEVEL")
   if envFileLogLevel.len > 0:
     result.fileLogLevel = envFileLogLevel
+  # Write back: adds new fields, removes old ones, pretty-prints.
+  saveConfig(repoPath, result)
