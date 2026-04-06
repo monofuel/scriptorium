@@ -237,6 +237,12 @@ proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd
     response = handlePause(repoPath)
   of "resume":
     response = handleResume(repoPath)
+  of "help":
+    response = handleHelp()
+  of "restart":
+    discard client.createPost(channelId, "Restarting...")
+    handleRestart()
+    return
   else:
     response = &"Unknown command: !{cmd}"
   let truncated = truncateMessage(response)

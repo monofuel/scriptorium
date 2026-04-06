@@ -125,6 +125,31 @@ proc formatQueueMessage*(repoPath: string): string =
   lines.add(queueResult)
   result = lines.join("\n")
 
+const
+  HelpMessage* = """**Scriptorium Commands**
+`/status` — Show orchestrator status and ticket counts
+`/queue` — Show merge queue and ticket lists
+`/pause` — Pause the orchestrator (in-flight agents finish)
+`/resume` — Resume the orchestrator
+`/help` — Show this help message
+`/restart` — Restart the bot process
+
+**Chat Prefixes**
+`ask:` — Read-only question about the project
+`plan:` — Request a spec or ticket change
+`do:` — Execute a task with full repo access
+No prefix — Intent is classified automatically"""
+
+proc handleHelp*(): string =
+  ## Handle the /help command.
+  result = HelpMessage
+
+proc handleRestart*() =
+  ## Handle the /restart command by exiting the process.
+  ## Expects systemd (or similar) to restart the service.
+  echo "scriptorium: restart requested via chat command"
+  quit(0)
+
 proc handlePause*(repoPath: string): string =
   ## Handle the /pause command.
   if isPaused(repoPath):

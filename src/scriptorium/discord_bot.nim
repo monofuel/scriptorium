@@ -32,6 +32,8 @@ proc registerSlashCommands(c: GuildyClient, serverId: string) =
     SlashCommand(name: "queue", description: "Show merge queue and ticket lists", `type`: 1),
     SlashCommand(name: "pause", description: "Pause the orchestrator", `type`: 1),
     SlashCommand(name: "resume", description: "Resume the orchestrator", `type`: 1),
+    SlashCommand(name: "help", description: "Show available commands", `type`: 1),
+    SlashCommand(name: "restart", description: "Restart the bot process", `type`: 1),
   ]
   discard c.registerCommands(toJson(commands), serverId)
   echo "scriptorium: registered slash commands"
@@ -303,6 +305,12 @@ proc runDiscordBot*(repoPath: string) =
       response = handlePause(repoPath)
     of "resume":
       response = handleResume(repoPath)
+    of "help":
+      response = handleHelp()
+    of "restart":
+      c.respondToInteraction(interaction.id, interaction.token, InteractionResponseMessage, "Restarting...")
+      handleRestart()
+      return
     else:
       response = "Unknown command."
     let truncated = truncateMessage(response)

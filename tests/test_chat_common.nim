@@ -98,6 +98,20 @@ proc testTruncateMessageCustomLimit() =
   doAssert result.endsWith(TruncatedMarker)
   echo "[OK] truncateMessage custom limit"
 
+proc testHandleHelp() =
+  ## Verify handleHelp returns a message containing all commands.
+  let result = handleHelp()
+  doAssert "/status" in result
+  doAssert "/queue" in result
+  doAssert "/pause" in result
+  doAssert "/resume" in result
+  doAssert "/help" in result
+  doAssert "/restart" in result
+  doAssert "ask:" in result
+  doAssert "plan:" in result
+  doAssert "do:" in result
+  echo "[OK] handleHelp contains all commands"
+
 testParseChatModeAsk()
 testParseChatModePlan()
 testParseChatModeDo()
@@ -109,3 +123,4 @@ testTruncateMessageUnderLimit()
 testTruncateMessageAtLimit()
 testTruncateMessageOverLimit()
 testTruncateMessageCustomLimit()
+testHandleHelp()
