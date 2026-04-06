@@ -30,7 +30,12 @@ Analyze the diff above against the spec and AGENTS.md conventions.
    - Cite the specific rule from AGENTS.md.
    - Cite the offending code location as file:line.
 
-Output a markdown report with exactly two sections:
+3. **Spec Hygiene**: Check whether spec.md contains content that violates the
+   blueprint rule: changelogs, iteration-specific diagnostic tables, retired
+   ticket post-mortems, "changes already applied" lists, or inline code blocks
+   that belong in area files. Flag any such content.
+
+Output a markdown report with exactly three sections:
 
 ## Spec Drift
 
@@ -39,3 +44,7 @@ Output a markdown report with exactly two sections:
 ## AGENTS.md Violations
 
 (List each violation with the relevant rule and file:line of the offending code. If no issues are found, write "No issues found.")
+
+## Spec Hygiene
+
+(List any spec.md content that violates the blueprint rule. If no issues are found, write "No issues found.")

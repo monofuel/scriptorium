@@ -20,3 +20,9 @@ The spec is a current-state blueprint, not a changelog or release log.
 - Version history belongs in git tags and `docs/vN.md` files, not in spec.md.
 - When updating the spec, restructure existing content as needed to maintain
   a coherent single-document blueprint.
+- Historical records belong in `docs/` or `iteration_log.md`, not spec.md.
+  This includes: "changes already applied" lists, confirmed dead ends,
+  completed/retired ticket post-mortems, diagnostic tables from specific runs,
+  and inline code blocks longer than ~10 lines (move to area files or tickets).
+- When updating spec.md after an iteration, update the *current state* sections
+  in place. Do not append new sections for each iteration's results.

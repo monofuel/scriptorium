@@ -11,6 +11,10 @@ proc withTone*(prompt: string): string =
   ## Append the shared communication tone directive to a prompt.
   result = prompt.strip() & "\n\n" & ToneTemplate.strip() & "\n"
 
+proc withHygiene*(prompt: string): string =
+  ## Append the shared repository hygiene directive to a prompt.
+  result = prompt.strip() & "\n\n" & RepoHygieneTemplate.strip() & "\n"
+
 proc truncateTail*(value: string, maxChars: int): string =
   ## Return at most maxChars from the end of value.
   if maxChars < 1:
@@ -57,7 +61,7 @@ proc formatPlanStreamEvent*(event: AgentStreamEvent): string =
 proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string, priorWorkNote: string = ""): string =
   ## Build the coding-agent prompt from ticket context.
   ## When priorWorkNote is non-empty, it is appended to inform the agent of existing commits.
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     CodingAgentTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -65,7 +69,7 @@ proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPa
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
-  ))
+  )))
   if priorWorkNote.len > 0:
     result = result.strip() & "\n\n" & priorWorkNote
 
@@ -102,14 +106,14 @@ proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaCon
 
 proc buildArchitectAreasPrompt*(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectAreasTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
       (name: "WORKTREE_PATH", value: planPath),
       (name: "CURRENT_SPEC", value: spec.strip()),
     ],
-  ))
+  )))
 
 proc buildManagerTicketsPrompt*(repoPath: string,
     areaId: string, areaRelPath: string, areaContent: string, nextId: int): string =
@@ -150,7 +154,7 @@ proc buildPlanScopePrompt*(repoPath: string, planPath: string): string =
 
 proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: string, currentSpec: string, username: string = "engineer"): string =
   ## Build the one-shot architect prompt that edits spec.md in place.
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectPlanOneShotTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
@@ -158,7 +162,7 @@ proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: s
       (name: "USER_REQUEST", value: userPrompt.strip()),
       (name: "CURRENT_SPEC", value: currentSpec.strip()),
     ],
-  ))
+  )))
 
 proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
@@ -168,7 +172,7 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectPlanInteractiveTemplate,
     [
       (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
@@ -177,48 +181,26 @@ proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: strin
       (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  ))
+  )))
 
 proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string, iterationLog: string, feedbackOutput: string, iterationNumber: int): string =
   ## Build the architect loop prompt containing goal, iteration log, feedback, and instructions.
-  let iterNum = $iterationNumber
-  result = &"""You are the architect for a loop-driven development cycle.
-
-## Goal
-
-{goal}
-
-## Current Iteration
-
-Iteration {iterNum}
-
-## Iteration Log
-
-{iterationLog}
-
-## Latest Feedback Output
-
-{feedbackOutput}
-
-## Instructions
-
-- You MUST update `spec.md` with concrete changes to improve the next eval result. Writing only to `iteration_log.md` is not sufficient — the spec drives all downstream work.
-- Assess previous results against declared expectations from the prior iteration.
-- Write the next iteration log entry to `iteration_log.md` (iteration number, feedback summary, assessment, strategy, tradeoffs).
-- If results diverge significantly from prior declared expectations, investigate rather than press forward.
-- For hard constraints, treat violations as non-negotiable.
-
-## Workspace
-
-- Repository: {repoPath}
-- Plan worktree: {planPath}
-- You may write to: `spec.md`, `areas/`, `tickets/open/`, `iteration_log.md`
-"""
-  result = withTone(result)
+  result = withHygiene(withTone(renderPromptTemplate(
+    ArchitectLoopTemplate,
+    [
+      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
+      (name: "GOAL", value: goal.strip()),
+      (name: "ITERATION_NUMBER", value: $iterationNumber),
+      (name: "ITERATION_LOG", value: iterationLog.strip()),
+      (name: "FEEDBACK_OUTPUT", value: feedbackOutput.strip()),
+      (name: "REPO_PATH", value: repoPath),
+      (name: "PLAN_PATH", value: planPath),
+    ],
+  )))
 
 proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failureClassification: string, gitStatus: string, recentCommits: string): string =
   ## Build the architect prompt for investigating a stuck ticket.
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectInvestigateStuckTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -227,11 +209,11 @@ proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failu
       (name: "GIT_STATUS", value: gitStatus.strip()),
       (name: "RECENT_COMMITS", value: recentCommits.strip()),
     ],
-  ))
+  )))
 
 proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: string = "engineer"): string =
   ## Build the one-shot architect "do" prompt for ad-hoc tasks with full repo access.
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -239,7 +221,7 @@ proc buildDoOneShotPrompt*(repoPath: string, userPrompt: string, username: strin
       (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userPrompt.strip()),
     ],
-  ))
+  )))
 
 proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Build the multi-turn architect "do" prompt with conversation history.
@@ -249,7 +231,7 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
     for turn in history:
       conversationHistory &= fmt"\n[{turn.role}]: {turn.text.strip()}\n"
 
-  result = withTone(renderPromptTemplate(
+  result = withHygiene(withTone(renderPromptTemplate(
     ArchitectDoTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -257,7 +239,7 @@ proc buildInteractiveDoPrompt*(repoPath: string, history: seq[PlanTurn], userMsg
       (name: "USERNAME", value: username),
       (name: "USER_MESSAGE", value: userMsg.strip()),
     ],
-  ))
+  )))
 
 proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn read-only architect prompt with spec, history, and current message.

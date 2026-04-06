@@ -59,6 +59,13 @@ Flag the following issues introduced by the PR:
 - Leftover artifacts: commented-out code, TODO comments for work that is already completed, assigned-but-unread variables.
 - Changes unrelated to the ticket goal. Use judgment here — legitimate incidental fixes (e.g. fixing a typo noticed while working nearby) are acceptable.
 
+### Repository hygiene
+
+Flag as substantive issues:
+- Committed log files, replay data, binary artifacts, or diagnostic output.
+- Use of `git add -A` or `git add .` that may have swept in unintended files.
+- Large files (>100KB) that appear to be generated data rather than source code.
+
 ### Test coverage
 
 Check whether the changed or added code paths have corresponding tests:

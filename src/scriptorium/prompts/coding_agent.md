@@ -38,13 +38,9 @@ Ticket path:
 Ticket content:
 {{TICKET_CONTENT}}
 
-## Repository hygiene
-
-Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files. Only commit source code, configuration, documentation, and test files that are part of the project.
-
 IMPORTANT: Before calling submit_pr, you MUST:
-1. Commit all changes:
-     git add -A && git commit -m "your description"
+1. Commit all changes (stage only the files you changed — do not use `git add -A` or `git add .`):
+     git add <changed-files> && git commit -m "your description"
 2. Rebase onto the latest default branch to pick up any changes merged while
    you were working:
      git rebase master

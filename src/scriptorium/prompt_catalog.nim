@@ -18,7 +18,9 @@ const
   AuditAgentTemplate* = staticRead(PromptDirectory & "audit_agent.md")
   ArchitectDoTemplate* = staticRead(PromptDirectory & "architect_do.md")
   ArchitectInvestigateStuckTemplate* = staticRead(PromptDirectory & "architect_investigate_stuck.md")
+  ArchitectLoopTemplate* = staticRead(PromptDirectory & "architect_loop.md")
   ToneTemplate* = staticRead(PromptDirectory & "tone.md")
+  RepoHygieneTemplate* = staticRead(PromptDirectory & "repo_hygiene.md")
 
 type
   PromptBinding* = tuple[name: string, value: string]
