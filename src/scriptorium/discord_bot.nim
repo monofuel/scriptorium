@@ -6,11 +6,11 @@ import
      lock_management, logging, notifications, prompt_builders, shared_state]
 
 const
-  DiscordMessageLimit = 2000
+  DiscordMessageLimit* = 2000
   SpecUpdatedNote = "\n[spec.md updated]"
   DiscordChatTicketId = "discord-chat"
   InteractionResponseMessage = 4
-  MaxProcessedMessageIds = 500
+  MaxProcessedMessageIds* = 500
 
 var
   processedMessageIds {.global.}: HashSet[string]
@@ -21,9 +21,34 @@ type
   ChatThreadArgs = tuple[repoPath: string, token: string, channelId: string, messageText: string, mode: ChatMode, explicit: bool, username: string, chatHistoryCount: int, messageId: string]
   NotificationPollerArgs = tuple[repoPath: string, token: string, channelId: string]
 
-proc truncateMessage(msg: string): string =
+proc truncateMessage*(msg: string): string =
   ## Truncate a message to fit within the Discord message character limit.
   result = chat_common.truncateMessage(msg, DiscordMessageLimit)
+
+proc initDedup*() =
+  ## Initialize the dedup lock. Must be called before trackMessageId.
+  initLock(processedMessageLock)
+
+proc resetDedup*() =
+  ## Reset dedup state for testing. Caller must have called initDedup first.
+  withLock processedMessageLock:
+    processedMessageIds.clear()
+    processedMessageIdQueue.setLen(0)
+
+proc trackMessageId*(id: string): bool =
+  ## Track a message ID for dedup. Returns true if the ID is new (first seen).
+  ## Returns false if already processed (duplicate).
+  ## Maintains a bounded set capped at MaxProcessedMessageIds.
+  withLock processedMessageLock:
+    if id in processedMessageIds:
+      return false
+    processedMessageIds.incl(id)
+    processedMessageIdQueue.add(id)
+    if processedMessageIdQueue.len > MaxProcessedMessageIds:
+      let oldest = processedMessageIdQueue[0]
+      processedMessageIdQueue.delete(0)
+      processedMessageIds.excl(oldest)
+    return true
 
 proc registerSlashCommands(c: GuildyClient, serverId: string) =
   ## Register slash commands with Discord after gateway READY.
@@ -270,7 +295,7 @@ proc runDiscordBot*(repoPath: string) =
     if event.hasKey("t") and event["t"].getStr() == "READY":
       registerSlashCommands(c, serverId)
 
-  initLock(processedMessageLock)
+  initDedup()
 
   clearNotifications(repoPath)
   let pollerPtr = create(Thread[NotificationPollerArgs])
@@ -284,15 +309,8 @@ proc runDiscordBot*(repoPath: string) =
     # Dedup: guildy fires onMessage for both MESSAGE_CREATE and MESSAGE_UPDATE.
     # Discord link preview embeds trigger MESSAGE_UPDATE, causing duplicate processing.
     {.cast(gcsafe).}:
-      withLock processedMessageLock:
-        if msg.id in processedMessageIds:
-          return
-        processedMessageIds.incl(msg.id)
-        processedMessageIdQueue.add(msg.id)
-        if processedMessageIdQueue.len > MaxProcessedMessageIds:
-          let oldest = processedMessageIdQueue[0]
-          processedMessageIdQueue.delete(0)
-          processedMessageIds.excl(oldest)
+      if not trackMessageId(msg.id):
+        return
     if allowedUserIds.len > 0 and msg.author.id notin allowedUserIds:
       let ignoredUser = msg.author.username
       let ignoredId = msg.author.id
