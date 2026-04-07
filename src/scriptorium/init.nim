@@ -14,13 +14,10 @@ const
   ConfigFileName = "scriptorium.json"
   PlanDirs = [
     "areas",
-    "docs",
-    "docs/iterations",
-    "services",
     "tickets/open",
     "tickets/in-progress",
     "tickets/done",
-    "tickets/stuck",
+    "tickets/stuck", # Not in spec, but used by orchestrator (shared_state.PlanTicketsStuckDir).
     "decisions",
   ]
 
