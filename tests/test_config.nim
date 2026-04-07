@@ -13,7 +13,7 @@ proc testDefaultConfigValues() =
   doAssert cfg.agents.architect.harness == harnessClaudeCode
   doAssert cfg.agents.coding.harness == harnessClaudeCode
   doAssert cfg.endpoints.local == "http://127.0.0.1:8097"
-  doAssert cfg.concurrency.maxAgents == 1
+  doAssert cfg.concurrency.maxAgents == 4
   doAssert cfg.concurrency.tokenBudgetMB == 0
   doAssert cfg.loop.enabled == false
   doAssert cfg.discord.serverId == ""
@@ -51,7 +51,7 @@ proc testPartialJsonMerge() =
   doAssert cfg.agents.coding.model == "custom-model"
   doAssert cfg.agents.coding.harness == harnessTypoi  # inferHarness("custom-model")
   doAssert cfg.agents.architect.model == "claude-opus-4-6"
-  doAssert cfg.concurrency.maxAgents == 1
+  doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] partial JSON overrides only specified field"
 
 proc testFullJsonMerge() =
@@ -212,7 +212,7 @@ proc testDashboardConfigLoading() =
   doAssert cfg.dashboard.port == 9000
   doAssert cfg.dashboard.host == "0.0.0.0"
   doAssert cfg.agents.architect.model == "claude-opus-4-6"
-  doAssert cfg.concurrency.maxAgents == 1
+  doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] dashboard config fields loaded correctly"
 
 proc testDashboardPartialConfig() =

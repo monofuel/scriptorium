@@ -130,7 +130,7 @@ proc defaultConfig*(): Config =
       local: DefaultLocalEndpoint,
     ),
     concurrency: ConcurrencyConfig(
-      maxAgents: 1,
+      maxAgents: 4,
       tokenBudgetMB: 0,
     ),
     timeouts: TimeoutConfig(
