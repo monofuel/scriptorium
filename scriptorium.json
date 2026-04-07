@@ -55,7 +55,6 @@
     "codingAgentMaxAttempts": 5
   },
   "discord": {
-    "enabled": false,
     "serverId": "1180587895921328158",
     "channelId": "1486502923486757055",
     "allowedUserIds": [
@@ -64,7 +63,6 @@
     "chatHistoryCount": 8
   },
   "mattermost": {
-    "enabled": false,
     "url": "https://mattermost.solution-nine.monofuel.dev",
     "channelId": "oreg6xwkhpg5ibjexhhbjcjpqo",
     "allowedUserIds": [
