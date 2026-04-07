@@ -5,7 +5,7 @@ import
      lock_management, logging, notifications, prompt_builders, shared_state]
 
 const
-  MattermostMessageLimit = 16383
+  MattermostMessageLimit* = 16383
   SpecUpdatedNote = "\n[spec.md updated]"
   MattermostChatTicketId = "mattermost-chat"
 
@@ -17,14 +17,13 @@ proc truncateMessage(msg: string): string =
   ## Truncate a message to fit within the Mattermost message character limit.
   result = chat_common.truncateMessage(msg, MattermostMessageLimit)
 
-proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, botUserId: string, currentPostId: string): seq[PlanTurn] =
-  ## Fetch recent channel posts and convert to PlanTurn history.
-  ## Excludes the current post by ID and filters to normal posts only.
-  if count <= 0:
-    return @[]
-  # Fetch extra to account for filtering.
-  let postList = client.getChannelPosts(channelId, 0, count + 1)
-  # Order is newest-first.
+type
+  UserLookup* = proc(userId: string): string {.gcsafe.}
+
+proc convertPostListToTurns*(postList: MattermostPostList, botUserId: string, currentPostId: string, count: int, userLookup: UserLookup): seq[PlanTurn] =
+  ## Filter and convert a MattermostPostList into PlanTurn history.
+  ## Skips the current post, system posts, and empty messages.
+  ## Returns turns in chronological order (oldest first), limited to count.
   var turns: seq[PlanTurn] = @[]
   for id in postList.order:
     if id == currentPostId:
@@ -41,13 +40,20 @@ proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, 
       break
     let role =
       if post.user_id == botUserId: "architect"
-      else:
-        let user = client.getUser(post.user_id)
-        user.username
+      else: userLookup(post.user_id)
     turns.add(PlanTurn(role: role, text: text))
-  # Reverse to chronological order (oldest first).
   turns.reverse()
   result = turns
+
+proc fetchMattermostHistory(client: MostyClient, channelId: string, count: int, botUserId: string, currentPostId: string): seq[PlanTurn] =
+  ## Fetch recent channel posts and convert to PlanTurn history.
+  if count <= 0:
+    return @[]
+  let postList = client.getChannelPosts(channelId, 0, count + 1)
+  let lookup: UserLookup = proc(userId: string): string =
+    let user = client.getUser(userId)
+    result = user.username
+  result = convertPostListToTurns(postList, botUserId, currentPostId, count, lookup)
 
 proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with a chat message and post the response to the channel.
@@ -240,26 +246,32 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   of chatModeIgnore:
     logDebug(&"ignoring message from {username} (classified as human-to-human)")
 
-proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
-  ## Handle a !command prefix message and post the response.
-  var response = ""
+proc resolveCommand*(repoPath: string, cmd: string): string =
+  ## Map a command string to its response text.
+  ## Returns empty string for "restart" (handled separately).
   case cmd
   of "status":
-    response = formatStatusMessage(repoPath)
+    result = formatStatusMessage(repoPath)
   of "queue":
-    response = formatQueueMessage(repoPath)
+    result = formatQueueMessage(repoPath)
   of "pause":
-    response = handlePause(repoPath)
+    result = handlePause(repoPath)
   of "resume":
-    response = handleResume(repoPath)
+    result = handleResume(repoPath)
   of "help":
-    response = handleHelp()
+    result = handleHelp()
   of "restart":
+    result = ""
+  else:
+    result = &"Unknown command: !{cmd}"
+
+proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
+  ## Handle a !command prefix message and post the response.
+  if cmd == "restart":
     discard client.createPost(channelId, "Restarting...")
     handleRestart()
     return
-  else:
-    response = &"Unknown command: !{cmd}"
+  let response = resolveCommand(repoPath, cmd)
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 
