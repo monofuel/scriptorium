@@ -1,6 +1,6 @@
 import
-  std/strutils,
-  scriptorium/chat_common
+  std/[os, strutils, tempfiles],
+  scriptorium/[chat_common, git_ops, pause_flag]
 
 proc testParseChatModeAsk() =
   ## Verify "ask:" prefix parses to chatModeAsk with explicit=true.
@@ -112,6 +112,52 @@ proc testHandleHelp() =
   doAssert "do:" in result
   echo "[OK] handleHelp contains all commands"
 
+proc testHandlePauseNotPaused() =
+  ## Verify handlePause writes the flag and returns confirmation.
+  let tmp = createTempDir("chat_pause_", "", getTempDir())
+  defer: removeDir(tmp)
+  createDir(tmp / ManagedStateDirName)
+
+  let result = handlePause(tmp)
+  doAssert "paused" in result.toLowerAscii()
+  doAssert isPaused(tmp)
+  echo "[OK] handlePause when not paused"
+
+proc testHandlePauseAlreadyPaused() =
+  ## Verify handlePause returns already-paused message when flag exists.
+  let tmp = createTempDir("chat_pause_already_", "", getTempDir())
+  defer: removeDir(tmp)
+  createDir(tmp / ManagedStateDirName)
+
+  writePauseFlag(tmp)
+  let result = handlePause(tmp)
+  doAssert "already paused" in result.toLowerAscii()
+  doAssert isPaused(tmp)
+  echo "[OK] handlePause when already paused"
+
+proc testHandleResumeWhenPaused() =
+  ## Verify handleResume removes the flag and returns confirmation.
+  let tmp = createTempDir("chat_resume_", "", getTempDir())
+  defer: removeDir(tmp)
+  createDir(tmp / ManagedStateDirName)
+
+  writePauseFlag(tmp)
+  let result = handleResume(tmp)
+  doAssert "resumed" in result.toLowerAscii()
+  doAssert not isPaused(tmp)
+  echo "[OK] handleResume when paused"
+
+proc testHandleResumeWhenNotPaused() =
+  ## Verify handleResume returns not-paused message when no flag exists.
+  let tmp = createTempDir("chat_resume_noop_", "", getTempDir())
+  defer: removeDir(tmp)
+  createDir(tmp / ManagedStateDirName)
+
+  let result = handleResume(tmp)
+  doAssert "was not paused" in result.toLowerAscii()
+  doAssert not isPaused(tmp)
+  echo "[OK] handleResume when not paused"
+
 testParseChatModeAsk()
 testParseChatModePlan()
 testParseChatModeDo()
@@ -124,3 +170,7 @@ testTruncateMessageAtLimit()
 testTruncateMessageOverLimit()
 testTruncateMessageCustomLimit()
 testHandleHelp()
+testHandlePauseNotPaused()
+testHandlePauseAlreadyPaused()
+testHandleResumeWhenPaused()
+testHandleResumeWhenNotPaused()
