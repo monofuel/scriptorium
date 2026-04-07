@@ -596,6 +596,7 @@ proc runOrchestrator*(repoPath: string) =
   defer:
     teardownPlanWorktree(repoPath)
     releaseOrchestratorPidGuard(repoPath)
+  normalizeConfig(repoPath)
   let cfg = loadConfig(repoPath)
   if cfg.syncAgentsMd:
     syncAgentsMd(repoPath)

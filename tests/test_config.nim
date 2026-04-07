@@ -438,8 +438,8 @@ proc testExplicitZeroTimeoutOverrides() =
   doAssert cfg.agents.coding.progressTimeout == 0
   echo "[OK] explicit zero-value timeouts override defaults"
 
-proc testConfigWriteBack() =
-  ## Verify loadConfig writes back pretty-printed JSON with all defaults filled in.
+proc testNormalizeConfigWriteBack() =
+  ## Verify normalizeConfig writes back pretty-printed JSON with all defaults filled in.
   let tmpDir = getTempDir() / "test_config_writeback"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
@@ -447,7 +447,7 @@ proc testConfigWriteBack() =
   let json = """{"agents": {"architect": {"model": "claude-sonnet-4-6"}}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
-  discard loadConfig(tmpDir)
+  normalizeConfig(tmpDir)
 
   let written = readFile(tmpDir / "scriptorium.json")
   # Pretty-printed: contains newlines and indentation.
@@ -459,10 +459,10 @@ proc testConfigWriteBack() =
   doAssert "devops" in written
   # User value preserved.
   doAssert "claude-sonnet-4-6" in written
-  echo "[OK] loadConfig writes back pretty-printed JSON with all defaults"
+  echo "[OK] normalizeConfig writes back pretty-printed JSON with all defaults"
 
-proc testConfigStripsUnknownKeys() =
-  ## Verify unknown keys are stripped from the written-back file.
+proc testNormalizeConfigStripsUnknownKeys() =
+  ## Verify unknown keys are stripped by normalizeConfig.
   let tmpDir = getTempDir() / "test_config_strip_unknown"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
@@ -470,13 +470,29 @@ proc testConfigStripsUnknownKeys() =
   let json = """{"agents": {"architect": {"model": "claude-opus-4-6"}}, "bogusKey": "should-be-removed", "anotherUnknown": 42}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
-  discard loadConfig(tmpDir)
+  normalizeConfig(tmpDir)
 
   let written = readFile(tmpDir / "scriptorium.json")
   doAssert "bogusKey" notin written
   doAssert "anotherUnknown" notin written
   doAssert "should-be-removed" notin written
-  echo "[OK] unknown keys stripped from written-back config"
+  echo "[OK] unknown keys stripped by normalizeConfig"
+
+proc testLoadConfigIsReadOnly() =
+  ## Verify loadConfig does not modify the file on disk.
+  let tmpDir = getTempDir() / "test_config_readonly"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"architect": {"model": "claude-sonnet-4-6"}}}"""
+  let configPath = tmpDir / "scriptorium.json"
+  writeFile(configPath, json)
+
+  discard loadConfig(tmpDir)
+
+  let afterLoad = readFile(configPath)
+  doAssert afterLoad == json
+  echo "[OK] loadConfig does not modify the file on disk"
 
 when isMainModule:
   testParseLogLevel()
@@ -502,5 +518,6 @@ when isMainModule:
   testPerAgentTimeoutOverride()
   testPerAgentTimeoutFullOverride()
   testExplicitZeroTimeoutOverrides()
-  testConfigWriteBack()
-  testConfigStripsUnknownKeys()
+  testNormalizeConfigWriteBack()
+  testNormalizeConfigStripsUnknownKeys()
+  testLoadConfigIsReadOnly()

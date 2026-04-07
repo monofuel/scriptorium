@@ -211,8 +211,7 @@ proc saveConfig*(repoPath: string, cfg: Config) =
   writeFile(path, jsonStr & "\n")
 
 proc loadConfig*(repoPath: string): Config =
-  ## Load scriptorium.json, deep-merging with defaults.
-  ## New fields are added, unknown fields are stripped, and the file is pretty-printed on write-back.
+  ## Load scriptorium.json, deep-merging with defaults. Read-only — does not write the file.
   ## Crashes on invalid JSON.
   let path = repoPath / ConfigFile
   if not fileExists(path):
@@ -230,5 +229,12 @@ proc loadConfig*(repoPath: string): Config =
   let envFileLogLevel = getEnv("SCRIPTORIUM_FILE_LOG_LEVEL")
   if envFileLogLevel.len > 0:
     result.fileLogLevel = envFileLogLevel
-  # Write back: adds new fields, removes old ones, pretty-prints.
-  saveConfig(repoPath, result)
+
+proc normalizeConfig*(repoPath: string) =
+  ## Load, merge with defaults, and write back the config file once.
+  ## Call at startup to add new fields, remove old ones, and pretty-print.
+  let path = repoPath / ConfigFile
+  if not fileExists(path):
+    return
+  let cfg = loadConfig(repoPath)
+  saveConfig(repoPath, cfg)
