@@ -56,14 +56,15 @@ proc setFileLogLevel*(level: LogLevel) =
 
 proc log*(level: LogLevel, msg: string) =
   ## Write a timestamped log line to stdout (filtered) and the log file (always).
-  if captureLogs:
-    capturedLogs.add((level: level, msg: msg))
-  let line = fmt"[{formatTimestamp()}] [{LogLevelLabels[level]}] {msg}"
-  if level >= minLogLevel:
-    echo line
-  if logInitialized and level >= minFileLogLevel:
-    writeLine(logFile, line)
-    flushFile(logFile)
+  {.cast(gcsafe).}:
+    if captureLogs:
+      capturedLogs.add((level: level, msg: msg))
+    let line = fmt"[{formatTimestamp()}] [{LogLevelLabels[level]}] {msg}"
+    if level >= minLogLevel:
+      echo line
+    if logInitialized and level >= minFileLogLevel:
+      writeLine(logFile, line)
+      flushFile(logFile)
 
 proc logDebug*(msg: string) =
   ## Log a message at debug level.
