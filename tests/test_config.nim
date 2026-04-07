@@ -496,6 +496,40 @@ proc testApplyLogLevelFromConfig() =
   setFileLogLevel(lvlDebug)
   echo "[OK] applyLogLevelFromConfig sets levels from config"
 
+proc testChatHistoryCountConfig() =
+  ## Verify chatHistoryCount defaults and custom JSON loading for discord and mattermost.
+  let cfg = defaultConfig()
+  doAssert cfg.discord.chatHistoryCount == 8
+  doAssert cfg.mattermost.chatHistoryCount == 8
+
+  let tmpDir = getTempDir() / "test_config_chat_history"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"discord": {"chatHistoryCount": 20}, "mattermost": {"chatHistoryCount": 15}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let loaded = loadConfig(tmpDir)
+  doAssert loaded.discord.chatHistoryCount == 20
+  doAssert loaded.mattermost.chatHistoryCount == 15
+  echo "[OK] chatHistoryCount defaults and custom values load correctly"
+
+proc testLoopFeedbackTimeoutConfig() =
+  ## Verify feedbackTimeoutMs default and custom JSON loading for loop config.
+  let cfg = defaultConfig()
+  doAssert cfg.loop.feedbackTimeoutMs == DefaultFeedbackTimeoutMs
+
+  let tmpDir = getTempDir() / "test_config_feedback_timeout"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"loop": {"feedbackTimeoutMs": 30000}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let loaded = loadConfig(tmpDir)
+  doAssert loaded.loop.feedbackTimeoutMs == 30000
+  echo "[OK] feedbackTimeoutMs default and custom value load correctly"
+
 when isMainModule:
   testParseLogLevel()
   testDefaultConfigValues()
@@ -524,3 +558,5 @@ when isMainModule:
   testDiscordEnabledField()
   testMattermostEnabledField()
   testApplyLogLevelFromConfig()
+  testChatHistoryCountConfig()
+  testLoopFeedbackTimeoutConfig()
