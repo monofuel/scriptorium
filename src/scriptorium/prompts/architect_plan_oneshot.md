@@ -42,7 +42,7 @@ Required fields:
 
 Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
 
-REMINDER: You may only write to `spec.md`. Do not modify `areas/` or any other files.
+REMINDER: You may only write to `spec.md`. Do not modify `areas/`, `tickets/`, source code, or any other files. Area and ticket updates happen automatically when the orchestrator processes your spec changes.
 
 [{{USERNAME}}]:
 {{USER_REQUEST}}
