@@ -489,20 +489,6 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   runOrchestratorMainLoop(repoPath, maxTicks, runner)
   shouldRun = false
 
-proc applyLogLevelFromConfig(repoPath: string) =
-  ## Apply log level from config or environment variable.
-  let cfg = loadConfig(repoPath)
-  if cfg.logLevel.len > 0:
-    try:
-      setLogLevel(parseLogLevel(cfg.logLevel))
-    except ValueError:
-      logWarn(&"unknown log level '{cfg.logLevel}', using default")
-  if cfg.fileLogLevel.len > 0:
-    try:
-      setFileLogLevel(parseLogLevel(cfg.fileLogLevel))
-    except ValueError:
-      logWarn(&"unknown file log level '{cfg.fileLogLevel}', using default")
-
 proc harnessBinaryName(h: Harness): string =
   ## Return the expected binary name for a harness.
   case h

@@ -442,6 +442,28 @@ proc testLoadConfigIsReadOnly() =
   doAssert afterLoad == json
   echo "[OK] loadConfig does not modify the file on disk"
 
+proc testApplyLogLevelFromConfig() =
+  ## Verify applyLogLevelFromConfig sets log levels from config file.
+  let tmpDir = getTempDir() / "test_apply_log_level"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"logLevel": "debug", "fileLogLevel": "warn"}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  # Reset to defaults before testing.
+  setLogLevel(lvlInfo)
+  setFileLogLevel(lvlDebug)
+
+  applyLogLevelFromConfig(tmpDir)
+  doAssert minLogLevel == lvlDebug
+  doAssert minFileLogLevel == lvlWarn
+
+  # Restore defaults.
+  setLogLevel(lvlInfo)
+  setFileLogLevel(lvlDebug)
+  echo "[OK] applyLogLevelFromConfig sets levels from config"
+
 when isMainModule:
   testParseLogLevel()
   testDefaultConfigValues()
@@ -467,3 +489,4 @@ when isMainModule:
   testNormalizeConfigWriteBack()
   testNormalizeConfigStripsUnknownKeys()
   testLoadConfigIsReadOnly()
+  testApplyLogLevelFromConfig()

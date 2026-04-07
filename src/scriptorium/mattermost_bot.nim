@@ -2,7 +2,7 @@ import
   std/[algorithm, json, os, strformat, strutils, tables],
   mosty,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
-     lock_management, notifications, prompt_builders, shared_state]
+     lock_management, logging, notifications, prompt_builders, shared_state]
 
 const
   MattermostMessageLimit = 16383
@@ -92,7 +92,7 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
     )
   except CatchableError as e:
     let errMsg = e.msg
-    echo &"scriptorium: mattermost architect error: {errMsg}"
+    logError(&"mattermost architect error: {errMsg}")
     response = &"Error: {errMsg}"
 
   if specChanged:
@@ -127,7 +127,7 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
     )
   except CatchableError as e:
     let errMsg = e.msg
-    echo &"scriptorium: mattermost ask error: {errMsg}"
+    logError(&"mattermost ask error: {errMsg}")
     response = &"Error: {errMsg}"
 
   let truncated = truncateMessage(response)
@@ -154,7 +154,7 @@ proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, m
         response = "(no response from architect)"
     except CatchableError as e:
       let errMsg = e.msg
-      echo &"scriptorium: mattermost do error: {errMsg}"
+      logError(&"mattermost do error: {errMsg}")
       response = &"Error: {errMsg}"
 
     let truncated = truncateMessage(response)
@@ -188,7 +188,7 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
       )
     except CatchableError as e:
       let errMsg = e.msg
-      echo &"scriptorium: mattermost chat error: {errMsg}"
+      logError(&"mattermost chat error: {errMsg}")
       response = &"Error: {errMsg}"
 
     let truncated = truncateMessage(response)
@@ -206,7 +206,7 @@ proc notificationPollerThread(args: NotificationPollerArgs) {.thread.} =
       for msg in messages:
         discard client.createPost(args.channelId, msg)
     except CatchableError as e:
-      echo &"scriptorium: notification poller error: {e.msg}"
+      logWarn(&"notification poller error: {e.msg}")
 
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
@@ -220,7 +220,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   if not args.explicit:
     let cfg = loadConfig(args.repoPath)
     let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, username, cfg.devops.enabled, cfg.agents.architect)
-    echo &"scriptorium: classified intent for {username}: {intent}"
+    logDebug(&"classified intent for {username}: {intent}")
     case intent
     of intentIgnore: mode = chatModeIgnore
     of intentChat: mode = chatModeChat
@@ -238,7 +238,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   of chatModeChat:
     handleChatResponse(args.repoPath, restClient, args.channelId, args.messageText, username, history)
   of chatModeIgnore:
-    echo &"scriptorium: ignoring message from {username} (classified as human-to-human)"
+    logDebug(&"ignoring message from {username} (classified as human-to-human)")
 
 proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd: string) =
   ## Handle a !command prefix message and post the response.
@@ -281,6 +281,10 @@ proc runMattermostBot*(repoPath: string) =
     echo "scriptorium: mattermost.channelId is required in scriptorium.json"
     quit(1)
 
+  initLog(repoPath, "mattermost")
+  applyLogLevelFromConfig(repoPath)
+  defer: closeLog()
+
   let allowedUserIds = cfg.mattermost.allowedUserIds
   enablePartialChainVerification()
   let client = newMostyClient(url, token)
@@ -292,7 +296,7 @@ proc runMattermostBot*(repoPath: string) =
   # Get the bot's own user ID so we can ignore our own messages.
   let me = client.getMe()
   let botUserId = me.id
-  echo &"scriptorium: mattermost bot user: {me.username} ({botUserId})"
+  logInfo(&"mattermost bot user: {me.username} ({botUserId})")
 
   let onPost = proc(c: MostyClient, post: MattermostPost) {.gcsafe.} =
     if post.channel_id != channelId:
@@ -300,7 +304,7 @@ proc runMattermostBot*(repoPath: string) =
     if post.user_id == botUserId:
       return
     if allowedUserIds.len > 0 and post.user_id notin allowedUserIds:
-      echo &"scriptorium: mattermost message ignored from non-allowlisted user ({post.user_id})"
+      logDebug(&"mattermost message ignored from non-allowlisted user ({post.user_id})")
       return
 
     let content = post.message.strip()
@@ -310,17 +314,17 @@ proc runMattermostBot*(repoPath: string) =
     # Handle !command prefixes.
     if content.startsWith("!"):
       let cmd = content[1..^1].strip().toLowerAscii().split(" ")[0]
-      echo &"scriptorium: mattermost command !{cmd}"
+      logInfo(&"mattermost command !{cmd}")
       handleCommand(c, repoPath, channelId, cmd)
       return
 
     # Parse chat mode and spawn background thread.
     let (mode, text, explicit) = parseChatMode(content)
-    echo &"scriptorium: mattermost message from {post.user_id} (mode={mode}): {text}"
+    logInfo(&"mattermost message from {post.user_id} (mode={mode}): {text}")
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.mattermost.chatHistoryCount
     let currentPostId = post.id
     createThread(threadPtr[], chatWorkerThread, (repoPath, url, token, channelId, text, mode, explicit, post.user_id, botUserId, historyCount, currentPostId))
 
-  echo "scriptorium: starting Mattermost bot"
+  logInfo(&"starting Mattermost bot (log file: {logFilePath})")
   client.startGateway(onPost = onPost)

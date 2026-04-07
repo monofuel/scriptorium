@@ -1,7 +1,8 @@
-## Global file logger for scriptorium orchestrator sessions.
+## Global file logger for scriptorium sessions.
 
 import
-  std/[os, strformat, strutils, times]
+  std/[os, strformat, strutils, times],
+  ./config
 
 type
   LogLevel* = enum
@@ -30,9 +31,9 @@ proc formatFileTimestamp(): string =
   ## Return a UTC timestamp suitable for log file names.
   result = now().utc().format("yyyy-MM-dd'T'HH-mm-ss'Z'")
 
-proc initLog*(repoPath: string) =
+proc initLog*(repoPath: string, subdirectory: string = "orchestrator") =
   ## Create the session log file and open it for writing.
-  let logDir = repoPath / ".scriptorium" / "logs" / "orchestrator"
+  let logDir = repoPath / ".scriptorium" / "logs" / subdirectory
   createDir(logDir)
   logFilePath = logDir / fmt"run_{formatFileTimestamp()}.log"
   logFile = open(logFilePath, fmWrite)
@@ -89,3 +90,17 @@ proc parseLogLevel*(value: string): LogLevel =
   of "error": lvlError
   else:
     raise newException(ValueError, &"unknown log level: {value}")
+
+proc applyLogLevelFromConfig*(repoPath: string) =
+  ## Apply log level settings from the project config file.
+  let cfg = loadConfig(repoPath)
+  if cfg.logLevel.len > 0:
+    try:
+      setLogLevel(parseLogLevel(cfg.logLevel))
+    except ValueError:
+      logWarn(&"unknown log level '{cfg.logLevel}', using default")
+  if cfg.fileLogLevel.len > 0:
+    try:
+      setFileLogLevel(parseLogLevel(cfg.fileLogLevel))
+    except ValueError:
+      logWarn(&"unknown file log level '{cfg.fileLogLevel}', using default")

@@ -3,7 +3,7 @@ import
   guildy,
   jsony,
   ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
-     lock_management, notifications, prompt_builders, shared_state]
+     lock_management, logging, notifications, prompt_builders, shared_state]
 
 const
   DiscordMessageLimit = 2000
@@ -37,7 +37,7 @@ proc registerSlashCommands(c: GuildyClient, serverId: string) =
     SlashCommand(name: "restart", description: "Restart the bot process", `type`: 1),
   ]
   discard c.registerCommands(toJson(commands), serverId)
-  echo "scriptorium: registered slash commands"
+  logInfo("registered slash commands")
 
 proc fetchDiscordHistory(client: GuildyClient, channelId: string, count: int, currentMessageId: string): seq[PlanTurn] =
   ## Fetch recent channel messages and convert to PlanTurn history.
@@ -104,7 +104,7 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
     )
   except CatchableError as e:
     let errMsg = e.msg
-    echo &"scriptorium: discord architect error: {errMsg}"
+    logError(&"discord architect error: {errMsg}")
     response = &"Error: {errMsg}"
 
   if specChanged:
@@ -138,7 +138,7 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
     )
   except CatchableError as e:
     let errMsg = e.msg
-    echo &"scriptorium: discord ask error: {errMsg}"
+    logError(&"discord ask error: {errMsg}")
     response = &"Error: {errMsg}"
 
   discard client.postChannelMessage(channelId, truncateMessage(response))
@@ -164,7 +164,7 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
         response = "(no response from architect)"
     except CatchableError as e:
       let errMsg = e.msg
-      echo &"scriptorium: discord do error: {errMsg}"
+      logError(&"discord do error: {errMsg}")
       response = &"Error: {errMsg}"
 
     discard client.postChannelMessage(channelId, truncateMessage(response))
@@ -198,7 +198,7 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
       )
     except CatchableError as e:
       let errMsg = e.msg
-      echo &"scriptorium: discord chat error: {errMsg}"
+      logError(&"discord chat error: {errMsg}")
       response = &"Error: {errMsg}"
 
     discard client.postChannelMessage(channelId, truncateMessage(response))
@@ -213,7 +213,7 @@ proc notificationPollerThread(args: NotificationPollerArgs) {.thread.} =
       for msg in messages:
         discard client.postChannelMessage(args.channelId, msg)
     except CatchableError as e:
-      echo &"scriptorium: notification poller error: {e.msg}"
+      logWarn(&"notification poller error: {e.msg}")
 
 proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   ## Run architect chat in a background thread, routed by mode.
@@ -225,7 +225,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   if not args.explicit:
     let cfg = loadConfig(args.repoPath)
     let intent = classifyIntent(runAgent, args.repoPath, args.messageText, history, args.username, cfg.devops.enabled, cfg.agents.architect)
-    echo &"scriptorium: classified intent for {args.username}: {intent}"
+    logDebug(&"classified intent for {args.username}: {intent}")
     case intent
     of intentIgnore: mode = chatModeIgnore
     of intentChat: mode = chatModeChat
@@ -243,7 +243,7 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   of chatModeChat:
     handleChatResponse(args.repoPath, restClient, args.channelId, args.messageText, args.username, history)
   of chatModeIgnore:
-    echo &"scriptorium: ignoring message from {args.username} (classified as human-to-human)"
+    logDebug(&"ignoring message from {args.username} (classified as human-to-human)")
 
 proc runDiscordBot*(repoPath: string) =
   ## Start the Discord bot gateway connection.
@@ -257,6 +257,10 @@ proc runDiscordBot*(repoPath: string) =
   if channelId.len == 0:
     echo "scriptorium: discord.channelId is required in scriptorium.json"
     quit(1)
+
+  initLog(repoPath, "discord")
+  applyLogLevelFromConfig(repoPath)
+  defer: closeLog()
 
   let serverId = cfg.discord.serverId
   let allowedUserIds = cfg.discord.allowedUserIds
@@ -292,12 +296,12 @@ proc runDiscordBot*(repoPath: string) =
     if allowedUserIds.len > 0 and msg.author.id notin allowedUserIds:
       let ignoredUser = msg.author.username
       let ignoredId = msg.author.id
-      echo &"scriptorium: discord message ignored from non-allowlisted user {ignoredUser} ({ignoredId})"
+      logDebug(&"discord message ignored from non-allowlisted user {ignoredUser} ({ignoredId})")
       return
     let user = msg.author.username
     let content = msg.content
     let (mode, text, explicit) = parseChatMode(content)
-    echo &"scriptorium: discord message from {user} (mode={mode}): {text}"
+    logInfo(&"discord message from {user} (mode={mode}): {text}")
     # Spawn background thread to avoid blocking the gateway event loop.
     let threadPtr = create(Thread[ChatThreadArgs])
     let historyCount = cfg.discord.chatHistoryCount
@@ -308,10 +312,10 @@ proc runDiscordBot*(repoPath: string) =
     if interaction.channel_id != channelId:
       return
     if allowedUserIds.len > 0 and interaction.user_id notin allowedUserIds:
-      echo &"scriptorium: discord interaction ignored from non-allowlisted user ({interaction.user_id})"
+      logDebug(&"discord interaction ignored from non-allowlisted user ({interaction.user_id})")
       return
     let cmd = interaction.command_name
-    echo &"scriptorium: slash command /{cmd}"
+    logInfo(&"slash command /{cmd}")
     var response = ""
     case cmd
     of "status":
@@ -333,5 +337,5 @@ proc runDiscordBot*(repoPath: string) =
     let truncated = truncateMessage(response)
     c.respondToInteraction(interaction.id, interaction.token, InteractionResponseMessage, truncated)
 
-  echo "scriptorium: starting Discord bot"
+  logInfo(&"starting Discord bot (log file: {logFilePath})")
   client.startGateway(onRaw = onRaw, onMessage = onMessage, onInteraction = onInteraction)

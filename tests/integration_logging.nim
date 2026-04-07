@@ -18,6 +18,18 @@ suite "logging":
     check ".scriptorium/logs/orchestrator/" in logFilePath
     check "run_" in logFilePath
 
+  test "initLog with custom subdirectory":
+    let tmpDir = createTempDir("scriptorium_log_test_", "")
+    defer: removeDir(tmpDir)
+    let fakeRepo = tmpDir / "myproject2"
+    createDir(fakeRepo)
+    initLog(fakeRepo, "discord")
+    defer: closeLog()
+    check logFilePath.len > 0
+    check fileExists(logFilePath)
+    check ".scriptorium/logs/discord/" in logFilePath
+    check "run_" in logFilePath
+
   test "logInfo writes timestamped line to file":
     let tmpDir = createTempDir("scriptorium_log_test_", "")
     defer: removeDir(tmpDir)
