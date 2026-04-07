@@ -87,9 +87,12 @@
     "enabled": false
   },
   "remoteSync": {
-    "enabled": false,
-    "primaryRemote": "gitea",
-    "remotes": [],
+    "enabled": true,
+    "primaryRemote": "github",
+    "remotes": [
+      "github",
+      "origin"
+    ],
     "syncIntervalSeconds": 60
   },
   "syncAgentsMd": false,
