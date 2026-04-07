@@ -17,6 +17,7 @@ jobs:
       - uses: treeform/setup-nim-action@v6
       - run: nimby sync -g nimby.lock
       - run: make test
+      - run: make build
 
   linux-binary:
     runs-on: ubuntu-latest
