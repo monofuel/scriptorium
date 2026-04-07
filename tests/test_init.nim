@@ -6,6 +6,9 @@ const
   SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
   ExpectedDirs = [
     "areas",
+    "docs",
+    "docs/iterations",
+    "services",
     "tickets/open",
     "tickets/in-progress",
     "tickets/done",
