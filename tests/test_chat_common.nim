@@ -158,6 +158,24 @@ proc testHandleResumeWhenNotPaused() =
   doAssert not isPaused(tmp)
   echo "[OK] handleResume when not paused"
 
+proc testTruncateMessageWithSpecNote() =
+  ## Verify that response + spec note is properly truncated when combined length exceeds limit.
+  let specNote = "\n[spec.md updated]"
+  let longResponse = 'x'.repeat(1995) & specNote
+  let result = truncateMessage(longResponse, 2000)
+  doAssert result.len == 2000
+  doAssert result.endsWith(TruncatedMarker)
+  echo "[OK] truncateMessage with spec note over limit"
+
+proc testTruncateMessageWithSpecNoteUnderLimit() =
+  ## Verify that response + spec note is preserved when combined length is under limit.
+  let specNote = "\n[spec.md updated]"
+  let shortResponse = "Spec updated." & specNote
+  let result = truncateMessage(shortResponse, 2000)
+  doAssert result == shortResponse
+  doAssert result.endsWith(specNote)
+  echo "[OK] truncateMessage with spec note under limit"
+
 testParseChatModeAsk()
 testParseChatModePlan()
 testParseChatModeDo()
@@ -174,3 +192,5 @@ testHandlePauseNotPaused()
 testHandlePauseAlreadyPaused()
 testHandleResumeWhenPaused()
 testHandleResumeWhenNotPaused()
+testTruncateMessageWithSpecNote()
+testTruncateMessageWithSpecNoteUnderLimit()

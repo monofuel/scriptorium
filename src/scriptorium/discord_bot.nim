@@ -109,7 +109,7 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
 
   if specChanged:
     response = response & SpecUpdatedNote
-  discard client.postChannelMessage(channelId, response)
+  discard client.postChannelMessage(channelId, truncateMessage(response))
 
 proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect in read-only mode and post the response to the channel.
@@ -141,7 +141,7 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
     echo &"scriptorium: discord ask error: {errMsg}"
     response = &"Error: {errMsg}"
 
-  discard client.postChannelMessage(channelId, response)
+  discard client.postChannelMessage(channelId, truncateMessage(response))
 
 proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Invoke the architect with full repo access and post the response to the channel.
@@ -167,7 +167,7 @@ proc handleDoMessage(repoPath: string, client: GuildyClient, channelId: string, 
       echo &"scriptorium: discord do error: {errMsg}"
       response = &"Error: {errMsg}"
 
-    discard client.postChannelMessage(channelId, response)
+    discard client.postChannelMessage(channelId, truncateMessage(response))
 
 proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: string, messageText: string, username: string, history: seq[PlanTurn]) =
   ## Handle casual chat messages using the architect in read-only ask mode.
@@ -201,7 +201,7 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
       echo &"scriptorium: discord chat error: {errMsg}"
       response = &"Error: {errMsg}"
 
-    discard client.postChannelMessage(channelId, response)
+    discard client.postChannelMessage(channelId, truncateMessage(response))
 
 proc notificationPollerThread(args: NotificationPollerArgs) {.thread.} =
   ## Poll for notification files and post them to the channel.
