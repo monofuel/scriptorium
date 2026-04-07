@@ -1,38 +1,98 @@
 {
   "agents": {
     "architect": {
-      "model": "claude-opus-4-6"
+      "harness": "claude-code",
+      "model": "claude-opus-4-6",
+      "reasoningEffort": "",
+      "hardTimeout": 7200000,
+      "noOutputTimeout": 600000,
+      "progressTimeout": 0
     },
     "coding": {
-      "model": "claude-opus-4-6"
+      "harness": "claude-code",
+      "model": "claude-opus-4-6",
+      "reasoningEffort": "",
+      "hardTimeout": 14400000,
+      "noOutputTimeout": 300000,
+      "progressTimeout": 600000
     },
     "manager": {
-      "model": "claude-opus-4-6"
+      "harness": "claude-code",
+      "model": "claude-opus-4-6",
+      "reasoningEffort": "",
+      "hardTimeout": 3600000,
+      "noOutputTimeout": 300000,
+      "progressTimeout": 0
     },
     "reviewer": {
-      "model": "claude-opus-4-6"
+      "harness": "claude-code",
+      "model": "claude-opus-4-6",
+      "reasoningEffort": "",
+      "hardTimeout": 3600000,
+      "noOutputTimeout": 300000,
+      "progressTimeout": 0
+    },
+    "audit": {
+      "harness": "claude-code",
+      "model": "claude-haiku-4-5-20251001",
+      "reasoningEffort": "",
+      "hardTimeout": 0,
+      "noOutputTimeout": 0,
+      "progressTimeout": 0
     }
   },
-  "syncAgentsMd": false,
+  "endpoints": {
+    "local": "http://127.0.0.1:8097"
+  },
   "concurrency": {
-    "maxAgents": 4
+    "maxAgents": 4,
+    "tokenBudgetMB": 0
   },
   "timeouts": {
     "codingAgentHardTimeoutMs": 14400000,
     "codingAgentNoOutputTimeoutMs": 300000,
+    "codingAgentProgressTimeoutMs": 600000,
     "codingAgentMaxAttempts": 5
   },
-  "dashboard": {
-    "host": "0.0.0.0"
-  },
   "discord": {
+    "enabled": false,
     "serverId": "1180587895921328158",
     "channelId": "1486502923486757055",
-    "allowedUserIds": ["215660018010161152"]
+    "allowedUserIds": [
+      "215660018010161152"
+    ],
+    "chatHistoryCount": 8
   },
   "mattermost": {
+    "enabled": false,
     "url": "https://mattermost.solution-nine.monofuel.dev",
     "channelId": "oreg6xwkhpg5ibjexhhbjcjpqo",
-    "allowedUserIds": ["14bbqjnm63dq3nwk3tsjkfe9sh"]
-  }
+    "allowedUserIds": [
+      "14bbqjnm63dq3nwk3tsjkfe9sh"
+    ],
+    "chatHistoryCount": 8
+  },
+  "loop": {
+    "enabled": false,
+    "feedback": "",
+    "goal": "",
+    "maxIterations": 0,
+    "feedbackTimeoutMs": 7200000
+  },
+  "dashboard": {
+    "host": "0.0.0.0",
+    "port": 8098
+  },
+  "devops": {
+    "enabled": false
+  },
+  "remoteSync": {
+    "enabled": false,
+    "primaryRemote": "gitea",
+    "remotes": [],
+    "syncIntervalSeconds": 60
+  },
+  "syncAgentsMd": false,
+  "logLevel": "",
+  "fileLogLevel": ""
 }

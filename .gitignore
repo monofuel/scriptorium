@@ -18,3 +18,4 @@ nimcache
 !.codex
 !.codex/*
 nim.cfg
+*.log
