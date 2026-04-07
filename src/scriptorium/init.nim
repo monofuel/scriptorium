@@ -4,7 +4,7 @@ import
 
 const
   PlanBranch = "scriptorium/plan"
-  SpecPlaceholder = "# Spec\n\nThis is a new project. See AGENTS.md for project conventions.\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
+  SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
   AgentsFileName = "AGENTS.md"
   AgentsTemplate = staticRead("prompts/agents_example.md")
   MakefileName = "Makefile"

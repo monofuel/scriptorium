@@ -3,7 +3,7 @@ import
   scriptorium/init
 
 const
-  SpecPlaceholder = "# Spec\n\nThis is a new project. See AGENTS.md for project conventions.\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
+  SpecPlaceholder = "# Spec\n\nRun `scriptorium plan` to build your spec with the Architect.\n"
   ExpectedDirs = [
     "areas",
     "tickets/open",
