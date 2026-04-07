@@ -49,6 +49,18 @@ proc cleanStaleGitLocks*(repoPath: string) =
       if age > GitLockMaxAgeSeconds.float:
         logWarn(&"removing stale git lock: {lockRel} (age={age:.0f}s)")
         removeFile(lockPath)
+  let worktreesDir = repoPath / ".git" / "worktrees"
+  if dirExists(worktreesDir):
+    for entry in walkDir(worktreesDir, relative = false):
+      if entry.kind == pcDir:
+        let lockPath = entry.path / "index.lock"
+        if fileExists(lockPath):
+          let age = epochTime() - getLastModificationTime(lockPath).toUnixFloat()
+          if age > GitLockMaxAgeSeconds.float:
+            let name = lastPathPart(entry.path)
+            let lockRel = &"worktrees/{name}/index.lock"
+            logWarn(&"removing stale git lock: {lockRel} (age={age:.0f}s)")
+            removeFile(lockPath)
 
 proc gitRunOnce(dir: string, argsSeq: seq[string]): tuple[exitCode: int, output: string] =
   ## Run a git subcommand once and return exit code and output.

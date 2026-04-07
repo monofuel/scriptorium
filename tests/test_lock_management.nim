@@ -125,3 +125,45 @@ suite "cleanStaleGitLocks static locks":
 
     cleanStaleGitLocks(tmp)
     check not fileExists(lockPath)
+
+suite "cleanStaleGitLocks worktree locks":
+  test "stale worktree index.lock is removed":
+    let tmp = createTempDir("wt_stale_", "", getTempDir())
+    defer: removeDir(tmp)
+    let wtDir = tmp / ".git" / "worktrees" / "my-worktree"
+    createDir(wtDir)
+    let lockPath = wtDir / "index.lock"
+    writeFile(lockPath, "")
+    let staleTime = getTime() - initDuration(seconds = 600)
+    setLastModificationTime(lockPath, staleTime)
+
+    cleanStaleGitLocks(tmp)
+    check not fileExists(lockPath)
+
+  test "fresh worktree index.lock is preserved":
+    let tmp = createTempDir("wt_fresh_", "", getTempDir())
+    defer: removeDir(tmp)
+    let wtDir = tmp / ".git" / "worktrees" / "my-worktree"
+    createDir(wtDir)
+    let lockPath = wtDir / "index.lock"
+    writeFile(lockPath, "")
+
+    cleanStaleGitLocks(tmp)
+    check fileExists(lockPath)
+
+  test "multiple stale worktree locks are all cleaned":
+    let tmp = createTempDir("wt_multi_", "", getTempDir())
+    defer: removeDir(tmp)
+    let staleTime = getTime() - initDuration(seconds = 600)
+    var lockPaths: seq[string]
+    for name in ["wt-alpha", "wt-beta", "wt-gamma"]:
+      let wtDir = tmp / ".git" / "worktrees" / name
+      createDir(wtDir)
+      let lockPath = wtDir / "index.lock"
+      writeFile(lockPath, "")
+      setLastModificationTime(lockPath, staleTime)
+      lockPaths.add(lockPath)
+
+    cleanStaleGitLocks(tmp)
+    for lp in lockPaths:
+      check not fileExists(lp)
