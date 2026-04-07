@@ -1,7 +1,7 @@
-## Tests for the orchestrator singleton PID guard in lock_management.
+## Tests for lock management: PID guard and stale git lock cleanup.
 
 import
-  std/[os, posix, strutils, tempfiles, unittest],
+  std/[os, posix, strutils, tempfiles, times, unittest],
   jsony,
   scriptorium/[git_ops, lock_management]
 
@@ -90,3 +90,38 @@ suite "orchestrator PID guard":
 
     check dirExists(tmp / ManagedStateDirName)
     check fileExists(orchestratorPidPath(tmp))
+
+suite "cleanStaleGitLocks static locks":
+  test "stale index.lock is removed":
+    let tmp = createTempDir("stale_lock_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ".git")
+    let lockPath = tmp / ".git" / "index.lock"
+    writeFile(lockPath, "")
+    let staleTime = getTime() - initDuration(seconds = 600)
+    setLastModificationTime(lockPath, staleTime)
+
+    cleanStaleGitLocks(tmp)
+    check not fileExists(lockPath)
+
+  test "fresh index.lock is preserved":
+    let tmp = createTempDir("fresh_lock_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ".git")
+    let lockPath = tmp / ".git" / "index.lock"
+    writeFile(lockPath, "")
+
+    cleanStaleGitLocks(tmp)
+    check fileExists(lockPath)
+
+  test "stale packed-refs.lock is removed":
+    let tmp = createTempDir("stale_packed_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ".git")
+    let lockPath = tmp / ".git" / "packed-refs.lock"
+    writeFile(lockPath, "")
+    let staleTime = getTime() - initDuration(seconds = 600)
+    setLastModificationTime(lockPath, staleTime)
+
+    cleanStaleGitLocks(tmp)
+    check not fileExists(lockPath)
