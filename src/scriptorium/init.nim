@@ -73,13 +73,13 @@ proc syncAgentsMd*(repoPath: string) =
   let agentsPath = repoPath / AgentsFileName
   if not fileExists(agentsPath):
     writeFile(agentsPath, AgentsTemplate)
-    gitRun(repoPath, "add", AgentsFileName)
+    gitRun(repoPath, "add", "-f", AgentsFileName)
     gitRun(repoPath, "commit", "-m", "scriptorium: sync AGENTS.md from template")
     return
   let current = readFile(agentsPath)
   if current != AgentsTemplate:
     writeFile(agentsPath, AgentsTemplate)
-    gitRun(repoPath, "add", AgentsFileName)
+    gitRun(repoPath, "add", "-f", AgentsFileName)
     gitRun(repoPath, "commit", "-m", "scriptorium: sync AGENTS.md from template")
 
 proc hasOriginRemote(repoPath: string): bool =
@@ -116,7 +116,7 @@ proc runInit*(path: string, quiet: bool = false) =
   let createdAgents = not fileExists(agentsPath)
   if createdAgents:
     writeFile(agentsPath, AgentsTemplate)
-    gitRun(target, "add", AgentsFileName)
+    gitRun(target, "add", "-f", AgentsFileName)
     gitRun(target, "commit", "-m", "scriptorium: add AGENTS.md from template")
     if not quiet:
       echo "Created AGENTS.md — edit to match your project conventions."
@@ -125,7 +125,7 @@ proc runInit*(path: string, quiet: bool = false) =
   let createdMakefile = not fileExists(makefilePath)
   if createdMakefile:
     writeFile(makefilePath, MakefileTemplate)
-    gitRun(target, "add", MakefileName)
+    gitRun(target, "add", "-f", MakefileName)
     gitRun(target, "commit", "-m", "scriptorium: add starter Makefile")
     if not quiet:
       echo "Created Makefile with placeholder targets — replace with real build commands."
@@ -135,7 +135,7 @@ proc runInit*(path: string, quiet: bool = false) =
   if createdTestConfig:
     createDir(target / "tests")
     writeFile(testConfigPath, TestConfigNimsContent)
-    gitRun(target, "add", TestConfigNimsName)
+    gitRun(target, "add", "-f", TestConfigNimsName)
     gitRun(target, "commit", "-m", "scriptorium: add tests/config.nims")
 
   let srcKeep = "src" / ".gitkeep"
@@ -143,7 +143,7 @@ proc runInit*(path: string, quiet: bool = false) =
   if createdSrc:
     createDir(target / "src")
     writeFile(target / srcKeep, "")
-    gitRun(target, "add", srcKeep)
+    gitRun(target, "add", "-f", srcKeep)
     gitRun(target, "commit", "-m", "scriptorium: add src/ directory")
 
   let docsKeep = "docs" / ".gitkeep"
@@ -151,7 +151,7 @@ proc runInit*(path: string, quiet: bool = false) =
   if createdDocs:
     createDir(target / "docs")
     writeFile(target / docsKeep, "")
-    gitRun(target, "add", docsKeep)
+    gitRun(target, "add", "-f", docsKeep)
     gitRun(target, "commit", "-m", "scriptorium: add docs/ directory")
 
   let configPath = target / ConfigFileName
