@@ -442,6 +442,38 @@ proc testLoadConfigIsReadOnly() =
   doAssert afterLoad == json
   echo "[OK] loadConfig does not modify the file on disk"
 
+proc testDiscordEnabledField() =
+  ## Verify discord enabled field defaults to false and loads true from JSON.
+  let cfg = defaultConfig()
+  doAssert cfg.discord.enabled == false
+
+  let tmpDir = getTempDir() / "test_config_discord_enabled"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"discord": {"enabled": true}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let loaded = loadConfig(tmpDir)
+  doAssert loaded.discord.enabled == true
+  echo "[OK] discord enabled field defaults to false and loads true"
+
+proc testMattermostEnabledField() =
+  ## Verify mattermost enabled field defaults to false and loads true from JSON.
+  let cfg = defaultConfig()
+  doAssert cfg.mattermost.enabled == false
+
+  let tmpDir = getTempDir() / "test_config_mattermost_enabled"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"mattermost": {"enabled": true}}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let loaded = loadConfig(tmpDir)
+  doAssert loaded.mattermost.enabled == true
+  echo "[OK] mattermost enabled field defaults to false and loads true"
+
 proc testApplyLogLevelFromConfig() =
   ## Verify applyLogLevelFromConfig sets log levels from config file.
   let tmpDir = getTempDir() / "test_apply_log_level"
@@ -489,4 +521,6 @@ when isMainModule:
   testNormalizeConfigWriteBack()
   testNormalizeConfigStripsUnknownKeys()
   testLoadConfigIsReadOnly()
+  testDiscordEnabledField()
+  testMattermostEnabledField()
   testApplyLogLevelFromConfig()
