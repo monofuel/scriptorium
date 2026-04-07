@@ -571,7 +571,8 @@ proc preflightValidation*(repoPath: string) =
   case cfg.agents.coding.harness
   of harnessClaudeCode:
     hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
-              dirExists(getHomeDir() / ".claude")
+              dirExists(getHomeDir() / ".claude") or
+              getEnv("CLAUDE_CODE_USE_BEDROCK").len > 0
   of harnessCodex:
     hasAuth = getEnv("OPENAI_API_KEY").len > 0 or
               getEnv("CODEX_API_KEY").len > 0 or
