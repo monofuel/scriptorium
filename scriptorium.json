@@ -45,7 +45,7 @@
     "local": "http://127.0.0.1:8097"
   },
   "concurrency": {
-    "maxAgents": 4,
+    "maxAgents": 8,
     "tokenBudgetMB": 0
   },
   "timeouts": {
