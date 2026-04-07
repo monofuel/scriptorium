@@ -16,7 +16,8 @@ Prompt path terminology should stay aligned with `docs/terms.md`.
 - `architect_areas.md`: Architect area generation prompt.
 - `manager_tickets.md`: Manager ticket generation prompt.
 - `agents_example.md`: generic example `AGENTS.md` content for generated fixture repositories.
-- `plan_scope.md`: shared plan worktree and read-scope context.
+- `plan_scope.md`: shared plan worktree context with write scope (used by plan and loop prompts).
+- `plan_scope_readonly.md`: shared plan worktree context with read-only scope (used by ask prompts).
 - `tone.md`: shared communication tone directive (appended to all agent prompts).
 - `repo_hygiene.md`: shared repository hygiene directive (appended to all action-taking agent prompts).
 - `engineering_method.md`: shared engineering method directive (Five Whys, root cause analysis — appended to all agent prompts).

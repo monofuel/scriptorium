@@ -7,6 +7,7 @@ const
   ArchitectAreasTemplate* = staticRead(PromptDirectory & "architect_areas.md")
   ManagerTicketsTemplate* = staticRead(PromptDirectory & "manager_tickets.md")
   PlanScopeTemplate* = staticRead(PromptDirectory & "plan_scope.md")
+  PlanScopeReadonlyTemplate* = staticRead(PromptDirectory & "plan_scope_readonly.md")
   ArchitectPlanOneShotTemplate* = staticRead(PromptDirectory & "architect_plan_oneshot.md")
   ArchitectPlanInteractiveTemplate* = staticRead(PromptDirectory & "architect_plan_interactive.md")
   CodexRetryContinuationTemplate* = staticRead(PromptDirectory & "codex_retry_continuation.md")

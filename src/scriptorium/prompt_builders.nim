@@ -163,6 +163,16 @@ proc buildPlanScopePrompt*(repoPath: string, planPath: string): string =
     ],
   )
 
+proc buildPlanScopeReadonlyPrompt*(repoPath: string, planPath: string): string =
+  ## Build shared planning prompt context with read-only scope.
+  result = renderPromptTemplate(
+    PlanScopeReadonlyTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
+    ],
+  )
+
 proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: string, currentSpec: string, username: string = "engineer"): string =
   ## Build the one-shot architect prompt that edits spec.md in place.
   result = withMethod(withHygiene(withTone(renderPromptTemplate(
@@ -263,7 +273,7 @@ proc buildInteractiveAskPrompt*(repoPath: string, planPath: string, spec: string
   result = withTone(renderPromptTemplate(
     ArchitectAskInteractiveTemplate,
     [
-      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
+      (name: "PLAN_SCOPE", value: buildPlanScopeReadonlyPrompt(repoPath, planPath).strip()),
       (name: "CURRENT_SPEC", value: spec.strip()),
       (name: "CONVERSATION_HISTORY", value: conversationHistory),
       (name: "USERNAME", value: username),
