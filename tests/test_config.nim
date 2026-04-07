@@ -514,6 +514,84 @@ proc testChatHistoryCountConfig() =
   doAssert loaded.mattermost.chatHistoryCount == 15
   echo "[OK] chatHistoryCount defaults and custom values load correctly"
 
+proc testSaveConfigRoundTrip() =
+  ## Verify saveConfig followed by loadConfig preserves all field values.
+  let tmpDir = getTempDir() / "test_config_save_round_trip"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let original = defaultConfig()
+  saveConfig(tmpDir, original)
+  let loaded = loadConfig(tmpDir)
+
+  # Agents.
+  doAssert loaded.agents.architect.model == original.agents.architect.model
+  doAssert loaded.agents.architect.harness == original.agents.architect.harness
+  doAssert loaded.agents.architect.hardTimeout == original.agents.architect.hardTimeout
+  doAssert loaded.agents.architect.noOutputTimeout == original.agents.architect.noOutputTimeout
+  doAssert loaded.agents.architect.progressTimeout == original.agents.architect.progressTimeout
+  doAssert loaded.agents.coding.model == original.agents.coding.model
+  doAssert loaded.agents.coding.harness == original.agents.coding.harness
+  doAssert loaded.agents.coding.hardTimeout == original.agents.coding.hardTimeout
+  doAssert loaded.agents.coding.noOutputTimeout == original.agents.coding.noOutputTimeout
+  doAssert loaded.agents.coding.progressTimeout == original.agents.coding.progressTimeout
+  doAssert loaded.agents.manager.model == original.agents.manager.model
+  doAssert loaded.agents.reviewer.model == original.agents.reviewer.model
+  doAssert loaded.agents.audit.model == original.agents.audit.model
+
+  # Endpoints.
+  doAssert loaded.endpoints.local == original.endpoints.local
+
+  # Concurrency.
+  doAssert loaded.concurrency.maxAgents == original.concurrency.maxAgents
+  doAssert loaded.concurrency.tokenBudgetMB == original.concurrency.tokenBudgetMB
+
+  # Timeouts.
+  doAssert loaded.timeouts.codingAgentHardTimeoutMs == original.timeouts.codingAgentHardTimeoutMs
+  doAssert loaded.timeouts.codingAgentNoOutputTimeoutMs == original.timeouts.codingAgentNoOutputTimeoutMs
+  doAssert loaded.timeouts.codingAgentProgressTimeoutMs == original.timeouts.codingAgentProgressTimeoutMs
+  doAssert loaded.timeouts.codingAgentMaxAttempts == original.timeouts.codingAgentMaxAttempts
+
+  # Loop.
+  doAssert loaded.loop.enabled == original.loop.enabled
+  doAssert loaded.loop.feedback == original.loop.feedback
+  doAssert loaded.loop.goal == original.loop.goal
+  doAssert loaded.loop.maxIterations == original.loop.maxIterations
+  doAssert loaded.loop.feedbackTimeoutMs == original.loop.feedbackTimeoutMs
+
+  # Discord.
+  doAssert loaded.discord.enabled == original.discord.enabled
+  doAssert loaded.discord.serverId == original.discord.serverId
+  doAssert loaded.discord.channelId == original.discord.channelId
+  doAssert loaded.discord.allowedUserIds == original.discord.allowedUserIds
+  doAssert loaded.discord.chatHistoryCount == original.discord.chatHistoryCount
+
+  # Mattermost.
+  doAssert loaded.mattermost.enabled == original.mattermost.enabled
+  doAssert loaded.mattermost.url == original.mattermost.url
+  doAssert loaded.mattermost.channelId == original.mattermost.channelId
+  doAssert loaded.mattermost.allowedUserIds == original.mattermost.allowedUserIds
+  doAssert loaded.mattermost.chatHistoryCount == original.mattermost.chatHistoryCount
+
+  # Dashboard.
+  doAssert loaded.dashboard.port == original.dashboard.port
+  doAssert loaded.dashboard.host == original.dashboard.host
+
+  # Devops.
+  doAssert loaded.devops.enabled == original.devops.enabled
+
+  # Remote sync.
+  doAssert loaded.remoteSync.enabled == original.remoteSync.enabled
+  doAssert loaded.remoteSync.primaryRemote == original.remoteSync.primaryRemote
+  doAssert loaded.remoteSync.remotes == original.remoteSync.remotes
+  doAssert loaded.remoteSync.syncIntervalSeconds == original.remoteSync.syncIntervalSeconds
+
+  # Top-level fields.
+  doAssert loaded.logLevel == original.logLevel
+  doAssert loaded.fileLogLevel == original.fileLogLevel
+  doAssert loaded.syncAgentsMd == original.syncAgentsMd
+  echo "[OK] saveConfig round-trip preserves all field values"
+
 proc testLoopFeedbackTimeoutConfig() =
   ## Verify feedbackTimeoutMs default and custom JSON loading for loop config.
   let cfg = defaultConfig()
@@ -560,3 +638,4 @@ when isMainModule:
   testApplyLogLevelFromConfig()
   testChatHistoryCountConfig()
   testLoopFeedbackTimeoutConfig()
+  testSaveConfigRoundTrip()
