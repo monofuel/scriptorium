@@ -582,7 +582,11 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       if parseForceEvalFromTicketContent(ticketContent):
         forceEvalPending = true
         logInfo(&"ticket {item.ticketId}: force eval flag set, will trigger early eval")
-      postNotification(repoPath, "merged", &"Ticket {item.ticketId} merged successfully.")
+      let
+        title = parseTitleFromTicketContent(ticketContent)
+        mergedMsg = if title.len > 0: &"Ticket {item.ticketId} merged: {title}"
+          else: &"Ticket {item.ticketId} merged."
+      postNotification(repoPath, "merged", mergedMsg)
       true
     else:
       let failureReason = if mergeMasterResult.exitCode != 0: "git merge conflict"

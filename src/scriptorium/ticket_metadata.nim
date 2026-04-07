@@ -64,6 +64,14 @@ proc ticketIdFromTicketPath*(ticketRelPath: string): string =
     raise newException(ValueError, fmt"ticket filename has non-numeric prefix: {fileName}")
   result = id
 
+proc parseTitleFromTicketContent*(ticketContent: string): string =
+  ## Extract the title from the first H1 line in a ticket markdown body.
+  for line in ticketContent.splitLines():
+    let trimmed = line.strip()
+    if trimmed.startsWith("# "):
+      result = trimmed[2..^1].strip()
+      break
+
 proc parseAreaFromTicketContent*(ticketContent: string): string =
   ## Extract the area identifier from a ticket markdown body.
   for line in ticketContent.splitLines():
