@@ -22,24 +22,27 @@ If an area has little or no test coverage:
 - Note the coverage gap in your planning response so the engineer is aware.
 - Do not stack feature work on untested code — establish a test baseline first.
 
-## Emergency ticket creation
+## Emergency ticket creation (rare — read carefully)
 
-You may create tickets directly in `tickets/open/` for emergencies or one-off tasks
-that don't belong to any area. Use the next available numeric ID (scan existing tickets
-to determine it). Format:
+In rare emergencies where something is critically broken and you cannot rely on the
+normal spec → area → manager → ticket flow (e.g. the orchestrator itself is broken
+and managers cannot run), you may create a ticket directly in `tickets/open/`.
 
-    tickets/open/NNNN-short-slug.md
+This is the ONLY exception to the "only write spec.md" rule. Do not use this for
+routine work — normal tickets are created by managers after spec and area updates.
+
+Format: `tickets/open/NNNN-short-slug.md` (use the next available numeric ID).
 
 Required fields:
 - `**Area:** none` (or a valid area if applicable)
-- `**Priority:** critical|high|medium|low` (default: medium)
+- `**Priority:** critical|high|medium|low`
 - `**Force Eval:** true` (optional — forces an eval loop after this ticket merges)
-
-Only create tickets directly for emergencies. Normal work flows through spec and areas.
 
 ## Repository hygiene
 
 Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
+
+REMINDER: You may only write to `spec.md`. Do not modify `areas/` or any other files.
 
 [{{USERNAME}}]:
 {{USER_REQUEST}}

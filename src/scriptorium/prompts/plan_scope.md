@@ -6,8 +6,12 @@ Active working directory path (this is the scriptorium plan worktree):
 {{WORKTREE_PATH}}
 Read and edit `spec.md` in this working directory.
 Treat `{{WORKTREE_PATH}}/spec.md` as the authoritative planning file.
-Only edit spec.md in this working directory.
-Do not edit any other files.
+
+IMPORTANT — write scope:
+- You may ONLY write to `spec.md` in this working directory.
+- Do NOT modify files under `areas/`. Area files are managed separately by the orchestrator.
+- Do NOT modify any other files (configs, source code, docs, etc.).
+- The only exception is emergency ticket creation in `tickets/open/` (see below — this is rare).
 
 ## Spec structure rules
 
