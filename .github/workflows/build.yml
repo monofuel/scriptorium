@@ -8,6 +8,10 @@ on:
       - "v*"
   pull_request:
 
+concurrency:
+  group: build-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
