@@ -101,6 +101,18 @@ proc buildStallContinuationPrompt*(initialPrompt: string, ticketContent: string,
     testSection & "\n\n" &
     ToneTemplate.strip()
 
+proc buildAuditAgentPrompt*(spec: string, agentsMd: string, lastAuditCommit: string, diff: string): string =
+  ## Build the audit agent prompt from spec, AGENTS.md, last audit commit, and diff.
+  result = withMethod(withTone(renderPromptTemplate(
+    AuditAgentTemplate,
+    [
+      (name: "spec", value: spec.strip()),
+      (name: "agents_md", value: agentsMd.strip()),
+      (name: "last_audit_commit", value: lastAuditCommit.strip()),
+      (name: "diff", value: diff.strip()),
+    ],
+  )))
+
 proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string, agentsContent: string, specContent: string): string =
   ## Build the review agent prompt from ticket, diff, area, summary, AGENTS.md, and spec context.
   result = withMethod(withTone(renderPromptTemplate(
