@@ -31,21 +31,32 @@ proc pruneHealthCache*(cache: Table[string, HealthCacheEntry], maxEntries: int):
 
 proc readHealthCache*(planPath: string): Table[string, HealthCacheEntry] =
   ## Read health/cache.json from a plan worktree path and return the cache table.
+  ## Missing fields get safe defaults; malformed entries are skipped; invalid
+  ## JSON returns an empty table.
   let cachePath = planPath / HealthCacheRelPath
   if not fileExists(cachePath):
     return initTable[string, HealthCacheEntry]()
   let raw = readFile(cachePath)
-  let rootNode = parseJson(raw)
+  var rootNode: JsonNode
+  try:
+    rootNode = parseJson(raw)
+  except JsonParsingError:
+    logWarn("health cache: failed to parse JSON, returning empty cache")
+    return initTable[string, HealthCacheEntry]()
   for commitHash, entryNode in rootNode.pairs:
-    var entry = HealthCacheEntry(
-      healthy: entryNode["healthy"].getBool(),
-      timestamp: entryNode["timestamp"].getStr(),
-      test_exit_code: entryNode["test_exit_code"].getInt(),
-      integration_test_exit_code: entryNode["integration_test_exit_code"].getInt(),
-      test_wall_seconds: entryNode["test_wall_seconds"].getInt(),
-      integration_test_wall_seconds: entryNode["integration_test_wall_seconds"].getInt(),
-    )
-    result[commitHash] = entry
+    try:
+      let entry = HealthCacheEntry(
+        healthy: entryNode{"healthy"}.getBool(),
+        timestamp: entryNode{"timestamp"}.getStr(),
+        test_exit_code: entryNode{"test_exit_code"}.getInt(),
+        integration_test_exit_code: entryNode{"integration_test_exit_code"}.getInt(),
+        test_wall_seconds: entryNode{"test_wall_seconds"}.getInt(),
+        integration_test_wall_seconds: entryNode{"integration_test_wall_seconds"}.getInt(),
+      )
+      result[commitHash] = entry
+    except CatchableError:
+      let msg = getCurrentExceptionMsg()
+      logWarn(&"health cache: skipping malformed entry {commitHash}: {msg}")
 
 proc writeHealthCache*(planPath: string, cache: Table[string, HealthCacheEntry]) =
   ## Write the health cache table to health/cache.json in a plan worktree path.

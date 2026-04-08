@@ -207,3 +207,65 @@ suite "pruneHealthCache":
     let cache = initTable[string, HealthCacheEntry]()
     let pruned = pruneHealthCache(cache, 10)
     check pruned.len == 0
+
+suite "defensive JSON parsing":
+  test "missing fields produce safe defaults":
+    let tmp = createTempDir("scriptorium_test_hc_missing_", "")
+    defer: removeDir(tmp)
+
+    let cacheDir = tmp / "health"
+    createDir(cacheDir)
+    writeFile(cacheDir / "cache.json", """{"abc123": {"healthy": true}}""")
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 1
+    check "abc123" in loaded
+    check loaded["abc123"].healthy == true
+    check loaded["abc123"].timestamp == ""
+    check loaded["abc123"].test_exit_code == 0
+    check loaded["abc123"].integration_test_exit_code == 0
+    check loaded["abc123"].test_wall_seconds == 0
+    check loaded["abc123"].integration_test_wall_seconds == 0
+
+  test "completely empty entry object gets all safe defaults":
+    let tmp = createTempDir("scriptorium_test_hc_empty_entry_", "")
+    defer: removeDir(tmp)
+
+    let cacheDir = tmp / "health"
+    createDir(cacheDir)
+    writeFile(cacheDir / "cache.json", """{"def456": {}}""")
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 1
+    check "def456" in loaded
+    check loaded["def456"].healthy == false
+    check loaded["def456"].timestamp == ""
+    check loaded["def456"].test_exit_code == 0
+    check loaded["def456"].integration_test_exit_code == 0
+    check loaded["def456"].test_wall_seconds == 0
+    check loaded["def456"].integration_test_wall_seconds == 0
+
+  test "extra unknown fields are ignored":
+    let tmp = createTempDir("scriptorium_test_hc_extra_", "")
+    defer: removeDir(tmp)
+
+    let cacheDir = tmp / "health"
+    createDir(cacheDir)
+    writeFile(cacheDir / "cache.json", """{"abc123": {"healthy": true, "timestamp": "2026-04-01T00:00:00Z", "unknown_field": "value", "another": 42}}""")
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 1
+    check "abc123" in loaded
+    check loaded["abc123"].healthy == true
+    check loaded["abc123"].timestamp == "2026-04-01T00:00:00Z"
+
+  test "completely invalid JSON returns empty cache":
+    let tmp = createTempDir("scriptorium_test_hc_invalid_", "")
+    defer: removeDir(tmp)
+
+    let cacheDir = tmp / "health"
+    createDir(cacheDir)
+    writeFile(cacheDir / "cache.json", "this is not json at all {{{")
+
+    let loaded = readHealthCache(tmp)
+    check loaded.len == 0
