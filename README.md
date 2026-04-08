@@ -239,7 +239,7 @@ Create `scriptorium.json` in repo root:
     "enabled": false,
     "serverId": "",
     "channelId": "",
-    "allowedUserIds": []
+    "allowedUsers": []
   },
   "logLevel": "INFO",
   "fileLogLevel": "DEBUG"
@@ -345,7 +345,7 @@ Configure in `scriptorium.json`:
     "enabled": true,
     "serverId": "your-server-id",
     "channelId": "your-channel-id",
-    "allowedUserIds": ["user-id-1"]
+    "allowedUsers": ["user-id-1"]
   }
 }
 ```

@@ -58,7 +58,7 @@
     "enabled": false,
     "serverId": "1180587895921328158",
     "channelId": "1486502923486757055",
-    "allowedUserIds": [
+    "allowedUsers": [
       "215660018010161152"
     ],
     "chatHistoryCount": 8
@@ -67,7 +67,7 @@
     "enabled": false,
     "url": "https://mattermost.solution-nine.monofuel.dev",
     "channelId": "oreg6xwkhpg5ibjexhhbjcjpqo",
-    "allowedUserIds": [
+    "allowedUsers": [
       "14bbqjnm63dq3nwk3tsjkfe9sh"
     ],
     "chatHistoryCount": 8
