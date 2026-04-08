@@ -608,6 +608,25 @@ proc testLoopFeedbackTimeoutConfig() =
   doAssert loaded.loop.feedbackTimeoutMs == 30000
   echo "[OK] feedbackTimeoutMs default and custom value load correctly"
 
+proc testCorruptedJsonRaisesValueError() =
+  ## Verify loadConfig raises ValueError with clear message on corrupted JSON.
+  let tmpDir = getTempDir() / "test_config_corrupted_json"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  writeFile(tmpDir / "scriptorium.json", "{not valid json!!!")
+
+  var raised = false
+  try:
+    discard loadConfig(tmpDir)
+  except ValueError:
+    raised = true
+    let msg = getCurrentExceptionMsg()
+    doAssert "scriptorium.json is corrupted or not valid JSON" in msg
+    doAssert "scriptorium init" in msg
+  doAssert raised, "loadConfig should raise ValueError on corrupted JSON"
+  echo "[OK] corrupted JSON raises ValueError with clear recovery message"
+
 when isMainModule:
   testParseLogLevel()
   testDefaultConfigValues()
@@ -639,3 +658,4 @@ when isMainModule:
   testChatHistoryCountConfig()
   testLoopFeedbackTimeoutConfig()
   testSaveConfigRoundTrip()
+  testCorruptedJsonRaisesValueError()

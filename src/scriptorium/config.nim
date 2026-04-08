@@ -212,12 +212,19 @@ proc saveConfig*(repoPath: string, cfg: Config) =
 
 proc loadConfig*(repoPath: string): Config =
   ## Load scriptorium.json, deep-merging with defaults. Read-only — does not write the file.
-  ## Crashes on invalid JSON.
+  ## Raises ValueError on invalid JSON with a clear recovery message.
   let path = repoPath / ConfigFile
   if not fileExists(path):
     return defaultConfig()
   let raw = readFile(path)
-  let userJson = parseJson(raw)
+  var userJson: JsonNode
+  try:
+    userJson = parseJson(raw)
+  except JsonParsingError:
+    let msg = getCurrentExceptionMsg()
+    raise newException(ValueError,
+      "scriptorium.json is corrupted or not valid JSON: " & msg &
+      ". Delete the file and run 'scriptorium init' to regenerate defaults.")
   let defaultJson = parseJson(defaultConfig().toJson())
   let merged = deepMerge(defaultJson, userJson)
   result = fromJson($merged, Config)
