@@ -173,14 +173,23 @@ proc orchestratorPidPath*(repoPath: string): string =
   result = managedRepoRootPath(repoPath) / OrchestratorPidFileName
 
 proc forceRemoveDir*(path: string) =
-  ## Remove a directory tree, falling back to rm -rf if removeDir fails.
-  try:
-    removeDir(path)
-  except OSError:
-    let rmRc = execCmd(&"rm -rf {quoteShell(path)}")
-    if rmRc != 0:
-      let msg = &"rm -rf failed (rc={rmRc}): {path}"
-      raise newException(OSError, msg)
+  ## Remove a directory tree, retrying on transient failures (e.g. NFS ESTALE).
+  const MaxAttempts = 3
+  const RetryDelayMs = 500
+  for attempt in 1 .. MaxAttempts:
+    try:
+      removeDir(path)
+      return
+    except OSError:
+      let rmRc = execCmd(&"rm -rf {quoteShell(path)}")
+      if rmRc == 0:
+        return
+      if attempt < MaxAttempts:
+        sleep(RetryDelayMs)
+  let finalRc = execCmd(&"rm -rf {quoteShell(path)}")
+  if finalRc != 0:
+    let msg = &"rm -rf failed (rc={finalRc}) after {MaxAttempts} attempts: {path}"
+    raise newException(OSError, msg)
 
 proc isManagedWorktreePath*(repoPath: string, path: string): bool =
   ## Return true when path is under this repository's managed worktree root.
@@ -190,10 +199,14 @@ proc isManagedWorktreePath*(repoPath: string, path: string): bool =
 
 proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool =
   ## Remove stale managed worktree conflicts and prune stale worktree metadata.
+  ## Refuses to recover active worktrees (directory exists with .git file).
   let conflictPath = parseWorktreeConflictPath(addOutput)
   if conflictPath.len == 0:
     result = false
   elif not isManagedWorktreePath(repoPath, conflictPath):
+    result = false
+  elif dirExists(conflictPath) and fileExists(conflictPath / ".git"):
+    logWarn(&"conflict path is active, skipping recovery: {conflictPath}")
     result = false
   else:
     logWarn(&"recovering stale worktree conflict: {conflictPath}")
@@ -207,8 +220,11 @@ proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool 
       forceRemoveDir(conflictPath)
     result = true
 
-proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string) =
+proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string,
+    force: bool = false) =
   ## Add one git worktree path for one branch, recovering stale managed conflicts once.
+  ## When force is true, pass -f to allow checking out a branch already used by another
+  ## worktree (needed for per-caller plan worktrees sharing scriptorium/plan).
   logDebug(&"worktree add: {worktreePath} ({branch})")
   createDir(parentDir(worktreePath))
   if dirExists(worktreePath):
@@ -222,10 +238,16 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
 
   var recoveredConflict = false
   while true:
+    var args = @["-C", repoPath, "worktree", "add"]
+    if force:
+      args.add("-f")
+    args.add(worktreePath)
+    args.add(branch)
+
     acquireProcessLock()
     let addProcess = startProcess(
       "git",
-      args = @["-C", repoPath, "worktree", "add", worktreePath, branch],
+      args = args,
       options = {poUsePath, poStdErrToStdOut},
     )
     let addOutput = addProcess.outputStream.readAll()

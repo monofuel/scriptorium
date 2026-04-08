@@ -165,11 +165,15 @@ proc ensurePlanWorktreeReady*(repoPath: string, caller: string): string =
     let checkRc = gitCheck(planWorktree, "rev-parse", "--git-dir")
     if checkRc != 0:
       # Worktree exists but git metadata is corrupt — recreate.
+      # Acquire commit lock to prevent branch checkout conflicts across processes.
       logWarn(&"plan worktree corrupt, recreating: {planWorktree}")
-      if dirExists(planWorktree):
-        forceRemoveDir(planWorktree)
-      discard gitCheck(repoPath, "worktree", "prune")
-      addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
+      discard withCommitLock(repoPath, proc(): bool =
+        if dirExists(planWorktree):
+          forceRemoveDir(planWorktree)
+        discard gitCheck(repoPath, "worktree", "prune")
+        addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch, force = true)
+        true
+      )
       logDebug(&"plan worktree recreated: {planWorktree}")
     else:
       gitRun(planWorktree, "checkout", PlanBranch)
@@ -178,18 +182,15 @@ proc ensurePlanWorktreeReady*(repoPath: string, caller: string): string =
       logDebug(&"plan worktree refreshed: {planWorktree}")
   else:
     # First time or missing — create fresh.
+    # Acquire commit lock to prevent branch checkout conflicts across processes.
     logDebug(&"plan worktree creating: {planWorktree}")
-    if dirExists(planWorktree):
-      forceRemoveDir(planWorktree)
-    discard gitCheck(repoPath, "worktree", "prune")
-    try:
-      addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
-    except:
-      # Clean up partial state on failure.
+    discard withCommitLock(repoPath, proc(): bool =
       if dirExists(planWorktree):
         forceRemoveDir(planWorktree)
       discard gitCheck(repoPath, "worktree", "prune")
-      raise
+      addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch, force = true)
+      true
+    )
     logDebug(&"plan worktree created: {planWorktree}")
 
   result = planWorktree
