@@ -158,6 +158,78 @@ proc testSrcAndDocsCreated() =
   doAssert fileExists(repo / "docs" / ".gitkeep"), "docs/.gitkeep should exist"
   echo "[OK] runInit creates src/.gitkeep and docs/.gitkeep"
 
+proc testAgentsMdCreated() =
+  ## Verify runInit creates AGENTS.md with non-empty content.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  let agentsPath = repo / "AGENTS.md"
+  doAssert fileExists(agentsPath), "AGENTS.md should exist after init"
+  let content = readFile(agentsPath)
+  doAssert content.len > 0, "AGENTS.md should be non-empty"
+  echo "[OK] runInit creates AGENTS.md with content"
+
+proc testConfigJsonCreated() =
+  ## Verify runInit creates scriptorium.json.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  doAssert fileExists(repo / "scriptorium.json"), "scriptorium.json should exist after init"
+  echo "[OK] runInit creates scriptorium.json"
+
+proc testGitignoreEntry() =
+  ## Verify .gitignore contains a .scriptorium entry after init.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  let gitignorePath = repo / ".gitignore"
+  doAssert fileExists(gitignorePath), ".gitignore should exist after init"
+  let content = readFile(gitignorePath)
+  doAssert ".scriptorium/" in content, ".gitignore should contain .scriptorium/ entry"
+  echo "[OK] .gitignore contains .scriptorium entry"
+
+proc testSkipsExistingAgentsMd() =
+  ## Verify runInit preserves existing AGENTS.md with custom content.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  let customContent = "# Custom AGENTS.md\nDo not overwrite me.\n"
+  let agentsPath = repo / "AGENTS.md"
+  writeFile(agentsPath, customContent)
+  let qpath = quoteShell(repo)
+  discard execCmdEx("git -C " & qpath & " add AGENTS.md")
+  discard execCmdEx("git -C " & qpath & " commit -m \"add custom AGENTS.md\"")
+
+  runInit(repo, quiet = true)
+
+  let afterContent = readFile(agentsPath)
+  doAssert afterContent == customContent, "AGENTS.md should preserve custom content"
+  echo "[OK] runInit skips existing AGENTS.md"
+
+proc testSkipsExistingMakefile() =
+  ## Verify runInit preserves existing Makefile with custom content.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  let customContent = "all:\n\t@echo custom\n"
+  let makefilePath = repo / "Makefile"
+  writeFile(makefilePath, customContent)
+  let qpath = quoteShell(repo)
+  discard execCmdEx("git -C " & qpath & " add Makefile")
+  discard execCmdEx("git -C " & qpath & " commit -m \"add custom Makefile\"")
+
+  runInit(repo, quiet = true)
+
+  let afterContent = readFile(makefilePath)
+  doAssert afterContent == customContent, "Makefile should preserve custom content"
+  echo "[OK] runInit skips existing Makefile"
+
 when isMainModule:
   testNotAGitRepo()
   testAlreadyInitializedFails()
@@ -167,3 +239,8 @@ when isMainModule:
   testInitNoRemote()
   testMakefileContainsAllTargets()
   testSrcAndDocsCreated()
+  testAgentsMdCreated()
+  testConfigJsonCreated()
+  testGitignoreEntry()
+  testSkipsExistingAgentsMd()
+  testSkipsExistingMakefile()
