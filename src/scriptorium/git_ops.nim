@@ -24,8 +24,8 @@ const
   TicketBranchPrefix* = "scriptorium/ticket-"
   CommitLockFileName* = "commit.lock"
   CommitLockStalenessSeconds* = 30
-  CommitLockPollMs* = 100
-  CommitLockMaxRetries* = 50
+  CommitLockPollMs* = 500
+  CommitLockMaxRetries* = 600
 
 var
   processLock: Lock
