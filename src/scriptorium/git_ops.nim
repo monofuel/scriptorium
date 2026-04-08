@@ -283,6 +283,14 @@ proc resolveDefaultBranch*(repoPath: string): string =
 
   raise newException(IOError, "cannot determine default branch: refs/remotes/origin/HEAD is not set and none of master, main, develop exist")
 
+proc resolveDefaultBranchOrEmpty*(repoPath: string): string =
+  ## Non-raising variant of resolveDefaultBranch.
+  ## Returns "" when the default branch cannot be determined.
+  try:
+    result = resolveDefaultBranch(repoPath)
+  except IOError:
+    result = ""
+
 proc defaultBranchHeadCommit*(repoPath: string): string =
   ## Return the current default branch commit SHA.
   let branch = resolveDefaultBranch(repoPath)

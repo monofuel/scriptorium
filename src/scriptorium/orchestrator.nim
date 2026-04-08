@@ -32,6 +32,10 @@ proc installSignalHandlers() =
 
 proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int, testOutput: string] =
   ## Run the master health check and return detailed results.
+  let defaultBranch = resolveDefaultBranchOrEmpty(repoPath)
+  if defaultBranch == "":
+    logInfo("cannot determine default branch; reporting unhealthy")
+    return (healthy: false, testExitCode: 1, integrationTestExitCode: 0, testWallSeconds: 0, integrationTestWallSeconds: 0, testOutput: "cannot determine default branch")
   let checkResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[testExitCode: int, integrationTestExitCode: int, testWallSeconds: int, integrationTestWallSeconds: int, testOutput: string] =
     var testExitCode = 0
     var integrationTestExitCode = 0
@@ -59,7 +63,10 @@ proc checkMasterHealth(repoPath: string): tuple[healthy: bool, testExitCode: int
 proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
   ## Return cached master health, refreshing only when the master commit changes.
   ## Checks in-memory cache first, then file cache on plan branch, then runs checks.
-  let branchName = resolveDefaultBranch(repoPath)
+  let branchName = resolveDefaultBranchOrEmpty(repoPath)
+  if branchName == "":
+    logInfo("cannot determine default branch; reporting unhealthy")
+    return false
   let currentHead = defaultBranchHeadCommit(repoPath)
   if state.initialized and state.head == currentHead:
     return state.healthy

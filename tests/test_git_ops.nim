@@ -1,8 +1,8 @@
 ## Unit tests for git_ops: atomicWriteFile, worktree conflict parsing, managed
-## path checks, and directory removal.
+## path checks, directory removal, and default branch resolution.
 
 import
-  std/[os, tempfiles, unittest],
+  std/[os, osproc, tempfiles, unittest],
   scriptorium/git_ops
 
 suite "atomicWriteFile":
@@ -107,3 +107,22 @@ suite "forceRemoveDir":
     check not dirExists(path)
     forceRemoveDir(path)
     check not dirExists(path)
+
+suite "resolveDefaultBranchOrEmpty":
+  test "returns empty for non-git directory":
+    let tmp = createTempDir("resolve_branch_", "", getTempDir())
+    defer: removeDir(tmp)
+    check resolveDefaultBranchOrEmpty(tmp) == ""
+
+  test "returns branch name for valid git repo":
+    let tmp = createTempDir("resolve_branch_valid_", "", getTempDir())
+    defer: removeDir(tmp)
+    discard execCmd("git -C " & tmp & " init -b master")
+    discard execCmd("git -C " & tmp & " commit --allow-empty -m init")
+    check resolveDefaultBranchOrEmpty(tmp) == "master"
+
+  test "resolveDefaultBranch raises for non-git directory":
+    let tmp = createTempDir("resolve_branch_raise_", "", getTempDir())
+    defer: removeDir(tmp)
+    expect IOError:
+      discard resolveDefaultBranch(tmp)
