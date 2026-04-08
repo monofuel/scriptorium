@@ -268,6 +268,7 @@ proc reopenOrphanedInProgressTickets*(repoPath: string, caller: string): int =
 
       # Not merged and not queued — reopen by moving back to open.
       let openRelPath = PlanTicketsOpenDir / fileName
+      createDir(planPath / PlanTicketsOpenDir)
       logInfo(&"recovery: reopening orphaned in-progress ticket {ticketId}")
       moveFile(ticketPath, planPath / openRelPath)
 
@@ -337,6 +338,7 @@ proc runRecoveryAgent*(repoPath: string, caller: string, runner: AgentRunner, te
     let fileName = idStr & "-recovery-" & shortHash & ".md"
     let ticketRelPath = PlanTicketsOpenDir / fileName
     let ticketFullPath = planPath / ticketRelPath
+    createDir(planPath / PlanTicketsOpenDir)
     writeFile(ticketFullPath, ticketContent)
     gitRun(planPath, "add", ticketRelPath)
     let commitMsg = RecoveryTicketCommitPrefix & " " & idStr

@@ -31,6 +31,7 @@ proc writeTicketsForArea*(
   ## Write manager-generated tickets for one area into tickets/open.
   let areaId = areaIdFromAreaPath(areaRelPath)
   var hasChanges = false
+  createDir(planPath / PlanTicketsOpenDir)
 
   for doc in docs:
     let slug = normalizeTicketSlug(doc.slug)
@@ -92,6 +93,7 @@ proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     ticketDocs: seq[string], nextId: int) =
   ## Write ticket document strings for one area into tickets/open/.
   var currentId = nextId
+  createDir(planPath / PlanTicketsOpenDir)
   for doc in ticketDocs:
     let body = doc.strip()
     if body.len == 0:
