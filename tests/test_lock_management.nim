@@ -126,6 +126,28 @@ suite "cleanStaleGitLocks static locks":
     cleanStaleGitLocks(tmp)
     check not fileExists(lockPath)
 
+suite "waitForWorktreeIndexLock":
+  test "returns immediately when lock file does not exist":
+    let tmp = createTempDir("wt_nolock_", "", getTempDir())
+    defer: removeDir(tmp)
+    let lockPath = tmp / "index.lock"
+    waitForWorktreeIndexLock(lockPath)
+    # No exception means success.
+
+  test "raises IOError when lock persists beyond max retries":
+    let tmp = createTempDir("wt_persist_", "", getTempDir())
+    defer: removeDir(tmp)
+    let lockPath = tmp / "index.lock"
+    writeFile(lockPath, "")
+    var raised = false
+    try:
+      waitForWorktreeIndexLock(lockPath)
+    except IOError:
+      raised = true
+      check "timed out" in getCurrentExceptionMsg()
+      check lockPath in getCurrentExceptionMsg()
+    check raised
+
 suite "cleanStaleGitLocks worktree locks":
   test "stale worktree index.lock is removed":
     let tmp = createTempDir("wt_stale_", "", getTempDir())

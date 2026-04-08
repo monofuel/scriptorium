@@ -7,6 +7,8 @@ const
   RepoLockPollIntervalMs* = 1000
   RepoLockTimeoutSeconds* = 300
   AdminLockPollIntervalMs* = 1000
+  WorktreeIndexLockPollMs* = 200
+  WorktreeIndexLockMaxRetries* = 25
 
 var
   planWorktreeLock*: Lock
@@ -107,6 +109,20 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
 
   result = operation()
 
+proc waitForWorktreeIndexLock*(lockPath: string) =
+  ## Wait for a worktree index lock file to be released.
+  ## Polls every WorktreeIndexLockPollMs up to WorktreeIndexLockMaxRetries times.
+  if not fileExists(lockPath):
+    return
+  logInfo(&"waiting for worktree index lock: {lockPath}")
+  for i in 1 .. WorktreeIndexLockMaxRetries:
+    sleep(WorktreeIndexLockPollMs)
+    if not fileExists(lockPath):
+      logDebug(&"worktree index lock released after {i} retries: {lockPath}")
+      return
+  raise newException(IOError,
+    &"timed out waiting for worktree index lock: {lockPath}")
+
 proc ensurePlanWorktreeReady*(repoPath: string): string =
   ## Ensure the persistent plan worktree exists and is on the latest plan branch state.
   ## Internal: callers must hold planWorktreeLock.
@@ -117,6 +133,10 @@ proc ensurePlanWorktreeReady*(repoPath: string): string =
   let gitFile = planWorktree / ".git"
 
   if dirExists(planWorktree) and fileExists(gitFile):
+    # Wait for any in-progress git operations on this worktree.
+    let wtIndexLock = repoPath / ".git" / "worktrees" / ManagedPlanWorktreeName / "index.lock"
+    waitForWorktreeIndexLock(wtIndexLock)
+
     # Existing worktree — reset to latest plan branch tip.
     let checkRc = gitCheck(planWorktree, "rev-parse", "--git-dir")
     if checkRc != 0:
