@@ -3,7 +3,7 @@
 import
   std/[os, osproc, strutils, unittest],
   jsony,
-  scriptorium/[config, init]
+  scriptorium/[config, git_ops, init, lock_management]
 
 const
   AgentsExampleContent = staticRead("../src/scriptorium/prompts/agents_example.md")
@@ -50,16 +50,12 @@ proc runCliInRepo(repoPath: string, args: string): tuple[output: string, exitCod
   result = execCmdEx(command)
 
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
-  ## Open scriptorium/plan in a temporary worktree for direct test mutations.
-  let tmpPlan = getTempDir() / ("scriptorium_test_plan_" & suffix)
-  if dirExists(tmpPlan):
-    removeDir(tmpPlan)
-
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " worktree add " & quoteShell(tmpPlan) & " scriptorium/plan")
-  defer:
-    discard execCmdEx("git -C " & quoteShell(repoPath) & " worktree remove --force " & quoteShell(tmpPlan))
-
-  action(tmpPlan)
+  ## Open scriptorium/plan via the persistent per-caller plan worktree.
+  discard suffix
+  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): bool =
+    action(planPath)
+    result = true
+  )
 
 proc addTicketToPlan(repoPath: string, state: string, fileName: string, content: string) =
   ## Add one ticket file to a plan ticket state directory and commit it.

@@ -3,7 +3,7 @@
 import
   std/[algorithm, os, osproc, posix, sequtils, strutils, tempfiles, times],
   jsony,
-  scriptorium/config
+  scriptorium/[config, git_ops, lock_management]
 
 const
   LiveIntegrationRoot* = "/tmp/scriptorium/integration"
@@ -119,18 +119,12 @@ proc withTempLiveRepo*(prefix: string, action: proc(repoPath: string)) =
   action(repoPath)
 
 proc withPlanWorktree*(repoPath: string, suffix: string, action: proc(planPath: string)) =
-  ## Open scriptorium/plan in a temporary worktree for direct fixture mutations.
-  let planPath = createTempDir("scriptorium_integration_live_" & suffix & "_", "", getTempDir())
-  removeDir(planPath)
-  defer:
-    if dirExists(planPath):
-      removeDir(planPath)
-
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " worktree add " & quoteShell(planPath) & " scriptorium/plan")
-  defer:
-    discard execCmdEx("git -C " & quoteShell(repoPath) & " worktree remove --force " & quoteShell(planPath))
-
-  action(planPath)
+  ## Open scriptorium/plan via the persistent per-caller plan worktree.
+  discard suffix
+  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): bool =
+    action(planPath)
+    result = true
+  )
 
 proc writeSpecInPlan*(repoPath: string, content: string, commitMessage: string) =
   ## Replace spec.md on the plan branch and commit fixture content.

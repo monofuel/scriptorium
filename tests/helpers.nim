@@ -3,11 +3,11 @@
 import
   std/[algorithm, json, os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest],
   jsony,
-  scriptorium/[agent_runner, config, init, lock_management, orchestrator, ticket_metadata]
+  scriptorium/[agent_runner, config, git_ops, init, lock_management, orchestrator, ticket_metadata]
 
 export os, osproc, sequtils, strformat, strutils, tables, tempfiles, unittest
 export json, jsony
-export agent_runner, config, init, lock_management, orchestrator, ticket_metadata
+export agent_runner, config, git_ops, init, lock_management, orchestrator, ticket_metadata
 
 const
   OrchestratorTestBasePort* = 19000

@@ -230,9 +230,9 @@ suite "orchestrator merge queue":
     defer: removeDir(tmp)
 
     let before = planCommitCount(tmp)
-    let first = ensureMergeQueueInitialized(tmp)
+    let first = ensureMergeQueueInitialized(tmp, PlanCallerCli)
     let afterFirst = planCommitCount(tmp)
-    let second = ensureMergeQueueInitialized(tmp)
+    let second = ensureMergeQueueInitialized(tmp, PlanCallerCli)
     let afterSecond = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
