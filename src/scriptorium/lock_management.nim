@@ -4,8 +4,6 @@ import
   ./[git_ops, logging]
 
 const
-  RepoLockPollIntervalMs* = 1000
-  RepoLockTimeoutSeconds* = 300
   AdminLockPollIntervalMs* = 1000
   WorktreeIndexLockPollMs* = 200
   WorktreeIndexLockMaxRetries* = 25
@@ -66,52 +64,6 @@ proc tryAcquireRepoLock*(lockPath: string): bool =
       let errNo = osLastError()
       let errText = osErrorMsg(errNo)
       raise newException(IOError, &"failed to create repo lock at {lockPath}: {errText}")
-
-proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
-  ## Acquire a per-repository lock for planner and manager writes.
-  ## Waits with polling if another process holds the lock.
-  let lockPath = managedRepoLockPath(repoPath)
-  createDir(parentDir(lockPath))
-
-  var acquired = tryAcquireRepoLock(lockPath)
-  if not acquired and lockPathIsStale(lockPath):
-    let stalePid = lockHolderPid(lockPath)
-    logWarn(&"stealing stale repo lock at {lockPath} from dead PID {stalePid}")
-    if dirExists(lockPath):
-      removeDir(lockPath)
-    acquired = tryAcquireRepoLock(lockPath)
-
-  if not acquired:
-    let holderPid = lockHolderPid(lockPath)
-    let normalizedRepoPath = normalizeAbsolutePath(repoPath)
-    logInfo(&"waiting for repo lock held by PID {holderPid} on {normalizedRepoPath}...")
-    let deadline = epochTime() + float(RepoLockTimeoutSeconds)
-    while not acquired and epochTime() < deadline:
-      sleep(RepoLockPollIntervalMs)
-      if lockPathIsStale(lockPath):
-        let stalePid = lockHolderPid(lockPath)
-        logWarn(&"stealing stale repo lock at {lockPath} from dead PID {stalePid}")
-        if dirExists(lockPath):
-          removeDir(lockPath)
-      acquired = tryAcquireRepoLock(lockPath)
-
-  if not acquired:
-    let normalizedRepoPath = normalizeAbsolutePath(repoPath)
-    raise newException(IOError,
-      &"timed out after {RepoLockTimeoutSeconds}s waiting for repo lock on {normalizedRepoPath}")
-
-  let pidPath = lockPath / ManagedRepoLockPidFileName
-  let currentPid = getCurrentProcessId()
-  atomicWriteFile(pidPath, &"{currentPid}\n")
-  logDebug(&"repo lock acquired: {lockPath}")
-  defer:
-    if fileExists(pidPath):
-      removeFile(pidPath)
-    if dirExists(lockPath):
-      removeDir(lockPath)
-    logDebug(&"repo lock released: {lockPath}")
-
-  result = operation()
 
 type
   CommitLockFile* = object

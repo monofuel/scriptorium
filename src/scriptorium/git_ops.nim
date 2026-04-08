@@ -17,7 +17,6 @@ const
   PlanCallerMattermost* = "plan-mattermost"
   ManagedTicketWorktreeDirName* = "tickets"
   ManagedLockDirName* = "locks"
-  ManagedRepoLockName* = "repo.lock"
   ManagedAdminLockName* = "admin.lock"
   ManagedRepoLockPidFileName* = "pid"
   OrchestratorPidFileName* = "orchestrator.pid"
@@ -160,10 +159,6 @@ proc managedMasterWorktreePath*(repoPath: string): string =
 proc managedTicketWorktreeRootPath*(repoPath: string): string =
   ## Return the managed ticket worktree root path for one repository.
   result = managedWorktreeRootPath(repoPath) / ManagedTicketWorktreeDirName
-
-proc managedRepoLockPath*(repoPath: string): string =
-  ## Return the managed repository lock path for one repository.
-  result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedRepoLockName
 
 proc managedAdminLockPath*(repoPath: string): string =
   ## Return the admin lock path for one repository.
