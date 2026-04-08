@@ -141,8 +141,15 @@ proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
       return
 
     # Lock file exists — check staleness.
-    let raw = readFile(lockPath)
-    let existing = fromJson(raw, CommitLockFile)
+    var existing: CommitLockFile
+    try:
+      let raw = readFile(lockPath)
+      existing = fromJson(raw, CommitLockFile)
+    except CatchableError:
+      # Corrupted lock file from a crashed process — treat as stale.
+      logWarn(&"corrupted commit lock file at {lockPath}, removing as stale")
+      removeFile(lockPath)
+      continue
     let age = epochTime() - existing.timestamp
     if age >= float(CommitLockStalenessSeconds):
       let holderPid = existing.pid
@@ -337,28 +344,36 @@ proc acquireOrchestratorPidGuard*(repoPath: string) =
   createDir(parentDir(pidPath))
 
   if fileExists(pidPath):
-    let raw = readFile(pidPath)
-    let existing = fromJson(raw, OrchestratorPidFile)
-    # Same PID as us means the file is from a previous container that reused
-    # our PID namespace slot — we cannot be holding a guard we haven't acquired.
-    if existing.pid == getCurrentProcessId():
-      stderr.writeLine(&"WARNING: Stale orchestrator PID file found (same PID as us: {existing.pid}), overwriting")
-    else:
-      let killRc = posix.kill(Pid(existing.pid), 0)
-      if killRc == 0 or (killRc != 0 and int(osLastError()) != ESRCH):
-        # PID is alive (or we lack permission to signal it). Check if it is
-        # actually a scriptorium process — in containers, low PIDs from a
-        # previous run may collide with unrelated processes.
-        if not isScriptoriumProcess(existing.pid):
-          stderr.writeLine(&"WARNING: Stale orchestrator PID file found (PID {existing.pid} is not scriptorium), overwriting")
-        else:
-          let startedAt = fromUnix(int64(existing.timestamp))
-          let startedStr = startedAt.utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
-          raise newException(IOError,
-            &"Another orchestrator is already running (PID {existing.pid}, started {startedStr})")
+    var existing: OrchestratorPidFile
+    var parsed = false
+    try:
+      let raw = readFile(pidPath)
+      existing = fromJson(raw, OrchestratorPidFile)
+      parsed = true
+    except CatchableError:
+      # Corrupted PID file from a crashed process — overwrite it.
+      logWarn(&"corrupted orchestrator PID file at {pidPath}, overwriting")
+    if parsed:
+      # Same PID as us means the file is from a previous container that reused
+      # our PID namespace slot — we cannot be holding a guard we haven't acquired.
+      if existing.pid == getCurrentProcessId():
+        stderr.writeLine(&"WARNING: Stale orchestrator PID file found (same PID as us: {existing.pid}), overwriting")
       else:
-        # PID is dead (ESRCH) — overwrite.
-        stderr.writeLine(&"WARNING: Stale orchestrator PID file found for dead PID {existing.pid}, overwriting")
+        let killRc = posix.kill(Pid(existing.pid), 0)
+        if killRc == 0 or (killRc != 0 and int(osLastError()) != ESRCH):
+          # PID is alive (or we lack permission to signal it). Check if it is
+          # actually a scriptorium process — in containers, low PIDs from a
+          # previous run may collide with unrelated processes.
+          if not isScriptoriumProcess(existing.pid):
+            stderr.writeLine(&"WARNING: Stale orchestrator PID file found (PID {existing.pid} is not scriptorium), overwriting")
+          else:
+            let startedAt = fromUnix(int64(existing.timestamp))
+            let startedStr = startedAt.utc.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            raise newException(IOError,
+              &"Another orchestrator is already running (PID {existing.pid}, started {startedStr})")
+        else:
+          # PID is dead (ESRCH) — overwrite.
+          stderr.writeLine(&"WARNING: Stale orchestrator PID file found for dead PID {existing.pid}, overwriting")
 
   let currentPid = getCurrentProcessId()
   let now = epochTime()

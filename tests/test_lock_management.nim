@@ -296,3 +296,64 @@ suite "commit lock":
     )
     check executed
     check not fileExists(commitLockPath(tmp))
+
+  test "corrupted commit lock file is treated as stale":
+    let tmp = createTempDir("commit_lock_corrupt_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    # Write truncated JSON that will fail to parse.
+    writeFile(commitLockPath(tmp), "{\"pid\":123,\"time")
+
+    var executed = false
+    discard withCommitLock[int](tmp, proc(): int =
+      executed = true
+      result = 0
+    )
+    check executed
+    check not fileExists(commitLockPath(tmp))
+
+  test "empty commit lock file is treated as stale":
+    let tmp = createTempDir("commit_lock_empty_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    writeFile(commitLockPath(tmp), "")
+
+    var executed = false
+    discard withCommitLock[int](tmp, proc(): int =
+      executed = true
+      result = 0
+    )
+    check executed
+    check not fileExists(commitLockPath(tmp))
+
+suite "orchestrator PID guard corrupted file":
+  test "corrupted PID file is overwritten":
+    let tmp = createTempDir("pid_guard_corrupt_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    # Write truncated JSON that will fail to parse.
+    writeFile(orchestratorPidPath(tmp), "{\"pid\":99")
+
+    acquireOrchestratorPidGuard(tmp)
+    defer: releaseOrchestratorPidGuard(tmp)
+
+    let raw = readFile(orchestratorPidPath(tmp))
+    let parsed = fromJson(raw, OrchestratorPidFile)
+    check parsed.pid == getCurrentProcessId()
+
+  test "empty PID file is overwritten":
+    let tmp = createTempDir("pid_guard_empty_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    writeFile(orchestratorPidPath(tmp), "")
+
+    acquireOrchestratorPidGuard(tmp)
+    defer: releaseOrchestratorPidGuard(tmp)
+
+    let raw = readFile(orchestratorPidPath(tmp))
+    let parsed = fromJson(raw, OrchestratorPidFile)
+    check parsed.pid == getCurrentProcessId()
