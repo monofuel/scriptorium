@@ -276,10 +276,16 @@ proc computeContentHash*(content: string): string =
   result = $secureHash(content)
 
 proc readSpecHashMarker*(planPath: string): string =
-  ## Read stored spec hash, or "" if missing.
+  ## Read stored spec hash (single-line SHA-1 hex), or "" if missing or unreadable.
+  ## Returns "" on I/O errors so callers treat corrupted/inaccessible files as absent.
   let path = planPath / SpecHashMarkerPath
   if fileExists(path):
-    result = readFile(path).strip()
+    try:
+      result = readFile(path).strip()
+    except IOError, OSError:
+      let msg = getCurrentExceptionMsg()
+      logWarn("Could not read spec hash marker at " & path & ": " & msg)
+      result = ""
   else:
     result = ""
 
@@ -291,11 +297,20 @@ proc writeSpecHashMarker*(planPath: string) =
   atomicWriteFile(planPath / SpecHashMarkerPath, hash & "\n")
 
 proc readAreaHashes*(planPath: string): Table[string, string] =
-  ## Read area-id:hash pairs from tickets/.area-hashes.
+  ## Read area-id:hash pairs (one "area-id:sha1-hex" per line) from tickets/.area-hashes.
+  ## Returns an empty table on I/O errors so callers treat corrupted/inaccessible files as absent.
+  ## Lines that do not match the expected format are silently skipped.
   result = initTable[string, string]()
   let path = planPath / AreaHashesPath
   if fileExists(path):
-    for line in readFile(path).splitLines():
+    var content: string
+    try:
+      content = readFile(path)
+    except IOError, OSError:
+      let msg = getCurrentExceptionMsg()
+      logWarn("Could not read area hashes at " & path & ": " & msg)
+      return
+    for line in content.splitLines():
       let stripped = line.strip()
       if stripped.len == 0:
         continue
