@@ -320,15 +320,6 @@ proc computeAllAreaHashes*(planPath: string): Table[string, string] =
     let areaId = areaIdFromAreaPath(relativeAreaPath)
     result[areaId] = computeContentHash(readFile(areaPath))
 
-proc collectActiveTicketAreas*(planPath: string): HashSet[string] =
-  ## Collect area identifiers that have open, in-progress, or done tickets.
-  result = initHashSet[string]()
-  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
-    for ticketPath in listMarkdownFiles(planPath / stateDir):
-      let areaId = parseAreaFromTicketContent(readFile(ticketPath))
-      if areaId.len > 0:
-        result.incl(areaId)
-
 proc collectOpenAndInProgressAreas*(planPath: string): HashSet[string] =
   ## Collect area identifiers that have open or in-progress tickets (blocks concurrent work).
   result = initHashSet[string]()
@@ -340,18 +331,12 @@ proc collectOpenAndInProgressAreas*(planPath: string): HashSet[string] =
 
 proc areasNeedingTicketsInPlanPath*(planPath: string): seq[string] =
   ## Return area files eligible for ticket generation.
-  ## Uses hash-based comparison when area hashes file exists; falls back to
-  ## legacy behavior (suppress areas with any ticket) when no hashes file.
+  ## Requires area hashes file; returns empty when missing to let bootstrap create it.
   let hasAreaHashes = fileExists(planPath / AreaHashesPath)
 
   if not hasAreaHashes:
-    # Legacy fallback: suppress areas with any ticket (open, in-progress, done, stuck)
-    let activeAreas = collectActiveTicketAreas(planPath)
-    for areaPath in listMarkdownFiles(planPath / PlanAreasDir):
-      let relativeAreaPath = relativePath(areaPath, planPath).replace('\\', '/')
-      let areaId = areaIdFromAreaPath(relativeAreaPath)
-      if not activeAreas.contains(areaId):
-        result.add(relativeAreaPath)
+    # No area hashes file yet — skip this tick to let bootstrap create it.
+    return @[]
   else:
     # Hash-based: skip areas with open/in-progress work, include changed content
     let storedHashes = readAreaHashes(planPath)
@@ -484,6 +469,14 @@ proc runArchitectAreas*(repoPath: string, caller: string, runner: AgentRunner = 
       gitRun(planPath, "add", SpecHashMarkerPath)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", "scriptorium: initialize spec hash marker")
+
+    # Migration: bootstrap area hashes for existing areas without one.
+    if not areasMissingInPlanPath(planPath) and not fileExists(planPath / AreaHashesPath):
+      let currentHashes = computeAllAreaHashes(planPath)
+      writeAreaHashes(planPath, currentHashes)
+      gitRun(planPath, "add", AreaHashesPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: bootstrap area hashes")
 
     if not architectShouldRun(planPath):
       return false
