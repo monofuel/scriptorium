@@ -200,7 +200,22 @@ proc replayOrRollbackJournal*(worktreeRoot: string) =
   if not journalExists(worktreeRoot):
     return
 
-  let journal = readJournal(worktreeRoot)
+  var journal: Journal
+  try:
+    journal = readJournal(worktreeRoot)
+  except CatchableError:
+    let jPath = journalPath(worktreeRoot)
+    logWarn("recovery: corrupted journal file, discarding and resetting")
+    removeFile(jPath)
+    gitRun(worktreeRoot, "checkout", "--", ".")
+    gitRun(worktreeRoot, "add", "-A")
+    try:
+      gitRun(worktreeRoot, "commit", "-m", "scriptorium: discard corrupted journal")
+    except CatchableError:
+      # Commit fails with "nothing to commit" when journal was never tracked.
+      discard
+    return
+
   var appliedCount = 0
   for step in journal.steps:
     if isStepApplied(worktreeRoot, step):
