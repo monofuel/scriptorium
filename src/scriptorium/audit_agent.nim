@@ -1,8 +1,8 @@
 import
   std/[os, strformat, strutils, times],
   jsony,
-  ./[agent_runner, architect_agent, config, git_ops, lock_management, logging,
-     prompt_builders, shared_state]
+  ./[agent_pool, agent_runner, architect_agent, config, git_ops, lock_management,
+     logging, prompt_builders, shared_state]
 
 const
   AuditLogDirName* = "audit"
@@ -128,3 +128,34 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
   )
   logInfo(&"audit: state updated to commit {headCommit}")
   result = reportPath
+
+proc needsAudit*(repoPath: string): bool =
+  ## Check if the default branch HEAD differs from the last audited commit.
+  let headCommit = defaultBranchHeadCommit(repoPath)
+  var lastAudited = ""
+  discard withPlanWorktree(repoPath, AuditCallerName, proc(planPath: string): bool =
+    let state = loadAuditState(planPath)
+    lastAudited = state.lastAuditedCommit
+    true
+  )
+  if lastAudited.len == 0:
+    return true
+  result = headCommit != lastAudited
+
+const
+  AuditTicketId* = "audit"
+
+proc auditAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
+  ## Run the audit agent in a background thread and send completion to the pool channel.
+  {.cast(gcsafe).}:
+    let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
+    discard runAuditAgent(args.repoPath, runner)
+    sendPoolResult(AgentPoolCompletionResult(
+      role: arAudit,
+      ticketId: AuditTicketId,
+      result: AgentRunResult(),
+    ))
+
+proc startAuditAgentAsync*(repoPath: string, maxAgents: int) =
+  ## Start the audit agent as a background thread consuming one shared pool slot.
+  startAgentAsync(arAudit, repoPath, TicketAssignment(), AuditTicketId, "", maxAgents, auditAgentWorkerThread)

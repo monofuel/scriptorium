@@ -1,10 +1,10 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  agent_pool, architect_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag, stuck_investigation
+  agent_pool, architect_agent, audit_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag, stuck_investigation
 
 const
   IdleSleepMs = 200
@@ -13,9 +13,12 @@ const
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
   UnstickCommitPrefix = "scriptorium: unstick ticket"
 
-var tickSleepOverrideMs*: int = -1
-  ## When >= 0, overrides both idle and active sleep durations in the tick loop.
-  ## Set to 0 in tests to eliminate wall-clock sleep.
+var
+  tickSleepOverrideMs*: int = -1
+    ## When >= 0, overrides both idle and active sleep durations in the tick loop.
+    ## Set to 0 in tests to eliminate wall-clock sleep.
+  specChangeAuditPending*: bool = false
+    ## Set to true when the architect rewrites spec.md so the next tick spawns an audit.
 
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
@@ -423,6 +426,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 let specUpdated = runArchitectLoopIteration(repoPath, PlanCallerOrchestrator, runner, feedbackOutput)
                 let cycleElapsed = epochTime() - cycleT0
                 if specUpdated:
+                  specChangeAuditPending = true
                   logInfo(&"loop: feedback cycle {loopIterationCount} complete, spec updated (total {cycleElapsed:.1f}s)")
                 else:
                   logWarn(&"loop: feedback cycle {loopIterationCount} failed to produce spec changes (total {cycleElapsed:.1f}s)")
@@ -431,6 +435,22 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 let cycleElapsed = epochTime() - cycleT0
                 logWarn(&"loop: architect iteration failed ({cycleElapsed:.1f}s): {errMsg}")
               idle = false
+
+        # Step 9: Audit trigger — spawn audit agent on queue drain or spec change.
+        if not isAuditRunning():
+          let drainTrigger = withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
+            isQueueDrained(planPath)
+          ) and runningAgentCount() == 0
+          let triggerAudit = (drainTrigger and needsAudit(repoPath)) or specChangeAuditPending
+          if triggerAudit and emptySlotCount(maxAgents) > 0:
+            if specChangeAuditPending:
+              specChangeAuditPending = false
+              logInfo("audit: triggered by spec change")
+            else:
+              logInfo("audit: triggered by queue drain")
+            startAuditAgentAsync(repoPath, maxAgents)
+          elif triggerAudit:
+            logInfo("audit: skipped, no slots available")
 
         let ticketCounts = readOrchestratorStatus(repoPath, PlanCallerOrchestrator)
         let running = runningAgentCount()
