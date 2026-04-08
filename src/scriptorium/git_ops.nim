@@ -332,6 +332,17 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
     raise newException(IOError, &"{cmdStr} timed out after {timeoutMs div 1000}s")
   result = (exitCode: exitCode, output: output)
 
+proc atomicWriteFile*(path: string, content: string) =
+  ## Write content to path atomically via a temp file and rename.
+  let tmpPath = path & ".tmp"
+  writeFile(tmpPath, content)
+  try:
+    moveFile(tmpPath, path)
+  except OSError:
+    # Fallback to direct write if rename fails (e.g. cross-device).
+    writeFile(path, content)
+    removeFile(tmpPath)
+
 proc ensureGitignoreEntry(gitignorePath: string, entry: string, matchPatterns: openArray[string]) =
   ## Append entry to .gitignore if none of matchPatterns are already present.
   if fileExists(gitignorePath):

@@ -102,7 +102,7 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
 
   let pidPath = lockPath / ManagedRepoLockPidFileName
   let currentPid = getCurrentProcessId()
-  writeFile(pidPath, &"{currentPid}\n")
+  atomicWriteFile(pidPath, &"{currentPid}\n")
   logDebug(&"repo lock acquired: {lockPath}")
   defer:
     if fileExists(pidPath):
@@ -131,7 +131,7 @@ proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
       let currentPid = getCurrentProcessId()
       let now = epochTime()
       let payload = CommitLockFile(pid: currentPid, timestamp: now)
-      writeFile(lockPath, payload.toJson())
+      atomicWriteFile(lockPath, payload.toJson())
       logDebug(&"commit lock acquired: {lockPath}")
       defer:
         if fileExists(lockPath):
@@ -245,7 +245,7 @@ proc acquireAdminLock*(repoPath: string) =
     if acquired:
       let pidPath = lockPath / ManagedRepoLockPidFileName
       let currentPid = getCurrentProcessId()
-      writeFile(pidPath, &"{currentPid}\n")
+      atomicWriteFile(pidPath, &"{currentPid}\n")
       logInfo("admin lock acquired")
       return
     if lockPathIsStale(lockPath):
@@ -363,7 +363,7 @@ proc acquireOrchestratorPidGuard*(repoPath: string) =
   let currentPid = getCurrentProcessId()
   let now = epochTime()
   let pidFile = OrchestratorPidFile(pid: currentPid, timestamp: now)
-  writeFile(pidPath, pidFile.toJson())
+  atomicWriteFile(pidPath, pidFile.toJson())
   logInfo(&"orchestrator PID guard acquired (PID {currentPid})")
 
 proc releaseOrchestratorPidGuard*(repoPath: string) =

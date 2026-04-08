@@ -62,7 +62,7 @@ proc writeHealthCache*(planPath: string, cache: Table[string, HealthCacheEntry])
     entryNode["test_wall_seconds"] = newJInt(entry.test_wall_seconds)
     entryNode["integration_test_wall_seconds"] = newJInt(entry.integration_test_wall_seconds)
     rootNode[commitHash] = entryNode
-  writeFile(planPath / HealthCacheRelPath, $rootNode)
+  atomicWriteFile(planPath / HealthCacheRelPath, $rootNode)
 
 proc commitHealthCache*(planPath: string) =
   ## Stage and commit health/cache.json on the plan branch.

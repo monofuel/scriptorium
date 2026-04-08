@@ -286,7 +286,7 @@ proc writeSpecHashMarker*(planPath: string) =
   let spec = loadSpecFromPlanPath(planPath)
   let hash = computeContentHash(spec)
   createDir(parentDir(planPath / SpecHashMarkerPath))
-  writeFile(planPath / SpecHashMarkerPath, hash & "\n")
+  atomicWriteFile(planPath / SpecHashMarkerPath, hash & "\n")
 
 proc readAreaHashes*(planPath: string): Table[string, string] =
   ## Read area-id:hash pairs from tickets/.area-hashes.
@@ -310,7 +310,7 @@ proc writeAreaHashes*(planPath: string, hashes: Table[string, string]) =
     lines.add(areaId & ":" & hash)
   lines.sort()
   createDir(parentDir(planPath / AreaHashesPath))
-  writeFile(planPath / AreaHashesPath, lines.join("\n") & "\n")
+  atomicWriteFile(planPath / AreaHashesPath, lines.join("\n") & "\n")
 
 proc computeAllAreaHashes*(planPath: string): Table[string, string] =
   ## Compute content hashes for all area markdown files.
