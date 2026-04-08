@@ -2,7 +2,7 @@
 
 import
   std/[os, strutils, unittest],
-  scriptorium/[audit_agent, prompt_builders, shared_state]
+  scriptorium/[agent_pool, audit_agent, prompt_builders, prompt_catalog, shared_state]
 
 proc makeTempDir(prefix: string): string =
   ## Create a temporary directory for tests.
@@ -33,6 +33,14 @@ suite "audit agent prompt rendering":
     check "agents" in prompt
     check "abc" in prompt
     check "+line" in prompt
+
+  test "renderPromptTemplate raises on empty template":
+    expect(ValueError):
+      discard renderPromptTemplate("", @[])
+
+  test "renderPromptTemplate raises on missing placeholder":
+    expect(ValueError):
+      discard renderPromptTemplate("no placeholders here", @[(name: "missing", value: "val")])
 
 suite "audit state persistence":
   test "loadAuditState returns empty when file missing":
@@ -84,3 +92,11 @@ suite "audit report capture via shared state":
     discard consumeAuditReport("clear-test")
     let second = consumeAuditReport("clear-test")
     check second == ""
+
+suite "agent role enum and pool":
+  test "arAudit exists in AgentRole":
+    let role: AgentRole = arAudit
+    check $role == "arAudit"
+
+  test "isAuditRunning returns false when pool is empty":
+    check not isAuditRunning()
