@@ -109,6 +109,52 @@ proc withRepoLock*[T](repoPath: string, operation: proc(): T): T =
 
   result = operation()
 
+type
+  CommitLockFile* = object
+    pid*: int
+    timestamp*: float
+
+proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
+  ## Acquire a file-based transactional commit lock with retry and staleness detection.
+  ## Writes a JSON payload with PID and timestamp. Stale locks (>= 30s) are stolen.
+  ## Fresh locks cause polling retries up to CommitLockMaxRetries times.
+  let lockPath = commitLockPath(repoPath)
+  createDir(parentDir(lockPath))
+
+  for attempt in 0 ..< CommitLockMaxRetries:
+    if not fileExists(lockPath):
+      # Lock file absent — acquire it.
+      let currentPid = getCurrentProcessId()
+      let now = epochTime()
+      let payload = CommitLockFile(pid: currentPid, timestamp: now)
+      writeFile(lockPath, payload.toJson())
+      logDebug(&"commit lock acquired: {lockPath}")
+      defer:
+        if fileExists(lockPath):
+          removeFile(lockPath)
+        logDebug(&"commit lock released: {lockPath}")
+      result = operation()
+      return
+
+    # Lock file exists — check staleness.
+    let raw = readFile(lockPath)
+    let existing = fromJson(raw, CommitLockFile)
+    let age = epochTime() - existing.timestamp
+    if age >= float(CommitLockStalenessSeconds):
+      let holderPid = existing.pid
+      let durationStr = &"{age:.1f}s"
+      logWarn(&"stealing stale commit lock from PID {holderPid}, held for {durationStr}")
+      removeFile(lockPath)
+      continue
+
+    # Fresh lock — wait and retry.
+    sleep(CommitLockPollMs)
+
+  let maxWait = CommitLockMaxRetries * CommitLockPollMs
+  let maxWaitSeconds = maxWait div 1000
+  raise newException(IOError,
+    &"timed out after {maxWaitSeconds}s waiting for commit lock on {lockPath}")
+
 proc waitForWorktreeIndexLock*(lockPath: string) =
   ## Wait for a worktree index lock file to be released.
   ## Polls every WorktreeIndexLockPollMs up to WorktreeIndexLockMaxRetries times.
@@ -255,7 +301,7 @@ proc withPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T
     result = withPlanWorktreeImpl(repoPath, operation)
 
 proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T): T =
-  ## Thread-safe plan worktree access with file-based repo lock for write operations.
+  ## Thread-safe plan worktree access with file-based commit lock for write operations.
   ensurePlanWorktreeLockInitialized()
   {.cast(gcsafe).}:
     logDebug("plan worktree lock acquiring (write)")
@@ -264,7 +310,7 @@ proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: stri
     defer:
       release(planWorktreeLock)
       logDebug("plan worktree lock released (write)")
-    result = withRepoLock(repoPath, proc(): T =
+    result = withCommitLock(repoPath, proc(): T =
       withPlanWorktreeImpl(repoPath, operation)
     )
 

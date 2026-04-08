@@ -1,7 +1,7 @@
-## Tests for lock management: PID guard and stale git lock cleanup.
+## Tests for lock management: PID guard, stale git lock cleanup, and commit lock.
 
 import
-  std/[os, posix, strutils, tempfiles, times, unittest],
+  std/[os, posix, strformat, strutils, tempfiles, times, unittest],
   jsony,
   scriptorium/[git_ops, lock_management]
 
@@ -189,3 +189,110 @@ suite "cleanStaleGitLocks worktree locks":
     cleanStaleGitLocks(tmp)
     for lp in lockPaths:
       check not fileExists(lp)
+
+suite "commit lock":
+  test "acquiring commit lock writes correct JSON payload":
+    let tmp = createTempDir("commit_lock_write_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    var lockContent = ""
+    discard withCommitLock[int](tmp, proc(): int =
+      # Lock file should exist during the operation.
+      let lp = commitLockPath(tmp)
+      check fileExists(lp)
+      lockContent = readFile(lp)
+      result = 42
+    )
+    # Verify the payload that was written.
+    let parsed = fromJson(lockContent, CommitLockFile)
+    check parsed.pid == getCurrentProcessId()
+    check parsed.timestamp > 0.0
+
+  test "lock is deleted on normal release":
+    let tmp = createTempDir("commit_lock_release_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    discard withCommitLock[int](tmp, proc(): int =
+      result = 0
+    )
+    check not fileExists(commitLockPath(tmp))
+
+  test "lock is deleted when operation raises":
+    let tmp = createTempDir("commit_lock_exc_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    var raised = false
+    try:
+      discard withCommitLock[int](tmp, proc(): int =
+        raise newException(ValueError, "boom")
+      )
+    except ValueError:
+      raised = true
+    check raised
+    check not fileExists(commitLockPath(tmp))
+
+  test "stale lock is stolen with warning":
+    let tmp = createTempDir("commit_lock_stale_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    # Write a lock file with a timestamp older than the staleness threshold.
+    let staleTimestamp = epochTime() - float(CommitLockStalenessSeconds) - 10.0
+    let staleLock = CommitLockFile(pid: 999999, timestamp: staleTimestamp)
+    writeFile(commitLockPath(tmp), staleLock.toJson())
+
+    # withCommitLock should steal the stale lock and succeed.
+    var executed = false
+    discard withCommitLock[int](tmp, proc(): int =
+      executed = true
+      result = 0
+    )
+    check executed
+    check not fileExists(commitLockPath(tmp))
+
+  test "fresh lock causes retry and eventual timeout":
+    let tmp = createTempDir("commit_lock_timeout_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    # Write a fresh lock that will not be stale during the retry window.
+    let freshLock = CommitLockFile(pid: getCurrentProcessId(), timestamp: epochTime())
+    writeFile(commitLockPath(tmp), freshLock.toJson())
+
+    # Override constants are not possible, but the lock stays fresh so all
+    # retries will be exhausted. We use a small subset to keep the test fast.
+    # Since we cannot change the constants, we just verify the timeout raises.
+    var raised = false
+    try:
+      discard withCommitLock[int](tmp, proc(): int =
+        result = 0
+      )
+    except IOError:
+      raised = true
+      check "timed out" in getCurrentExceptionMsg()
+    check raised
+
+    # Clean up the lock file we created.
+    removeFile(commitLockPath(tmp))
+
+  test "successful acquisition after lock is released during retry window":
+    let tmp = createTempDir("commit_lock_retry_ok_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    # Write a lock that is almost stale — it will become stale during retries.
+    let almostStaleTimestamp = epochTime() - float(CommitLockStalenessSeconds) + 0.5
+    let almostStaleLock = CommitLockFile(pid: 999999, timestamp: almostStaleTimestamp)
+    writeFile(commitLockPath(tmp), almostStaleLock.toJson())
+
+    # withCommitLock should retry, detect staleness, steal, and succeed.
+    var executed = false
+    discard withCommitLock[int](tmp, proc(): int =
+      executed = true
+      result = 0
+    )
+    check executed
+    check not fileExists(commitLockPath(tmp))

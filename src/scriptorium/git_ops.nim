@@ -18,6 +18,10 @@ const
   ManagedRepoLockPidFileName* = "pid"
   OrchestratorPidFileName* = "orchestrator.pid"
   TicketBranchPrefix* = "scriptorium/ticket-"
+  CommitLockFileName* = "commit.lock"
+  CommitLockStalenessSeconds* = 30
+  CommitLockPollMs* = 100
+  CommitLockMaxRetries* = 50
 
 var
   processLock: Lock
@@ -160,6 +164,10 @@ proc managedRepoLockPath*(repoPath: string): string =
 proc managedAdminLockPath*(repoPath: string): string =
   ## Return the admin lock path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedLockDirName / ManagedAdminLockName
+
+proc commitLockPath*(repoPath: string): string =
+  ## Return the commit lock file path for one repository.
+  result = managedRepoRootPath(repoPath) / CommitLockFileName
 
 proc orchestratorPidPath*(repoPath: string): string =
   ## Return the orchestrator PID file path for one repository.
