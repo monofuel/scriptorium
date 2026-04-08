@@ -29,7 +29,7 @@ proc ensureWorktreeCreated*(repoPath: string, ticketRelPath: string): tuple[bran
 
   discard gitCheck(repoPath, "worktree", "remove", "--force", path)
   if dirExists(path):
-    removeDir(path)
+    forceRemoveDir(path)
 
   if gitCheck(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/" & branch) == 0:
     gitRun(repoPath, "branch", "-D", branch)
@@ -348,7 +348,7 @@ proc cleanupStaleTicketWorktrees*(repoPath: string, caller: string): seq[string]
     if normalizedPath.startsWith(managedRoot & "/") and not activeWorktrees.contains(path):
       discard gitCheck(repoPath, "worktree", "remove", "--force", path)
       if dirExists(path):
-        removeDir(path)
+        forceRemoveDir(path)
       result.add(path)
 
 proc worktreeElapsed(worktreePath: string): string =

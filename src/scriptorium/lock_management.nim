@@ -200,7 +200,7 @@ proc ensurePlanWorktreeReady*(repoPath: string, caller: string): string =
       # Worktree exists but git metadata is corrupt — recreate.
       logWarn(&"plan worktree corrupt, recreating: {planWorktree}")
       if dirExists(planWorktree):
-        removeDir(planWorktree)
+        forceRemoveDir(planWorktree)
       discard gitCheck(repoPath, "worktree", "prune")
       addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
       logDebug(&"plan worktree recreated: {planWorktree}")
@@ -213,14 +213,14 @@ proc ensurePlanWorktreeReady*(repoPath: string, caller: string): string =
     # First time or missing — create fresh.
     logDebug(&"plan worktree creating: {planWorktree}")
     if dirExists(planWorktree):
-      removeDir(planWorktree)
+      forceRemoveDir(planWorktree)
     discard gitCheck(repoPath, "worktree", "prune")
     try:
       addWorktreeWithRecovery(repoPath, planWorktree, PlanBranch)
     except:
       # Clean up partial state on failure.
       if dirExists(planWorktree):
-        removeDir(planWorktree)
+        forceRemoveDir(planWorktree)
       discard gitCheck(repoPath, "worktree", "prune")
       raise
     logDebug(&"plan worktree created: {planWorktree}")
@@ -235,7 +235,7 @@ proc teardownPlanWorktree*(repoPath: string, caller: string) =
     if removeRc != 0:
       logWarn(&"plan worktree teardown remove failed (rc={removeRc}): {planWorktree}")
       if dirExists(planWorktree):
-        removeDir(planWorktree)
+        forceRemoveDir(planWorktree)
     let pruneRc = gitCheck(repoPath, "worktree", "prune")
     if pruneRc != 0:
       logWarn(&"plan worktree teardown prune failed (rc={pruneRc})")

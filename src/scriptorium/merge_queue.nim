@@ -101,7 +101,7 @@ proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string
   except:
     # Clean up partial state on failure.
     if dirExists(masterWorktree):
-      removeDir(masterWorktree)
+      forceRemoveDir(masterWorktree)
     discard gitCheck(repoPath, "worktree", "prune")
     raise
   logDebug(&"master worktree ready: {masterWorktree}")
@@ -110,7 +110,7 @@ proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string
     if removeRc != 0:
       logWarn(&"master worktree remove failed (rc={removeRc}): {masterWorktree}")
       if dirExists(masterWorktree):
-        removeDir(masterWorktree)
+        forceRemoveDir(masterWorktree)
       discard gitCheck(repoPath, "worktree", "prune")
     logDebug(&"master worktree removed: {masterWorktree}")
 

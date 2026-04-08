@@ -177,7 +177,7 @@ proc orchestratorPidPath*(repoPath: string): string =
   ## Return the orchestrator PID file path for one repository.
   result = managedRepoRootPath(repoPath) / OrchestratorPidFileName
 
-proc forceRemoveDir(path: string) =
+proc forceRemoveDir*(path: string) =
   ## Remove a directory tree, falling back to rm -rf if removeDir fails.
   try:
     removeDir(path)
