@@ -2,7 +2,7 @@
 
 import
   std/[os, strutils, unittest],
-  scriptorium/[manager_agent, prompt_builders, prompt_catalog, shared_state, ticket_metadata]
+  scriptorium/[agent_runner, manager_agent, prompt_builders, prompt_catalog, shared_state, ticket_metadata]
 
 suite "buildManagerTicketsPrompt":
   test "renders single-area prompt with all placeholders":
@@ -105,3 +105,17 @@ suite "writeTicketsForAreaFromStrings":
     let docs = @["# My Ticket\n\nContent.\n\n**Area:** wrong-area"]
     expect ValueError:
       writeTicketsForAreaFromStrings(tmpDir, "correct-area", docs, 1)
+
+suite "executeManagerForArea":
+  test "sets continuationPromptBuilder on AgentRunRequest":
+    var capturedRequest: AgentRunRequest
+    let capturingRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      capturedRequest = request
+      AgentRunResult()
+
+    let tmpDir = getTempDir() / "test_manager_continuation"
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    discard executeManagerForArea("test-area", "Area content.", tmpDir, 1, capturingRunner)
+    check not capturedRequest.continuationPromptBuilder.isNil
