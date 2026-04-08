@@ -244,6 +244,7 @@ proc runInteractiveAskSession*(
         AskSessionTicketId,
         streamEventHandler,
         PlanHeartbeatIntervalMs,
+        AskReadOnlyTools,
       )
       enforceNoWrites(planPath, AskWriteScopeName)
 

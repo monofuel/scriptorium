@@ -37,6 +37,7 @@ type
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
     onEvent*: AgentEventHandler
+    allowedTools*: seq[string]
 
   AgentRunResult* = object
     backend*: Harness
@@ -170,6 +171,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       maxAttempts: request.maxAttempts,
       continuationPrompt: request.continuationPrompt,
       continuationPromptBuilder: request.continuationPromptBuilder,
+      allowedTools: request.allowedTools,
       onEvent: proc(event: ClaudeCodeStreamEvent) =
         ## Forward Claude Code streaming events to the optional agent callback.
         if not request.onEvent.isNil:

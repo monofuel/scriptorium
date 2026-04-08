@@ -12,6 +12,7 @@ const
   PlanLogDirName* = "logs"
   PlanWriteScopeName* = "scriptorium plan"
   PlanDefaultMaxAttempts = 1
+  AskReadOnlyTools* = @["Read", "Glob", "Grep", "Agent", "TodoWrite", "WebFetch", "AskUserQuestion"]
   PlanNoOutputTimeoutMs* = 600_000
   PlanHardTimeoutMs* = 7_200_000
   PlanHeartbeatIntervalMs* = 3000
@@ -36,6 +37,7 @@ proc runPlanArchitectRequest*(
   ticketId: string,
   onEvent: AgentEventHandler = nil,
   heartbeatIntervalMs: int = 0,
+  allowedTools: seq[string] = @[],
 ): AgentRunResult =
   ## Run one architect planning pass with shared harness settings.
   if runner.isNil:
@@ -55,6 +57,7 @@ proc runPlanArchitectRequest*(
     heartbeatIntervalMs: heartbeatIntervalMs,
     maxAttempts: PlanDefaultMaxAttempts,
     onEvent: onEvent,
+    allowedTools: allowedTools,
   ))
 
 proc runDoArchitectRequest*(

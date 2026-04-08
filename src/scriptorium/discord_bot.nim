@@ -151,6 +151,7 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
         cfg.agents.architect,
         prompt,
         DiscordChatTicketId,
+        allowedTools = AskReadOnlyTools,
       )
       enforceNoWrites(planPath, "scriptorium discord ask")
 
@@ -211,6 +212,7 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
           cfg.agents.architect,
           prompt,
           DiscordChatTicketId,
+          allowedTools = AskReadOnlyTools,
         )
         enforceNoWrites(planPath, "scriptorium discord chat")
 

@@ -55,6 +55,7 @@ type
     maxAttempts*: int
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
+    allowedTools*: seq[string]
 
   ClaudeCodeRunResult* = object
     command*: seq[string]
@@ -207,6 +208,11 @@ proc buildClaudeCodeExecArgs*(request: ClaudeCodeRunRequest): seq[string] =
     "--dangerously-skip-permissions",
     "--model", resolvedModel,
   ]
+
+  if request.allowedTools.len > 0:
+    let toolList = request.allowedTools.join(",")
+    result.add("--allowedTools")
+    result.add(toolList)
 
   let reasoningEffort = normalizeReasoningEffort(request.reasoningEffort)
   if reasoningEffort.len > 0:

@@ -17,4 +17,6 @@ If the user asks about available commands, the following are available:
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}{{CONVERSATION_HISTORY}}
 
+CRITICAL REMINDER: You are in read-only mode. Do NOT write, edit, or create any files. Do NOT use Write, Edit, Bash, or any file-modification tools. Only read files and answer questions.
+
 [{{USERNAME}}]: {{USER_MESSAGE}}

@@ -121,6 +121,7 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
         cfg.agents.architect,
         prompt,
         MattermostChatTicketId,
+        allowedTools = AskReadOnlyTools,
       )
       enforceNoWrites(planPath, "scriptorium mattermost ask")
 
@@ -182,6 +183,7 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
           cfg.agents.architect,
           prompt,
           MattermostChatTicketId,
+          allowedTools = AskReadOnlyTools,
         )
         enforceNoWrites(planPath, "scriptorium mattermost chat")
 
