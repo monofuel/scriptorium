@@ -157,7 +157,7 @@ proc specWasModified(planPath: string): bool =
   let untracked = gitCheck(planPath, "ls-files", "--error-unmatch", PlanSpecPath) != 0
   result = changed or untracked
 
-proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackOutput: string): bool =
+proc runArchitectLoopIteration*(repoPath: string, caller: string, runner: AgentRunner, feedbackOutput: string): bool =
   ## Run one architect loop iteration: build prompt, invoke architect, commit results.
   ## Returns true when spec.md was modified, false when the architect failed to produce changes.
   let cfg = loadConfig(repoPath)
@@ -166,7 +166,7 @@ proc runArchitectLoopIteration*(repoPath: string, runner: AgentRunner, feedbackO
     logWarn("loop goal is empty, skipping architect loop iteration")
     return false
 
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
     ensureIterationsDir(planPath)
     let recentIters = readRecentIterations(planPath)
     let iterNum = nextIterationNumber(planPath)

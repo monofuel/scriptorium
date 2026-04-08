@@ -9,8 +9,12 @@ const
   PlanBranch* = "scriptorium/plan"
   ManagedStateDirName* = ".scriptorium"
   ManagedWorktreeDirName* = "worktrees"
-  ManagedPlanWorktreeName* = "plan"
+  ManagedPlanWorktreeName* {.deprecated: "use PlanCaller* constants instead".} = "plan"
   ManagedMasterWorktreeName* = "master"
+  PlanCallerCli* = "plan-cli"
+  PlanCallerOrchestrator* = "plan-orchestrator"
+  PlanCallerDiscord* = "plan-discord"
+  PlanCallerMattermost* = "plan-mattermost"
   ManagedTicketWorktreeDirName* = "tickets"
   ManagedLockDirName* = "locks"
   ManagedRepoLockName* = "repo.lock"
@@ -145,9 +149,9 @@ proc managedWorktreeRootPath*(repoPath: string): string =
   ## Return the managed worktree root path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedWorktreeDirName
 
-proc managedPlanWorktreePath*(repoPath: string): string =
-  ## Return the managed plan worktree path for one repository.
-  result = managedWorktreeRootPath(repoPath) / ManagedPlanWorktreeName
+proc managedPlanWorktreePath*(repoPath: string, caller: string): string =
+  ## Return the managed plan worktree path for one caller role.
+  result = managedWorktreeRootPath(repoPath) / caller
 
 proc managedMasterWorktreePath*(repoPath: string): string =
   ## Return the managed master worktree path for one repository.

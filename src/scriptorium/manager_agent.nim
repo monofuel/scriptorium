@@ -114,7 +114,7 @@ proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     writeFile(ticketPath, ticketContent)
     inc currentId
 
-proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
+proc runManagerForAreas*(repoPath: string, caller: string, runner: AgentRunner = runAgent): bool =
   ## Run per-area manager agents serially with narrow plan branch locking.
   ## 1. Brief lock to snapshot area content.
   ## 2. No lock during agent execution.
@@ -127,7 +127,7 @@ proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool
 
   # Step 1: Brief lock to read area snapshots.
   var areas: seq[AreaSnapshot]
-  discard withPlanWorktree(repoPath, proc(planPath: string): bool =
+  discard withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
     if not hasRunnableSpecInPlanPath(planPath):
       return false
     let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
@@ -161,7 +161,7 @@ proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool
   for i in 0..<results.len:
     let areaId = results[i].areaId
     let ticketDocs = results[i].ticketDocs
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
       let nextId = nextTicketId(planPath)
       writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
       gitRun(planPath, "add", PlanTicketsOpenDir)
@@ -173,7 +173,7 @@ proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool
 
   # Update area hashes after all writes.
   if hasChanges:
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+    discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
       let currentHashes = computeAllAreaHashes(planPath)
       writeAreaHashes(planPath, currentHashes)
       gitRun(planPath, "add", AreaHashesPath)
@@ -197,9 +197,9 @@ proc managerAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
       managerResult: ticketDocs,
     ))
 
-proc launchManagerAreasAsync*(repoPath: string, maxAgents: int) =
+proc launchManagerAreasAsync*(repoPath: string, caller: string, maxAgents: int) =
   ## Launch per-area manager agents asynchronously for parallel execution.
-  discard withPlanWorktree(repoPath, proc(planPath: string): int =
+  discard withPlanWorktree(repoPath, caller, proc(planPath: string): int =
     if not hasRunnableSpecInPlanPath(planPath):
       return 0
     let areasToProcess = areasNeedingTicketsInPlanPath(planPath)

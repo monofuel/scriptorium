@@ -22,7 +22,7 @@ suite "ticket difficulty prediction":
           timeoutKind: "none",
         )
 
-      runTicketPrediction(repoPath, "tickets/in-progress/0099-pred.md", predictionRunner)
+      runTicketPrediction(repoPath, PlanCallerCli, "tickets/in-progress/0099-pred.md", predictionRunner)
 
       let (ticketContent, rc) = execCmdEx(
         "git -C " & quoteShell(repoPath) & " show scriptorium/plan:tickets/in-progress/0099-pred.md"
@@ -50,7 +50,7 @@ suite "ticket difficulty prediction":
         )
 
       # Should not raise - prediction is best-effort.
-      runTicketPrediction(repoPath, "tickets/in-progress/0098-predfail.md", failRunner)
+      runTicketPrediction(repoPath, PlanCallerCli, "tickets/in-progress/0098-predfail.md", failRunner)
 
       let (ticketContent, rc) = execCmdEx(
         "git -C " & quoteShell(repoPath) & " show scriptorium/plan:tickets/in-progress/0098-predfail.md"

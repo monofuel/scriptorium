@@ -88,13 +88,13 @@ proc investigateStuckTicket*(repoPath: string, runner: AgentRunner, ticketId: st
   logInfo(&"stuck ticket {ticketId}: investigation finished (exit={agentResult.exitCode})")
   result = true
 
-proc investigateAndRecoverStuckTickets*(repoPath: string, runner: AgentRunner): int =
+proc investigateAndRecoverStuckTickets*(repoPath: string, caller: string, runner: AgentRunner): int =
   ## Investigate stuck tickets and move recoverable ones back to open.
   ## Replaces the old recoverStuckTickets with architect-driven investigation.
   ## Returns the number of tickets recovered.
 
   # Phase 1: Snapshot recoverable stuck tickets under a brief lock.
-  let tickets = withPlanWorktree(repoPath, proc(planPath: string): seq[StuckTicketInfo] =
+  let tickets = withPlanWorktree(repoPath, caller, proc(planPath: string): seq[StuckTicketInfo] =
     var items: seq[StuckTicketInfo]
     let stuckFiles = listMarkdownFiles(planPath / PlanTicketsStuckDir)
     for ticketPath in stuckFiles:
@@ -127,7 +127,7 @@ proc investigateAndRecoverStuckTickets*(repoPath: string, runner: AgentRunner): 
       investigated.add(false)
 
   # Phase 3: Move tickets from stuck to open under the write lock.
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
     var recovered = 0
     for i, ticket in tickets:
       # Re-read content in case it changed.

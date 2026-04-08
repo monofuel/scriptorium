@@ -27,12 +27,12 @@ proc isScriptoriumProcess(pid: int): bool =
   let cmdline = readFile(cmdlinePath)
   result = "scriptorium" in cmdline
 
-proc cleanOrphanedWorktrees*(repoPath: string): int =
+proc cleanOrphanedWorktrees*(repoPath: string, caller: string): int =
   ## Step 1: Clean orphaned worktrees and remove locks held by dead PIDs.
   if not hasPlanBranch(repoPath):
     return 0
 
-  let cleaned = cleanupStaleTicketWorktrees(repoPath)
+  let cleaned = cleanupStaleTicketWorktrees(repoPath, caller)
   for path in cleaned:
     logInfo(&"recovery: cleaned orphaned worktree {path}")
   result = cleaned.len
@@ -96,12 +96,12 @@ proc detectStaleAgentProcesses*(repoPath: string): int =
       elif killRc == 0:
         logWarn(&"recovery: stale agent process {markerPid} still running in {worktreePath}, manual intervention may be needed")
 
-proc reconcileDirtyPlanBranch*(repoPath: string): string =
+proc reconcileDirtyPlanBranch*(repoPath: string, caller: string): string =
   ## Step 3: Reconcile dirty plan branch.
   if not hasPlanBranch(repoPath):
     return "clean"
 
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): string =
     # Check for journal first.
     if journalExists(planPath):
       logInfo("recovery: journal file found, replaying or rolling back")
@@ -137,13 +137,13 @@ proc reconcileDirtyPlanBranch*(repoPath: string): string =
     result = "clean"
   )
 
-proc completeAlreadyMergedTickets*(repoPath: string): int =
+proc completeAlreadyMergedTickets*(repoPath: string, caller: string): int =
   ## Step 4: Complete in-progress tickets whose branches are already merged into master.
   ## Scans both merge queue items and bare in-progress tickets.
   if not hasPlanBranch(repoPath):
     return 0
 
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
     let defaultBranch = resolveDefaultBranch(repoPath)
     var completed = 0
 
@@ -228,13 +228,13 @@ proc completeAlreadyMergedTickets*(repoPath: string): int =
     result = completed
   )
 
-proc reopenOrphanedInProgressTickets*(repoPath: string): int =
+proc reopenOrphanedInProgressTickets*(repoPath: string, caller: string): int =
   ## Step 5: Reopen in-progress tickets that are not merged and not in the merge queue.
   ## At startup no agents are running, so any such ticket was interrupted by a crash.
   if not hasPlanBranch(repoPath):
     return 0
 
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
     let defaultBranch = resolveDefaultBranch(repoPath)
     var reopened = 0
     let inProgressDir = planPath / PlanTicketsInProgressDir
@@ -290,14 +290,14 @@ proc reopenOrphanedInProgressTickets*(repoPath: string): int =
     result = reopened
   )
 
-proc recoverFromCrash*(repoPath: string): RecoverySummary =
+proc recoverFromCrash*(repoPath: string, caller: string): RecoverySummary =
   ## Execute the full startup recovery sequence before the first orchestrator tick.
   cleanStaleGitLocks(repoPath)
-  result.worktreesCleaned = cleanOrphanedWorktrees(repoPath)
+  result.worktreesCleaned = cleanOrphanedWorktrees(repoPath, caller)
   result.staleMarkersCleared = detectStaleAgentProcesses(repoPath)
-  result.planAction = reconcileDirtyPlanBranch(repoPath)
-  result.alreadyMergedCompleted = completeAlreadyMergedTickets(repoPath)
-  result.orphanedReopened = reopenOrphanedInProgressTickets(repoPath)
+  result.planAction = reconcileDirtyPlanBranch(repoPath, caller)
+  result.alreadyMergedCompleted = completeAlreadyMergedTickets(repoPath, caller)
+  result.orphanedReopened = reopenOrphanedInProgressTickets(repoPath, caller)
 
   # Step 6: Log recovery summary.
   if result.worktreesCleaned == 0 and result.staleMarkersCleared == 0 and result.planAction == "clean" and result.alreadyMergedCompleted == 0 and result.orphanedReopened == 0:
@@ -323,7 +323,7 @@ proc buildRecoveryTicketContent*(testOutput: string, commitHash: string): string
     "Keep the fix minimal and targeted.\n\n" &
     outputSection
 
-proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string, commitHash: string) =
+proc runRecoveryAgent*(repoPath: string, caller: string, runner: AgentRunner, testOutput: string, commitHash: string) =
   ## Create a recovery ticket and execute it with a coding agent to fix unhealthy main.
   ## Uses the architect model for higher quality fixes.
   let cfg = loadConfig(repoPath)
@@ -331,7 +331,7 @@ proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string
   let ticketContent = buildRecoveryTicketContent(testOutput, shortHash)
 
   # Create recovery ticket on plan branch.
-  let ticketFileName = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+  let ticketFileName = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): string =
     let ticketId = nextTicketId(planPath)
     let idStr = align($ticketId, 4, '0')
     let fileName = idStr & "-recovery-" & shortHash & ".md"
@@ -346,7 +346,7 @@ proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string
   )
 
   # Assign and execute. assignOldestOpenTicket picks up the recovery ticket.
-  let assignment = assignOldestOpenTicket(repoPath)
+  let assignment = assignOldestOpenTicket(repoPath, caller)
   if assignment.inProgressTicket.len == 0:
     logWarn("recovery: failed to assign recovery ticket")
     return
@@ -355,7 +355,7 @@ proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string
   logInfo(&"recovery: executing recovery agent for {ticketId} (model={cfg.agents.architect.model})")
 
   # Execute with architect model config for higher quality.
-  let agentResult = executeAssignedTicket(repoPath, assignment, runner, cfg.agents.architect)
+  let agentResult = executeAssignedTicket(repoPath, caller, assignment, runner, cfg.agents.architect)
   if agentResult.submitted:
     logInfo(&"recovery: agent submitted fix for {ticketId}")
   else:

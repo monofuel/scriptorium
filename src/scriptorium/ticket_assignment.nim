@@ -49,9 +49,9 @@ proc oldestOpenTicketInPlanPath*(planPath: string): string =
       bestRel = rel
   result = bestRel
 
-proc oldestOpenTicket*(repoPath: string): string =
+proc oldestOpenTicket*(repoPath: string, caller: string): string =
   ## Return the oldest open ticket path in the plan branch.
-  result = withPlanWorktree(repoPath, proc(planPath: string): string =
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
     oldestOpenTicketInPlanPath(planPath)
   )
 
@@ -162,9 +162,9 @@ proc listActiveTicketWorktreesInPlanPath*(planPath: string): seq[ActiveTicketWor
     ))
   result.sort(proc(a: ActiveTicketWorktree, b: ActiveTicketWorktree): int = cmp(a.ticketPath, b.ticketPath))
 
-proc listActiveTicketWorktrees*(repoPath: string): seq[ActiveTicketWorktree] =
+proc listActiveTicketWorktrees*(repoPath: string, caller: string): seq[ActiveTicketWorktree] =
   ## Return active in-progress ticket worktrees from the plan branch.
-  result = withPlanWorktree(repoPath, proc(planPath: string): seq[ActiveTicketWorktree] =
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): seq[ActiveTicketWorktree] =
     listActiveTicketWorktreesInPlanPath(planPath)
   )
 
@@ -207,10 +207,10 @@ proc doneTicketIdsInPlanPath(planPath: string): HashSet[string] =
     let rel = PlanTicketsDoneDir / extractFilename(ticketPath)
     result.incl(ticketIdFromTicketPath(rel))
 
-proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
+proc assignOldestOpenTicket*(repoPath: string, caller: string): TicketAssignment =
   ## Move the oldest assignable open ticket to in-progress and attach a code worktree.
   ## Skips tickets whose dependencies are not yet in done.
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): TicketAssignment =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): TicketAssignment =
     let openTickets = openTicketsByIdInPlanPath(planPath)
     if openTickets.len == 0:
       return TicketAssignment()
@@ -265,12 +265,12 @@ proc assignOldestOpenTicket*(repoPath: string): TicketAssignment =
     )
   )
 
-proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment] =
+proc assignOpenTickets*(repoPath: string, caller: string, maxAgents: int): seq[TicketAssignment] =
   ## Assign multiple open tickets concurrently when they touch independent areas.
   ## Scans open tickets in ID order (oldest first), skipping tickets whose area
   ## already has an in-progress ticket or was claimed earlier in this batch.
   ## Returns a sequence of assignment records for the caller to execute.
-  result = withLockedPlanWorktree(repoPath, proc(planPath: string): seq[TicketAssignment] =
+  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): seq[TicketAssignment] =
     let openTickets = openTicketsByIdInPlanPath(planPath)
     if openTickets.len == 0:
       return @[]
@@ -332,10 +332,10 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int): seq[TicketAssignment]
     result = assignments
   )
 
-proc cleanupStaleTicketWorktrees*(repoPath: string): seq[string] =
+proc cleanupStaleTicketWorktrees*(repoPath: string, caller: string): seq[string] =
   ## Remove managed code worktrees that no longer correspond to in-progress tickets.
   let managedRoot = normalizeAbsolutePath(managedTicketWorktreeRootPath(repoPath))
-  let activeWorktrees = withLockedPlanWorktree(repoPath, proc(planPath: string): HashSet[string] =
+  let activeWorktrees = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): HashSet[string] =
     result = initHashSet[string]()
     for ticketPath in listMarkdownFiles(planPath / PlanTicketsInProgressDir):
       let worktreePath = parseWorktreeFromTicketContent(readFile(ticketPath))
@@ -366,9 +366,9 @@ proc worktreeElapsed(worktreePath: string): string =
 const
   DefaultRecentDoneCount = 5
 
-proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
+proc readOrchestratorStatus*(repoPath: string, caller: string): OrchestratorStatus =
   ## Return plan ticket counts, active agent metadata, elapsed times, recent done tickets, and first-attempt success rate.
-  result = withPlanWorktree(repoPath, proc(planPath: string): OrchestratorStatus =
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): OrchestratorStatus =
     result = OrchestratorStatus(
       openTickets: listMarkdownFiles(planPath / PlanTicketsOpenDir).len,
       inProgressTickets: listMarkdownFiles(planPath / PlanTicketsInProgressDir).len,
@@ -459,9 +459,9 @@ proc readOrchestratorStatus*(repoPath: string): OrchestratorStatus =
           result.waitingTickets.add(WaitingTicket(ticketId: ticketId, dependsOn: unsatisfied))
   )
 
-proc validateTicketStateInvariant*(repoPath: string) =
+proc validateTicketStateInvariant*(repoPath: string, caller: string) =
   ## Validate that no ticket markdown filename exists in more than one state directory.
-  discard withPlanWorktree(repoPath, proc(planPath: string): int =
+  discard withPlanWorktree(repoPath, caller, proc(planPath: string): int =
     ensureUniqueTicketStateInPlanPath(planPath)
     0
   )
@@ -535,11 +535,11 @@ proc loadOrchestratorEndpoint*(repoPath: string): OrchestratorEndpoint =
   let cfg = loadConfig(repoPath)
   result = parseEndpoint(cfg.endpoints.local)
 
-proc recoverStuckTickets*(repoPath: string): int =
+proc recoverStuckTickets*(repoPath: string, caller: string): int =
   ## Move recoverable stuck tickets back to open for retry.
   ## A ticket is recoverable if its stuck count is below MaxStuckCount.
   ## Returns the number of tickets recovered.
-  result = withPlanWorktree(repoPath, proc(planPath: string): int =
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): int =
     let stuckFiles = listMarkdownFiles(planPath / PlanTicketsStuckDir)
     var recovered = 0
     for ticketPath in stuckFiles:

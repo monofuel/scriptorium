@@ -68,7 +68,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0032-fail.md", "# Ticket 32\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 900)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     let before = planCommitCount(tmp)
 
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
@@ -85,7 +85,7 @@ suite "logging":
         timeoutKind: "hard",
       )
 
-    let runResult = executeAssignedTicket(tmp, assignment, fakeRunner)
+    let runResult = executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
     check runResult.exitCode == 137
 
     let after = planCommitCount(tmp)
@@ -105,7 +105,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0033-stall.md", "# Ticket 33\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 902)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
@@ -127,7 +127,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
 
     check callCount == 2
     check capturedRequests.len == 2
@@ -145,7 +145,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0034-stall.md", "# Ticket 34\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 903)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     let before = planCommitCount(tmp)
 
     var callCount = 0
@@ -164,7 +164,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
     let after = planCommitCount(tmp)
 
     check callCount == 2
@@ -182,7 +182,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0035-stall.md", "# Ticket 35\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 904)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo PASS\nintegration-test:\n\t@echo PASS\n")
 
     var callCount = 0
@@ -204,7 +204,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunnerPass)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunnerPass)
 
     check callCount == 2
     check capturedRequests.len == 2
@@ -219,7 +219,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0036-stall.md", "# Ticket 36\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 905)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo FAILURE OUTPUT\n\t@false\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
@@ -241,7 +241,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunnerFail)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunnerFail)
 
     check callCount == 2
     check capturedRequests.len == 2
@@ -257,7 +257,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0037-testwall.md", "# Ticket 37\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 906)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     let ticketId = "0037"
@@ -279,7 +279,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunnerStall)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunnerStall)
 
     check callCount == 2
     check ticketTestWalls.hasKey(ticketId)
@@ -295,7 +295,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0038-cleanup.md", "# Ticket 38\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 907)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     let ticketId = "0038"
 
     check ticketStartTimes.hasKey(ticketId)
@@ -315,7 +315,7 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunnerFail)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunnerFail)
 
     check not ticketStartTimes.hasKey(ticketId)
     check not ticketAttemptCounts.hasKey(ticketId)
@@ -329,7 +329,7 @@ suite "logging":
     addTicketToPlan(tmp, "open", "0050-stale.md", "# Ticket 50\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 901)
 
-    let assignment1 = assignOldestOpenTicket(tmp)
+    let assignment1 = assignOldestOpenTicket(tmp, PlanCallerCli)
 
     proc fakeRunnerFirst(request: AgentRunRequest): AgentRunResult =
       ## Write a stale file and commit it, then exit non-zero without submit_pr.
@@ -347,9 +347,9 @@ suite "logging":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment1, fakeRunnerFirst)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment1, fakeRunnerFirst)
 
-    let assignment2 = assignOldestOpenTicket(tmp)
+    let assignment2 = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment2.inProgressTicket.len > 0
 
     let (logOutput, logRc) = execCmdEx(

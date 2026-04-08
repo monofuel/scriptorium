@@ -92,7 +92,7 @@ suite "orchestrator final v1 flow":
     check masterRc == 0
     check masterFile.strip() == "done"
 
-    validateTicketStateInvariant(tmp)
+    validateTicketStateInvariant(tmp, PlanCallerCli)
     validateTransitionCommitInvariant(tmp)
 
 suite "orchestrator agent enqueue with fakes":
@@ -112,11 +112,11 @@ suite "orchestrator agent enqueue with fakes":
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
-      let firstAssignment = assignOldestOpenTicket(repoPath)
+      let firstAssignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
       writeFile(firstAssignment.worktree / "ticket-output.txt", "done\n")
       runCmdOrDie("git -C " & quoteShell(firstAssignment.worktree) & " add ticket-output.txt")
       runCmdOrDie("git -C " & quoteShell(firstAssignment.worktree) & " commit -m ticket-output")
-      discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
+      discard enqueueMergeRequest(repoPath, PlanCallerCli, firstAssignment, "first summary")
 
       proc fakeRunner(request: AgentRunRequest): AgentRunResult =
         ## Ticket 0002 returns without submit_pr so it gets reopened as stalled.
@@ -163,7 +163,7 @@ suite "orchestrator agent enqueue with fakes":
           )
         ]
 
-      let syncedAreas = syncAreasFromSpec(repoPath, architectGenerator)
+      let syncedAreas = syncAreasFromSpec(repoPath, PlanCallerCli, architectGenerator)
       check syncedAreas
       check architectCalls == 1
 
@@ -174,7 +174,7 @@ suite "orchestrator agent enqueue with fakes":
       check "areas/01-e2e.md" in filesAfterPlanning
       check "tickets/open/0001-e2e-happy-path.md" in filesAfterPlanning
 
-      let assignment = assignOldestOpenTicket(repoPath)
+      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
       check assignment.inProgressTicket == "tickets/in-progress/0001-e2e-happy-path.md"
       writeFile(assignment.worktree / "e2e-output.txt", "done\n")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add e2e-output.txt")
@@ -199,12 +199,12 @@ suite "orchestrator agent enqueue with fakes":
           timeoutKind: "none",
         )
 
-      discard executeAssignedTicket(repoPath, assignment, fakeRunner)
+      discard executeAssignedTicket(repoPath, PlanCallerCli, assignment, fakeRunner)
       let pending = pendingQueueFiles(repoPath)
       check pending.len == 1
       check pending[0] == "queue/merge/pending/0001-0001.md"
 
-      let processed = processMergeQueue(repoPath, noopRunner)
+      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -222,7 +222,7 @@ suite "orchestrator agent enqueue with fakes":
       )
       check ancestorRc == 0
 
-      validateTicketStateInvariant(repoPath)
+      validateTicketStateInvariant(repoPath, PlanCallerCli)
       validateTransitionCommitInvariant(repoPath)
     )
 
@@ -405,8 +405,8 @@ suite "concurrent agent execution":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-x\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-y\n")
 
-    let assignment1 = assignOldestOpenTicket(tmp)
-    let assignment2 = assignOldestOpenTicket(tmp)
+    let assignment1 = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment2 = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment1.inProgressTicket.len > 0
     check assignment2.inProgressTicket.len > 0
 
@@ -550,8 +550,8 @@ suite "concurrent agent execution":
     stallCfg.timeouts.codingAgentMaxAttempts = 2
     writeScriptoriumConfig(tmp, stallCfg)
 
-    let assignment1 = assignOldestOpenTicket(tmp)
-    let assignment2 = assignOldestOpenTicket(tmp)
+    let assignment1 = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment2 = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment1.inProgressTicket.len > 0
     check assignment2.inProgressTicket.len > 0
 
@@ -597,8 +597,8 @@ suite "concurrent agent execution":
         timeoutKind: "none",
       )
 
-    let result1 = executeAssignedTicket(tmp, assignment1, stallingRunner)
-    let result2 = executeAssignedTicket(tmp, assignment2, submittingRunner)
+    let result1 = executeAssignedTicket(tmp, PlanCallerCli, assignment1, stallingRunner)
+    let result2 = executeAssignedTicket(tmp, PlanCallerCli, assignment2, submittingRunner)
 
     check stallCallCount == 2
     check result1.submitted == false

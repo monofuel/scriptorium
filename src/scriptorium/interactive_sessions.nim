@@ -40,7 +40,7 @@ proc runInteractivePlanSession*(
   let cfg = loadConfig(repoPath)
   acquireAdminLock(repoPath)
   defer: releaseAdminLock(repoPath)
-  discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): int =
     if not quiet:
       echo "scriptorium: interactive planning session (type /help for commands, /quit to exit)"
     var history: seq[PlanTurn] = @[]
@@ -166,7 +166,7 @@ proc runInteractiveAskSession*(
   let cfg = loadConfig(repoPath)
   acquireAdminLock(repoPath)
   defer: releaseAdminLock(repoPath)
-  discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): int =
     if not quiet:
       echo "scriptorium: ask session (read-only, type /help for commands, /quit to exit)"
     var history: seq[PlanTurn] = @[]

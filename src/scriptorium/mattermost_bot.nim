@@ -61,7 +61,7 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
   var specChanged = false
   var response = ""
   try:
-    response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+    response = withLockedPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
       let existingSpec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractivePlanPrompt(repoPath, planPath, existingSpec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -111,7 +111,7 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
-    response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+    response = withLockedPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -173,7 +173,7 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
+      response = withLockedPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
         let spec = loadSpecFromPlanPath(planPath)
         let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
         let agentResult = runPlanArchitectRequest(
@@ -248,14 +248,14 @@ proc chatWorkerThread(args: ChatThreadArgs) {.thread.} =
   of chatModeIgnore:
     logDebug(&"ignoring message from {username} (classified as human-to-human)")
 
-proc resolveCommand*(repoPath: string, cmd: string): string =
+proc resolveCommand*(repoPath: string, caller: string, cmd: string): string =
   ## Map a command string to its response text.
   ## Returns empty string for "restart" (handled separately).
   case cmd
   of "status":
-    result = formatStatusMessage(repoPath)
+    result = formatStatusMessage(repoPath, caller)
   of "queue":
-    result = formatQueueMessage(repoPath)
+    result = formatQueueMessage(repoPath, caller)
   of "pause":
     result = handlePause(repoPath)
   of "resume":
@@ -273,7 +273,7 @@ proc handleCommand(client: MostyClient, repoPath: string, channelId: string, cmd
     discard client.createPost(channelId, "Restarting...")
     handleRestart()
     return
-  let response = resolveCommand(repoPath, cmd)
+  let response = resolveCommand(repoPath, PlanCallerMattermost, cmd)
   let truncated = truncateMessage(response)
   discard client.createPost(channelId, truncated)
 

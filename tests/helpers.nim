@@ -87,7 +87,7 @@ proc writeOrchestratorEndpointConfig*(repoPath: string, portOffset: int, maxAtte
 proc withPlanWorktree*(repoPath: string, suffix: string, action: proc(planPath: string)) =
   ## Open scriptorium/plan via the persistent plan worktree for direct test mutations.
   discard suffix
-  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
+  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): bool =
     action(planPath)
     result = true
   )

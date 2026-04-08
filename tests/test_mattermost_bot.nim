@@ -1,7 +1,7 @@
 import
   std/[strutils, tables],
   mosty,
-  scriptorium/[chat_common, mattermost_bot, shared_state]
+  scriptorium/[chat_common, git_ops, mattermost_bot, shared_state]
 
 # -- convertPostListToTurns tests --
 
@@ -111,20 +111,20 @@ proc testConvertSkipsMissingPost() =
 
 proc testResolveCommandHelp() =
   ## Verify the help command returns help text.
-  let response = resolveCommand("/tmp/nonexistent", "help")
+  let response = resolveCommand("/tmp/nonexistent", PlanCallerCli, "help")
   doAssert "/status" in response
   doAssert "/help" in response
   echo "[OK] resolveCommand help"
 
 proc testResolveCommandUnknown() =
   ## Verify unknown commands return the expected error format.
-  let response = resolveCommand("/tmp/nonexistent", "foobar")
+  let response = resolveCommand("/tmp/nonexistent", PlanCallerCli, "foobar")
   doAssert response == "Unknown command: !foobar"
   echo "[OK] resolveCommand unknown"
 
 proc testResolveCommandRestart() =
   ## Verify restart returns empty string (handled separately).
-  let response = resolveCommand("/tmp/nonexistent", "restart")
+  let response = resolveCommand("/tmp/nonexistent", PlanCallerCli, "restart")
   doAssert response == ""
   echo "[OK] resolveCommand restart"
 

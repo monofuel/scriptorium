@@ -33,9 +33,9 @@ proc truncateMessage*(msg: string, limit: int): string =
     let markerLen = TruncatedMarker.len
     result = msg[0 ..< limit - markerLen] & TruncatedMarker
 
-proc formatStatusMessage*(repoPath: string): string =
+proc formatStatusMessage*(repoPath: string, caller: string): string =
   ## Build the /status response string from orchestrator state.
-  let status = readOrchestratorStatus(repoPath)
+  let status = readOrchestratorStatus(repoPath, caller)
   var lines: seq[string] = @[]
 
   # Orchestrator running check.
@@ -85,11 +85,11 @@ proc formatStatusMessage*(repoPath: string): string =
 
   result = lines.join("\n")
 
-proc formatQueueMessage*(repoPath: string): string =
+proc formatQueueMessage*(repoPath: string, caller: string): string =
   ## Build the /queue response string from plan branch state.
   var lines: seq[string] = @[]
 
-  let queueResult = withPlanWorktree(repoPath, proc(planPath: string): string =
+  let queueResult = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
     var inner: seq[string] = @[]
 
     # Merge queue items.

@@ -11,6 +11,10 @@ const
   WorktreeIndexLockMaxRetries* = 25
 
 var
+  # Single in-process mutex protecting the plan worktree. Each process uses
+  # only one caller role, so a single lock is correct even with per-caller
+  # worktree paths. Cross-process isolation is provided by the distinct
+  # worktree directories.
   planWorktreeLock*: Lock
   planWorktreeLockInitialized* = false
 
@@ -169,18 +173,18 @@ proc waitForWorktreeIndexLock*(lockPath: string) =
   raise newException(IOError,
     &"timed out waiting for worktree index lock: {lockPath}")
 
-proc ensurePlanWorktreeReady*(repoPath: string): string =
+proc ensurePlanWorktreeReady*(repoPath: string, caller: string): string =
   ## Ensure the persistent plan worktree exists and is on the latest plan branch state.
   ## Internal: callers must hold planWorktreeLock.
   if gitCheck(repoPath, "rev-parse", "--verify", PlanBranch) != 0:
     raise newException(ValueError, "scriptorium/plan branch does not exist")
 
-  let planWorktree = managedPlanWorktreePath(repoPath)
+  let planWorktree = managedPlanWorktreePath(repoPath, caller)
   let gitFile = planWorktree / ".git"
 
   if dirExists(planWorktree) and fileExists(gitFile):
     # Wait for any in-progress git operations on this worktree.
-    let wtIndexLock = repoPath / ".git" / "worktrees" / ManagedPlanWorktreeName / "index.lock"
+    let wtIndexLock = repoPath / ".git" / "worktrees" / caller / "index.lock"
     waitForWorktreeIndexLock(wtIndexLock)
 
     # Existing worktree — reset to latest plan branch tip.
@@ -216,9 +220,9 @@ proc ensurePlanWorktreeReady*(repoPath: string): string =
 
   result = planWorktree
 
-proc teardownPlanWorktree*(repoPath: string) =
+proc teardownPlanWorktree*(repoPath: string, caller: string) =
   ## Remove the persistent plan worktree on clean shutdown.
-  let planWorktree = managedPlanWorktreePath(repoPath)
+  let planWorktree = managedPlanWorktreePath(repoPath, caller)
   if dirExists(planWorktree):
     let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", planWorktree)
     if removeRc != 0:
@@ -281,14 +285,14 @@ proc waitForAdminLock*(repoPath: string) =
       logged = true
     sleep(AdminLockPollIntervalMs)
 
-proc withPlanWorktreeImpl*[T](repoPath: string, operation: proc(planPath: string): T): T =
+proc withPlanWorktreeImpl*[T](repoPath: string, caller: string, operation: proc(planPath: string): T): T =
   ## Provide the persistent plan worktree to the operation.
   ## Internal: callers must hold planWorktreeLock.
   waitForAdminLock(repoPath)
-  let planWorktree = ensurePlanWorktreeReady(repoPath)
+  let planWorktree = ensurePlanWorktreeReady(repoPath, caller)
   result = operation(planWorktree)
 
-proc withPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T): T =
+proc withPlanWorktree*[T](repoPath: string, caller: string, operation: proc(planPath: string): T): T =
   ## Thread-safe plan worktree access for read-only operations.
   ensurePlanWorktreeLockInitialized()
   {.cast(gcsafe).}:
@@ -298,9 +302,9 @@ proc withPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T
     defer:
       release(planWorktreeLock)
       logDebug("plan worktree lock released (read-only)")
-    result = withPlanWorktreeImpl(repoPath, operation)
+    result = withPlanWorktreeImpl(repoPath, caller, operation)
 
-proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: string): T): T =
+proc withLockedPlanWorktree*[T](repoPath: string, caller: string, operation: proc(planPath: string): T): T =
   ## Thread-safe plan worktree access with file-based commit lock for write operations.
   ensurePlanWorktreeLockInitialized()
   {.cast(gcsafe).}:
@@ -311,7 +315,7 @@ proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: stri
       release(planWorktreeLock)
       logDebug("plan worktree lock released (write)")
     result = withCommitLock(repoPath, proc(): T =
-      withPlanWorktreeImpl(repoPath, operation)
+      withPlanWorktreeImpl(repoPath, caller, operation)
     )
 
 type

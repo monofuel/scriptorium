@@ -44,7 +44,7 @@ suite "cleanOrphanedWorktrees":
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let cleaned = cleanOrphanedWorktrees(tmpDir)
+    let cleaned = cleanOrphanedWorktrees(tmpDir, PlanCallerCli)
     check cleaned == 0
 
   test "cleans worktree lock held by dead PID":
@@ -58,7 +58,7 @@ suite "cleanOrphanedWorktrees":
     # Use PID 99999999 which is almost certainly not running.
     writeFile(worktreeGitDir / "locked", "locked by PID 99999999")
 
-    let cleaned = cleanOrphanedWorktrees(tmpDir)
+    let cleaned = cleanOrphanedWorktrees(tmpDir, PlanCallerCli)
     check cleaned >= 1
     check not fileExists(worktreeGitDir / "locked")
 
@@ -96,7 +96,7 @@ suite "reconcileDirtyPlanBranch":
     makeTestRepoWithPlanBranch(tmpDir)
     defer: removeDir(tmpDir)
 
-    let action = reconcileDirtyPlanBranch(tmpDir)
+    let action = reconcileDirtyPlanBranch(tmpDir, PlanCallerCli)
     check action == "clean"
 
   test "returns clean when no plan branch exists":
@@ -104,7 +104,7 @@ suite "reconcileDirtyPlanBranch":
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let action = reconcileDirtyPlanBranch(tmpDir)
+    let action = reconcileDirtyPlanBranch(tmpDir, PlanCallerCli)
     check action == "clean"
 
   test "commits uncommitted changes on plan branch":
@@ -113,7 +113,7 @@ suite "reconcileDirtyPlanBranch":
     defer: removeDir(tmpDir)
 
     # Create a plan worktree, add a dirty file, then remove the worktree.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     writeFile(planWorktree / "dirty-file.txt", "uncommitted content")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
@@ -139,7 +139,7 @@ suite "reconcileDirtyPlanBranch":
     defer: removeDir(tmpDir)
 
     # Create plan worktree with a journal.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
 
     let steps = @[
@@ -150,7 +150,7 @@ suite "reconcileDirtyPlanBranch":
     # Simulate crash: journal exists but steps not executed.
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let action = reconcileDirtyPlanBranch(tmpDir)
+    let action = reconcileDirtyPlanBranch(tmpDir, PlanCallerCli)
     check action == "journal-rolled-back"
 
 suite "completeAlreadyMergedTickets":
@@ -159,7 +159,7 @@ suite "completeAlreadyMergedTickets":
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let completed = completeAlreadyMergedTickets(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir, PlanCallerCli)
     check completed == 0
 
   test "returns 0 when merge queue is empty":
@@ -167,7 +167,7 @@ suite "completeAlreadyMergedTickets":
     makeTestRepoWithPlanBranch(tmpDir)
     defer: removeDir(tmpDir)
 
-    let completed = completeAlreadyMergedTickets(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir, PlanCallerCli)
     check completed == 0
 
   test "completes already-merged ticket":
@@ -185,7 +185,7 @@ suite "completeAlreadyMergedTickets":
     runCmdOrDie(&"git -C {tmpDir} merge --no-ff {ticketBranch} -m 'merge ticket 0099'")
 
     # Add a merge queue entry and in-progress ticket on the plan branch.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
 
     let ticketContent = "# Ticket 0099\nFake ticket for testing."
@@ -196,7 +196,7 @@ suite "completeAlreadyMergedTickets":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add test ticket and queue entry'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let completed = completeAlreadyMergedTickets(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir, PlanCallerCli)
     check completed == 1
 
     # Verify ticket moved to done.
@@ -221,7 +221,7 @@ suite "completeAlreadyMergedTickets":
     runCmdOrDie(&"git -C {tmpDir} merge --no-ff {ticketBranch} -m 'merge ticket 0077'")
 
     # Add an in-progress ticket on the plan branch with NO merge queue entry.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     let ticketContent = "# Ticket 0077\nFake ticket for testing."
     writeFile(planWorktree / "tickets" / "in-progress" / "0077-bare-ticket.md", ticketContent)
@@ -229,7 +229,7 @@ suite "completeAlreadyMergedTickets":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add bare in-progress ticket'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let completed = completeAlreadyMergedTickets(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir, PlanCallerCli)
     check completed == 1
 
     # Verify ticket moved to done.
@@ -244,14 +244,14 @@ suite "completeAlreadyMergedTickets":
     defer: removeDir(tmpDir)
 
     # Write a stale active marker pointing to a nonexistent pending file.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     writeFile(planWorktree / "queue" / "merge" / "active.md", "queue/merge/pending/0001-9999.md\n")
     runCmdOrDie(&"git -C {planWorktree} add -A")
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add stale active marker'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let completed = completeAlreadyMergedTickets(tmpDir)
+    let completed = completeAlreadyMergedTickets(tmpDir, PlanCallerCli)
     check completed == 0
 
     # Verify active marker was cleared.
@@ -266,7 +266,7 @@ suite "reopenOrphanedInProgressTickets":
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    let reopened = reopenOrphanedInProgressTickets(tmpDir, PlanCallerCli)
     check reopened == 0
 
   test "reopens in-progress ticket with no worktree and unmerged branch":
@@ -283,7 +283,7 @@ suite "reopenOrphanedInProgressTickets":
     runCmdOrDie(&"git -C {tmpDir} checkout master")
 
     # Place ticket in in-progress on plan branch, with no worktree.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     let ticketContent = "# Ticket 0055\nFake ticket for testing."
     writeFile(planWorktree / "tickets" / "in-progress" / "0055-orphaned-ticket.md", ticketContent)
@@ -291,7 +291,7 @@ suite "reopenOrphanedInProgressTickets":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add orphaned in-progress ticket'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    let reopened = reopenOrphanedInProgressTickets(tmpDir, PlanCallerCli)
     check reopened == 1
 
     # Verify ticket moved back to open.
@@ -306,7 +306,7 @@ suite "reopenOrphanedInProgressTickets":
     defer: removeDir(tmpDir)
 
     # Place ticket in in-progress on plan branch.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     let ticketContent = "# Ticket 0066\nFake ticket.\n\n**Worktree:** " & tmpDir / ".scriptorium" / "worktrees" / "tickets" / "0066-has-worktree"
     writeFile(planWorktree / "tickets" / "in-progress" / "0066-has-worktree.md", ticketContent)
@@ -319,7 +319,7 @@ suite "reopenOrphanedInProgressTickets":
     let worktreeDir = tmpDir / ".scriptorium" / "worktrees" / "tickets" / "0066-has-worktree"
     createDir(worktreeDir)
 
-    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    let reopened = reopenOrphanedInProgressTickets(tmpDir, PlanCallerCli)
     check reopened == 1
 
     # Stale worktree directory should also be cleaned up.
@@ -353,7 +353,7 @@ suite "reopenOrphanedInProgressTickets":
     check found
 
     # Place ticket in in-progress on plan branch.
-    let planWorktree = managedPlanWorktreePath(tmpDir)
+    let planWorktree = managedPlanWorktreePath(tmpDir, PlanCallerCli)
     addWorktreeWithRecovery(tmpDir, planWorktree, PlanBranch)
     let ticketContent = "# Ticket 0088\nFake ticket.\n\n**Worktree:** " & worktreeDir
     writeFile(planWorktree / "tickets" / "in-progress" / "0088-tracked-worktree.md", ticketContent)
@@ -361,7 +361,7 @@ suite "reopenOrphanedInProgressTickets":
     runCmdOrDie(&"git -C {planWorktree} commit -m 'add ticket with real worktree'")
     discard gitCheck(tmpDir, "worktree", "remove", "--force", planWorktree)
 
-    let reopened = reopenOrphanedInProgressTickets(tmpDir)
+    let reopened = reopenOrphanedInProgressTickets(tmpDir, PlanCallerCli)
     check reopened == 1
 
     # The worktree directory should be gone.
@@ -378,7 +378,7 @@ suite "recoverFromCrash":
     makeTestRepoWithPlanBranch(tmpDir)
     defer: removeDir(tmpDir)
 
-    let summary = recoverFromCrash(tmpDir)
+    let summary = recoverFromCrash(tmpDir, PlanCallerCli)
     check summary.worktreesCleaned == 0
     check summary.staleMarkersCleared == 0
     check summary.planAction == "clean"
@@ -390,7 +390,7 @@ suite "recoverFromCrash":
     makeTestRepo(tmpDir)
     defer: removeDir(tmpDir)
 
-    let summary = recoverFromCrash(tmpDir)
+    let summary = recoverFromCrash(tmpDir, PlanCallerCli)
     check summary.worktreesCleaned == 0
     check summary.staleMarkersCleared == 0
     check summary.planAction == "clean"

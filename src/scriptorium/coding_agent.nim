@@ -69,6 +69,7 @@ proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: str
 
 proc predictTicketDifficulty*(
   repoPath: string,
+  caller: string,
   ticketRelPath: string,
   ticketContent: string,
   runner: AgentRunner = runAgent,
@@ -82,14 +83,14 @@ proc predictTicketDifficulty*(
   let areaId = parseAreaFromTicketContent(ticketContent)
   var areaContent = ""
   if areaId.len > 0:
-    areaContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+    areaContent = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
       let areaPath = planPath / PlanAreasDir / areaId & ".md"
       if fileExists(areaPath):
         result = readFile(areaPath)
     )
 
   # Gather spec summary.
-  let specSummary = withPlanWorktree(repoPath, proc(planPath: string): string =
+  let specSummary = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
     let specPath = planPath / PlanSpecPath
     if fileExists(specPath):
       let content = readFile(specPath)
@@ -128,15 +129,15 @@ proc predictTicketDifficulty*(
   result = parsePredictionResponse(responseText)
   logInfo(&"ticket {ticketId}: predicted difficulty={result.difficulty} duration={result.durationMinutes}min")
 
-proc runTicketPrediction*(repoPath: string, ticketRelPath: string, runner: AgentRunner = runAgent) =
+proc runTicketPrediction*(repoPath: string, caller: string, ticketRelPath: string, runner: AgentRunner = runAgent) =
   ## Run a best-effort prediction for a ticket and persist results to the plan branch.
   let ticketId = ticketIdFromTicketPath(ticketRelPath)
-  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+  let ticketContent = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
     readFile(planPath / ticketRelPath)
   )
   try:
-    let prediction = predictTicketDifficulty(repoPath, ticketRelPath, ticketContent, runner)
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    let prediction = predictTicketDifficulty(repoPath, caller, ticketRelPath, ticketContent, runner)
+    discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       if not fileExists(ticketPath):
         return 0
@@ -153,6 +154,7 @@ proc runTicketPrediction*(repoPath: string, ticketRelPath: string, runner: Agent
 
 proc executeAssignedTicket*(
   repoPath: string,
+  caller: string,
   assignment: TicketAssignment,
   runner: AgentRunner = runAgent,
   agentConfigOverride: AgentConfig = AgentConfig(),
@@ -171,7 +173,7 @@ proc executeAssignedTicket*(
   let ticketRelPath = assignment.inProgressTicket
 
   logDebug(fmt"executeAssignedTicket: reading ticket from plan worktree")
-  let ticketContent = withPlanWorktree(repoPath, proc(planPath: string): string =
+  let ticketContent = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
     let ticketPath = planPath / ticketRelPath
     if not fileExists(ticketPath):
       raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
@@ -266,7 +268,7 @@ proc executeAssignedTicket*(
       logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
 
     logDebug(fmt"executeAssignedTicket: writing agent run notes to plan worktree")
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       if not fileExists(ticketPath):
         raise newException(ValueError, fmt"ticket does not exist in plan branch: {ticketRelPath}")
@@ -318,7 +320,7 @@ proc executeAssignedTicket*(
       gitAddFiltered(assignment.worktree)
       gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
-    discard enqueueMergeRequest(repoPath, assignment, submitSummary)
+    discard enqueueMergeRequest(repoPath, caller, assignment, submitSummary)
   else:
     let attempts = ticketAttemptCounts.getOrDefault(ticketId, totalAttemptsUsed)
     let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)
@@ -333,7 +335,7 @@ proc executeAssignedTicket*(
     let metricsNote = formatMetricsNote(ticketId, "reopened", failureReason).strip()
     let stallWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
     cleanupTicketTimings(ticketId)
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): int =
+    discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): int =
       let ticketPath = planPath / ticketRelPath
       let openRelPath = PlanTicketsOpenDir / extractFilename(ticketRelPath)
       if fileExists(ticketPath):
@@ -350,23 +352,23 @@ proc executeAssignedTicket*(
       0
     )
 
-proc executeOldestOpenTicket*(repoPath: string, runner: AgentRunner = runAgent): AgentRunResult =
+proc executeOldestOpenTicket*(repoPath: string, caller: string, runner: AgentRunner = runAgent): AgentRunResult =
   ## Assign the oldest open ticket and execute it with the coding agent.
-  let assignment = assignOldestOpenTicket(repoPath)
+  let assignment = assignOldestOpenTicket(repoPath, caller)
   if assignment.inProgressTicket.len == 0:
     logDebug("no open tickets to execute")
     result = AgentRunResult()
   else:
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
-    runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
-    result = executeAssignedTicket(repoPath, assignment, runner)
+    runTicketPrediction(repoPath, caller, assignment.inProgressTicket, runner)
+    result = executeAssignedTicket(repoPath, caller, assignment, runner)
     result.ticketId = ticketId
 
 proc codingAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
   ## Run executeAssignedTicket in a background thread and send the result to the pool channel.
   {.cast(gcsafe).}:
     let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
-    let agentResult = executeAssignedTicket(args.repoPath, args.assignment, runner)
+    let agentResult = executeAssignedTicket(args.repoPath, PlanCallerOrchestrator, args.assignment, runner)
     sendPoolResult(AgentPoolCompletionResult(
       role: arCoder,
       ticketId: args.ticketId,

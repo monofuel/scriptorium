@@ -14,7 +14,7 @@ suite "orchestrator ticket assignment":
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let oldest = oldestOpenTicket(tmp)
+    let oldest = oldestOpenTicket(tmp, PlanCallerCli)
     check oldest == "tickets/open/0001-first.md"
 
   test "assign moves ticket to in-progress in one commit":
@@ -24,7 +24,7 @@ suite "orchestrator ticket assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     let before = planCommitCount(tmp)
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -40,7 +40,7 @@ suite "orchestrator ticket assignment":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     let normalizedWorktreePath = normalizedPathForTest(assignment.worktree)
     let normalizedManagedRoot = normalizedPathForTest(tmp / ".scriptorium")
     check assignment.worktree.len > 0
@@ -60,10 +60,10 @@ suite "orchestrator ticket assignment":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     moveTicketStateInPlan(tmp, "in-progress", "done", "0001-first.md")
 
-    let removed = cleanupStaleTicketWorktrees(tmp)
+    let removed = cleanupStaleTicketWorktrees(tmp, PlanCallerCli)
     check assignment.worktree in removed
     check assignment.worktree notin gitWorktreePaths(tmp)
 
@@ -75,7 +75,7 @@ suite "parallel ticket assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
 
-    let assignments = assignOpenTickets(tmp, 2)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 2)
     check assignments.len == 2
     check assignments[0].openTicket == "tickets/open/0001-first.md"
     check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
@@ -93,7 +93,7 @@ suite "parallel ticket assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** shared\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** shared\n")
 
-    let assignments = assignOpenTickets(tmp, 2)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 2)
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0001-first.md"
     check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
@@ -106,7 +106,7 @@ suite "parallel ticket assignment":
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
     addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-c\n")
 
-    let assignments = assignOpenTickets(tmp, 2)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 2)
     check assignments.len == 2
     check assignments[0].openTicket == "tickets/open/0001-first.md"
     check assignments[1].openTicket == "tickets/open/0002-second.md"
@@ -118,7 +118,7 @@ suite "parallel ticket assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n")
 
-    let assignments = assignOpenTickets(tmp, 1)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 1)
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0001-first.md"
     check assignments[0].inProgressTicket == "tickets/in-progress/0001-first.md"
@@ -132,7 +132,7 @@ suite "parallel ticket assignment":
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0003-third.md", "# Ticket 3\n\n**Area:** area-b\n")
 
-    let assignments = assignOpenTickets(tmp, 3)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 3)
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0003-third.md"
 
@@ -141,7 +141,7 @@ suite "parallel ticket assignment":
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
-    let assignments = assignOpenTickets(tmp, 3)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 3)
     check assignments.len == 0
 
 suite "ticket dependency parsing":
@@ -184,7 +184,7 @@ suite "ticket dependency assignment":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment.inProgressTicket.len == 0
 
   test "assignOldestOpenTicket assigns ticket with satisfied dependency":
@@ -194,7 +194,7 @@ suite "ticket dependency assignment":
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n**Depends:** 0001\n")
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment.inProgressTicket == "tickets/in-progress/0002-second.md"
 
   test "assignOldestOpenTicket skips blocked ticket and assigns next":
@@ -204,7 +204,7 @@ suite "ticket dependency assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n**Depends:** 9999\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     check assignment.inProgressTicket == "tickets/in-progress/0002-second.md"
 
   test "assignOpenTickets skips ticket with unsatisfied dependency":
@@ -214,7 +214,7 @@ suite "ticket dependency assignment":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 9999\n")
 
-    let assignments = assignOpenTickets(tmp, 2)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 2)
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0001-first.md"
 
@@ -225,7 +225,7 @@ suite "ticket dependency assignment":
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** area-a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** area-b\n**Depends:** 0001\n")
 
-    let assignments = assignOpenTickets(tmp, 2)
+    let assignments = assignOpenTickets(tmp, PlanCallerCli, 2)
     check assignments.len == 1
     check assignments[0].openTicket == "tickets/open/0002-second.md"
 
@@ -237,7 +237,7 @@ suite "status dependency visibility":
     addTicketToPlan(tmp, "open", "0010-alpha.md", "# Alpha\n\n**Area:** a\n**Depends:** 0011\n")
     addTicketToPlan(tmp, "open", "0011-beta.md", "# Beta\n\n**Area:** b\n**Depends:** 0010\n")
 
-    let status = readOrchestratorStatus(tmp)
+    let status = readOrchestratorStatus(tmp, PlanCallerCli)
     # Cycles are auto-repaired: 0011 (newest) has edge to 0010 removed.
     # 0010 still depends on 0011 (unsatisfied) → reported as waiting.
     # 0011 has no deps after repair → not waiting.
@@ -251,7 +251,7 @@ suite "status dependency visibility":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0020-first.md", "# First\n\n**Area:** a\n**Depends:** 9999\n")
 
-    let status = readOrchestratorStatus(tmp)
+    let status = readOrchestratorStatus(tmp, PlanCallerCli)
     check status.waitingTickets.len == 1
     check status.waitingTickets[0].ticketId == "0020"
     check status.waitingTickets[0].dependsOn == @["9999"]
@@ -263,7 +263,7 @@ suite "status dependency visibility":
     addTicketToPlan(tmp, "done", "0030-prereq.md", "# Prereq\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0031-next.md", "# Next\n\n**Area:** b\n**Depends:** 0030\n")
 
-    let status = readOrchestratorStatus(tmp)
+    let status = readOrchestratorStatus(tmp, PlanCallerCli)
     check status.blockedTickets.len == 0
     check status.waitingTickets.len == 0
 
@@ -273,7 +273,7 @@ suite "status dependency visibility":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0040-plain.md", "# Plain\n\n**Area:** a\n")
 
-    let status = readOrchestratorStatus(tmp)
+    let status = readOrchestratorStatus(tmp, PlanCallerCli)
     check status.blockedTickets.len == 0
     check status.waitingTickets.len == 0
 
@@ -285,7 +285,7 @@ suite "status dependency visibility":
     addTicketToPlan(tmp, "open", "0051-b.md", "# B\n\n**Area:** b\n**Depends:** 0052\n")
     addTicketToPlan(tmp, "open", "0052-c.md", "# C\n\n**Area:** c\n**Depends:** 0050\n")
 
-    let status = readOrchestratorStatus(tmp)
+    let status = readOrchestratorStatus(tmp, PlanCallerCli)
     # Cycle auto-repaired: 0052 (newest) has edge to 0050 removed.
     # 0050 waits on 0051, 0051 waits on 0052, 0052 is free.
     check status.blockedTickets.len == 0

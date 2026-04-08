@@ -109,7 +109,7 @@ suite "progress-based stall detection":
     addTicketToPlan(tmp, "open", "0080-progress.md", "# Ticket 80\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 950)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var callCount = 0
@@ -130,7 +130,7 @@ suite "progress-based stall detection":
         timeoutKind: if callCount == 1: "progress" else: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
 
     check callCount == 2
     check capturedRequests.len == 2
@@ -146,7 +146,7 @@ suite "progress-based stall detection":
     addTicketToPlan(tmp, "open", "0081-progress-exhaust.md", "# Ticket 81\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 951)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
     let before = planCommitCount(tmp)
 
@@ -164,7 +164,7 @@ suite "progress-based stall detection":
         timeoutKind: "progress",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
 
     let after = planCommitCount(tmp)
     check after > before
@@ -181,7 +181,7 @@ suite "progress-based stall detection":
     addTicketToPlan(tmp, "open", "0082-progress-cfg.md", "# Ticket 82\n\n**Area:** a\n")
     writeOrchestratorEndpointConfig(tmp, 952)
 
-    let assignment = assignOldestOpenTicket(tmp)
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
     writeFile(assignment.worktree / "Makefile", "test:\n\t@echo OK\nintegration-test:\n\t@echo OK\n")
 
     var capturedRequest: AgentRunRequest
@@ -199,6 +199,6 @@ suite "progress-based stall detection":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
 
     check capturedRequest.progressTimeoutMs == 600_000
