@@ -177,6 +177,16 @@ proc orchestratorPidPath*(repoPath: string): string =
   ## Return the orchestrator PID file path for one repository.
   result = managedRepoRootPath(repoPath) / OrchestratorPidFileName
 
+proc forceRemoveDir(path: string) =
+  ## Remove a directory tree, falling back to rm -rf if removeDir fails.
+  try:
+    removeDir(path)
+  except OSError:
+    let rmRc = execCmd(&"rm -rf {quoteShell(path)}")
+    if rmRc != 0:
+      let msg = &"rm -rf failed (rc={rmRc}): {path}"
+      raise newException(OSError, msg)
+
 proc isManagedWorktreePath*(repoPath: string, path: string): bool =
   ## Return true when path is under this repository's managed worktree root.
   let managedRoot = normalizeAbsolutePath(managedWorktreeRootPath(repoPath))
@@ -199,7 +209,7 @@ proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool 
     if pruneRc != 0:
       logWarn(&"worktree prune failed (rc={pruneRc})")
     if dirExists(conflictPath):
-      removeDir(conflictPath)
+      forceRemoveDir(conflictPath)
     result = true
 
 proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string) =
@@ -208,7 +218,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
   createDir(parentDir(worktreePath))
   if dirExists(worktreePath):
     logDebug(&"worktree add: removing existing dir {worktreePath}")
-    removeDir(worktreePath)
+    forceRemoveDir(worktreePath)
 
   # Prune stale worktree entries pointing to nonexistent paths.
   let pruneRc = gitCheck(repoPath, "worktree", "prune")
@@ -239,7 +249,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
       )
     recoveredConflict = true
     if dirExists(worktreePath):
-      removeDir(worktreePath)
+      forceRemoveDir(worktreePath)
 
 proc hasPlanBranch*(repoPath: string): bool =
   ## Return true when the repository has the scriptorium plan branch.
