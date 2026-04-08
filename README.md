@@ -412,6 +412,8 @@ queue/
   merge/
     pending/
     active.md
+health/
+  cache.json
 ```
 
 Key invariants:
