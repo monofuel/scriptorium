@@ -2,7 +2,7 @@ import
   std/[os, strformat, strutils, times],
   jsony,
   ./[agent_runner, architect_agent, config, git_ops, lock_management, logging,
-     prompt_builders, prompt_catalog, shared_state]
+     prompt_builders, shared_state]
 
 const
   AuditLogDirName* = "audit"
@@ -38,7 +38,7 @@ proc computeAuditDiff*(repoPath: string, lastAuditedCommit: string): string =
 
 proc writeAuditReport*(repoPath: string, report: string): string =
   ## Write the audit report to the logs directory and return the path.
-  let logDir = repoPath / ManagedStateDirName / PlanLogDirName / AuditLogDirName
+  let logDir = planAgentLogRoot(repoPath, AuditLogDirName)
   createDir(logDir)
   let timestamp = now().utc.format("yyyy-MM-dd'T'HH-mm-ss'Z'")
   let reportPath = logDir / (timestamp & ".md")
@@ -89,8 +89,6 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
   let noOutputTimeoutMs =
     if auditCfg.noOutputTimeout > 0: auditCfg.noOutputTimeout
     else: DefaultAuditNoOutputTimeoutMs
-  let logRoot = repoPath / ManagedStateDirName / PlanLogDirName / AuditLogDirName
-
   let request = AgentRunRequest(
     prompt: prompt,
     workingDir: repoPath,
@@ -98,7 +96,9 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
     model: resolveModel(auditCfg.model),
     reasoningEffort: auditCfg.reasoningEffort,
     mcpEndpoint: cfg.endpoints.local,
-    logRoot: logRoot,
+    ticketId: "audit",
+    skipGitRepoCheck: true,
+    logRoot: planAgentLogRoot(repoPath, AuditLogDirName),
     hardTimeoutMs: hardTimeoutMs,
     noOutputTimeoutMs: noOutputTimeoutMs,
   )
