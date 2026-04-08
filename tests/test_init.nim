@@ -1,5 +1,5 @@
 import
-  std/[os, osproc, strutils],
+  std/[json, os, osproc, strutils],
   scriptorium/init
 
 const
@@ -172,14 +172,20 @@ proc testAgentsMdCreated() =
   echo "[OK] runInit creates AGENTS.md with content"
 
 proc testConfigJsonCreated() =
-  ## Verify runInit creates scriptorium.json.
+  ## Verify runInit creates scriptorium.json with valid JSON and expected keys.
   let repo = createTempRepo()
   defer: removeDir(repo)
 
   runInit(repo, quiet = true)
 
-  doAssert fileExists(repo / "scriptorium.json"), "scriptorium.json should exist after init"
-  echo "[OK] runInit creates scriptorium.json"
+  let configPath = repo / "scriptorium.json"
+  doAssert fileExists(configPath), "scriptorium.json should exist after init"
+  let content = readFile(configPath)
+  let node = parseJson(content)
+  const ExpectedKeys = ["agents", "concurrency", "endpoints", "logLevel"]
+  for key in ExpectedKeys:
+    doAssert node.hasKey(key), "scriptorium.json missing key: " & key
+  echo "[OK] runInit creates scriptorium.json with valid JSON and expected keys"
 
 proc testGitignoreEntry() =
   ## Verify .gitignore contains a .scriptorium entry after init.
@@ -230,6 +236,19 @@ proc testSkipsExistingMakefile() =
   doAssert afterContent == customContent, "Makefile should preserve custom content"
   echo "[OK] runInit skips existing Makefile"
 
+proc testTestConfigNimsCreated() =
+  ## Verify runInit creates tests/config.nims with the src path directive.
+  let repo = createTempRepo()
+  defer: removeDir(repo)
+
+  runInit(repo, quiet = true)
+
+  let configNimsPath = repo / "tests" / "config.nims"
+  doAssert fileExists(configNimsPath), "tests/config.nims should exist after init"
+  let content = readFile(configNimsPath)
+  doAssert "--path:\"../src\"" in content, "tests/config.nims should contain --path:\"../src\""
+  echo "[OK] runInit creates tests/config.nims with path directive"
+
 when isMainModule:
   testNotAGitRepo()
   testAlreadyInitializedFails()
@@ -244,3 +263,4 @@ when isMainModule:
   testGitignoreEntry()
   testSkipsExistingAgentsMd()
   testSkipsExistingMakefile()
+  testTestConfigNimsCreated()
