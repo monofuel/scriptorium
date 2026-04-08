@@ -165,6 +165,29 @@ suite "per-ticket submit_pr state":
     check getActiveTicketWorktree("0030").worktreePath == ""
     check getActiveTicketWorktree("0031").worktreePath == ""
 
+suite "audit report state":
+  test "recordAuditReport and consumeAuditReport round-trip with ticketId":
+    discard consumeAuditReport()
+    recordAuditReport("# Audit\nAll good.", "0040")
+    check consumeAuditReport("0040") == "# Audit\nAll good."
+    check consumeAuditReport("0040") == ""
+
+  test "consumeAuditReport without ticketId returns first available":
+    discard consumeAuditReport()
+    recordAuditReport("report content", "0041")
+    let result = consumeAuditReport()
+    check result == "report content"
+    check consumeAuditReport() == ""
+
+  test "recordAuditReport defaults to active ticket when no ticketId given":
+    discard consumeAuditReport()
+    clearActiveTicketWorktree()
+    setActiveTicketWorktree("/tmp/wt-audit", "0042")
+    defer: clearActiveTicketWorktree("0042")
+
+    recordAuditReport("default ticket report")
+    check consumeAuditReport("0042") == "default ticket report"
+
 suite "agent slot types":
   test "AgentSlot stores ticket metadata with role":
     let slot = AgentSlot(

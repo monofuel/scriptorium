@@ -134,6 +134,27 @@ proc createOrchestratorServer*(): HttpMcpServer =
     recordSubmitTickets(areaId, tickets)
     %*"Tickets recorded."
   server.registerTool(submitTicketsTool, submitTicketsHandler)
+  let submitAuditReportTool = McpTool(
+    name: "submit_audit_report",
+    description: "Submit an audit report for the current ticket",
+    inputSchema: %*{
+      "type": "object",
+      "properties": {
+        "report": {
+          "type": "string",
+          "description": "Full markdown audit report"
+        }
+      },
+      "required": ["report"]
+    },
+  )
+  let submitAuditReportHandler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
+    let report = arguments["report"].getStr()
+    {.cast(gcsafe).}:
+      logInfo("audit: submit_audit_report accepted")
+    recordAuditReport(report)
+    %*"Audit report recorded."
+  server.registerTool(submitAuditReportTool, submitAuditReportHandler)
   result = newHttpMcpServer(server, logEnabled = false)
 
 proc shutdownMonitor(server: mummy.Server) {.thread.} =

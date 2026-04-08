@@ -151,6 +151,7 @@ var
   submitPrLock*: Lock
   submitPrLockInitialized* = false
   submitPrSummaries*: Table[string, string]
+  auditReportEntries*: Table[string, string]
   submitTicketsEntries*: Table[string, seq[string]]
   activeTicketEntries*: Table[string, string]
   reviewActionLen* = 0
@@ -206,6 +207,33 @@ proc consumeSubmitPrSummary*(ticketId: string = ""): string {.gcsafe.} =
         for k, v in submitPrSummaries:
           result = v
           submitPrSummaries.del(k)
+          break
+
+proc recordAuditReport*(report: string, ticketId: string = "") {.gcsafe.} =
+  ## Store the audit report for a specific ticket or the sole active ticket.
+  ensureSubmitPrLockInitialized()
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      var id = ticketId
+      if id.len == 0 and activeTicketEntries.len > 0:
+        for k in activeTicketEntries.keys:
+          id = k
+          break
+      auditReportEntries[id] = report
+
+proc consumeAuditReport*(ticketId: string = ""): string {.gcsafe.} =
+  ## Return and clear the audit report for a ticket or the first available.
+  ensureSubmitPrLockInitialized()
+  {.cast(gcsafe).}:
+    withLock submitPrLock:
+      if ticketId.len > 0:
+        if auditReportEntries.hasKey(ticketId):
+          result = auditReportEntries[ticketId]
+          auditReportEntries.del(ticketId)
+      else:
+        for k, v in auditReportEntries:
+          result = v
+          auditReportEntries.del(k)
           break
 
 proc recordSubmitTickets*(areaId: string, tickets: seq[string]) {.gcsafe.} =
