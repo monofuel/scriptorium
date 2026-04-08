@@ -118,6 +118,23 @@ type
     pid*: int
     timestamp*: float
 
+proc tryCreateCommitLock(lockPath: string, payload: string): bool =
+  ## Atomically create a lock file using O_CREAT|O_EXCL to avoid TOCTOU races.
+  let fd = posix.open(lockPath.cstring, O_WRONLY or O_CREAT or O_EXCL, Mode(0o644))
+  if fd < 0:
+    let errCode = int(osLastError())
+    if errCode == EEXIST:
+      return false
+    let errText = osErrorMsg(osLastError())
+    raise newException(IOError, &"failed to create commit lock at {lockPath}: {errText}")
+  let payloadLen = payload.len
+  let written = posix.write(fd, payload.cstring, payloadLen)
+  discard posix.close(fd)
+  if written != payloadLen:
+    removeFile(lockPath)
+    raise newException(IOError, &"failed to write commit lock payload at {lockPath}")
+  result = true
+
 proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
   ## Acquire a file-based transactional commit lock with retry and staleness detection.
   ## Writes a JSON payload with PID and timestamp. Stale locks (>= 30s) are stolen.
@@ -126,12 +143,10 @@ proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
   createDir(parentDir(lockPath))
 
   for attempt in 0 ..< CommitLockMaxRetries:
-    if not fileExists(lockPath):
-      # Lock file absent — acquire it.
-      let currentPid = getCurrentProcessId()
-      let now = epochTime()
-      let payload = CommitLockFile(pid: currentPid, timestamp: now)
-      atomicWriteFile(lockPath, payload.toJson())
+    let currentPid = getCurrentProcessId()
+    let now = epochTime()
+    let payload = CommitLockFile(pid: currentPid, timestamp: now)
+    if tryCreateCommitLock(lockPath, payload.toJson()):
       logDebug(&"commit lock acquired: {lockPath}")
       defer:
         if fileExists(lockPath):
