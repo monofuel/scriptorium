@@ -44,9 +44,11 @@ proc runningAgentSummary*(): string =
   ## Return a short description of running agents, e.g. "2mgr+1code".
   let mgr = runningAgentCountByRole(arManager)
   let code = runningAgentCountByRole(arCoder)
+  let audit = runningAgentCountByRole(arAudit)
   var parts: seq[string]
   if mgr > 0: parts.add($mgr & "mgr")
   if code > 0: parts.add($code & "code")
+  if audit > 0: parts.add($audit & "audit")
   if parts.len == 0: return "none"
   result = parts.join("+")
 
@@ -58,6 +60,12 @@ proc isManagerRunningForArea*(areaId: string): bool =
   ## Check if a manager agent is already running for the given area.
   for slot in runningPoolSlots:
     if slot.role == arManager and slot.areaId == areaId:
+      return true
+
+proc isAuditRunning*(): bool =
+  ## Return true if any agent slot has the arAudit role.
+  for slot in runningPoolSlots:
+    if slot.role == arAudit:
       return true
 
 proc startAgentAsync*(
@@ -148,6 +156,9 @@ proc checkCompletedAgents*(): seq[AgentPoolCompletionResult] =
         slotIdx = i
         break
       elif completion.role == arManager and slot.areaId == completion.areaId:
+        slotIdx = i
+        break
+      elif completion.role == arAudit and slot.ticketId == completion.ticketId:
         slotIdx = i
         break
     if slotIdx >= 0:

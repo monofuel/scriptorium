@@ -121,6 +121,7 @@ type
   AgentRole* = enum
     arCoder
     arManager
+    arAudit
 
   AgentSlot* = object
     role*: AgentRole

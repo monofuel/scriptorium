@@ -40,6 +40,16 @@ suite "agent pool completion result":
     check completion.managerResult.len == 1
     check completion.managerResult[0] == "tickets/open/0100-new-ticket.md"
 
+suite "agent pool summary and audit helpers":
+  test "runningAgentSummary returns none when pool is empty":
+    check runningAgentSummary() == "none"
+
+  test "isAuditRunning returns false when pool is empty":
+    check isAuditRunning() == false
+
+  test "runningAgentCountByRole returns zero for arAudit initially":
+    check runningAgentCountByRole(arAudit) == 0
+
 suite "agent pool slot arithmetic":
   test "shared pool means managers reduce coder capacity":
     # With maxAgents=4, if 2 managers are running, only 2 slots remain.
