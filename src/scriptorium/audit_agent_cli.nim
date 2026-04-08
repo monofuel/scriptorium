@@ -1,4 +1,8 @@
+import
+  ./audit_agent
+
 proc runAudit*(repoPath: string) =
   ## Run the audit agent against the given repository path.
-  echo "scriptorium: audit command not yet implemented"
-  quit(1)
+  let reportPath = runAuditAgent(repoPath)
+  if reportPath.len > 0:
+    echo reportPath
