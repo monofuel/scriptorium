@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils, tables],
-  ./[agent_pool, agent_runner, architect_agent, config, git_ops, lock_management, log_forwarding, logging, prompt_builders, shared_state, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, lock_management, log_forwarding, logging, prompt_builders, shared_state, ticket_metadata]
 
 const
   TicketCommitMessage = "scriptorium: create tickets from areas"
@@ -80,6 +80,7 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
     hardTimeoutMs: cfg.agents.manager.hardTimeout,
     progressTimeoutMs: cfg.agents.manager.progressTimeout,
     maxAttempts: DefaultAgentMaxAttempts,
+    continuationPromptBuilder: buildAgentsReinjectPrompt,
     onEvent: proc(event: AgentStreamEvent) =
       forwardAgentEvent("manager", areaId, event),
   ))
