@@ -3,7 +3,7 @@
 import
   std/[algorithm, json, locks, os, osproc, sequtils, sha1, strformat, strutils, tables, tempfiles, times, unittest],
   jsony,
-  scriptorium/[agent_runner, config, init, logging, orchestrator, ticket_metadata],
+  scriptorium/[agent_runner, config, continuation_builder, init, logging, orchestrator, ticket_metadata],
   helpers
 
 suite "orchestrator mcp tools":
@@ -375,6 +375,33 @@ suite "orchestrator merge queue":
     )
     check ticketRc == 0
     check "**Review:** approved" in ticketContent
+
+  test "processMergeQueue review agent request includes continuationPromptBuilder":
+    let tmp = getTempDir() / "scriptorium_test_review_continuation"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
+
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "builder test")
+
+    var capturedRequest = AgentRunRequest()
+    proc capturingRunner(request: AgentRunRequest): AgentRunResult =
+      ## Capture the review request and approve.
+      capturedRequest = request
+      recordReviewDecision("approve", "")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, PlanCallerCli, capturingRunner)
+    check processed
+    check capturedRequest.continuationPromptBuilder != nil
+    let output = capturedRequest.continuationPromptBuilder(tmp)
+    check "AGENTS.md" in output
 
   test "processMergeQueue review request_changes reopens ticket":
     let tmp = getTempDir() / "scriptorium_test_review_changes"
