@@ -69,8 +69,17 @@ proc cleanStaleGitLocks*(repoPath: string) =
             logWarn(&"removing stale git lock: {lockRel} (age={age:.0f}s)")
             removeFile(lockPath)
 
+proc validateGitDir*(dir: string) =
+  ## Verify dir has a .git entry (file for worktrees, directory for repos).
+  ## Prevents git -C from walking up to a parent repo when a worktree is broken.
+  let gitPath = dir / ".git"
+  if not fileExists(gitPath) and not dirExists(gitPath):
+    raise newException(IOError,
+      &"git directory missing at {dir} — refusing to run to prevent parent repo corruption")
+
 proc gitRunOnce(dir: string, argsSeq: seq[string]): tuple[exitCode: int, output: string] =
   ## Run a git subcommand once and return exit code and output.
+  validateGitDir(dir)
   let allArgs = @["-C", dir] & argsSeq
   acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
@@ -103,6 +112,8 @@ proc gitRun*(dir: string, args: varargs[string]) =
 
 proc gitCheck*(dir: string, args: varargs[string]): int =
   ## Run a git subcommand in dir and return its exit code.
+  ## Does NOT validate .git presence — used for probing (e.g. rev-parse --git-dir).
+  ## State-modifying git commands should use gitRun instead.
   let allArgs = @["-C", dir] & @args
   acquireProcessLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
@@ -366,6 +377,12 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
     let cmdStr = command & " " & args.join(" ")
     raise newException(IOError, &"{cmdStr} timed out after {timeoutMs div 1000}s")
   result = (exitCode: exitCode, output: output)
+
+proc gitRunCapture*(dir: string, args: seq[string], timeoutMs: int = 300_000): tuple[exitCode: int, output: string] =
+  ## Run a git command with working directory validation.
+  ## Use instead of runCommandCapture(dir, "git", ...) to prevent fallthrough.
+  validateGitDir(dir)
+  runCommandCapture(dir, "git", args, timeoutMs)
 
 proc atomicWriteFile*(path: string, content: string) =
   ## Write content to path atomically via a temp file and rename.

@@ -126,7 +126,7 @@ proc reconcileDirtyPlanBranch*(repoPath: string, caller: string): string =
       return
 
     # Check for uncommitted changes.
-    let statusResult = runCommandCapture(planPath, "git", @["status", "--porcelain"])
+    let statusResult = gitRunCapture(planPath, @["status", "--porcelain"])
     if statusResult.exitCode == 0 and statusResult.output.strip().len > 0:
       gitRun(planPath, "add", "-A")
       gitRun(planPath, "commit", "-m", RecoveryCommitMessage)

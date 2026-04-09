@@ -126,3 +126,26 @@ suite "resolveDefaultBranchOrEmpty":
     defer: removeDir(tmp)
     expect IOError:
       discard resolveDefaultBranch(tmp)
+
+suite "validateGitDir":
+  test "accepts directory with .git directory":
+    let tmp = createTempDir("validate_gitdir_dir_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ".git")
+    validateGitDir(tmp)
+
+  test "accepts directory with .git file":
+    let tmp = createTempDir("validate_gitdir_file_", "", getTempDir())
+    defer: removeDir(tmp)
+    writeFile(tmp / ".git", "gitdir: /some/path")
+    validateGitDir(tmp)
+
+  test "rejects directory without .git":
+    let tmp = createTempDir("validate_gitdir_none_", "", getTempDir())
+    defer: removeDir(tmp)
+    expect IOError:
+      validateGitDir(tmp)
+
+  test "rejects non-existent directory":
+    expect IOError:
+      validateGitDir(getTempDir() / "validate_gitdir_nonexistent_99999")

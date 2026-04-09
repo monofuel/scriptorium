@@ -17,7 +17,7 @@ export agent_pool
 proc gitAddFiltered*(worktreePath: string, maxFileBytes: int = MaxAutoCommitFileBytes) =
   ## Stage all modified and untracked files except those exceeding maxFileBytes.
   ## Logs a warning for each skipped file.
-  let result = runCommandCapture(worktreePath, "git", @["ls-files", "--others", "--modified", "--exclude-standard"])
+  let result = gitRunCapture(worktreePath, @["ls-files", "--others", "--modified", "--exclude-standard"])
   if result.exitCode != 0 or result.output.strip().len == 0:
     gitRun(worktreePath, "add", "-A")
     return
@@ -44,7 +44,7 @@ proc detectPriorWork*(worktreePath: string, ticketId: string): int =
   ## Detect commits ahead of the default branch on the ticket branch.
   ## Returns the number of prior commits found.
   let defaultBranch = resolveDefaultBranch(worktreePath)
-  let logResult = runCommandCapture(worktreePath, "git", @["log", defaultBranch & "..HEAD", "--oneline"])
+  let logResult = gitRunCapture(worktreePath, @["log", defaultBranch & "..HEAD", "--oneline"])
   if logResult.exitCode != 0:
     return 0
   let lines = logResult.output.strip()
@@ -56,7 +56,7 @@ proc detectPriorWork*(worktreePath: string, ticketId: string): int =
 proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: string, ticketId: string, attempt: int) =
   ## Validate worktree state before a retry attempt.
   ## Corrupt worktrees are removed and recreated. Dirty worktrees have changes committed.
-  let statusResult = runCommandCapture(worktreePath, "git", @["status", "--porcelain"])
+  let statusResult = gitRunCapture(worktreePath, @["status", "--porcelain"])
   if statusResult.exitCode != 0:
     logInfo(&"ticket {ticketId}: worktree corrupt, recreated from branch")
     discard gitCheck(repoPath, "worktree", "remove", "--force", worktreePath)
@@ -314,7 +314,7 @@ proc executeAssignedTicket*(
   if submitSummary.len > 0:
     result.submitted = true
     logInfo(fmt"ticket {ticketId}: submit_pr called (summary=""{submitSummary}"")")
-    let dirtyCheck = runCommandCapture(assignment.worktree, "git", @["status", "--porcelain"])
+    let dirtyCheck = gitRunCapture(assignment.worktree, @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
       logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
       gitAddFiltered(assignment.worktree)

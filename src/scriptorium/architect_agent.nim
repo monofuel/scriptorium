@@ -122,7 +122,7 @@ proc normalizeRelativeWritePath*(rawPath: string): string =
 
 proc collectGitPathOutput(gitPath: string, args: seq[string]): seq[string] =
   ## Run one git command that emits relative paths and return non-empty lines.
-  let commandResult = runCommandCapture(gitPath, "git", args)
+  let commandResult = gitRunCapture(gitPath, args)
   if commandResult.exitCode != 0:
     let argsText = args.join(" ")
     raise newException(IOError, fmt"git {argsText} failed while checking write guards: {commandResult.output.strip()}")
@@ -229,7 +229,7 @@ proc pathFingerprintInGitPath*(gitPath: string, relPath: string): string =
   ## Return a stable fingerprint for one relative path in one git worktree path.
   let absPath = gitPath / relPath
   if fileExists(absPath):
-    let hashResult = runCommandCapture(gitPath, "git", @["hash-object", "--", relPath])
+    let hashResult = gitRunCapture(gitPath, @["hash-object", "--", relPath])
     if hashResult.exitCode != 0:
       raise newException(IOError, fmt"git hash-object failed for {relPath}: {hashResult.output.strip()}")
     result = hashResult.output.strip()

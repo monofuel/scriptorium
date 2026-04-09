@@ -18,7 +18,7 @@ type
 
 proc listRemotes*(repoPath: string): seq[string] =
   ## Return the names of all configured git remotes.
-  let capture = runCommandCapture(repoPath, "git", @["-C", repoPath, "remote"])
+  let capture = gitRunCapture(repoPath, @["-C", repoPath, "remote"])
   if capture.exitCode != 0:
     logWarn(&"git remote failed: {capture.output.strip()}")
     return @[]
@@ -29,7 +29,7 @@ proc listRemotes*(repoPath: string): seq[string] =
 
 proc fetchRemote*(repoPath: string, remote: string): int =
   ## Fetch from one remote. Returns exit code.
-  let capture = runCommandCapture(repoPath, "git", @["-C", repoPath, "fetch", remote])
+  let capture = gitRunCapture(repoPath, @["-C", repoPath, "fetch", remote])
   if capture.exitCode != 0:
     let msg = capture.output.strip()
     logWarn(&"fetch {remote} failed: {msg}")
@@ -50,23 +50,23 @@ proc mergeFromPrimary*(repoPath: string, primaryRemote: string, branch: string):
   let remoteBranch = primaryRemote & "/" & branch
   result = withMasterWorktree(repoPath, proc(masterPath: string): SyncMergeResult =
     # Check if already up to date.
-    let diffCheck = runCommandCapture(masterPath, "git", @["diff", "--quiet", "HEAD", remoteBranch])
+    let diffCheck = gitRunCapture(masterPath, @["diff", "--quiet", "HEAD", remoteBranch])
     if diffCheck.exitCode == 0:
       # Also check if HEAD and remote point to the same commit.
-      let localHead = runCommandCapture(masterPath, "git", @["rev-parse", "HEAD"])
-      let remoteHead = runCommandCapture(masterPath, "git", @["rev-parse", remoteBranch])
+      let localHead = gitRunCapture(masterPath, @["rev-parse", "HEAD"])
+      let remoteHead = gitRunCapture(masterPath, @["rev-parse", remoteBranch])
       if localHead.output.strip() == remoteHead.output.strip():
         return smrUpToDate
 
     # Try fast-forward first.
-    let ffResult = runCommandCapture(masterPath, "git", @["merge", "--ff-only", remoteBranch])
+    let ffResult = gitRunCapture(masterPath, @["merge", "--ff-only", remoteBranch])
     if ffResult.exitCode == 0:
       logInfo(&"remote sync: fast-forwarded to {remoteBranch}")
       return smrFastForward
 
     # Fast-forward failed (diverged). Merge with gitea winning conflicts.
     logInfo(&"remote sync: fast-forward failed, merging {remoteBranch} with -X theirs")
-    let mergeResult = runCommandCapture(masterPath, "git", @["merge", "-X", "theirs", "--no-edit", remoteBranch])
+    let mergeResult = gitRunCapture(masterPath, @["merge", "-X", "theirs", "--no-edit", remoteBranch])
     if mergeResult.exitCode == 0:
       logInfo(&"remote sync: merged {remoteBranch} with theirs strategy")
       return smrMerged
@@ -74,13 +74,13 @@ proc mergeFromPrimary*(repoPath: string, primaryRemote: string, branch: string):
     # Merge failed entirely. Abort and report.
     let msg = mergeResult.output.strip()
     logWarn(&"remote sync: merge failed: {msg}")
-    discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+    discard gitRunCapture(masterPath, @["merge", "--abort"])
     return smrFailed
   )
 
 proc pushToRemote*(repoPath: string, remote: string, branch: string): int =
   ## Push the branch to one remote. Returns exit code.
-  let capture = runCommandCapture(repoPath, "git", @["-C", repoPath, "push", remote, branch])
+  let capture = gitRunCapture(repoPath, @["-C", repoPath, "push", remote, branch])
   if capture.exitCode != 0:
     let msg = capture.output.strip()
     logWarn(&"push {remote} {branch} failed: {msg}")

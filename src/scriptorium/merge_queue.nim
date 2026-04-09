@@ -82,7 +82,7 @@ proc withMasterWorktree*[T](repoPath: string, operation: proc(masterPath: string
   if gitCheck(repoPath, "rev-parse", "--verify", defaultBranch) != 0:
     raise newException(ValueError, &"{defaultBranch} branch does not exist")
 
-  let worktreeList = runCommandCapture(repoPath, "git", @["worktree", "list", "--porcelain"])
+  let worktreeList = gitRunCapture(repoPath, @["worktree", "list", "--porcelain"])
   if worktreeList.exitCode != 0:
     raise newException(IOError, fmt"git worktree list failed: {worktreeList.output.strip()}")
 
@@ -237,7 +237,7 @@ proc runReviewAgent*(
   let model = cfg.agents.reviewer.model
 
   let defaultBranch = resolveDefaultBranch(repoPath)
-  let diffResult = runCommandCapture(item.worktree, "git", @["diff", defaultBranch & "..." & item.branch])
+  let diffResult = gitRunCapture(item.worktree, @["diff", defaultBranch & "..." & item.branch])
   let diffContent = if diffResult.exitCode == 0: diffResult.output else: "(diff unavailable)"
 
   let areaId = parseAreaFromTicketContent(ticketContent)
@@ -348,9 +348,9 @@ proc runReviewAgent*(
 proc resetWorktreeState*(worktreePath: string, ticketId: string) =
   ## Reset a worktree to a clean state after a failed rebase or merge.
   ## Discards uncommitted changes and removes untracked files.
-  discard runCommandCapture(worktreePath, "git", @["checkout", "."])
-  discard runCommandCapture(worktreePath, "git", @["clean", "-fd"])
-  let dirtyCheck = runCommandCapture(worktreePath, "git", @["status", "--porcelain"])
+  discard gitRunCapture(worktreePath, @["checkout", "."])
+  discard gitRunCapture(worktreePath, @["clean", "-fd"])
+  let dirtyCheck = gitRunCapture(worktreePath, @["status", "--porcelain"])
   if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
     logWarn(&"ticket {ticketId}: worktree still dirty after reset")
 
@@ -433,7 +433,7 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
         completeJournalTransition(planPath)
         return true
 
-    let dirtyCheck = runCommandCapture(item.worktree, "git", @["status", "--porcelain"])
+    let dirtyCheck = gitRunCapture(item.worktree, @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
       logWarn(fmt"processMergeQueue: dirty worktree detected for {item.ticketId}, resetting")
       resetWorktreeState(item.worktree, item.ticketId)
@@ -466,18 +466,18 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
     let defaultBranch = resolveDefaultBranch(repoPath)
 
     # Rebase onto latest default branch before testing (sub-second, catches drift).
-    let rebaseResult = runCommandCapture(item.worktree, "git", @["rebase", defaultBranch])
+    let rebaseResult = gitRunCapture(item.worktree, @["rebase", defaultBranch])
     var mergeMasterResult: tuple[exitCode: int, output: string]
     if rebaseResult.exitCode == 0:
       logInfo(fmt"ticket {item.ticketId}: rebased onto {defaultBranch}")
       mergeMasterResult = (exitCode: 0, output: rebaseResult.output)
     else:
-      discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+      discard gitRunCapture(item.worktree, @["rebase", "--abort"])
       resetWorktreeState(item.worktree, item.ticketId)
       logInfo(fmt"ticket {item.ticketId}: rebase failed, falling back to merge")
-      mergeMasterResult = runCommandCapture(item.worktree, "git", @["merge", "--no-edit", defaultBranch])
+      mergeMasterResult = gitRunCapture(item.worktree, @["merge", "--no-edit", defaultBranch])
       if mergeMasterResult.exitCode != 0:
-        discard runCommandCapture(item.worktree, "git", @["merge", "--abort"])
+        discard gitRunCapture(item.worktree, @["merge", "--abort"])
         resetWorktreeState(item.worktree, item.ticketId)
     var qualityCheckResult = (exitCode: 0, output: "", failedTarget: "")
     if mergeMasterResult.exitCode == 0:
@@ -491,15 +491,15 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
 
     if mergeMasterResult.exitCode == 0 and qualityCheckResult.exitCode == 0:
       let mergeToMasterResult = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
-        let ffResult = runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
+        let ffResult = gitRunCapture(masterPath, @["merge", "--ff-only", item.branch])
         if ffResult.exitCode == 0:
           return ffResult
 
         # ff-only failed. Try --no-ff merge (pre-merge quality check already validated this tree).
         logInfo(fmt"ticket {item.ticketId}: ff-only failed, attempting --no-ff merge")
-        let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
+        let noFfResult = gitRunCapture(masterPath, @["merge", "--no-ff", "--no-edit", item.branch])
         if noFfResult.exitCode != 0:
-          discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+          discard gitRunCapture(masterPath, @["merge", "--abort"])
           resetWorktreeState(masterPath, item.ticketId)
           return noFfResult
 
@@ -510,18 +510,18 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
       if not mergedToMaster:
         # Last resort: rebase the ticket branch and retry the merge.
         logInfo(fmt"ticket {item.ticketId}: merge to master failed, attempting rebase retry")
-        let retryRebase = runCommandCapture(item.worktree, "git", @["rebase", defaultBranch])
+        let retryRebase = gitRunCapture(item.worktree, @["rebase", defaultBranch])
         if retryRebase.exitCode == 0:
           logInfo(fmt"ticket {item.ticketId}: rebase succeeded, re-running quality checks")
           let retryQuality = runRequiredQualityChecks(item.worktree)
           if retryQuality.exitCode == 0:
             let retryMerge = withMasterWorktree(repoPath, proc(masterPath: string): tuple[exitCode: int, output: string] =
-              let ffResult = runCommandCapture(masterPath, "git", @["merge", "--ff-only", item.branch])
+              let ffResult = gitRunCapture(masterPath, @["merge", "--ff-only", item.branch])
               if ffResult.exitCode == 0:
                 return ffResult
-              let noFfResult = runCommandCapture(masterPath, "git", @["merge", "--no-ff", "--no-edit", item.branch])
+              let noFfResult = gitRunCapture(masterPath, @["merge", "--no-ff", "--no-edit", item.branch])
               if noFfResult.exitCode != 0:
-                discard runCommandCapture(masterPath, "git", @["merge", "--abort"])
+                discard gitRunCapture(masterPath, @["merge", "--abort"])
                 resetWorktreeState(masterPath, item.ticketId)
               return noFfResult
             )
@@ -535,7 +535,7 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
             failureOutput = retryQuality.output
             failureStep = &"make {retryQuality.failedTarget} (after rebase retry)"
         else:
-          discard runCommandCapture(item.worktree, "git", @["rebase", "--abort"])
+          discard gitRunCapture(item.worktree, @["rebase", "--abort"])
           resetWorktreeState(item.worktree, item.ticketId)
           logInfo(fmt"ticket {item.ticketId}: rebase retry failed, proceeding with reopen")
           failureOutput = mergeToMasterResult.output

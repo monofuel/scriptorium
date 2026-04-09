@@ -274,3 +274,67 @@ suite "concurrent plan worktree creation":
     # Simulate conflict error pointing to the active worktree.
     let fakeOutput = &"fatal: '{PlanBranch}' is already used by worktree at '{activePath}'"
     check not recoverManagedWorktreeConflict(repoPath, fakeOutput)
+
+suite "worktree fallthrough protection":
+  test "gitRun refuses to operate on worktree with missing .git":
+    let tmpDir = getTempDir() / "scriptorium_test_fallthrough_gitrun"
+    let repoPath = tmpDir / "repo"
+    let branch = "scriptorium/ticket-test-fallthrough"
+
+    if dirExists(tmpDir):
+      removeDir(tmpDir)
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    makeTestRepo(repoPath)
+    runCmdOrDie(&"git -C {repoPath} branch {branch}")
+
+    # Create a valid worktree then delete its .git file to simulate the race.
+    let managedRoot = managedWorktreeRootPath(repoPath)
+    let wtPath = managedRoot / "broken-wt"
+    createDir(parentDir(wtPath))
+    runCmdOrDie(&"git -C {repoPath} worktree add {wtPath} {branch}")
+    removeFile(wtPath / ".git")
+
+    # gitRun should raise instead of falling through to the parent repo.
+    var raised = false
+    try:
+      gitRun(wtPath, "status")
+    except IOError:
+      raised = true
+    check raised
+
+    # Verify the parent repo was not affected.
+    let (branchOut, _) = execCmdEx("git -C " & repoPath & " rev-parse --abbrev-ref HEAD")
+    check branchOut.strip() != branch
+
+    # Clean up worktree metadata.
+    discard execCmdEx(&"git -C {repoPath} worktree prune")
+
+  test "gitRunCapture refuses to operate on worktree with missing .git":
+    let tmpDir = getTempDir() / "scriptorium_test_fallthrough_capture"
+    let repoPath = tmpDir / "repo"
+    let branch = "scriptorium/ticket-test-fallthrough2"
+
+    if dirExists(tmpDir):
+      removeDir(tmpDir)
+    createDir(tmpDir)
+    defer: removeDir(tmpDir)
+
+    makeTestRepo(repoPath)
+    runCmdOrDie(&"git -C {repoPath} branch {branch}")
+
+    let managedRoot = managedWorktreeRootPath(repoPath)
+    let wtPath = managedRoot / "broken-wt2"
+    createDir(parentDir(wtPath))
+    runCmdOrDie(&"git -C {repoPath} worktree add {wtPath} {branch}")
+    removeFile(wtPath / ".git")
+
+    var raised = false
+    try:
+      discard gitRunCapture(wtPath, @["status", "--porcelain"])
+    except IOError:
+      raised = true
+    check raised
+
+    discard execCmdEx(&"git -C {repoPath} worktree prune")
