@@ -184,9 +184,12 @@ proc orchestratorPidPath*(repoPath: string): string =
   result = managedRepoRootPath(repoPath) / OrchestratorPidFileName
 
 proc forceRemoveDir*(path: string) =
-  ## Remove a directory tree, retrying on transient failures (e.g. NFS ESTALE).
-  const MaxAttempts = 3
-  const RetryDelayMs = 500
+  ## Remove a directory tree, retrying with exponential backoff on transient
+  ## failures (e.g. NFS ESTALE). Designed for 24/7 reliability on NFS mounts
+  ## where stale handles can persist for 30+ seconds.
+  const MaxAttempts = 10
+  const BaseDelayMs = 500
+  const MaxDelayMs = 5000
   for attempt in 1 .. MaxAttempts:
     try:
       removeDir(path)
@@ -196,7 +199,9 @@ proc forceRemoveDir*(path: string) =
       if rmRc == 0:
         return
       if attempt < MaxAttempts:
-        sleep(RetryDelayMs)
+        let delay = min(BaseDelayMs * (1 shl (attempt - 1)), MaxDelayMs)
+        logWarn(&"forceRemoveDir attempt {attempt}/{MaxAttempts} failed, retrying in {delay}ms: {path}")
+        sleep(delay)
   let finalRc = execCmd(&"rm -rf {quoteShell(path)}")
   if finalRc != 0:
     let msg = &"rm -rf failed (rc={finalRc}) after {MaxAttempts} attempts: {path}"
