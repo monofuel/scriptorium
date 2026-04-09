@@ -253,30 +253,26 @@ suite "commit lock":
     check executed
     check not fileExists(commitLockPath(tmp))
 
-  test "fresh lock causes retry and eventual timeout":
+  test "stale lock from alive process is eventually stolen":
     let tmp = createTempDir("commit_lock_timeout_", "", getTempDir())
     defer: removeDir(tmp)
     createDir(tmp / ManagedStateDirName)
 
-    # Write a fresh lock that will not be stale during the retry window.
-    let freshLock = CommitLockFile(pid: getCurrentProcessId(), timestamp: epochTime())
-    writeFile(commitLockPath(tmp), freshLock.toJson())
+    # Write a lock with the current PID and a timestamp that is already stale.
+    # withCommitLock will detect age >= CommitLockStalenessSeconds on the first
+    # retry and steal it, then the operation succeeds.
+    let staleLock = CommitLockFile(
+      pid: getCurrentProcessId(),
+      timestamp: epochTime() - float(CommitLockStalenessSeconds) - 1.0,
+    )
+    writeFile(commitLockPath(tmp), staleLock.toJson())
 
-    # Override constants are not possible, but the lock stays fresh so all
-    # retries will be exhausted. We use a small subset to keep the test fast.
-    # Since we cannot change the constants, we just verify the timeout raises.
-    var raised = false
-    try:
-      discard withCommitLock[int](tmp, proc(): int =
-        result = 0
-      )
-    except IOError:
-      raised = true
-      check "timed out" in getCurrentExceptionMsg()
-    check raised
-
-    # Clean up the lock file we created.
-    removeFile(commitLockPath(tmp))
+    var executed = false
+    discard withCommitLock[int](tmp, proc(): int =
+      executed = true
+      result = 0
+    )
+    check executed
 
   test "successful acquisition after lock is released during retry window":
     let tmp = createTempDir("commit_lock_retry_ok_", "", getTempDir())
