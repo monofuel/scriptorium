@@ -53,6 +53,14 @@ suite "parseWorktreeConflictPath":
     let output = "fatal: '/tmp/stale/wt' is a missing but already registered worktree"
     check parseWorktreeConflictPath(output) == "/tmp/stale/wt"
 
+  test "extracts path from locked-missing worktree":
+    let output = "fatal: '/tmp/stale/wt' is a missing but locked worktree"
+    check parseWorktreeConflictPath(output) == "/tmp/stale/wt"
+
+  test "extracts path with use 'add -f -f' hint in locked output":
+    let output = "fatal: '/home/user/.scriptorium/worktrees/plan-orchestrator' is a missing but locked worktree\nuse 'add -f -f' to override, or 'unlock' and 'prune' or 'remove' to clear"
+    check parseWorktreeConflictPath(output) == "/home/user/.scriptorium/worktrees/plan-orchestrator"
+
   test "returns empty for non-conflict output":
     let output = "Preparing worktree (checking out 'main')"
     check parseWorktreeConflictPath(output) == ""

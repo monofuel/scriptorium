@@ -142,10 +142,15 @@ proc parseWorktreeConflictPath*(output: string): string =
   let registeredMarkerPos = output.rfind(registeredMarker)
   if registeredMarkerPos >= 0:
     let pathStart = registeredMarkerPos + registeredMarker.len
-    let missingMarker = "' is a missing but already registered worktree"
-    let pathEnd = output.find(missingMarker, pathStart)
-    if pathEnd > pathStart:
-      result = output[pathStart..<pathEnd].strip()
+    const MissingMarkers = [
+      "' is a missing but already registered worktree",
+      "' is a missing but locked worktree",
+    ]
+    for marker in MissingMarkers:
+      let pathEnd = output.find(marker, pathStart)
+      if pathEnd > pathStart:
+        result = output[pathStart..<pathEnd].strip()
+        return
 
 proc normalizeAbsolutePath*(path: string): string =
   ## Return a normalized absolute path that always uses forward slashes.
@@ -226,6 +231,10 @@ proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool 
     result = false
   else:
     logWarn(&"recovering stale worktree conflict: {conflictPath}")
+    # Unlock first — a locked worktree cannot be removed with single --force.
+    let unlockRc = gitCheck(repoPath, "worktree", "unlock", conflictPath)
+    if unlockRc != 0:
+      logWarn(&"worktree unlock failed (rc={unlockRc}), may not have been locked: {conflictPath}")
     let removeRc = gitCheck(repoPath, "worktree", "remove", "--force", conflictPath)
     if removeRc != 0:
       logWarn(&"worktree remove failed (rc={removeRc}): {conflictPath}")
@@ -256,6 +265,8 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
   while true:
     var args = @["-C", repoPath, "worktree", "add"]
     if force:
+      # Double -f required to override locked worktrees.
+      args.add("-f")
       args.add("-f")
     args.add(worktreePath)
     args.add(branch)
