@@ -18,6 +18,7 @@ proc testDefaultConfigValues() =
   doAssert cfg.loop.enabled == false
   doAssert cfg.discord.serverId == ""
   doAssert cfg.discord.channelId == ""
+  doAssert cfg.discord.allowedUserIds.len == 0
   doAssert cfg.discord.allowedUsers.len == 0
   doAssert cfg.dashboard.port == 8098
   doAssert cfg.dashboard.host == "127.0.0.1"
@@ -77,7 +78,7 @@ proc testFullJsonMerge() =
       "codingAgentMaxAttempts": 10
     },
     "loop": {"enabled": true, "feedback": "echo ok", "goal": "ship it", "maxIterations": 5},
-    "discord": {"serverId": "srv-1", "channelId": "12345", "allowedUsers": ["alice", "bob"]},
+    "discord": {"serverId": "srv-1", "channelId": "12345", "allowedUserIds": ["id-1", "id-2"], "allowedUsers": ["alice", "bob"]},
     "dashboard": {"port": 9999, "host": "0.0.0.0"}
   }"""
   writeFile(tmpDir / "scriptorium.json", json)
@@ -105,6 +106,7 @@ proc testFullJsonMerge() =
   doAssert cfg.loop.maxIterations == 5
   doAssert cfg.discord.serverId == "srv-1"
   doAssert cfg.discord.channelId == "12345"
+  doAssert cfg.discord.allowedUserIds == @["id-1", "id-2"]
   doAssert cfg.discord.allowedUsers == @["alice", "bob"]
   doAssert cfg.dashboard.port == 9999
   doAssert cfg.dashboard.host == "0.0.0.0"
@@ -148,12 +150,13 @@ proc testDiscordConfigLoading() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"discord": {"serverId": "srv-42", "channelId": "ch-999", "allowedUsers": ["user1", "user2", "user3"]}}"""
+  let json = """{"discord": {"serverId": "srv-42", "channelId": "ch-999", "allowedUserIds": ["id-1", "id-2"], "allowedUsers": ["user1", "user2", "user3"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.discord.serverId == "srv-42"
   doAssert cfg.discord.channelId == "ch-999"
+  doAssert cfg.discord.allowedUserIds == @["id-1", "id-2"]
   doAssert cfg.discord.allowedUsers == @["user1", "user2", "user3"]
   echo "[OK] discord config fields loaded correctly"
 
@@ -234,6 +237,7 @@ proc testDefaultMattermostConfig() =
   let cfg = defaultConfig()
   doAssert cfg.mattermost.url == ""
   doAssert cfg.mattermost.channelId == ""
+  doAssert cfg.mattermost.allowedUserIds.len == 0
   doAssert cfg.mattermost.allowedUsers.len == 0
   echo "[OK] defaultConfig returns expected mattermost defaults"
 
@@ -243,12 +247,13 @@ proc testMattermostConfigLoading() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"mattermost": {"url": "https://mm.example.com", "channelId": "ch-abc", "allowedUsers": ["u1", "u2"]}}"""
+  let json = """{"mattermost": {"url": "https://mm.example.com", "channelId": "ch-abc", "allowedUserIds": ["id-a", "id-b"], "allowedUsers": ["u1", "u2"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.mattermost.url == "https://mm.example.com"
   doAssert cfg.mattermost.channelId == "ch-abc"
+  doAssert cfg.mattermost.allowedUserIds == @["id-a", "id-b"]
   doAssert cfg.mattermost.allowedUsers == @["u1", "u2"]
   echo "[OK] mattermost config fields loaded correctly"
 
@@ -264,6 +269,7 @@ proc testMattermostPartialConfig() =
   let cfg = loadConfig(tmpDir)
   doAssert cfg.mattermost.url == "https://mm.example.com"
   doAssert cfg.mattermost.channelId == ""
+  doAssert cfg.mattermost.allowedUserIds.len == 0
   doAssert cfg.mattermost.allowedUsers.len == 0
   echo "[OK] mattermost partial config works correctly"
 
@@ -442,37 +448,33 @@ proc testLoadConfigIsReadOnly() =
   doAssert afterLoad == json
   echo "[OK] loadConfig does not modify the file on disk"
 
-proc testDiscordEnabledField() =
-  ## Verify discord enabled field defaults to false and loads true from JSON.
-  let cfg = defaultConfig()
-  doAssert cfg.discord.enabled == false
-
-  let tmpDir = getTempDir() / "test_config_discord_enabled"
+proc testDiscordAllowedUserIdsConfig() =
+  ## Verify allowedUserIds loads correctly for discord config.
+  let tmpDir = getTempDir() / "test_config_discord_user_ids"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"discord": {"enabled": true}}"""
+  let json = """{"discord": {"allowedUserIds": ["123", "456"], "allowedUsers": ["alice"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let loaded = loadConfig(tmpDir)
-  doAssert loaded.discord.enabled == true
-  echo "[OK] discord enabled field defaults to false and loads true"
+  doAssert loaded.discord.allowedUserIds == @["123", "456"]
+  doAssert loaded.discord.allowedUsers == @["alice"]
+  echo "[OK] discord allowedUserIds and allowedUsers load correctly"
 
-proc testMattermostEnabledField() =
-  ## Verify mattermost enabled field defaults to false and loads true from JSON.
-  let cfg = defaultConfig()
-  doAssert cfg.mattermost.enabled == false
-
-  let tmpDir = getTempDir() / "test_config_mattermost_enabled"
+proc testMattermostAllowedUserIdsConfig() =
+  ## Verify allowedUserIds loads correctly for mattermost config.
+  let tmpDir = getTempDir() / "test_config_mattermost_user_ids"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"mattermost": {"enabled": true}}"""
+  let json = """{"mattermost": {"url": "https://mm.test", "allowedUserIds": ["a1", "b2"], "allowedUsers": ["bob"]}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let loaded = loadConfig(tmpDir)
-  doAssert loaded.mattermost.enabled == true
-  echo "[OK] mattermost enabled field defaults to false and loads true"
+  doAssert loaded.mattermost.allowedUserIds == @["a1", "b2"]
+  doAssert loaded.mattermost.allowedUsers == @["bob"]
+  echo "[OK] mattermost allowedUserIds and allowedUsers load correctly"
 
 proc testApplyLogLevelFromConfig() =
   ## Verify applyLogLevelFromConfig sets log levels from config file.
@@ -560,16 +562,16 @@ proc testSaveConfigRoundTrip() =
   doAssert loaded.loop.feedbackTimeoutMs == original.loop.feedbackTimeoutMs
 
   # Discord.
-  doAssert loaded.discord.enabled == original.discord.enabled
   doAssert loaded.discord.serverId == original.discord.serverId
   doAssert loaded.discord.channelId == original.discord.channelId
+  doAssert loaded.discord.allowedUserIds == original.discord.allowedUserIds
   doAssert loaded.discord.allowedUsers == original.discord.allowedUsers
   doAssert loaded.discord.chatHistoryCount == original.discord.chatHistoryCount
 
   # Mattermost.
-  doAssert loaded.mattermost.enabled == original.mattermost.enabled
   doAssert loaded.mattermost.url == original.mattermost.url
   doAssert loaded.mattermost.channelId == original.mattermost.channelId
+  doAssert loaded.mattermost.allowedUserIds == original.mattermost.allowedUserIds
   doAssert loaded.mattermost.allowedUsers == original.mattermost.allowedUsers
   doAssert loaded.mattermost.chatHistoryCount == original.mattermost.chatHistoryCount
 
@@ -652,8 +654,8 @@ when isMainModule:
   testNormalizeConfigWriteBack()
   testNormalizeConfigStripsUnknownKeys()
   testLoadConfigIsReadOnly()
-  testDiscordEnabledField()
-  testMattermostEnabledField()
+  testDiscordAllowedUserIdsConfig()
+  testMattermostAllowedUserIdsConfig()
   testApplyLogLevelFromConfig()
   testChatHistoryCountConfig()
   testLoopFeedbackTimeoutConfig()

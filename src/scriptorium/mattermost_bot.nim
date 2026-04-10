@@ -299,6 +299,7 @@ proc runMattermostBot*(repoPath: string) =
   applyLogLevelFromConfig(repoPath)
   defer: closeLog()
 
+  let allowedUserIds = cfg.mattermost.allowedUserIds
   let allowedUsers = cfg.mattermost.allowedUsers
   enablePartialChainVerification()
   let client = newMostyClient(url, token)
@@ -317,9 +318,15 @@ proc runMattermostBot*(repoPath: string) =
       return
     if post.user_id == botUserId:
       return
-    if allowedUsers.len > 0 and post.user_id notin allowedUsers:
-      logDebug(&"mattermost message ignored from non-allowlisted user ({post.user_id})")
-      return
+    let hasAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
+    if hasAllowlist:
+      var permitted = post.user_id in allowedUserIds
+      if not permitted and allowedUsers.len > 0:
+        let user = c.getUser(post.user_id)
+        permitted = user.username in allowedUsers
+      if not permitted:
+        logDebug(&"mattermost message ignored from non-allowlisted user ({post.user_id})")
+        return
 
     let content = post.message.strip()
     if content.len == 0:

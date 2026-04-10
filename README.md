@@ -236,9 +236,9 @@ Create `scriptorium.json` in repo root:
     "port": 8098
   },
   "discord": {
-    "enabled": false,
     "serverId": "",
     "channelId": "",
+    "allowedUserIds": [],
     "allowedUsers": []
   },
   "logLevel": "INFO",
@@ -342,10 +342,10 @@ Configure in `scriptorium.json`:
 ```json
 {
   "discord": {
-    "enabled": true,
     "serverId": "your-server-id",
     "channelId": "your-channel-id",
-    "allowedUsers": ["user-id-1"]
+    "allowedUserIds": ["user-id-1"],
+    "allowedUsers": ["username-1"]
   }
 }
 ```

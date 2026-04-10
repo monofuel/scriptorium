@@ -290,6 +290,7 @@ proc runDiscordBot*(repoPath: string) =
   defer: closeLog()
 
   let serverId = cfg.discord.serverId
+  let allowedUserIds = cfg.discord.allowedUserIds
   let allowedUsers = cfg.discord.allowedUsers
   let client = newGuildyClient(token)
 
@@ -313,7 +314,8 @@ proc runDiscordBot*(repoPath: string) =
     {.cast(gcsafe).}:
       if not trackMessageId(msg.id):
         return
-    if allowedUsers.len > 0 and msg.author.id notin allowedUsers:
+    let hasAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
+    if hasAllowlist and msg.author.id notin allowedUserIds and msg.author.username notin allowedUsers:
       let ignoredUser = msg.author.username
       let ignoredId = msg.author.id
       logDebug(&"discord message ignored from non-allowlisted user {ignoredUser} ({ignoredId})")
@@ -331,7 +333,8 @@ proc runDiscordBot*(repoPath: string) =
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:
       return
-    if allowedUsers.len > 0 and interaction.user_id notin allowedUsers:
+    let hasInteractionAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
+    if hasInteractionAllowlist and interaction.user_id notin allowedUserIds:
       logDebug(&"discord interaction ignored from non-allowlisted user ({interaction.user_id})")
       return
     let cmd = interaction.command_name
