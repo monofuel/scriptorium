@@ -27,7 +27,7 @@ suite "interactive planning":
     check "add feature C" in prompt
     check "AGENTS.md" in prompt
     check "Active working directory path (this is the scriptorium plan worktree):" in prompt
-    check "Only edit spec.md in this working directory." in prompt
+    check "Edit `spec.md` in this working directory." in prompt
     check "Treat `" in prompt
     check "as the authoritative planning file." in prompt
     check "If the engineer is discussing or asking questions, reply directly and do not edit spec.md." in prompt
@@ -255,13 +255,13 @@ suite "interactive planning":
     check callCount == 0
     check after == before
 
-  test "turn rejects writes outside spec.md":
+  test "turn reverts writes outside spec.md":
     let tmp = getTempDir() / "scriptorium_test_interactive_out_of_scope"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
-      ## Write one out-of-scope file in the plan worktree.
+      ## Write one out-of-scope file that should be reverted.
       writeFile(req.workingDir / "spec.md", "# Updated Spec\n")
       writeFile(req.workingDir / "areas/02-out-of-scope.md", "# Nope\n")
       result = AgentRunResult(
@@ -282,12 +282,11 @@ suite "interactive planning":
       result = "hello"
 
     let before = planCommitCount(tmp)
-    expect ValueError:
-      runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
+    runInteractivePlanSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
-    check after == before
+    check after > before
     check "areas/02-out-of-scope.md" notin files
 
   test "interrupt-style input exits session cleanly":

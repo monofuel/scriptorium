@@ -152,62 +152,57 @@ proc listModifiedPathsInPlanPath*(planPath: string): seq[string] =
   ## Return modified and untracked relative paths in the plan worktree.
   result = listModifiedPathsInGitPath(planPath)
 
+proc revertDisallowedPath(planPath: string, relPath: string, scopeName: string) =
+  ## Revert one disallowed file in the plan worktree.
+  ## Tracked files are unstaged and restored with git checkout; untracked files are deleted.
+  let isTracked = gitCheck(planPath, "ls-files", "--error-unmatch", relPath) == 0
+  if isTracked:
+    discard gitCheck(planPath, "reset", "HEAD", "--", relPath)
+    gitRun(planPath, "checkout", "--", relPath)
+  else:
+    let absPath = planPath / relPath
+    if fileExists(absPath):
+      removeFile(absPath)
+    elif dirExists(absPath):
+      removeDir(absPath)
+  logWarn(&"{scopeName} wrote to {relPath} — reverted")
+
 proc enforceWriteAllowlist*(planPath: string, allowedPaths: openArray[string], scopeName: string) =
-  ## Fail when modified paths are outside the provided relative-path allowlist.
+  ## Revert modified paths outside the provided relative-path allowlist.
   if allowedPaths.len == 0:
     raise newException(ValueError, "write allowlist cannot be empty")
 
   var allowedSet = initHashSet[string]()
-  var allowedList: seq[string] = @[]
   for path in allowedPaths:
     let normalized = normalizeRelativeWritePath(path)
-    if not allowedSet.contains(normalized):
-      allowedSet.incl(normalized)
-      allowedList.add(normalized)
-  allowedList.sort()
+    allowedSet.incl(normalized)
 
-  var disallowed: seq[string] = @[]
   for path in listModifiedPathsInPlanPath(planPath):
     if not allowedSet.contains(path):
-      disallowed.add(path)
-
-  if disallowed.len > 0:
-    let disallowedText = disallowed.join(", ")
-    let allowedText = allowedList.join(", ")
-    raise newException(
-      ValueError,
-      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed files: {allowedText}.",
-    )
+      revertDisallowedPath(planPath, path, scopeName)
 
 proc enforceNoWrites*(planPath: string, scopeName: string) =
-  ## Fail when any files were modified in the plan worktree.
-  let modified = listModifiedPathsInPlanPath(planPath)
-  if modified.len > 0:
-    let modifiedText = modified.join(", ")
-    raise newException(
-      ValueError,
-      fmt"{scopeName} modified files in read-only mode: {modifiedText}.",
-    )
+  ## Revert any files modified in the plan worktree (read-only mode).
+  for path in listModifiedPathsInPlanPath(planPath):
+    revertDisallowedPath(planPath, path, scopeName)
 
 proc isPathInAllowedPrefix*(path: string, prefix: string): bool =
   ## Return true when one relative path is under one normalized allowlist prefix.
   result = path == prefix or path.startsWith(prefix & "/")
 
 proc enforceWritePrefixAllowlist*(planPath: string, allowedPrefixes: openArray[string], scopeName: string) =
-  ## Fail when modified paths are outside the provided relative-path prefix allowlist.
+  ## Revert modified paths outside the provided relative-path prefix allowlist.
   if allowedPrefixes.len == 0:
     raise newException(ValueError, "write prefix allowlist cannot be empty")
 
-  var prefixSet = initHashSet[string]()
   var prefixList: seq[string] = @[]
+  var prefixSet = initHashSet[string]()
   for prefix in allowedPrefixes:
     let normalized = normalizeRelativeWritePath(prefix)
     if not prefixSet.contains(normalized):
       prefixSet.incl(normalized)
       prefixList.add(normalized)
-  prefixList.sort()
 
-  var disallowed: seq[string] = @[]
   for path in listModifiedPathsInPlanPath(planPath):
     var allowed = false
     for prefix in prefixList:
@@ -215,15 +210,7 @@ proc enforceWritePrefixAllowlist*(planPath: string, allowedPrefixes: openArray[s
         allowed = true
         break
     if not allowed:
-      disallowed.add(path)
-
-  if disallowed.len > 0:
-    let disallowedText = disallowed.join(", ")
-    let allowedText = prefixList.join(", ")
-    raise newException(
-      ValueError,
-      fmt"{scopeName} modified out-of-scope files: {disallowedText}. Allowed prefixes: {allowedText}.",
-    )
+      revertDisallowedPath(planPath, path, scopeName)
 
 proc pathFingerprintInGitPath*(gitPath: string, relPath: string): string =
   ## Return a stable fingerprint for one relative path in one git worktree path.

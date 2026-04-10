@@ -141,7 +141,7 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
-    response = withLockedPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
+    response = withPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -202,7 +202,7 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      response = withLockedPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
+      response = withPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
         let spec = loadSpecFromPlanPath(planPath)
         let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
         let agentResult = runPlanArchitectRequest(

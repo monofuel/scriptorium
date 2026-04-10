@@ -53,7 +53,7 @@ If the user asks about available commands, the following are available:
 
 Do not write log files, diagnostic output, build artifacts, test output, or temporary data to the repository. Use /tmp for scratch files.
 
-REMINDER: You may only write to `spec.md`. Do not modify `areas/`, `tickets/`, source code, or any other files. Area and ticket updates happen automatically when the orchestrator processes your spec changes.
+REMINDER: `spec.md` is the ONLY file you may write to (plus `tickets/open/` in rare emergencies). All other writes are automatically reverted.
 
 Inline convenience copy of `spec.md` from the plan worktree:
 {{CURRENT_SPEC}}{{CONVERSATION_HISTORY}}

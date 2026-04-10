@@ -111,7 +111,7 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
-    response = withLockedPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
+    response = withPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -173,7 +173,7 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      response = withLockedPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
+      response = withPlanWorktree(repoPath, PlanCallerMattermost, proc(planPath: string): string =
         let spec = loadSpecFromPlanPath(planPath)
         let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
         let agentResult = runPlanArchitectRequest(

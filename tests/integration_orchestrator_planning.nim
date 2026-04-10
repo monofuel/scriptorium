@@ -78,7 +78,7 @@ suite "orchestrator plan spec update":
     check "expand scope" in capturedFirstUserRequest
     check "AGENTS.md" in capturedFirstUserRequest
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedFirstUserRequest
-    check "Only edit spec.md in this working directory." in capturedFirstUserRequest
+    check "Edit `spec.md` in this working directory." in capturedFirstUserRequest
     check "Treat `" in capturedFirstUserRequest
     check "as the authoritative planning file." in capturedFirstUserRequest
     check "If the request is discussion, analysis, or questions, reply directly and do not edit spec.md." in capturedFirstUserRequest
@@ -91,13 +91,13 @@ suite "orchestrator plan spec update":
     check logRc == 0
     check "scriptorium: update spec from architect" in logOutput
 
-  test "updateSpecFromArchitect rejects writes outside spec.md":
+  test "updateSpecFromArchitect reverts writes outside spec.md":
     let tmp = getTempDir() / "scriptorium_test_plan_out_of_scope"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
-      ## Write to spec.md and one out-of-scope path to trigger guard failure.
+      ## Write to spec.md and one out-of-scope path that should be reverted.
       writeFile(req.workingDir / "spec.md", "# Updated Spec\n")
       writeFile(req.workingDir / "areas/01-out-of-scope.md", "# Bad write\n")
       result = AgentRunResult(
@@ -110,12 +110,12 @@ suite "orchestrator plan spec update":
       )
 
     let before = planCommitCount(tmp)
-    expect ValueError:
-      discard updateSpecFromArchitect(tmp, PlanCallerCli, "expand scope", fakeRunner)
+    let changed = updateSpecFromArchitect(tmp, PlanCallerCli, "expand scope", fakeRunner)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
-    check after == before
+    check changed
+    check after > before
     check "areas/01-out-of-scope.md" notin files
 
   test "updateSpecFromArchitect recovers stale managed deterministic worktree conflicts":
@@ -685,7 +685,7 @@ suite "orchestrator one-shot plan runner":
       check capturedRepoPath == repoPath
       check "AGENTS.md" in capturedPrompt
       check "Active working directory path (this is the scriptorium plan worktree):" in capturedPrompt
-      check "Only edit spec.md in this working directory." in capturedPrompt
+      check "Edit `spec.md` in this working directory." in capturedPrompt
       check "as the authoritative planning file." in capturedPrompt
       check "Inline convenience copy of `spec.md` from the plan worktree:" in capturedPrompt
 
