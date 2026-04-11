@@ -292,6 +292,11 @@ proc runDiscordBot*(repoPath: string) =
   let serverId = cfg.discord.serverId
   let allowedUserIds = cfg.discord.allowedUserIds
   let allowedUsers = cfg.discord.allowedUsers
+
+  if allowedUserIds.len == 0 and allowedUsers.len == 0:
+    echo "scriptorium: discord.allowedUserIds or discord.allowedUsers must be non-empty. Refusing to start with no auth configured."
+    quit(1)
+
   let client = newGuildyClient(token)
 
   let onRaw = proc(c: GuildyClient, event: JsonNode) {.gcsafe.} =

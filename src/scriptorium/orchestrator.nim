@@ -12,6 +12,8 @@ const
   IdleBackoffSleepMs = 30_000
   WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
   UnstickCommitPrefix = "scriptorium: unstick ticket"
+  UnhealthyAlertThreshold = 20
+  UnhealthyRepeatInterval = 100
 
 var
   tickSleepOverrideMs*: int = -1
@@ -172,6 +174,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   var masterHealthState = MasterHealthState()
   var specWaitingLogged = false
   var recoveryAttemptedForCommit = ""
+  var unhealthyTickCount = 0
   var queueDrainNotified = false
   let syncCfg = cfg.remoteSync
   var lastSyncTime = 0.0
@@ -242,12 +245,22 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         let healthy = isMasterHealthy(repoPath, masterHealthState)
         let healthElapsed = epochTime() - t0
         logDebug(&"tick {ticks}: {defaultBranch} health check took {healthElapsed:.1f}s, healthy={healthy}")
-        if not healthy and not masterHealthState.lastHealthLogged:
-          logWarn(&"{defaultBranch} is unhealthy — skipping tick")
-          masterHealthState.lastHealthLogged = true
-        elif healthy and masterHealthState.lastHealthLogged:
-          logInfo(&"{defaultBranch} is healthy again (commit {masterHealthState.head})")
-          masterHealthState.lastHealthLogged = false
+        if not healthy:
+          inc unhealthyTickCount
+          if not masterHealthState.lastHealthLogged:
+            logWarn(&"{defaultBranch} is unhealthy — skipping tick")
+            masterHealthState.lastHealthLogged = true
+          if unhealthyTickCount == UnhealthyAlertThreshold or
+              (unhealthyTickCount > UnhealthyAlertThreshold and
+               (unhealthyTickCount - UnhealthyAlertThreshold) mod UnhealthyRepeatInterval == 0):
+            let durationStr = formatDuration(float(unhealthyTickCount) * 30.0)
+            postNotification(repoPath, "unhealthy-master",
+              &"Master has been unhealthy for {unhealthyTickCount} ticks ({durationStr}). Recovery in progress.")
+        elif healthy:
+          if masterHealthState.lastHealthLogged:
+            logInfo(&"{defaultBranch} is healthy again (commit {masterHealthState.head})")
+            masterHealthState.lastHealthLogged = false
+          unhealthyTickCount = 0
 
         var architectStatus = "skipped"
         var managerStatus = "skipped"
@@ -258,9 +271,25 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         var managerChanged = false
 
         # When healthy, run the normal pipeline: architect → managers → coders.
-        # When unhealthy, skip new ticket work but allow merge queue + recovery below.
+        # When unhealthy, skip new ticket work but allow recovery ticket assignment.
         if not healthy:
           idle = true
+          # Recovery-area tickets are exempt from the unhealthy-master gate.
+          if hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator):
+            let assignment = assignOldestOpenTicket(repoPath, PlanCallerOrchestrator)
+            if assignment.inProgressTicket.len > 0:
+              let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+              logInfo(&"recovery: assigning recovery ticket {ticketId} (master unhealthy)")
+              if maxAgents <= 1:
+                let cfg2 = loadConfig(repoPath)
+                let agentResult = executeAssignedTicket(repoPath, PlanCallerOrchestrator, assignment, runner, cfg2.agents.architect)
+                if agentResult.submitted:
+                  logInfo(&"recovery: agent submitted fix for {ticketId}")
+                else:
+                  logWarn(&"recovery: agent did not submit fix for {ticketId}")
+              else:
+                startCodingAgentAsync(repoPath, assignment, maxAgents, codingAgentWorkerThread)
+              idle = false
         elif not shouldRun:
           discard
         elif hasRunnableSpec(repoPath, PlanCallerOrchestrator):
@@ -390,7 +419,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo(&"recovered {recoveredCount} stuck ticket(s)")
 
         # Step 7c: Recovery agent for unhealthy main branch.
-        if not healthy and masterHealthState.head != recoveryAttemptedForCommit:
+        # Skip creating a new recovery ticket when one already exists in open
+        # (it will be assigned by the recovery exemption in the unhealthy block above).
+        if not healthy and not hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator) and
+            masterHealthState.head != recoveryAttemptedForCommit:
           recoveryAttemptedForCommit = masterHealthState.head
           logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")
           runRecoveryAgent(repoPath, PlanCallerOrchestrator, runner, masterHealthState.testOutput, masterHealthState.head)
@@ -443,21 +475,11 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 logWarn(&"loop: architect iteration failed ({cycleElapsed:.1f}s): {errMsg}")
               idle = false
 
-        # Step 9: Audit trigger — spawn audit agent on queue drain or spec change.
-        if not isAuditRunning():
-          let drainTrigger = withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
-            isQueueDrained(planPath)
-          ) and runningAgentCount() == 0
-          let triggerAudit = (drainTrigger and needsAudit(repoPath)) or specChangeAuditPending
-          if triggerAudit and emptySlotCount(maxAgents) > 0:
-            if specChangeAuditPending:
-              specChangeAuditPending = false
-              logInfo("audit: triggered by spec change")
-            else:
-              logInfo("audit: triggered by queue drain")
-            startAuditAgentAsync(repoPath, maxAgents)
-          elif triggerAudit:
-            logInfo("audit: skipped, no slots available")
+        # Step 9: Audit trigger — temporarily disabled.
+        # The audit system is disabled pending proper testing and stabilization.
+        # Clear any pending audit flag so it does not accumulate.
+        if specChangeAuditPending:
+          specChangeAuditPending = false
 
         let ticketCounts = readOrchestratorStatus(repoPath, PlanCallerOrchestrator)
         let running = runningAgentCount()

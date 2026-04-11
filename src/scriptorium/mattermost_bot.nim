@@ -301,6 +301,11 @@ proc runMattermostBot*(repoPath: string) =
 
   let allowedUserIds = cfg.mattermost.allowedUserIds
   let allowedUsers = cfg.mattermost.allowedUsers
+
+  if allowedUserIds.len == 0 and allowedUsers.len == 0:
+    echo "scriptorium: mattermost.allowedUserIds or mattermost.allowedUsers must be non-empty. Refusing to start with no auth configured."
+    quit(1)
+
   enablePartialChainVerification()
   let client = newMostyClient(url, token)
 

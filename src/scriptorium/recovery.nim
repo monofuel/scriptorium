@@ -3,13 +3,16 @@
 
 import
   std/[os, osproc, posix, sets, strformat, strutils, times],
-  ./[agent_runner, coding_agent, config, git_ops, journal, lock_management, logging, manager_agent, merge_queue, output_formatting, prompt_builders, shared_state, ticket_assignment, ticket_metadata]
+  ./[agent_runner, coding_agent, config, git_ops, journal, lock_management,
+     logging, manager_agent, merge_queue, output_formatting, prompt_builders,
+     shared_state, ticket_assignment, ticket_metadata]
 
 const
   RecoveryCommitMessage = "scriptorium: recovery commit (unclean shutdown)"
   RecoveryMergedCommitPrefix = "scriptorium: recovery — completed already-merged ticket"
   RecoveryTicketCommitPrefix = "scriptorium: create recovery ticket"
   MaxRecoveryTestOutputChars* = 8000
+  RecoveryAreaName* = "recovery"
 
 type
   RecoverySummary* = object
@@ -306,6 +309,17 @@ proc recoverFromCrash*(repoPath: string, caller: string): RecoverySummary =
   else:
     let summaryLine = &"recovery: cleaned {result.worktreesCleaned} worktrees, cleared {result.staleMarkersCleared} stale markers, reconciled plan branch ({result.planAction}), completed {result.alreadyMergedCompleted} already-merged tickets, reopened {result.orphanedReopened} orphaned tickets"
     logInfo(summaryLine)
+
+proc hasOpenRecoveryTicket*(repoPath: string, caller: string): bool =
+  ## Return true when any open ticket has Area: recovery.
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+    for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
+      let content = readFile(ticketPath)
+      let area = parseAreaFromTicketContent(content)
+      if area == RecoveryAreaName:
+        return true
+    false
+  )
 
 proc buildRecoveryTicketContent*(testOutput: string, commitHash: string): string =
   ## Build the markdown content for a recovery ticket.

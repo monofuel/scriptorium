@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[audit_agent_cli, config, dashboard, discord_bot, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
+  ./scriptorium/[config, dashboard, discord_bot, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
   Version = "19.5.0"
@@ -93,7 +93,8 @@ proc cmdDo(args: seq[string]) =
 
 proc cmdAudit() =
   ## Run the audit agent against the current repository.
-  runAudit(getCurrentDir())
+  echo "scriptorium: audit system is temporarily disabled pending stabilization"
+  quit(0)
 
 proc cmdDashboard() =
   ## Start the web dashboard HTTP server.
