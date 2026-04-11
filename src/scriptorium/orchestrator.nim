@@ -419,6 +419,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo(&"recovered {recoveredCount} stuck ticket(s)")
 
         # Step 7c: Recovery agent for unhealthy main branch.
+        # Reset the guard when the previous recovery attempt has been fully processed
+        # (no recovery ticket exists anywhere), allowing a fresh attempt.
+        if not healthy and recoveryAttemptedForCommit == masterHealthState.head and
+            not hasAnyRecoveryTicket(repoPath, PlanCallerOrchestrator):
+          recoveryAttemptedForCommit = ""
+          logInfo("recovery: previous recovery attempt fully processed, allowing fresh attempt")
+
         # Skip creating a new recovery ticket when one already exists in open
         # (it will be assigned by the recovery exemption in the unhealthy block above).
         if not healthy and not hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator) and

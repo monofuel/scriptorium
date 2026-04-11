@@ -6,6 +6,10 @@ import
   helpers
 
 const
+  RecoveryTicketContent = "# Recovery\n\n**Area:** recovery\n"
+  NonRecoveryTicketContent = "# Ticket\n\n**Area:** a\n"
+
+const
   OrchestratorBasePort = 18000
 
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
@@ -236,4 +240,46 @@ suite "integration orchestrator merge queue":
       let files = planTreeFiles(repoPath)
       check "tickets/open/0001-first.md" in files
       check "tickets/in-progress/0001-first.md" notin files
+    )
+
+  test "IT-12 hasAnyRecoveryTicket returns true for open recovery ticket":
+    withInitializedTempRepo("scriptorium_integration_it12_", proc(repoPath: string) =
+      addTicketToPlan(repoPath, "open", "0001-recovery-abc1234.md", RecoveryTicketContent)
+      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "IT-13 hasAnyRecoveryTicket returns true for in-progress recovery ticket":
+    withInitializedTempRepo("scriptorium_integration_it13_", proc(repoPath: string) =
+      addTicketToPlan(repoPath, "in-progress", "0001-recovery-abc1234.md", RecoveryTicketContent)
+      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "IT-14 hasAnyRecoveryTicket returns true for stuck recovery ticket":
+    withInitializedTempRepo("scriptorium_integration_it14_", proc(repoPath: string) =
+      addTicketToPlan(repoPath, "stuck", "0001-recovery-abc1234.md", RecoveryTicketContent)
+      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "IT-15 hasAnyRecoveryTicket returns false when no recovery ticket exists":
+    withInitializedTempRepo("scriptorium_integration_it15_", proc(repoPath: string) =
+      addTicketToPlan(repoPath, "open", "0001-normal.md", NonRecoveryTicketContent)
+      check not hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "IT-16 hasAnyRecoveryTicket returns false for done recovery ticket":
+    withInitializedTempRepo("scriptorium_integration_it16_", proc(repoPath: string) =
+      addTicketToPlan(repoPath, "done", "0001-recovery-abc1234.md", RecoveryTicketContent)
+      check not hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "IT-17 hasAnyRecoveryTicket returns true for recovery ticket in merge queue":
+    withInitializedTempRepo("scriptorium_integration_it17_", proc(repoPath: string) =
+      addPassingMakefile(repoPath)
+      addTicketToPlan(repoPath, "open", "0001-recovery-abc1234.md", RecoveryTicketContent)
+      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
+      writeFile(assignment.worktree / "fix.txt", "fix\n")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add fix.txt")
+      runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m recovery-fix")
+      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "recovery fix")
+      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
     )

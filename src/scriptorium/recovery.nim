@@ -321,6 +321,28 @@ proc hasOpenRecoveryTicket*(repoPath: string, caller: string): bool =
     false
   )
 
+proc hasAnyRecoveryTicket*(repoPath: string, caller: string): bool =
+  ## Return true when a recovery ticket exists in open, in-progress, stuck, or the merge queue.
+  ## Used to decide whether recoveryAttemptedForCommit should be reset.
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+    for dir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsStuckDir]:
+      for ticketPath in listMarkdownFiles(planPath / dir):
+        let content = readFile(ticketPath)
+        let area = parseAreaFromTicketContent(content)
+        if area == RecoveryAreaName:
+          return true
+    discard ensureMergeQueueInitializedInPlanPath(planPath)
+    let items = listMergeQueueItems(planPath)
+    for item in items:
+      let ticketFullPath = planPath / item.ticketPath
+      if fileExists(ticketFullPath):
+        let content = readFile(ticketFullPath)
+        let area = parseAreaFromTicketContent(content)
+        if area == RecoveryAreaName:
+          return true
+    false
+  )
+
 proc buildRecoveryTicketContent*(testOutput: string, commitHash: string): string =
   ## Build the markdown content for a recovery ticket.
   let truncatedOutput = if testOutput.len > MaxRecoveryTestOutputChars:
