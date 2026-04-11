@@ -2,7 +2,7 @@
 
 import
   std/[os, osproc, tempfiles, unittest],
-  scriptorium/[shared_state, ticket_assignment],
+  scriptorium/[recovery, shared_state, ticket_assignment],
   helpers
 
 suite "stuck state transition validation":
@@ -72,3 +72,38 @@ suite "ensureUniqueTicketStateInPlanPath":
     createDir(planPath / PlanTicketsStuckDir)
 
     ensureUniqueTicketStateInPlanPath(planPath)
+
+suite "assignOldestOpenTicket areaFilter":
+  test "areaFilter recovery assigns recovery ticket when mixed tickets exist":
+    let tmp = getTempDir() / "scriptorium_test_area_filter_recovery"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
+    addTicketToPlan(tmp, "open", "0002-recovery-fix.md", "# Recovery Fix\n\n**Area:** recovery\n")
+
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli, RecoveryAreaName)
+    check assignment.inProgressTicket.len > 0
+    let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+    check ticketId == "0002"
+
+  test "areaFilter recovery returns empty when only non-recovery tickets exist":
+    let tmp = getTempDir() / "scriptorium_test_area_filter_no_recovery"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
+    addTicketToPlan(tmp, "open", "0003-another-bug.md", "# Another Bug\n\n**Area:** merge-queue\n")
+
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli, RecoveryAreaName)
+    check assignment.inProgressTicket.len == 0
+
+  test "no areaFilter assigns oldest ticket regardless of area":
+    let tmp = getTempDir() / "scriptorium_test_no_area_filter"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
+    addTicketToPlan(tmp, "open", "0002-recovery-fix.md", "# Recovery Fix\n\n**Area:** recovery\n")
+
+    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    check assignment.inProgressTicket.len > 0
+    let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
+    check ticketId == "0001"

@@ -176,12 +176,17 @@ proc priorityOrd(p: TicketPriority): int =
   of tpMedium: 1
   of tpLow: 0
 
-proc openTicketsByIdInPlanPath(planPath: string): seq[tuple[id: int, rel: string, priority: TicketPriority]] =
-  ## Return all open tickets sorted by priority (critical first) then numeric ID (ascending).
+proc openTicketsByIdInPlanPath(planPath: string, areaFilter: string = ""): seq[tuple[id: int, rel: string, priority: TicketPriority]] =
+  ## Return open tickets sorted by priority (critical first) then numeric ID (ascending).
+  ## When areaFilter is non-empty, only tickets matching that area are returned.
   for ticketPath in listMarkdownFiles(planPath / PlanTicketsOpenDir):
     let rel = relativePath(ticketPath, planPath).replace('\\', '/')
-    let parsedId = parseInt(ticketIdFromTicketPath(rel))
     let content = readFile(ticketPath)
+    if areaFilter.len > 0:
+      let area = parseAreaFromTicketContent(content)
+      if area != areaFilter:
+        continue
+    let parsedId = parseInt(ticketIdFromTicketPath(rel))
     let priority = parsePriorityFromTicketContent(content)
     result.add((id: parsedId, rel: rel, priority: priority))
   result.sort(proc(a, b: tuple[id: int, rel: string, priority: TicketPriority]): int =
@@ -207,11 +212,12 @@ proc doneTicketIdsInPlanPath(planPath: string): HashSet[string] =
     let rel = PlanTicketsDoneDir / extractFilename(ticketPath)
     result.incl(ticketIdFromTicketPath(rel))
 
-proc assignOldestOpenTicket*(repoPath: string, caller: string): TicketAssignment =
+proc assignOldestOpenTicket*(repoPath: string, caller: string, areaFilter: string = ""): TicketAssignment =
   ## Move the oldest assignable open ticket to in-progress and attach a code worktree.
   ## Skips tickets whose dependencies are not yet in done.
+  ## When areaFilter is non-empty, only tickets matching that area are considered.
   result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): TicketAssignment =
-    let openTickets = openTicketsByIdInPlanPath(planPath)
+    let openTickets = openTicketsByIdInPlanPath(planPath, areaFilter)
     if openTickets.len == 0:
       return TicketAssignment()
 
@@ -265,13 +271,14 @@ proc assignOldestOpenTicket*(repoPath: string, caller: string): TicketAssignment
     )
   )
 
-proc assignOpenTickets*(repoPath: string, caller: string, maxAgents: int): seq[TicketAssignment] =
+proc assignOpenTickets*(repoPath: string, caller: string, maxAgents: int, areaFilter: string = ""): seq[TicketAssignment] =
   ## Assign multiple open tickets concurrently when they touch independent areas.
   ## Scans open tickets in ID order (oldest first), skipping tickets whose area
   ## already has an in-progress ticket or was claimed earlier in this batch.
+  ## When areaFilter is non-empty, only tickets matching that area are considered.
   ## Returns a sequence of assignment records for the caller to execute.
   result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): seq[TicketAssignment] =
-    let openTickets = openTicketsByIdInPlanPath(planPath)
+    let openTickets = openTicketsByIdInPlanPath(planPath, areaFilter)
     if openTickets.len == 0:
       return @[]
 

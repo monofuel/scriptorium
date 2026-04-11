@@ -276,7 +276,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           idle = true
           # Recovery-area tickets are exempt from the unhealthy-master gate.
           if hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator):
-            let assignment = assignOldestOpenTicket(repoPath, PlanCallerOrchestrator)
+            let assignment = assignOldestOpenTicket(repoPath, PlanCallerOrchestrator, RecoveryAreaName)
             if assignment.inProgressTicket.len > 0:
               let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
               logInfo(&"recovery: assigning recovery ticket {ticketId} (master unhealthy)")
