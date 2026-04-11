@@ -426,9 +426,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           recoveryAttemptedForCommit = ""
           logInfo("recovery: previous recovery attempt fully processed, allowing fresh attempt")
 
+        # Do not create a new recovery ticket when one is already stuck (exhausted).
+        # The unhealthy-master notification was posted when it was parked.
+        if not healthy and hasStuckRecoveryTicket(repoPath, PlanCallerOrchestrator):
+          logDebug("recovery: stuck recovery ticket exists, suppressing new recovery attempt")
         # Skip creating a new recovery ticket when one already exists in open
         # (it will be assigned by the recovery exemption in the unhealthy block above).
-        if not healthy and not hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator) and
+        elif not healthy and not hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator) and
             masterHealthState.head != recoveryAttemptedForCommit:
           recoveryAttemptedForCommit = masterHealthState.head
           logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")

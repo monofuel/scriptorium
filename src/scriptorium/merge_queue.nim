@@ -626,7 +626,11 @@ proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = 
         beginJournalTransition(planPath, "park " & item.ticketId, stuckSteps, stuckCommitMsg)
         executeJournalSteps(planPath)
         completeJournalTransition(planPath)
-        postNotification(repoPath, "stuck", &"Ticket {item.ticketId} is stuck after {failureCount} merge failures. The architect is investigating — no action needed.")
+        let parkedArea = parseAreaFromTicketContent(ticketContent)
+        if parkedArea == "recovery":
+          postNotification(repoPath, "unhealthy-master", &"Recovery ticket {item.ticketId} exhausted all attempts. Master remains unhealthy. Manual intervention required.")
+        else:
+          postNotification(repoPath, "stuck", &"Ticket {item.ticketId} is stuck after {failureCount} merge failures. The architect is investigating — no action needed.")
       else:
         logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason={failureReason}, attempts={attempts}, total wall={totalWall})")
         sessionStats.ticketsReopened += 1

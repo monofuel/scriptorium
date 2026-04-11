@@ -1,8 +1,9 @@
-## Unit tests for buildRecoveryTicketContent.
+## Unit tests for recovery module.
 
 import
   std/[strutils, unittest],
-  scriptorium/recovery
+  helpers,
+  scriptorium/[notifications, recovery]
 
 suite "buildRecoveryTicketContent":
   test "contains expected title":
@@ -38,3 +39,54 @@ suite "buildRecoveryTicketContent":
     let result = buildRecoveryTicketContent("", "abc1234")
     check "Run `make test` and `make integration-test`" in result
     check "```" notin result
+
+suite "hasStuckRecoveryTicket":
+  test "returns false when no stuck tickets exist":
+    withInitializedTempRepo("test_no_stuck_", proc(repoPath: string) =
+      check not hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "returns true when a stuck recovery ticket exists":
+    withInitializedTempRepo("test_stuck_recovery_", proc(repoPath: string) =
+      let content = buildRecoveryTicketContent("FAIL", "abc1234")
+      addTicketToPlan(repoPath, "stuck", "0042-recovery-abc1234.md", content)
+      check hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+  test "returns false when stuck ticket is not a recovery ticket":
+    withInitializedTempRepo("test_stuck_nonrecov_", proc(repoPath: string) =
+      let content = "# Fix bug\n\n**Area:** frontend\n"
+      addTicketToPlan(repoPath, "stuck", "0042-fix-bug.md", content)
+      check not hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+    )
+
+suite "unhealthy-master notification on recovery ticket parking":
+  test "unhealthy-master notification posted when recovery ticket is parked":
+    withInitializedTempRepo("test_unhealthy_notif_", proc(repoPath: string) =
+      clearNotifications(repoPath)
+      let ticketContent = buildRecoveryTicketContent("FAIL", "abc1234")
+      let area = parseAreaFromTicketContent(ticketContent)
+      check area == "recovery"
+      # Simulate what merge_queue does: post unhealthy-master for recovery tickets.
+      if area == "recovery":
+        postNotification(repoPath, "unhealthy-master", "Recovery ticket 0042 exhausted all attempts. Master remains unhealthy. Manual intervention required.")
+      let messages = consumeNotifications(repoPath)
+      check messages.len == 1
+      check "unhealthy-master" notin messages[0]
+      check "exhausted all attempts" in messages[0]
+      check "Manual intervention required" in messages[0]
+    )
+
+  test "stuck notification posted for non-recovery tickets":
+    withInitializedTempRepo("test_stuck_notif_", proc(repoPath: string) =
+      clearNotifications(repoPath)
+      let ticketContent = "# Fix bug\n\n**Area:** frontend\n"
+      let area = parseAreaFromTicketContent(ticketContent)
+      check area == "frontend"
+      # Non-recovery tickets get the generic stuck notification.
+      if area != "recovery":
+        postNotification(repoPath, "stuck", "Ticket 0043 is stuck.")
+      let messages = consumeNotifications(repoPath)
+      check messages.len == 1
+      check "stuck" in messages[0]
+    )

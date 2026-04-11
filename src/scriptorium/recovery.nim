@@ -343,6 +343,17 @@ proc hasAnyRecoveryTicket*(repoPath: string, caller: string): bool =
     false
   )
 
+proc hasStuckRecoveryTicket*(repoPath: string, caller: string): bool =
+  ## Return true when a recovery ticket exists in tickets/stuck/.
+  result = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+    for ticketPath in listMarkdownFiles(planPath / PlanTicketsStuckDir):
+      let content = readFile(ticketPath)
+      let area = parseAreaFromTicketContent(content)
+      if area == RecoveryAreaName:
+        return true
+    false
+  )
+
 proc buildRecoveryTicketContent*(testOutput: string, commitHash: string): string =
   ## Build the markdown content for a recovery ticket.
   let truncatedOutput = if testOutput.len > MaxRecoveryTestOutputChars:
