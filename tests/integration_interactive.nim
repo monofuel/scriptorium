@@ -413,13 +413,13 @@ suite "interactive ask session":
 
     check after == before
 
-  test "ask session rejects writes":
-    let tmp = getTempDir() / "scriptorium_test_ask_rejects_writes"
+  test "ask session reverts writes":
+    let tmp = getTempDir() / "scriptorium_test_ask_reverts_writes"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
     proc fakeRunner(req: AgentRunRequest): AgentRunResult =
-      ## Attempt to write a file, which should be rejected.
+      ## Attempt to write a file, which should be silently reverted.
       writeFile(req.workingDir / "spec.md", "# Modified Spec\n")
       result = AgentRunResult(
         backend: harnessCodex,
@@ -438,8 +438,7 @@ suite "interactive ask session":
       result = "tell me something"
 
     let before = planCommitCount(tmp)
-    expect ValueError:
-      runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
+    runInteractiveAskSession(tmp, fakeRunner, fakeInput, quiet = true)
     let after = planCommitCount(tmp)
     check after == before
 
