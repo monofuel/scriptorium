@@ -5,6 +5,18 @@ import
   ./[agent_runner, architect_agent, chat_common, config, git_ops, intent_classifier,
      lock_management, logging, notifications, prompt_builders, shared_state]
 
+proc isUserAllowed*(userId: string, username: string, allowedUserIds: seq[string], allowedUsers: seq[string]): bool =
+  ## Check whether a user passes the allowlist gate.
+  ## Returns true if no allowlist is configured, or if the user matches either list.
+  let hasAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
+  if not hasAllowlist:
+    return true
+  if userId in allowedUserIds:
+    return true
+  if username.len > 0 and username in allowedUsers:
+    return true
+  result = false
+
 const
   DiscordMessageLimit* = 2000
   SpecUpdatedNote = "\n[spec.md updated]"
@@ -319,8 +331,7 @@ proc runDiscordBot*(repoPath: string) =
     {.cast(gcsafe).}:
       if not trackMessageId(msg.id):
         return
-    let hasAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
-    if hasAllowlist and msg.author.id notin allowedUserIds and msg.author.username notin allowedUsers:
+    if not isUserAllowed(msg.author.id, msg.author.username, allowedUserIds, allowedUsers):
       let ignoredUser = msg.author.username
       let ignoredId = msg.author.id
       logDebug(&"discord message ignored from non-allowlisted user {ignoredUser} ({ignoredId})")
@@ -338,8 +349,16 @@ proc runDiscordBot*(repoPath: string) =
   let onInteraction = proc(c: GuildyClient, interaction: DiscordInteraction) {.gcsafe.} =
     if interaction.channel_id != channelId:
       return
-    let hasInteractionAllowlist = allowedUserIds.len > 0 or allowedUsers.len > 0
-    if hasInteractionAllowlist and interaction.user_id notin allowedUserIds:
+    # Fast path: check userId first. If not in allowedUserIds and allowedUsers
+    # is configured, resolve the username via REST before rejecting (fail closed).
+    var interactionUsername = ""
+    if interaction.user_id notin allowedUserIds and allowedUsers.len > 0:
+      let guildId = interaction.guild_id
+      if guildId.len > 0:
+        let member = c.getGuildMember(guildId, interaction.user_id)
+        if member != nil and member.user != nil:
+          interactionUsername = member.user.username
+    if not isUserAllowed(interaction.user_id, interactionUsername, allowedUserIds, allowedUsers):
       logDebug(&"discord interaction ignored from non-allowlisted user ({interaction.user_id})")
       return
     let cmd = interaction.command_name

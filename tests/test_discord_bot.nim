@@ -63,6 +63,36 @@ proc testTruncateMessageOverLimit() =
   doAssert result.endsWith(TruncatedMarker)
   echo "[OK] discord truncateMessage over limit"
 
+proc testIsUserAllowedNoAllowlist() =
+  ## Verify all users pass when no allowlist is configured.
+  doAssert isUserAllowed("123", "alice", @[], @[]) == true
+  echo "[OK] isUserAllowed passes with no allowlist"
+
+proc testIsUserAllowedByUserId() =
+  ## Verify a user matching allowedUserIds is allowed.
+  doAssert isUserAllowed("123", "alice", @["123", "456"], @[]) == true
+  echo "[OK] isUserAllowed passes by userId"
+
+proc testIsUserAllowedByUsername() =
+  ## Verify a user matching allowedUsers is allowed even without matching userId.
+  doAssert isUserAllowed("999", "alice", @["123"], @["alice", "bob"]) == true
+  echo "[OK] isUserAllowed passes by username"
+
+proc testIsUserAllowedByUsernameOnly() =
+  ## Verify a user matching allowedUsers is allowed when allowedUserIds is empty.
+  doAssert isUserAllowed("999", "alice", @[], @["alice"]) == true
+  echo "[OK] isUserAllowed passes by username only"
+
+proc testIsUserAllowedRejected() =
+  ## Verify a user matching neither list is rejected.
+  doAssert isUserAllowed("999", "charlie", @["123"], @["alice"]) == false
+  echo "[OK] isUserAllowed rejects non-matching user"
+
+proc testIsUserAllowedEmptyUsername() =
+  ## Verify that an empty username does not match allowedUsers entries.
+  doAssert isUserAllowed("999", "", @["123"], @["alice"]) == false
+  echo "[OK] isUserAllowed rejects empty username"
+
 initDedup()
 testTrackMessageIdNew()
 testTrackMessageIdDuplicate()
@@ -71,3 +101,9 @@ testTrackMessageIdReAdd()
 testTruncateMessageUnderLimit()
 testTruncateMessageAtLimit()
 testTruncateMessageOverLimit()
+testIsUserAllowedNoAllowlist()
+testIsUserAllowedByUserId()
+testIsUserAllowedByUsername()
+testIsUserAllowedByUsernameOnly()
+testIsUserAllowedRejected()
+testIsUserAllowedEmptyUsername()
