@@ -27,12 +27,17 @@ proc ensureWorktreeCreated*(repoPath: string, ticketRelPath: string): tuple[bran
   let path = worktreePathForTicket(repoPath, ticketRelPath)
   createDir(parentDir(path))
 
+  # Unlock first — a locked worktree cannot be removed with single --force.
+  discard gitCheck(repoPath, "worktree", "unlock", path)
   discard gitCheck(repoPath, "worktree", "remove", "--force", path)
+  discard gitCheck(repoPath, "worktree", "prune")
   if dirExists(path):
     forceRemoveDir(path)
 
   if gitCheck(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/" & branch) == 0:
-    gitRun(repoPath, "branch", "-D", branch)
+    let branchRc = gitCheck(repoPath, "branch", "-D", branch)
+    if branchRc != 0:
+      logWarn(&"branch -D {branch} failed (rc={branchRc}), continuing anyway")
   gitRun(repoPath, "worktree", "add", "-b", branch, path)
 
   result = (branch: branch, path: path)
@@ -353,7 +358,10 @@ proc cleanupStaleTicketWorktrees*(repoPath: string, caller: string): seq[string]
   for path in listGitWorktreePaths(repoPath):
     let normalizedPath = normalizeAbsolutePath(path)
     if normalizedPath.startsWith(managedRoot & "/") and not activeWorktrees.contains(path):
+      # Unlock first — a locked worktree cannot be removed with single --force.
+      discard gitCheck(repoPath, "worktree", "unlock", path)
       discard gitCheck(repoPath, "worktree", "remove", "--force", path)
+      discard gitCheck(repoPath, "worktree", "prune")
       if dirExists(path):
         forceRemoveDir(path)
       result.add(path)
