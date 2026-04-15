@@ -636,6 +636,21 @@ proc testLoopFeedbackTimeoutConfig() =
   doAssert loaded.loop.feedbackTimeoutMs == 30000
   echo "[OK] feedbackTimeoutMs default and custom value load correctly"
 
+proc testDiskSpaceMinGBPartialOverride() =
+  ## Verify partial JSON with diskSpaceMinGB overrides the default while preserving other defaults.
+  let tmpDir = getTempDir() / "test_config_diskspace_partial"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"diskSpaceMinGB": 50}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  doAssert cfg.diskSpaceMinGB == 50
+  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.concurrency.maxAgents == 4
+  echo "[OK] diskSpaceMinGB partial override loads custom value with other defaults preserved"
+
 proc testCorruptedJsonRaisesValueError() =
   ## Verify loadConfig raises ValueError with clear message on corrupted JSON.
   let tmpDir = getTempDir() / "test_config_corrupted_json"
@@ -687,4 +702,5 @@ when isMainModule:
   testChatHistoryCountConfig()
   testLoopFeedbackTimeoutConfig()
   testSaveConfigRoundTrip()
+  testDiskSpaceMinGBPartialOverride()
   testCorruptedJsonRaisesValueError()
