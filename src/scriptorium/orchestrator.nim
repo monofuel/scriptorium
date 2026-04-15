@@ -158,6 +158,14 @@ proc logSessionSummary*() =
   let averagesLine = &"session summary: avg_ticket_wall={avgTicketWall} avg_coding_wall={avgCodingWall} avg_test_wall={avgTestWall} first_attempt_success={firstAttemptSuccess}"
   logInfo(averagesLine)
 
+proc availableDiskSpaceGB*(path: string): float =
+  ## Return available disk space in GB for the filesystem containing path.
+  var stat: Statvfs
+  if statvfs(path.cstring, stat) != 0:
+    raise newException(OSError, "statvfs failed for " & path)
+  let availBytes = stat.f_bavail.float * stat.f_frsize.float
+  result = availBytes / (1024.0 * 1024.0 * 1024.0)
+
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
   ## Execute the orchestrator polling loop with interleaved manager/coder execution.
   ## Tick order: poll completions → backoff/health → architect → managers → coders → merge → sleep.
@@ -225,8 +233,15 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         else:
           logInfo(&"agent slots: {running}/{maxAgents} (ticket {completion.ticketId} finished)")
 
+      # Disk space gate: skip all new work when available space is below threshold.
+      let diskSpaceMinGB = cfg.diskSpaceMinGB
+      let availGB = if diskSpaceMinGB > 0: availableDiskSpaceGB(repoPath) else: 0.0
+      if diskSpaceMinGB > 0 and availGB < diskSpaceMinGB.float:
+        let minGB = diskSpaceMinGB
+        logInfo(&"WAITING: low disk space — {availGB:.1f} GB available, need {minGB} GB")
+        idle = true
       # Pause check: skip new assignments but continue merge queue and completions.
-      if isPaused(repoPath):
+      elif isPaused(repoPath):
         logInfo("orchestrator paused, skipping new assignments")
         let mergeProcessed = processMergeQueue(repoPath, PlanCallerOrchestrator)
         if mergeProcessed:

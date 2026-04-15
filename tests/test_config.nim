@@ -22,6 +22,7 @@ proc testDefaultConfigValues() =
   doAssert cfg.discord.allowedUsers.len == 0
   doAssert cfg.dashboard.port == 8098
   doAssert cfg.dashboard.host == "127.0.0.1"
+  doAssert cfg.diskSpaceMinGB == 20
   doAssert cfg.logLevel == ""
   doAssert cfg.fileLogLevel == ""
   echo "[OK] defaultConfig returns expected default values"
@@ -613,6 +614,7 @@ proc testSaveConfigRoundTrip() =
   doAssert loaded.remoteSync.syncIntervalSeconds == original.remoteSync.syncIntervalSeconds
 
   # Top-level fields.
+  doAssert loaded.diskSpaceMinGB == original.diskSpaceMinGB
   doAssert loaded.logLevel == original.logLevel
   doAssert loaded.fileLogLevel == original.fileLogLevel
   doAssert loaded.syncAgentsMd == original.syncAgentsMd

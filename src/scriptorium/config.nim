@@ -96,6 +96,7 @@ type
     dashboard*: DashboardConfig
     devops*: DevopsConfig
     remoteSync*: RemoteSyncConfig
+    diskSpaceMinGB*: int
     syncAgentsMd*: bool
     logLevel*: string
     fileLogLevel*: string
@@ -150,6 +151,7 @@ proc defaultConfig*(): Config =
     loop: LoopConfig(enabled: false, feedback: "", goal: "", maxIterations: 0, feedbackTimeoutMs: DefaultFeedbackTimeoutMs),
     devops: DevopsConfig(enabled: false),
     dashboard: DashboardConfig(host: DefaultDashboardHost, port: DefaultDashboardPort),
+    diskSpaceMinGB: 20,
     syncAgentsMd: true,
   )
 
