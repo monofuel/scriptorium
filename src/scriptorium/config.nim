@@ -182,12 +182,15 @@ proc inferHarness*(model: string): Harness =
     harnessTypoi
 
 proc deepMerge(defaults: JsonNode, user: JsonNode): JsonNode =
-  ## Merge user values over defaults. Only keys present in defaults are kept.
+  ## Merge user values over defaults, preserving unknown user keys.
   if defaults.kind == JObject and user.kind == JObject:
     result = copy(defaults)
     for key, defaultVal in defaults.pairs:
       if key in user:
         result[key] = deepMerge(defaultVal, user[key])
+    for key, userVal in user.pairs:
+      if key notin result:
+        result[key] = copy(userVal)
   else:
     result = copy(user)
 
@@ -238,10 +241,13 @@ proc loadConfig*(repoPath: string): Config =
     result.fileLogLevel = envFileLogLevel
 
 proc normalizeConfig*(repoPath: string) =
-  ## Load, merge with defaults, and write back the config file once.
-  ## Call at startup to add new fields, remove old ones, and pretty-print.
+  ## Load raw JSON, deep-merge with defaults, and write back directly.
+  ## Preserves unknown user keys that are not in the Config struct.
   let path = repoPath / ConfigFile
   if not fileExists(path):
     return
-  let cfg = loadConfig(repoPath)
-  saveConfig(repoPath, cfg)
+  let raw = readFile(path)
+  let userJson = parseJson(raw)
+  let defaultJson = parseJson(defaultConfig().toJson())
+  let merged = deepMerge(defaultJson, userJson)
+  writeFile(path, merged.pretty() & "\n")

@@ -415,22 +415,46 @@ proc testNormalizeConfigWriteBack() =
   doAssert "claude-sonnet-4-6" in written
   echo "[OK] normalizeConfig writes back pretty-printed JSON with all defaults"
 
-proc testNormalizeConfigStripsUnknownKeys() =
-  ## Verify unknown keys are stripped by normalizeConfig.
-  let tmpDir = getTempDir() / "test_config_strip_unknown"
+proc testNormalizeConfigPreservesUnknownKeys() =
+  ## Verify unknown keys are preserved by normalizeConfig.
+  let tmpDir = getTempDir() / "test_config_preserve_unknown"
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"agents": {"architect": {"model": "claude-opus-4-6"}}, "bogusKey": "should-be-removed", "anotherUnknown": 42}"""
+  let json = """{"agents": {"architect": {"model": "claude-opus-4-6"}}, "bogusKey": "should-be-kept", "anotherUnknown": 42}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   normalizeConfig(tmpDir)
 
   let written = readFile(tmpDir / "scriptorium.json")
-  doAssert "bogusKey" notin written
-  doAssert "anotherUnknown" notin written
-  doAssert "should-be-removed" notin written
-  echo "[OK] unknown keys stripped by normalizeConfig"
+  doAssert "bogusKey" in written
+  doAssert "anotherUnknown" in written
+  doAssert "should-be-kept" in written
+  # Known defaults still present.
+  doAssert "maxAgents" in written
+  doAssert "dashboard" in written
+  echo "[OK] unknown keys preserved by normalizeConfig"
+
+proc testDeepMergePreservesUserOnlyKeys() =
+  ## Verify deepMerge preserves user-only keys at top-level and nested levels.
+  let tmpDir = getTempDir() / "test_config_deepmerge_user_keys"
+  createDir(tmpDir)
+  defer: removeDir(tmpDir)
+
+  let json = """{"agents": {"architect": {"model": "claude-opus-4-6", "customFlag": true}, "extraAgent": {"model": "x"}}, "topLevelExtra": "hello"}"""
+  writeFile(tmpDir / "scriptorium.json", json)
+
+  let cfg = loadConfig(tmpDir)
+  # Known fields still work.
+  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+
+  # Verify unknown keys survive normalizeConfig round-trip.
+  normalizeConfig(tmpDir)
+  let written = readFile(tmpDir / "scriptorium.json")
+  doAssert "customFlag" in written
+  doAssert "extraAgent" in written
+  doAssert "topLevelExtra" in written
+  echo "[OK] deepMerge preserves user-only keys at top and nested levels"
 
 proc testLoadConfigIsReadOnly() =
   ## Verify loadConfig does not modify the file on disk.
@@ -652,7 +676,8 @@ when isMainModule:
   testPerAgentTimeoutFullOverride()
   testExplicitZeroTimeoutOverrides()
   testNormalizeConfigWriteBack()
-  testNormalizeConfigStripsUnknownKeys()
+  testNormalizeConfigPreservesUnknownKeys()
+  testDeepMergePreservesUserOnlyKeys()
   testLoadConfigIsReadOnly()
   testDiscordAllowedUserIdsConfig()
   testMattermostAllowedUserIdsConfig()
