@@ -51,6 +51,12 @@ suite "buildReviewAgentPrompt":
     let prompt = buildReviewAgentPrompt("ticket", "   \n  \n", "area", "summary", "agents", "spec")
     check "## Changes" in prompt
 
+  test "includes human authority directive":
+    ## Verify the review prompt includes the human commit authority directive.
+    let prompt = buildReviewAgentPrompt("ticket", "diff", "area", "summary", "agents", "spec")
+    check "Human commit authority" in prompt
+    check "authoritative" in prompt
+
   test "agents and spec content appear in rendered prompt":
     ## Verify that AGENTS.md and spec content are included in the rendered prompt.
     let prompt = buildReviewAgentPrompt(

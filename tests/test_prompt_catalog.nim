@@ -55,6 +55,11 @@ suite "prompt catalog":
     check CodexRetryDefaultContinuationText.contains("Continue from the previous attempt")
     check CodexRetryDefaultContinuationText.contains("submit_pr")
 
+  test "HumanAuthorityTemplate is non-empty and contains key phrases":
+    check HumanAuthorityTemplate.len > 0
+    check "authoritative" in HumanAuthorityTemplate
+    check "Never revert" in HumanAuthorityTemplate
+
   test "agents example template contains expanded library catalog":
     check AgentsExampleTemplate.contains("nimby")
     check AgentsExampleTemplate.contains("jsony")

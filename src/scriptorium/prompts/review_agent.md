@@ -59,6 +59,8 @@ Flag the following issues introduced by the PR:
 - Leftover artifacts: commented-out code, TODO comments for work that is already completed, assigned-but-unread variables.
 - Changes unrelated to the ticket goal. Use judgment here — legitimate incidental fixes (e.g. fixing a typo noticed while working nearby) are acceptable.
 
+**Human commit authority:** Changes that build on or preserve recent human commits on the default branch are never "unrelated." Engineer commits are authoritative — do not flag them for removal or request they be reverted.
+
 ### Repository hygiene
 
 Flag as substantive issues:

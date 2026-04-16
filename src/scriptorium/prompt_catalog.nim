@@ -25,6 +25,7 @@ const
   ToneTemplate* = staticRead(PromptDirectory & "tone.md")
   RepoHygieneTemplate* = staticRead(PromptDirectory & "repo_hygiene.md")
   EngineeringMethodTemplate* = staticRead(PromptDirectory & "engineering_method.md")
+  HumanAuthorityTemplate* = staticRead(PromptDirectory & "human_authority.md")
 
 type
   PromptBinding* = tuple[name: string, value: string]

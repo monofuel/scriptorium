@@ -31,3 +31,9 @@ suite "buildAuditAgentPrompt":
     let prompt = buildAuditAgentPrompt("spec", "agents", "deadbeef", "diff")
     check "patience and kindness" in prompt or "Deliver all" in prompt
     check "root cause" in prompt or "five times" in prompt
+
+  test "includes human authority directive":
+    ## Verify the prompt includes the human commit authority directive.
+    let prompt = buildAuditAgentPrompt("spec", "agents", "deadbeef", "diff")
+    check "Human commit authority" in prompt
+    check "authoritative" in prompt

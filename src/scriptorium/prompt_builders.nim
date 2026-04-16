@@ -19,6 +19,10 @@ proc withMethod*(prompt: string): string =
   ## Append the shared engineering method directive to a prompt.
   result = prompt.strip() & "\n\n" & EngineeringMethodTemplate.strip() & "\n"
 
+proc withHumanAuthority*(prompt: string): string =
+  ## Append the shared human commit authority directive to a prompt.
+  result = prompt.strip() & "\n\n" & HumanAuthorityTemplate.strip() & "\n"
+
 proc withDevops*(prompt: string, devopsEnabled: bool): string =
   ## Append devops guidance when devops mode is enabled.
   if devopsEnabled:
@@ -72,7 +76,7 @@ proc formatPlanStreamEvent*(event: AgentStreamEvent): string =
 proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string, priorWorkNote: string = ""): string =
   ## Build the coding-agent prompt from ticket context.
   ## When priorWorkNote is non-empty, it is appended to inform the agent of existing commits.
-  result = withMethod(withHygiene(withTone(renderPromptTemplate(
+  result = withHumanAuthority(withMethod(withHygiene(withTone(renderPromptTemplate(
     CodingAgentTemplate,
     [
       (name: "PROJECT_REPO_PATH", value: repoPath),
@@ -80,7 +84,7 @@ proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPa
       (name: "TICKET_PATH", value: ticketRelPath),
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
     ],
-  ))))
+  )))))
   if priorWorkNote.len > 0:
     result = result.strip() & "\n\n" & priorWorkNote
 
@@ -103,7 +107,7 @@ proc buildStallContinuationPrompt*(initialPrompt: string, ticketContent: string,
 
 proc buildAuditAgentPrompt*(spec: string, agentsMd: string, lastAuditCommit: string, diff: string): string =
   ## Build the audit agent prompt from spec, AGENTS.md, last audit commit, and diff.
-  result = withMethod(withTone(renderPromptTemplate(
+  result = withHumanAuthority(withMethod(withTone(renderPromptTemplate(
     AuditAgentTemplate,
     [
       (name: "spec", value: spec.strip()),
@@ -111,11 +115,11 @@ proc buildAuditAgentPrompt*(spec: string, agentsMd: string, lastAuditCommit: str
       (name: "last_audit_commit", value: lastAuditCommit.strip()),
       (name: "diff", value: diff.strip()),
     ],
-  )))
+  ))))
 
 proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaContent: string, submitSummary: string, agentsContent: string, specContent: string): string =
   ## Build the review agent prompt from ticket, diff, area, summary, AGENTS.md, and spec context.
-  result = withMethod(withTone(renderPromptTemplate(
+  result = withHumanAuthority(withMethod(withTone(renderPromptTemplate(
     ReviewAgentTemplate,
     [
       (name: "TICKET_CONTENT", value: ticketContent.strip()),
@@ -125,7 +129,7 @@ proc buildReviewAgentPrompt*(ticketContent: string, diffContent: string, areaCon
       (name: "SPEC_CONTENT", value: specContent.strip()),
       (name: "SUBMIT_SUMMARY", value: submitSummary.strip()),
     ],
-  )))
+  ))))
 
 proc buildArchitectAreasPrompt*(repoPath: string, planPath: string, spec: string): string =
   ## Build the architect prompt that writes area files directly into areas/.
