@@ -20,7 +20,7 @@ suite "scriptorium quest":
     addPassingMakefile(tmp)
     writeOrchestratorEndpointConfig(tmp, 30)
 
-    startQuest(tmp, PlanCallerCli, "ensure hello.txt exists with content world")
+    startQuest(tmp, "ensure hello.txt exists with content world")
 
     var questCalls = 0
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
@@ -45,12 +45,12 @@ suite "scriptorium quest":
     check questCalls == 1
     check shouldRun == false
 
-    let finalVerdict = latestQuestVerdict(tmp, PlanCallerCli)
+    let finalVerdict = latestQuestVerdict(tmp)
     check finalVerdict.done == true
     check finalVerdict.reason == "world spotted"
     check finalVerdict.iteration == 1
 
-    archiveQuest(tmp, PlanCallerCli, finalVerdict)
+    archiveQuest(tmp, finalVerdict)
     let filesAfterArchive = planTreeFiles(tmp)
     check "quests/active.md" notin filesAfterArchive
     check "quests/active-verdict.json" notin filesAfterArchive
@@ -64,7 +64,7 @@ suite "scriptorium quest":
     addPassingMakefile(tmp)
     writeOrchestratorEndpointConfig(tmp, 31)
 
-    startQuest(tmp, PlanCallerCli, "drive a hard goal")
+    startQuest(tmp, "drive a hard goal")
 
     var questCalls = 0
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
@@ -87,7 +87,7 @@ suite "scriptorium quest":
     runOrchestratorForTicks(tmp, 3, fakeRunner, questMode = true)
 
     check questCalls >= 1
-    let latest = latestQuestVerdict(tmp, PlanCallerCli)
+    let latest = latestQuestVerdict(tmp)
     check latest.done == false
     check "still missing" in latest.reason
 
@@ -97,10 +97,10 @@ suite "scriptorium quest":
     defer: removeDir(tmp)
     writeOrchestratorEndpointConfig(tmp, 32)
 
-    startQuest(tmp, PlanCallerCli, "first quest")
+    startQuest(tmp, "first quest")
     var raised = false
     try:
-      startQuest(tmp, PlanCallerCli, "second quest")
+      startQuest(tmp, "second quest")
     except ValueError:
       raised = true
     check raised
@@ -114,8 +114,8 @@ suite "scriptorium quest":
     defer: removeDir(tmp)
     writeOrchestratorEndpointConfig(tmp, 33)
 
-    startQuest(tmp, PlanCallerCli, "archive me")
-    archiveQuest(tmp, PlanCallerCli,
+    startQuest(tmp, "archive me")
+    archiveQuest(tmp,
       QuestVerdict(done: true, reason: "ok", iteration: 2))
 
     let files = planTreeFiles(tmp)

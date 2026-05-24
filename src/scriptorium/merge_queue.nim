@@ -170,9 +170,9 @@ proc listMergeQueueItems*(planPath: string): seq[MergeQueueItem] =
     let content = readFile(planPath / relPath)
     result.add(parseMergeQueueItem(relPath, content))
 
-proc ensureMergeQueueInitialized*(repoPath: string, caller: string): bool =
+proc ensureMergeQueueInitialized*(repoPath: string): bool =
   ## Ensure the merge queue structure exists on the plan branch.
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let changed = ensureMergeQueueInitializedInPlanPath(planPath)
     if changed:
       gitRun(planPath, "add", PlanMergeQueueDir)
@@ -183,7 +183,6 @@ proc ensureMergeQueueInitialized*(repoPath: string, caller: string): bool =
 
 proc enqueueMergeRequest*(
   repoPath: string,
-  caller: string,
   assignment: TicketAssignment,
   summary: string,
 ): string =
@@ -197,7 +196,7 @@ proc enqueueMergeRequest*(
   if summary.strip().len == 0:
     raise newException(ValueError, "merge summary is required")
 
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): string =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
     discard ensureMergeQueueInitializedInPlanPath(planPath)
 
     let queueId = nextMergeQueueId(planPath)
@@ -354,9 +353,9 @@ proc resetWorktreeState*(worktreePath: string, ticketId: string) =
   if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
     logWarn(&"ticket {ticketId}: worktree still dirty after reset")
 
-proc processMergeQueue*(repoPath: string, caller: string, runner: AgentRunner = runAgent): bool =
+proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool =
   ## Process at most one merge queue item and apply success/failure transitions.
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     discard ensureMergeQueueInitializedInPlanPath(planPath)
     let activePath = planPath / PlanMergeQueueActivePath
 

@@ -60,9 +60,9 @@ suite "orchestrator plan spec update":
       )
 
     let before = planCommitCount(tmp)
-    let changed = updateSpecFromArchitect(tmp, PlanCallerCli, "expand scope", fakeRunner)
+    let changed = updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
     let after = planCommitCount(tmp)
-    let unchanged = updateSpecFromArchitect(tmp, PlanCallerCli, "expand scope", fakeRunner)
+    let unchanged = updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
     let afterUnchanged = planCommitCount(tmp)
     let (specBody, specRc) = execCmdEx("git -C " & quoteShell(tmp) & " show scriptorium/plan:spec.md")
     let (logOutput, logRc) = execCmdEx("git -C " & quoteShell(tmp) & " log --oneline -1 scriptorium/plan")
@@ -110,7 +110,7 @@ suite "orchestrator plan spec update":
       )
 
     let before = planCommitCount(tmp)
-    let changed = updateSpecFromArchitect(tmp, PlanCallerCli, "expand scope", fakeRunner)
+    let changed = updateSpecFromArchitect(tmp, "expand scope", fakeRunner)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -136,7 +136,7 @@ suite "orchestrator plan spec update":
         lastMessage: "done",
         timeoutKind: "none",
       )
-    discard updateSpecFromArchitect(tmp, PlanCallerCli, "bootstrap managed path", bootstrapRunner)
+    discard updateSpecFromArchitect(tmp, "bootstrap managed path", bootstrapRunner)
     check managedPlanPath.len > 0
     check "/worktrees/plan" in normalizedPathForTest(managedPlanPath)
 
@@ -156,7 +156,7 @@ suite "orchestrator plan spec update":
         timeoutKind: "none",
       )
 
-    let changed = updateSpecFromArchitect(tmp, PlanCallerCli, "recover stale temp", fakeRunner)
+    let changed = updateSpecFromArchitect(tmp, "recover stale temp", fakeRunner)
     let worktrees = gitWorktreePaths(tmp)
 
     check changed
@@ -194,7 +194,7 @@ suite "orchestrator plan spec update":
 
     var errorMessage = ""
     try:
-      discard updateSpecFromArchitect(tmp, PlanCallerCli, "conflict", fakeRunner)
+      discard updateSpecFromArchitect(tmp, "conflict", fakeRunner)
     except IOError as err:
       errorMessage = err.msg
 
@@ -222,7 +222,7 @@ suite "orchestrator plan spec update":
         lastMessage: "done",
         timeoutKind: "none",
       )
-    discard updateSpecFromArchitect(tmp, PlanCallerCli, "bootstrap", bootstrapRunner)
+    discard updateSpecFromArchitect(tmp, "bootstrap", bootstrapRunner)
     check managedPlanPath.len > 0
 
     # Simulate Docker scenario: worktree checkout dir is gone but
@@ -241,69 +241,11 @@ suite "orchestrator plan spec update":
         timeoutKind: "none",
       )
 
-    let changed = updateSpecFromArchitect(tmp, PlanCallerCli, "recover after prune", recoveryRunner)
+    let changed = updateSpecFromArchitect(tmp, "recover after prune", recoveryRunner)
     check changed
     # Plan worktree persists after the operation (persistent worktree pattern).
     let worktrees = gitWorktreePaths(tmp)
     check managedPlanPath in worktrees
-
-  test "updateSpecFromArchitect fails fast when planner lock is held":
-    let tmp = getTempDir() / "scriptorium_test_plan_lock_busy"
-    makeInitializedTestRepo(tmp)
-    defer: removeDir(tmp)
-
-    var managedPlanPath = ""
-    proc bootstrapRunner(req: AgentRunRequest): AgentRunResult =
-      ## Capture deterministic plan path so tests can derive lock location.
-      managedPlanPath = req.workingDir
-      writeFile(req.workingDir / "spec.md", "# Updated Spec\n\n- bootstrap\n")
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "done",
-        timeoutKind: "none",
-      )
-    discard updateSpecFromArchitect(tmp, PlanCallerCli, "bootstrap lock path", bootstrapRunner)
-    check managedPlanPath.len > 0
-
-    let managedRepoRoot = parentDir(parentDir(managedPlanPath))
-    let lockPath = managedRepoRoot / "locks/repo.lock"
-    createDir(parentDir(lockPath))
-    createDir(lockPath)
-    let pidPath = lockPath / "pid"
-    # Use PID 1 (init/systemd) — always alive, never us. Cannot use our own PID
-    # because lockPathIsStale treats same-PID locks as stale (cross-container fix).
-    writeFile(pidPath, "1\n")
-    defer:
-      if fileExists(pidPath):
-        removeFile(pidPath)
-      if dirExists(lockPath):
-        removeDir(lockPath)
-
-    var runnerCalls = 0
-    proc fakeRunner(req: AgentRunRequest): AgentRunResult =
-      ## Track invocations; lock contention should fail before runner starts.
-      inc runnerCalls
-      discard req
-      result = AgentRunResult(
-        backend: harnessCodex,
-        exitCode: 0,
-        attempt: 1,
-        attemptCount: 1,
-        lastMessage: "",
-        timeoutKind: "none",
-      )
-
-    var errorMessage = ""
-    try:
-      discard updateSpecFromArchitect(tmp, PlanCallerCli, "blocked by lock", fakeRunner)
-    except IOError as err:
-      errorMessage = err.msg
-
-    check runnerCalls == 0
-    check "another planner/manager is active" in errorMessage
 
 suite "orchestrator invariants":
   test "ticket state invariant fails when same ticket exists in multiple state directories":
@@ -314,7 +256,7 @@ suite "orchestrator invariants":
     addTicketToPlan(tmp, "done", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
     expect ValueError:
-      validateTicketStateInvariant(tmp, PlanCallerCli)
+      validateTicketStateInvariant(tmp)
 
   test "transition commit invariant passes for orchestrator-managed state moves":
     let tmp = getTempDir() / "scriptorium_test_invariant_transition_pass"
@@ -322,7 +264,7 @@ suite "orchestrator invariants":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    discard assignOldestOpenTicket(tmp, PlanCallerCli)
+    discard assignOldestOpenTicket(tmp)
     validateTransitionCommitInvariant(tmp)
 
   test "transition commit invariant fails for non-orchestrator ticket move commit":
@@ -356,7 +298,7 @@ suite "orchestrator invariants":
     check "tickets/open/0001-first.md" in files
     check "tickets/in-progress/0001-first.md" notin files
     check after == before
-    validateTicketStateInvariant(tmp, PlanCallerCli)
+    validateTicketStateInvariant(tmp)
 
 suite "orchestrator planning bootstrap":
   test "loads spec from plan branch":
@@ -364,7 +306,7 @@ suite "orchestrator planning bootstrap":
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
-    let spec = loadSpecFromPlan(tmp, PlanCallerCli)
+    let spec = loadSpecFromPlan(tmp)
     check "scriptorium plan" in spec
 
   test "missing spec raises error":
@@ -374,16 +316,16 @@ suite "orchestrator planning bootstrap":
     removeSpecFromPlan(tmp)
 
     expect ValueError:
-      discard loadSpecFromPlan(tmp, PlanCallerCli)
+      discard loadSpecFromPlan(tmp)
 
   test "areas missing is true for blank plan and false when area exists":
     let tmp = getTempDir() / "scriptorium_test_areas_missing"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
 
-    check areasMissing(tmp, PlanCallerCli)
+    check areasMissing(tmp)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
-    check not areasMissing(tmp, PlanCallerCli)
+    check not areasMissing(tmp)
 
   test "sync areas calls architect with configured model and spec":
     let tmp = getTempDir() / "scriptorium_test_sync_areas_call"
@@ -405,7 +347,7 @@ suite "orchestrator planning bootstrap":
         AreaDocument(path: "01-cli.md", content: "# Area 01\n\n## Scope\n- CLI\n")
       ]
 
-    let synced = syncAreasFromSpec(tmp, PlanCallerCli, generator)
+    let synced = syncAreasFromSpec(tmp, generator)
     check synced
     check callCount == 1
     check capturedModel == "claude-opus-4-6"
@@ -431,9 +373,9 @@ suite "orchestrator planning bootstrap":
       ]
 
     let before = planCommitCount(tmp)
-    let firstSync = syncAreasFromSpec(tmp, PlanCallerCli, generator)
+    let firstSync = syncAreasFromSpec(tmp, generator)
     let afterFirst = planCommitCount(tmp)
-    let secondSync = syncAreasFromSpec(tmp, PlanCallerCli, generator)
+    let secondSync = syncAreasFromSpec(tmp, generator)
     let afterSecond = planCommitCount(tmp)
 
     check firstSync
@@ -451,7 +393,7 @@ suite "orchestrator manager ticket bootstrap":
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed
     check "areas/01-cli.md" notin needed
 
@@ -482,7 +424,7 @@ suite "orchestrator architect areas":
       )
 
     let before = planCommitCount(tmp)
-    let changed = runArchitectAreas(tmp, PlanCallerCli, fakeRunner)
+    let changed = runArchitectAreas(tmp, fakeRunner)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -507,7 +449,7 @@ suite "orchestrator architect areas":
     addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
     addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check "areas/02-pending-area.md" in needed
     check "areas/01-done-area.md" notin needed
 
@@ -524,7 +466,7 @@ suite "orchestrator architect areas":
     hashes["02-pending-area"] = $secureHash("# Area 02\n")
     writeAreaHashesInPlan(tmp, hashes)
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check needed.len == 0  # both areas have matching hashes, done area not re-triggered
 
   test "done ticket with changed area content triggers new tickets":
@@ -540,7 +482,7 @@ suite "orchestrator architect areas":
     hashes["02-unchanged"] = $secureHash("# Area 02\n")  # matching hash
     writeAreaHashesInPlan(tmp, hashes)
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check "areas/01-done-area.md" in needed  # changed content triggers new tickets
     check "areas/02-unchanged.md" notin needed  # unchanged is suppressed
 
@@ -554,7 +496,7 @@ suite "orchestrator architect areas":
     hashes["01-active"] = $secureHash("# Area 01 v1\n")  # old hash, content changed
     writeAreaHashesInPlan(tmp, hashes)
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check "areas/01-active.md" notin needed  # open ticket blocks regardless of content change
 
   test "architect creates spec hash marker on first run":
@@ -566,7 +508,7 @@ suite "orchestrator architect areas":
     proc generator(model: string, spec: string): seq[AreaDocument] =
       result = @[AreaDocument(path: "01-cli.md", content: "# CLI Area\n")]
 
-    let synced = syncAreasFromSpec(tmp, PlanCallerCli, generator)
+    let synced = syncAreasFromSpec(tmp, generator)
     check synced
 
     let files = planTreeFiles(tmp)
@@ -588,7 +530,7 @@ suite "orchestrator architect areas":
       inc callCount
       result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
 
-    let changed = runArchitectAreas(tmp, PlanCallerCli, fakeRunner)
+    let changed = runArchitectAreas(tmp, fakeRunner)
     check not changed
     check callCount == 0  # architect was not invoked
 
@@ -608,7 +550,7 @@ suite "orchestrator architect areas":
       writeFile(request.workingDir / "areas/02-logging.md", "# Logging Area\n")
       result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
 
-    let changed = runArchitectAreas(tmp, PlanCallerCli, fakeRunner)
+    let changed = runArchitectAreas(tmp, fakeRunner)
     check changed
     check callCount == 1
 
@@ -630,7 +572,7 @@ suite "orchestrator architect areas":
       inc callCount
       result = AgentRunResult(backend: harnessClaudeCode, exitCode: 0, attempt: 1, attemptCount: 1)
 
-    let changed = runArchitectAreas(tmp, PlanCallerCli, fakeRunner)
+    let changed = runArchitectAreas(tmp, fakeRunner)
     check not changed  # migration only, no architect run
     check callCount == 0
 
@@ -678,7 +620,7 @@ suite "orchestrator one-shot plan runner":
           timeoutKind: "none",
         )
 
-      let changed = updateSpecFromArchitect(repoPath, PlanCallerCli, "sync source marker", fakeRunner)
+      let changed = updateSpecFromArchitect(repoPath, "sync source marker", fakeRunner)
 
       check changed
       check callCount == 1

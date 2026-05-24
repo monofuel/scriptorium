@@ -95,7 +95,7 @@ suite "orchestrator coding agent execution":
     writtenCfg.timeouts.codingAgentMaxAttempts = 2
     writeScriptoriumConfig(tmp, writtenCfg)
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     let before = planCommitCount(tmp)
 
     var callCount = 0
@@ -117,7 +117,7 @@ suite "orchestrator coding agent execution":
         timeoutKind: "none",
       )
 
-    let runResult = executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
+    let runResult = executeAssignedTicket(tmp, assignment, fakeRunner)
     let after = planCommitCount(tmp)
 
     check callCount == 2
@@ -153,7 +153,7 @@ suite "orchestrator coding agent execution":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     let before = planCommitCount(tmp)
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       ## Return a deterministic run result and signal completion with submit_pr.
@@ -172,7 +172,7 @@ suite "orchestrator coding agent execution":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
     let after = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -191,7 +191,7 @@ suite "orchestrator coding agent execution":
     defer: removeDir(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     var capturedRequest = AgentRunRequest()
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       ## Capture the request to inspect the onEvent callback.
@@ -209,7 +209,7 @@ suite "orchestrator coding agent execution":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
 
     check capturedRequest.onEvent != nil
 
@@ -230,9 +230,9 @@ suite "orchestrator merge queue":
     defer: removeDir(tmp)
 
     let before = planCommitCount(tmp)
-    let first = ensureMergeQueueInitialized(tmp, PlanCallerCli)
+    let first = ensureMergeQueueInitialized(tmp)
     let afterFirst = planCommitCount(tmp)
-    let second = ensureMergeQueueInitialized(tmp, PlanCallerCli)
+    let second = ensureMergeQueueInitialized(tmp)
     let afterSecond = planCommitCount(tmp)
     let files = planTreeFiles(tmp)
 
@@ -251,12 +251,12 @@ suite "orchestrator merge queue":
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
     addTicketToPlan(tmp, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
-    let firstAssignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    let secondAssignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    discard enqueueMergeRequest(tmp, PlanCallerCli, firstAssignment, "first summary")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, secondAssignment, "second summary")
+    let firstAssignment = assignOldestOpenTicket(tmp)
+    let secondAssignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, firstAssignment, "first summary")
+    discard enqueueMergeRequest(tmp, secondAssignment, "second summary")
 
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     let queueFiles = files.filterIt(it.startsWith("queue/merge/pending/") and it.endsWith(".md"))
 
@@ -273,13 +273,13 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "merge me")
+    discard enqueueMergeRequest(tmp, assignment, "merge me")
 
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -302,9 +302,9 @@ suite "orchestrator merge queue":
     addFailingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "expected failure")
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "expected failure")
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -325,9 +325,9 @@ suite "orchestrator merge queue":
     addIntegrationFailingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "integration failure")
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "integration failure")
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -350,11 +350,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "approve me")
+    discard enqueueMergeRequest(tmp, assignment, "approve me")
 
     proc approveRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that records an approve decision.
@@ -363,7 +363,7 @@ suite "orchestrator merge queue":
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, approveRunner)
+    let processed = processMergeQueue(tmp, approveRunner)
     check processed
 
     let files = planTreeFiles(tmp)
@@ -383,11 +383,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "builder test")
+    discard enqueueMergeRequest(tmp, assignment, "builder test")
 
     var capturedRequest = AgentRunRequest()
     proc capturingRunner(request: AgentRunRequest): AgentRunResult =
@@ -397,7 +397,7 @@ suite "orchestrator merge queue":
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, capturingRunner)
+    let processed = processMergeQueue(tmp, capturingRunner)
     check processed
     check capturedRequest.continuationPromptBuilder != nil
     let output = capturedRequest.continuationPromptBuilder(tmp)
@@ -410,11 +410,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "needs changes")
+    discard enqueueMergeRequest(tmp, assignment, "needs changes")
 
     proc changesRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that records a request_changes decision.
@@ -423,7 +423,7 @@ suite "orchestrator merge queue":
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, changesRunner)
+    let processed = processMergeQueue(tmp, changesRunner)
     check processed
 
     let files = planTreeFiles(tmp)
@@ -445,14 +445,14 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "stall test")
+    discard enqueueMergeRequest(tmp, assignment, "stall test")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     check processed
 
     let files = planTreeFiles(tmp)
@@ -472,11 +472,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "reasoning test")
+    discard enqueueMergeRequest(tmp, assignment, "reasoning test")
 
     proc reasoningRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that emits message events and records an approve decision.
@@ -488,7 +488,7 @@ suite "orchestrator merge queue":
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, reasoningRunner)
+    let processed = processMergeQueue(tmp, reasoningRunner)
     check processed
 
     let (ticketContent, ticketRc) = execCmdEx(
@@ -507,11 +507,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "done\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "truncate test")
+    discard enqueueMergeRequest(tmp, assignment, "truncate test")
 
     let longText = "x".repeat(3000)
     proc longReasoningRunner(request: AgentRunRequest): AgentRunResult =
@@ -522,7 +522,7 @@ suite "orchestrator merge queue":
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
     discard consumeReviewDecision()
-    let processed = processMergeQueue(tmp, PlanCallerCli, longReasoningRunner)
+    let processed = processMergeQueue(tmp, longReasoningRunner)
     check processed
 
     let (ticketContent, ticketRc) = execCmdEx(
@@ -539,7 +539,7 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       ## Write a file but do not commit, then signal submit_pr.
       discard request
@@ -558,7 +558,7 @@ suite "orchestrator merge queue":
         timeoutKind: "none",
       )
 
-    discard executeAssignedTicket(tmp, PlanCallerCli, assignment, fakeRunner)
+    discard executeAssignedTicket(tmp, assignment, fakeRunner)
 
     let (statusOutput, statusRc) = execCmdEx("git -C " & quoteShell(assignment.worktree) & " status --porcelain")
     check statusRc == 0
@@ -574,11 +574,11 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "uncommitted.txt", "dirty\n")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "dirty merge")
+    discard enqueueMergeRequest(tmp, assignment, "dirty merge")
 
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -597,9 +597,9 @@ suite "orchestrator merge queue":
     let ticketContent = "# Ticket 1\n\n**Area:** a\n\n" & priorFailures
     addTicketToPlan(tmp, "open", "0001-first.md", ticketContent)
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "expected stuck")
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "expected stuck")
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
 
     check processed
@@ -625,7 +625,7 @@ suite "orchestrator merge queue":
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "stuck", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
 
-    let needed = areasNeedingTickets(tmp, PlanCallerCli)
+    let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed
     check "areas/01-cli.md" notin needed
 
@@ -636,17 +636,17 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     writeFile(assignment.worktree / "ticket-output.txt", "recovered\n")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "recover me")
+    discard enqueueMergeRequest(tmp, assignment, "recover me")
 
     # Simulate container restart: remove the worktree directory but keep the branch
     removeDir(assignment.worktree)
     runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
 
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/done/0001-first.md" in files
@@ -663,15 +663,15 @@ suite "orchestrator merge queue":
     addPassingMakefile(tmp)
     addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
-    discard enqueueMergeRequest(tmp, PlanCallerCli, assignment, "lost branch")
+    let assignment = assignOldestOpenTicket(tmp)
+    discard enqueueMergeRequest(tmp, assignment, "lost branch")
 
     # Simulate container restart: remove both worktree and branch
     removeDir(assignment.worktree)
     runCmdOrDie("git -C " & quoteShell(tmp) & " worktree prune")
     runCmdOrDie("git -C " & quoteShell(tmp) & " branch -D " & quoteShell(assignment.branch))
 
-    let processed = processMergeQueue(tmp, PlanCallerCli, noopRunner)
+    let processed = processMergeQueue(tmp, noopRunner)
     let files = planTreeFiles(tmp)
     check processed
     check "tickets/open/0001-first.md" in files

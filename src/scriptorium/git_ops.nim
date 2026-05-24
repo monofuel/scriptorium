@@ -9,12 +9,8 @@ const
   PlanBranch* = "scriptorium/plan"
   ManagedStateDirName* = ".scriptorium"
   ManagedWorktreeDirName* = "worktrees"
-  ManagedPlanWorktreeName* {.deprecated: "use PlanCaller* constants instead".} = "plan"
+  ManagedPlanWorktreeName* = "plan"
   ManagedMasterWorktreeName* = "master"
-  PlanCallerCli* = "plan-cli"
-  PlanCallerOrchestrator* = "plan-orchestrator"
-  PlanCallerDiscord* = "plan-discord"
-  PlanCallerMattermost* = "plan-mattermost"
   ManagedTicketWorktreeDirName* = "tickets"
   ManagedLockDirName* = "locks"
   ManagedAdminLockName* = "admin.lock"
@@ -164,9 +160,9 @@ proc managedWorktreeRootPath*(repoPath: string): string =
   ## Return the managed worktree root path for one repository.
   result = managedRepoRootPath(repoPath) / ManagedWorktreeDirName
 
-proc managedPlanWorktreePath*(repoPath: string, caller: string): string =
-  ## Return the managed plan worktree path for one caller role.
-  result = managedWorktreeRootPath(repoPath) / caller
+proc managedPlanWorktreePath*(repoPath: string): string =
+  ## Return the managed plan worktree path for the repository.
+  result = managedWorktreeRootPath(repoPath) / ManagedPlanWorktreeName
 
 proc managedMasterWorktreePath*(repoPath: string): string =
   ## Return the managed master worktree path for one repository.
@@ -245,11 +241,8 @@ proc recoverManagedWorktreeConflict*(repoPath: string, addOutput: string): bool 
       forceRemoveDir(conflictPath)
     result = true
 
-proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string,
-    force: bool = false) =
+proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: string) =
   ## Add one git worktree path for one branch, recovering stale managed conflicts once.
-  ## When force is true, pass -f to allow checking out a branch already used by another
-  ## worktree (needed for per-caller plan worktrees sharing scriptorium/plan).
   logDebug(&"worktree add: {worktreePath} ({branch})")
   createDir(parentDir(worktreePath))
   if dirExists(worktreePath):
@@ -263,13 +256,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
 
   var recoveredConflict = false
   while true:
-    var args = @["-C", repoPath, "worktree", "add"]
-    if force:
-      # Double -f required to override locked worktrees.
-      args.add("-f")
-      args.add("-f")
-    args.add(worktreePath)
-    args.add(branch)
+    let args = @["-C", repoPath, "worktree", "add", worktreePath, branch]
 
     acquireProcessLock()
     let addProcess = startProcess(

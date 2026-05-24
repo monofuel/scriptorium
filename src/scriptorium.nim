@@ -37,7 +37,7 @@ proc cmdRun() =
 
 proc cmdStatus() =
   ## Show ticket counts, agent activity, elapsed times, recent done tickets, and first-attempt success rate.
-  let status = readOrchestratorStatus(getCurrentDir(), PlanCallerCli)
+  let status = readOrchestratorStatus(getCurrentDir())
   echo fmt"Open: {status.openTickets}"
   echo fmt"In Progress: {status.inProgressTickets}"
   echo fmt"Done: {status.doneTickets}"
@@ -74,7 +74,7 @@ proc cmdPlan(args: seq[string]) =
     runInteractivePlanSession(getCurrentDir())
   else:
     let prompt = args.join(" ").strip()
-    let changed = updateSpecFromArchitect(getCurrentDir(), PlanCallerCli, prompt)
+    let changed = updateSpecFromArchitect(getCurrentDir(), prompt)
     if changed:
       echo "scriptorium: updated spec.md on scriptorium/plan"
     else:
@@ -134,7 +134,7 @@ proc cmdSync() =
 
 proc cmdWorktrees() =
   ## List active git worktrees and which tickets they belong to.
-  let worktrees = listActiveTicketWorktrees(getCurrentDir(), PlanCallerCli)
+  let worktrees = listActiveTicketWorktrees(getCurrentDir())
   if worktrees.len == 0:
     echo "scriptorium: no active ticket worktrees"
   else:

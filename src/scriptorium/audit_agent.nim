@@ -7,7 +7,6 @@ import
 const
   AuditLogDirName* = "audit"
   AuditStatePath* = "audit_state.json"
-  AuditCallerName* = "plan-audit"
   DefaultAuditHardTimeoutMs* = 300_000
   DefaultAuditNoOutputTimeoutMs* = 120_000
 
@@ -53,7 +52,7 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
   var agentsMd: string
   var lastAuditedCommit: string
 
-  discard withPlanWorktree(repoPath, AuditCallerName, proc(planPath: string): bool =
+  discard withPlanWorktree(repoPath, proc(planPath: string): bool =
     spec = loadSpecFromPlanPath(planPath)
     let agentsPath = planPath / "AGENTS.md"
     if fileExists(agentsPath):
@@ -119,7 +118,7 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
   logInfo(&"audit: report written to {reportPath}")
 
   let headCommit = defaultBranchHeadCommit(repoPath)
-  discard withLockedPlanWorktree(repoPath, AuditCallerName, proc(planPath: string): bool =
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let newState = AuditState(lastAuditedCommit: headCommit)
     saveAuditState(planPath, newState)
     gitRun(planPath, "add", AuditStatePath)
@@ -133,7 +132,7 @@ proc needsAudit*(repoPath: string): bool =
   ## Check if the default branch HEAD differs from the last audited commit.
   let headCommit = defaultBranchHeadCommit(repoPath)
   var lastAudited = ""
-  discard withPlanWorktree(repoPath, AuditCallerName, proc(planPath: string): bool =
+  discard withPlanWorktree(repoPath, proc(planPath: string): bool =
     let state = loadAuditState(planPath)
     lastAudited = state.lastAuditedCommit
     true

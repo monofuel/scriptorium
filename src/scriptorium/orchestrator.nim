@@ -75,7 +75,7 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
 
   # In-memory miss — check file cache on plan branch.
   if hasPlanBranch(repoPath):
-    let cachedEntry = withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): tuple[found: bool, entry: HealthCacheEntry] =
+    let cachedEntry = withPlanWorktree(repoPath, proc(planPath: string): tuple[found: bool, entry: HealthCacheEntry] =
       let cache = readHealthCache(planPath)
       if currentHead in cache:
         result = (found: true, entry: cache[currentHead])
@@ -112,7 +112,7 @@ proc isMasterHealthy(repoPath: string, state: var MasterHealthState): bool =
     )
     logDebug(&"health cache: writing entry for {currentHead} (healthy={healthResult.healthy})")
     try:
-      discard withLockedPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
+      discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
         var cache = readHealthCache(planPath)
         cache[currentHead] = newEntry
         cache = pruneHealthCache(cache, MaxHealthCacheEntries)
@@ -170,7 +170,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   ## Execute the orchestrator polling loop with interleaved manager/coder execution.
   ## Tick order: poll completions → backoff/health → architect → managers → coders → merge → sleep.
   ## When questMode is true, step 8 runs the architect quest evaluator instead of the loop system.
-  discard recoverFromCrash(repoPath, PlanCallerOrchestrator)
+  discard recoverFromCrash(repoPath)
   agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
   ensureTimingsLockInitialized()
@@ -216,7 +216,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           let areaId = completion.areaId
           let ticketDocs = completion.managerResult
           logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
-          discard withLockedPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
+          discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
             if ticketDocs.len > 0:
               let nextId = nextTicketId(planPath)
               writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
@@ -244,10 +244,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       # Pause check: skip new assignments but continue merge queue and completions.
       elif isPaused(repoPath):
         logInfo("orchestrator paused, skipping new assignments")
-        let mergeProcessed = processMergeQueue(repoPath, PlanCallerOrchestrator)
+        let mergeProcessed = processMergeQueue(repoPath)
         if mergeProcessed:
           logInfo("merge queue: item processed (paused)")
-          let cleaned = cleanupStaleTicketWorktrees(repoPath, PlanCallerOrchestrator)
+          let cleaned = cleanupStaleTicketWorktrees(repoPath)
           for path in cleaned:
             logInfo(&"worktree cleaned after merge: {path}")
         idle = true
@@ -291,14 +291,14 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         if not healthy:
           idle = true
           # Recovery-area tickets are exempt from the unhealthy-master gate.
-          if hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator):
-            let assignment = assignOldestOpenTicket(repoPath, PlanCallerOrchestrator, RecoveryAreaName)
+          if hasOpenRecoveryTicket(repoPath):
+            let assignment = assignOldestOpenTicket(repoPath, RecoveryAreaName)
             if assignment.inProgressTicket.len > 0:
               let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
               logInfo(&"recovery: assigning recovery ticket {ticketId} (master unhealthy)")
               if maxAgents <= 1:
                 let cfg2 = loadConfig(repoPath)
-                let agentResult = executeAssignedTicket(repoPath, PlanCallerOrchestrator, assignment, runner, cfg2.agents.architect)
+                let agentResult = executeAssignedTicket(repoPath, assignment, runner, cfg2.agents.architect)
                 if agentResult.submitted:
                   logInfo(&"recovery: agent submitted fix for {ticketId}")
                 else:
@@ -308,12 +308,12 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
               idle = false
         elif not shouldRun:
           discard
-        elif hasRunnableSpec(repoPath, PlanCallerOrchestrator):
+        elif hasRunnableSpec(repoPath):
           specWaitingLogged = false
           # Step 3: Run architect (sequential, must complete before managers).
           logDebug("architect: generating areas from spec")
           t0 = epochTime()
-          architectChanged = runArchitectAreas(repoPath, PlanCallerOrchestrator, runner)
+          architectChanged = runArchitectAreas(repoPath, runner)
           let architectElapsed = epochTime() - t0
           logDebug(&"tick {ticks}: architect took {architectElapsed:.1f}s, changed={architectChanged}")
           if architectChanged:
@@ -329,9 +329,9 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logDebug("manager: generating tickets")
           t0 = epochTime()
           if maxAgents <= 1:
-            managerChanged = runManagerForAreas(repoPath, PlanCallerOrchestrator, runner)
+            managerChanged = runManagerForAreas(repoPath, runner)
           else:
-            discard withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): int =
+            discard withPlanWorktree(repoPath, proc(planPath: string): int =
               if not hasRunnableSpecInPlanPath(planPath): return 0
               let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
               for areaRelPath in areasToProcess:
@@ -348,7 +348,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if managerChanged:
             logInfo("manager: tickets created")
             managerStatus = "updated"
-            discard withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): int =
+            discard withPlanWorktree(repoPath, proc(planPath: string): int =
               discard detectAndLogCycles(planPath)
               0
             )
@@ -363,7 +363,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
             codingStatus = "budget-exceeded"
           elif maxAgents <= 1:
             t0 = epochTime()
-            let agentResult = executeOldestOpenTicket(repoPath, PlanCallerOrchestrator, runner)
+            let agentResult = executeOldestOpenTicket(repoPath, runner)
             let codingWallTime = epochTime() - t0
             logDebug(&"tick {ticks}: coding agent took {codingWallTime:.1f}s, exit={agentResult.exitCode}")
 
@@ -379,10 +379,10 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           else:
             let slotsAvailable = emptySlotCount(maxAgents)
             if slotsAvailable > 0:
-              let assignments = assignOpenTickets(repoPath, PlanCallerOrchestrator, slotsAvailable)
+              let assignments = assignOpenTickets(repoPath, slotsAvailable)
               for assignment in assignments:
                 let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
-                runTicketPrediction(repoPath, PlanCallerOrchestrator, assignment.inProgressTicket, runner)
+                runTicketPrediction(repoPath, assignment.inProgressTicket, runner)
                 startCodingAgentAsync(repoPath, assignment, maxAgents, codingAgentWorkerThread)
                 codingDidWork = true
               let running = runningAgentCount()
@@ -404,13 +404,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         # Step 7: Process at most one merge-queue item.
         logDebug("merge queue: processing")
         t0 = epochTime()
-        let mergeProcessed = processMergeQueue(repoPath, PlanCallerOrchestrator)
+        let mergeProcessed = processMergeQueue(repoPath)
         let mergeElapsed = epochTime() - t0
         logDebug(&"tick {ticks}: merge queue took {mergeElapsed:.1f}s, processed={mergeProcessed}")
         if mergeProcessed:
           logInfo("merge queue: item processed")
           mergeStatus = "processing"
-          let cleaned = cleanupStaleTicketWorktrees(repoPath, PlanCallerOrchestrator)
+          let cleaned = cleanupStaleTicketWorktrees(repoPath)
           for path in cleaned:
             logInfo(&"worktree cleaned after merge: {path}")
           # Push merged changes to all remotes immediately.
@@ -424,13 +424,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logDebug(&"tick {ticks}: idle")
           idle = true
 
-        discard withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): int =
+        discard withPlanWorktree(repoPath, proc(planPath: string): int =
           scanForCycleBlockedTickets(planPath)
           0
         )
 
         # Step 7b: Investigate and recover stuck tickets.
-        let recoveredCount = investigateAndRecoverStuckTickets(repoPath, PlanCallerOrchestrator, runner)
+        let recoveredCount = investigateAndRecoverStuckTickets(repoPath, runner)
         if recoveredCount > 0:
           logInfo(&"recovered {recoveredCount} stuck ticket(s)")
 
@@ -438,33 +438,33 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         # Reset the guard when the previous recovery attempt has been fully processed
         # (no recovery ticket exists anywhere), allowing a fresh attempt.
         if not healthy and recoveryAttemptedForCommit == masterHealthState.head and
-            not hasAnyRecoveryTicket(repoPath, PlanCallerOrchestrator):
+            not hasAnyRecoveryTicket(repoPath):
           recoveryAttemptedForCommit = ""
           logInfo("recovery: previous recovery attempt fully processed, allowing fresh attempt")
 
         # Do not create a new recovery ticket when one is already stuck (exhausted).
         # The unhealthy-master notification was posted when it was parked.
-        if not healthy and hasStuckRecoveryTicket(repoPath, PlanCallerOrchestrator):
+        if not healthy and hasStuckRecoveryTicket(repoPath):
           logDebug("recovery: stuck recovery ticket exists, suppressing new recovery attempt")
         # Skip creating a new recovery ticket when one already exists in open
         # (it will be assigned by the recovery exemption in the unhealthy block above).
-        elif not healthy and not hasOpenRecoveryTicket(repoPath, PlanCallerOrchestrator) and
+        elif not healthy and not hasOpenRecoveryTicket(repoPath) and
             masterHealthState.head != recoveryAttemptedForCommit:
           recoveryAttemptedForCommit = masterHealthState.head
           logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")
-          runRecoveryAgent(repoPath, PlanCallerOrchestrator, runner, masterHealthState.testOutput, masterHealthState.head)
+          runRecoveryAgent(repoPath, runner, masterHealthState.testOutput, masterHealthState.head)
 
         # Step 8: Quest evaluator or loop system.
         if questMode:
           try:
-            let questDone = runQuestEvalIfDrained(repoPath, PlanCallerOrchestrator, runner)
+            let questDone = runQuestEvalIfDrained(repoPath, runner)
             if questDone:
               logInfo("quest: architect declared done, exiting main loop")
               idle = false
           except CatchableError as e:
             logWarn(&"quest: iteration failed: {e.msg}")
         elif loopCfg.enabled and loopCfg.feedback.len > 0:
-          let drained = withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
+          let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
             isQueueDrained(planPath)
           )
           let forceEval = forceEvalPending
@@ -497,7 +497,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
                 logInfo(&"loop: feedback command completed (exit 0, {feedbackElapsed:.1f}s)")
               let feedbackOutput = formatFeedbackResult(feedbackResult)
               try:
-                let specUpdated = runArchitectLoopIteration(repoPath, PlanCallerOrchestrator, runner, feedbackOutput)
+                let specUpdated = runArchitectLoopIteration(repoPath, runner, feedbackOutput)
                 let cycleElapsed = epochTime() - cycleT0
                 if specUpdated:
                   specChangeAuditPending = true
@@ -516,7 +516,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         if specChangeAuditPending:
           specChangeAuditPending = false
 
-        let ticketCounts = readOrchestratorStatus(repoPath, PlanCallerOrchestrator)
+        let ticketCounts = readOrchestratorStatus(repoPath)
         let running = runningAgentCount()
         let agentDesc = runningAgentSummary()
         let stuck = ticketCounts.stuckTickets
@@ -568,7 +568,7 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   ## Run a bounded orchestrator loop without starting the MCP HTTP server.
   acquireOrchestratorPidGuard(repoPath)
   defer:
-    teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
+    teardownPlanWorktree(repoPath)
     releaseOrchestratorPidGuard(repoPath)
   shouldRun = true
   runOrchestratorMainLoop(repoPath, maxTicks, runner, questMode)
@@ -665,7 +665,7 @@ proc runOrchestrator*(repoPath: string) =
   preflightValidation(repoPath)
   acquireOrchestratorPidGuard(repoPath)
   defer:
-    teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
+    teardownPlanWorktree(repoPath)
     releaseOrchestratorPidGuard(repoPath)
   normalizeConfig(repoPath)
   let cfg = loadConfig(repoPath)
@@ -691,7 +691,7 @@ proc runQuest*(repoPath: string, questPrompt: string) =
   preflightValidation(repoPath)
   acquireOrchestratorPidGuard(repoPath)
   defer:
-    teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
+    teardownPlanWorktree(repoPath)
     releaseOrchestratorPidGuard(repoPath)
   normalizeConfig(repoPath)
   let cfg = loadConfig(repoPath)
@@ -706,14 +706,14 @@ proc runQuest*(repoPath: string, questPrompt: string) =
   logInfo(&"repo: {repoPath}")
   logInfo(&"build: {BuildCommitHash}")
   logInfo(&"log file: {logFilePath}")
-  startQuest(repoPath, PlanCallerOrchestrator, questPrompt)
+  startQuest(repoPath, questPrompt)
   let httpServer = createOrchestratorServer()
   defer: closeLog()
   let t0 = epochTime()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent, questMode = true)
   let elapsed = epochTime() - t0
-  let finalVerdict = latestQuestVerdict(repoPath, PlanCallerOrchestrator)
-  archiveQuest(repoPath, PlanCallerOrchestrator, finalVerdict)
+  let finalVerdict = latestQuestVerdict(repoPath)
+  archiveQuest(repoPath, finalVerdict)
   let status = if finalVerdict.done: "done" else: "interrupted"
   let elapsedStr = formatDuration(elapsed)
   echo &"quest {status}: {finalVerdict.reason}"

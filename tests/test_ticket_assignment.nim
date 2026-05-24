@@ -81,7 +81,7 @@ suite "assignOldestOpenTicket areaFilter":
     addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
     addTicketToPlan(tmp, "open", "0002-recovery-fix.md", "# Recovery Fix\n\n**Area:** recovery\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli, RecoveryAreaName)
+    let assignment = assignOldestOpenTicket(tmp, RecoveryAreaName)
     check assignment.inProgressTicket.len > 0
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
     check ticketId == "0002"
@@ -93,7 +93,7 @@ suite "assignOldestOpenTicket areaFilter":
     addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
     addTicketToPlan(tmp, "open", "0003-another-bug.md", "# Another Bug\n\n**Area:** merge-queue\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli, RecoveryAreaName)
+    let assignment = assignOldestOpenTicket(tmp, RecoveryAreaName)
     check assignment.inProgressTicket.len == 0
 
   test "no areaFilter assigns oldest ticket regardless of area":
@@ -103,7 +103,7 @@ suite "assignOldestOpenTicket areaFilter":
     addTicketToPlan(tmp, "open", "0001-normal-bug.md", "# Normal Bug\n\n**Area:** orchestrator\n")
     addTicketToPlan(tmp, "open", "0002-recovery-fix.md", "# Recovery Fix\n\n**Area:** recovery\n")
 
-    let assignment = assignOldestOpenTicket(tmp, PlanCallerCli)
+    let assignment = assignOldestOpenTicket(tmp)
     check assignment.inProgressTicket.len > 0
     let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
     check ticketId == "0001"

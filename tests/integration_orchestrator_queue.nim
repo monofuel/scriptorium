@@ -32,16 +32,16 @@ suite "integration orchestrator merge queue":
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
+      let assignment = assignOldestOpenTicket(repoPath)
       writeFile(assignment.worktree / "ticket-output.txt", "done\n")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m integration-ticket-output")
       let (ticketHead, ticketHeadRc) = execCmdEx("git -C " & quoteShell(assignment.worktree) & " rev-parse HEAD")
       doAssert ticketHeadRc == 0
 
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "merge me")
+      discard enqueueMergeRequest(repoPath, assignment, "merge me")
 
-      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -64,10 +64,10 @@ suite "integration orchestrator merge queue":
       addFailingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "expected failure")
+      let assignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, assignment, "expected failure")
 
-      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -86,10 +86,10 @@ suite "integration orchestrator merge queue":
       addIntegrationFailingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "integration failure")
+      let assignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, assignment, "integration failure")
 
-      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -110,12 +110,12 @@ suite "integration orchestrator merge queue":
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
       addTicketToPlan(repoPath, "open", "0002-second.md", "# Ticket 2\n\n**Area:** b\n")
 
-      let firstAssignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
-      let secondAssignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, firstAssignment, "first summary")
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, secondAssignment, "second summary")
+      let firstAssignment = assignOldestOpenTicket(repoPath)
+      let secondAssignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, firstAssignment, "first summary")
+      discard enqueueMergeRequest(repoPath, secondAssignment, "second summary")
 
-      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
 
       let files = planTreeFiles(repoPath)
@@ -136,7 +136,7 @@ suite "integration orchestrator merge queue":
       runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-add-conflict-base")
 
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
+      let assignment = assignOldestOpenTicket(repoPath)
 
       writeFile(assignment.worktree / "conflict.txt", "line=ticket\n")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add conflict.txt")
@@ -146,9 +146,9 @@ suite "integration orchestrator merge queue":
       runCmdOrDie("git -C " & quoteShell(repoPath) & " add conflict.txt")
       runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-master-conflict-change")
 
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "conflict expected")
+      discard enqueueMergeRequest(repoPath, assignment, "conflict expected")
 
-      let processed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let processed = processMergeQueue(repoPath, noopRunner)
       check processed
       check pendingQueueFiles(repoPath).len == 0
 
@@ -167,13 +167,13 @@ suite "integration orchestrator merge queue":
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "recover me")
+      let assignment = assignOldestOpenTicket(repoPath)
+      discard enqueueMergeRequest(repoPath, assignment, "recover me")
       moveTicketStateInPlan(repoPath, "in-progress", "done", "0001-first.md")
       writeActiveQueueInPlan(repoPath, "queue/merge/pending/0001-0001.md\n")
 
-      let firstProcessed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
-      let secondProcessed = processMergeQueue(repoPath, PlanCallerCli, noopRunner)
+      let firstProcessed = processMergeQueue(repoPath, noopRunner)
+      let secondProcessed = processMergeQueue(repoPath, noopRunner)
       check firstProcessed
       check not secondProcessed
 
@@ -207,11 +207,11 @@ suite "integration orchestrator merge queue":
       writeSpecInPlan(repoPath, "# Spec\n\nNeed queue processing.\n")
       addTicketToPlan(repoPath, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n")
 
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
+      let assignment = assignOldestOpenTicket(repoPath)
       writeFile(assignment.worktree / "ticket-output.txt", "done\n")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m integration-ticket-output")
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "merge me")
+      discard enqueueMergeRequest(repoPath, assignment, "merge me")
 
       # With a failing makefile the merge queue still processes (runs regardless of health).
       # The merge fails and the ticket is reopened.
@@ -245,41 +245,41 @@ suite "integration orchestrator merge queue":
   test "IT-12 hasAnyRecoveryTicket returns true for open recovery ticket":
     withInitializedTempRepo("scriptorium_integration_it12_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "open", "0001-recovery-abc1234.md", RecoveryTicketContent)
-      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      check hasAnyRecoveryTicket(repoPath)
     )
 
   test "IT-13 hasAnyRecoveryTicket returns true for in-progress recovery ticket":
     withInitializedTempRepo("scriptorium_integration_it13_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "in-progress", "0001-recovery-abc1234.md", RecoveryTicketContent)
-      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      check hasAnyRecoveryTicket(repoPath)
     )
 
   test "IT-14 hasAnyRecoveryTicket returns true for stuck recovery ticket":
     withInitializedTempRepo("scriptorium_integration_it14_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "stuck", "0001-recovery-abc1234.md", RecoveryTicketContent)
-      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      check hasAnyRecoveryTicket(repoPath)
     )
 
   test "IT-15 hasAnyRecoveryTicket returns false when no recovery ticket exists":
     withInitializedTempRepo("scriptorium_integration_it15_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "open", "0001-normal.md", NonRecoveryTicketContent)
-      check not hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      check not hasAnyRecoveryTicket(repoPath)
     )
 
   test "IT-16 hasAnyRecoveryTicket returns false for done recovery ticket":
     withInitializedTempRepo("scriptorium_integration_it16_", proc(repoPath: string) =
       addTicketToPlan(repoPath, "done", "0001-recovery-abc1234.md", RecoveryTicketContent)
-      check not hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      check not hasAnyRecoveryTicket(repoPath)
     )
 
   test "IT-17 hasAnyRecoveryTicket returns true for recovery ticket in merge queue":
     withInitializedTempRepo("scriptorium_integration_it17_", proc(repoPath: string) =
       addPassingMakefile(repoPath)
       addTicketToPlan(repoPath, "open", "0001-recovery-abc1234.md", RecoveryTicketContent)
-      let assignment = assignOldestOpenTicket(repoPath, PlanCallerCli)
+      let assignment = assignOldestOpenTicket(repoPath)
       writeFile(assignment.worktree / "fix.txt", "fix\n")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add fix.txt")
       runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m recovery-fix")
-      discard enqueueMergeRequest(repoPath, PlanCallerCli, assignment, "recovery fix")
-      check hasAnyRecoveryTicket(repoPath, PlanCallerCli)
+      discard enqueueMergeRequest(repoPath, assignment, "recovery fix")
+      check hasAnyRecoveryTicket(repoPath)
     )

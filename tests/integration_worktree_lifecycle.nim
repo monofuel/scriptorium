@@ -218,63 +218,6 @@ suite "ensureWorktreeCreated":
 
     discard execCmdEx("git -C " & tmpDir & " worktree remove --force " & path2)
 
-suite "concurrent plan worktree creation":
-  test "two callers can create plan worktrees for same branch":
-    let tmpDir = getTempDir() / "scriptorium_test_plan_concurrent"
-    let repoPath = tmpDir / "repo"
-
-    if dirExists(tmpDir):
-      removeDir(tmpDir)
-    createDir(tmpDir)
-    defer: removeDir(tmpDir)
-
-    makeTestRepo(repoPath)
-    runCmdOrDie(&"git -C {repoPath} branch {PlanBranch}")
-    ensurePlanWorktreeLockInitialized()
-
-    # Create worktrees for two different callers sequentially.
-    # The commit lock serializes them — the test verifies no "already checked out" error.
-    var cliPath, orchPath: string
-    {.cast(gcsafe).}:
-      acquire(planWorktreeLock)
-      cliPath = ensurePlanWorktreeReady(repoPath, PlanCallerCli)
-      release(planWorktreeLock)
-
-      acquire(planWorktreeLock)
-      orchPath = ensurePlanWorktreeReady(repoPath, PlanCallerOrchestrator)
-      release(planWorktreeLock)
-
-    check dirExists(cliPath)
-    check dirExists(orchPath)
-    check cliPath != orchPath
-
-    teardownPlanWorktree(repoPath, PlanCallerCli)
-    teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
-
-  test "recoverManagedWorktreeConflict skips active worktree":
-    let tmpDir = getTempDir() / "scriptorium_test_plan_skip_active"
-    let repoPath = tmpDir / "repo"
-
-    if dirExists(tmpDir):
-      removeDir(tmpDir)
-    createDir(tmpDir)
-    defer: removeDir(tmpDir)
-
-    makeTestRepo(repoPath)
-    runCmdOrDie(&"git -C {repoPath} branch {PlanBranch}")
-
-    # Create a real worktree at a managed path.
-    let managedRoot = managedWorktreeRootPath(repoPath)
-    let activePath = managedRoot / "active-wt"
-    createDir(parentDir(activePath))
-    runCmdOrDie(&"git -C {repoPath} worktree add {activePath} {PlanBranch}")
-    defer:
-      discard execCmdEx(&"git -C {repoPath} worktree remove --force {activePath}")
-
-    # Simulate conflict error pointing to the active worktree.
-    let fakeOutput = &"fatal: '{PlanBranch}' is already used by worktree at '{activePath}'"
-    check not recoverManagedWorktreeConflict(repoPath, fakeOutput)
-
 suite "worktree fallthrough protection":
   test "gitRun refuses to operate on worktree with missing .git":
     let tmpDir = getTempDir() / "scriptorium_test_fallthrough_gitrun"

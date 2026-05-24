@@ -52,7 +52,7 @@ proc runCliInRepo(repoPath: string, args: string): tuple[output: string, exitCod
 proc withPlanWorktree(repoPath: string, suffix: string, action: proc(planPath: string)) =
   ## Open scriptorium/plan via the persistent per-caller plan worktree.
   discard suffix
-  discard withLockedPlanWorktree(repoPath, PlanCallerCli, proc(planPath: string): bool =
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     action(planPath)
     result = true
   )

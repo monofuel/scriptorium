@@ -137,9 +137,9 @@ proc commitQuestProgress(planPath: string, iteration: int) =
   if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
     gitRun(planPath, "commit", "-m", &"scriptorium: quest iteration {iteration}")
 
-proc archiveQuest*(repoPath: string, caller: string, finalVerdict: QuestVerdict) =
+proc archiveQuest*(repoPath: string, finalVerdict: QuestVerdict) =
   ## Move the active quest and verdict into the quests/done archive as one commit.
-  discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let activePath = planPath / PlanQuestActivePath
     if not fileExists(activePath):
       logWarn("quest: no active quest to archive")
@@ -172,11 +172,11 @@ proc archiveQuest*(repoPath: string, caller: string, finalVerdict: QuestVerdict)
     true
   )
 
-proc startQuest*(repoPath: string, caller: string, questPrompt: string) =
+proc startQuest*(repoPath: string, questPrompt: string) =
   ## Write the active quest file to the plan branch and commit it.
   if questPrompt.strip().len == 0:
     raise newException(ValueError, "quest prompt cannot be empty")
-  discard withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     if isQuestActive(planPath):
       raise newException(ValueError,
         "an active quest already exists at quests/active.md — clear it before starting a new quest")
@@ -187,7 +187,7 @@ proc startQuest*(repoPath: string, caller: string, questPrompt: string) =
     true
   )
 
-proc runQuestEvalIfDrained*(repoPath: string, caller: string, runner: AgentRunner): bool =
+proc runQuestEvalIfDrained*(repoPath: string, runner: AgentRunner): bool =
   ## Run one architect quest evaluation when queues are drained and no agents are running.
   ## Returns true when the architect declared the quest done (and shouldRun has been flipped).
   if runner.isNil:
@@ -195,14 +195,14 @@ proc runQuestEvalIfDrained*(repoPath: string, caller: string, runner: AgentRunne
   if runningAgentCount() != 0:
     return false
 
-  let drained = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  let drained = withPlanWorktree(repoPath, proc(planPath: string): bool =
     isQueueDrained(planPath) and isQuestActive(planPath)
   )
   if not drained:
     return false
 
   let cfg = loadConfig(repoPath)
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     ensureQuestsDir(planPath)
     let questPrompt = readActiveQuest(planPath)
     let iterNum = nextVerdictNumber(planPath)
@@ -246,9 +246,9 @@ proc runQuestEvalIfDrained*(repoPath: string, caller: string, runner: AgentRunne
       return false
   )
 
-proc latestQuestVerdict*(repoPath: string, caller: string): QuestVerdict =
+proc latestQuestVerdict*(repoPath: string): QuestVerdict =
   ## Return the most recent verdict from the plan branch, or a zero-value if none exist.
-  result = withPlanWorktree(repoPath, caller, proc(planPath: string): QuestVerdict =
+  result = withPlanWorktree(repoPath, proc(planPath: string): QuestVerdict =
     let files = listVerdictFiles(planPath)
     if files.len == 0:
       return QuestVerdict()

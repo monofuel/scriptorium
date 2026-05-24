@@ -43,21 +43,21 @@ suite "buildRecoveryTicketContent":
 suite "hasStuckRecoveryTicket":
   test "returns false when no stuck tickets exist":
     withInitializedTempRepo("test_no_stuck_", proc(repoPath: string) =
-      check not hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+      check not hasStuckRecoveryTicket(repoPath)
     )
 
   test "returns true when a stuck recovery ticket exists":
     withInitializedTempRepo("test_stuck_recovery_", proc(repoPath: string) =
       let content = buildRecoveryTicketContent("FAIL", "abc1234")
       addTicketToPlan(repoPath, "stuck", "0042-recovery-abc1234.md", content)
-      check hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+      check hasStuckRecoveryTicket(repoPath)
     )
 
   test "returns false when stuck ticket is not a recovery ticket":
     withInitializedTempRepo("test_stuck_nonrecov_", proc(repoPath: string) =
       let content = "# Fix bug\n\n**Area:** frontend\n"
       addTicketToPlan(repoPath, "stuck", "0042-fix-bug.md", content)
-      check not hasStuckRecoveryTicket(repoPath, PlanCallerCli)
+      check not hasStuckRecoveryTicket(repoPath)
     )
 
 suite "unhealthy-master notification on recovery ticket parking":

@@ -411,37 +411,37 @@ proc writeAreasAndCommit*(planPath: string, docs: seq[AreaDocument]): bool =
 
   result = hasChanges
 
-proc hasRunnableSpec*(repoPath: string, caller: string): bool =
+proc hasRunnableSpec*(repoPath: string): bool =
   ## Return true when spec.md is present and contains actionable content.
-  result = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
     hasRunnableSpecInPlanPath(planPath)
   )
 
-proc areasMissing*(repoPath: string, caller: string): bool =
+proc areasMissing*(repoPath: string): bool =
   ## Return true when the plan branch has no area markdown files.
-  result = withPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withPlanWorktree(repoPath, proc(planPath: string): bool =
     areasMissingInPlanPath(planPath)
   )
 
-proc areasNeedingTickets*(repoPath: string, caller: string): seq[string] =
+proc areasNeedingTickets*(repoPath: string): seq[string] =
   ## Return area files that are eligible for manager ticket generation.
-  result = withPlanWorktree(repoPath, caller, proc(planPath: string): seq[string] =
+  result = withPlanWorktree(repoPath, proc(planPath: string): seq[string] =
     areasNeedingTicketsInPlanPath(planPath)
   )
 
-proc loadSpecFromPlan*(repoPath: string, caller: string): string =
+proc loadSpecFromPlan*(repoPath: string): string =
   ## Load spec.md by opening the scriptorium/plan branch in a temporary worktree.
-  result = withPlanWorktree(repoPath, caller, proc(planPath: string): string =
+  result = withPlanWorktree(repoPath, proc(planPath: string): string =
     loadSpecFromPlanPath(planPath)
   )
 
-proc syncAreasFromSpec*(repoPath: string, caller: string, generateAreas: ArchitectAreaGenerator): bool =
+proc syncAreasFromSpec*(repoPath: string, generateAreas: ArchitectAreaGenerator): bool =
   ## Generate and persist areas when plan/areas has no markdown files.
   if generateAreas.isNil:
     raise newException(ValueError, "architect area generator is required")
 
   let cfg = loadConfig(repoPath)
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let missing = areasMissingInPlanPath(planPath)
     if missing:
       let spec = loadSpecFromPlanPath(planPath)
@@ -466,13 +466,13 @@ proc architectShouldRun*(planPath: string): bool =
   let currentHash = computeContentHash(loadSpecFromPlanPath(planPath))
   return storedHash != currentHash
 
-proc runArchitectAreas*(repoPath: string, caller: string, runner: AgentRunner = runAgent): bool =
+proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
   ## Run one architect pass that writes area files directly in the plan worktree.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
 
   let cfg = loadConfig(repoPath)
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     if not hasRunnableSpecInPlanPath(planPath):
       return false
 
@@ -543,7 +543,6 @@ proc runArchitectAreas*(repoPath: string, caller: string, runner: AgentRunner = 
 
 proc updateSpecFromArchitect*(
   repoPath: string,
-  caller: string,
   prompt: string,
   runner: AgentRunner,
 ): bool =
@@ -554,7 +553,7 @@ proc updateSpecFromArchitect*(
     raise newException(ValueError, "plan prompt is required")
 
   let cfg = loadConfig(repoPath)
-  result = withLockedPlanWorktree(repoPath, caller, proc(planPath: string): bool =
+  result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let existingSpec = loadSpecFromPlanPath(planPath)
     discard runPlanArchitectRequest(
       runner,
@@ -581,6 +580,6 @@ proc updateSpecFromArchitect*(
       true
   )
 
-proc updateSpecFromArchitect*(repoPath: string, caller: string, prompt: string): bool =
+proc updateSpecFromArchitect*(repoPath: string, prompt: string): bool =
   ## Update spec.md using the default architect model backend.
-  result = updateSpecFromArchitect(repoPath, caller, prompt, runAgent)
+  result = updateSpecFromArchitect(repoPath, prompt, runAgent)

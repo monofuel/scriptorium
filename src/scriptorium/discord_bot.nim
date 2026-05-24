@@ -104,7 +104,7 @@ proc handleChatMessage(repoPath: string, client: GuildyClient, channelId: string
   var specChanged = false
   var response = ""
   try:
-    response = withLockedPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
+    response = withLockedPlanWorktree(repoPath, proc(planPath: string): string =
       let existingSpec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractivePlanPrompt(repoPath, planPath, existingSpec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -153,7 +153,7 @@ proc handleAskMessage(repoPath: string, client: GuildyClient, channelId: string,
   let cfg = loadConfig(repoPath)
   var response = ""
   try:
-    response = withPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
+    response = withPlanWorktree(repoPath, proc(planPath: string): string =
       let spec = loadSpecFromPlanPath(planPath)
       let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
       let agentResult = runPlanArchitectRequest(
@@ -214,7 +214,7 @@ proc handleChatResponse(repoPath: string, client: GuildyClient, channelId: strin
     let cfg = loadConfig(repoPath)
     var response = ""
     try:
-      response = withPlanWorktree(repoPath, PlanCallerDiscord, proc(planPath: string): string =
+      response = withPlanWorktree(repoPath, proc(planPath: string): string =
         let spec = loadSpecFromPlanPath(planPath)
         let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, messageText, username)
         let agentResult = runPlanArchitectRequest(
@@ -366,9 +366,9 @@ proc runDiscordBot*(repoPath: string) =
     var response = ""
     case cmd
     of "status":
-      response = formatStatusMessage(repoPath, PlanCallerDiscord)
+      response = formatStatusMessage(repoPath)
     of "queue":
-      response = formatQueueMessage(repoPath, PlanCallerDiscord)
+      response = formatQueueMessage(repoPath)
     of "pause":
       response = handlePause(repoPath)
     of "resume":
