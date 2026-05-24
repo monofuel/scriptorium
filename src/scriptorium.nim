@@ -16,6 +16,7 @@ Usage:
   scriptorium ask              Interactive read-only Q&A session with the Architect
   scriptorium do               Interactive coding session with full repo access
   scriptorium do <prompt>      One-shot: run an ad-hoc task with full repo access
+  scriptorium quest <prompt>   Bounded run: orchestrator drives toward an AI-judged goal
   scriptorium audit            Run the audit agent
   scriptorium dashboard        Start the web dashboard
   scriptorium discord          Run the Discord bot
@@ -90,6 +91,17 @@ proc cmdDo(args: seq[string]) =
   else:
     let prompt = args.join(" ").strip()
     runOneShotDoSession(getCurrentDir(), prompt)
+
+proc cmdQuest(args: seq[string]) =
+  ## Run the orchestrator until the architect judges the quest prompt satisfied.
+  if args.len == 0:
+    stderr.writeLine("scriptorium quest: a prompt is required")
+    quit(1)
+  let prompt = args.join(" ").strip()
+  if prompt.len == 0:
+    stderr.writeLine("scriptorium quest: a prompt is required")
+    quit(1)
+  runQuest(getCurrentDir(), prompt)
 
 proc cmdAudit() =
   ## Run the audit agent against the current repository.
@@ -171,6 +183,9 @@ when isMainModule:
   of "do":
     let doArgs = if args.len > 1: args[1..^1] else: @[]
     cmdDo(doArgs)
+  of "quest":
+    let questArgs = if args.len > 1: args[1..^1] else: @[]
+    cmdQuest(questArgs)
   of "dashboard":
     cmdDashboard()
   of "audit":

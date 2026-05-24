@@ -16,6 +16,11 @@ var
   planWorktreeLock*: Lock
   planWorktreeLockInitialized* = false
 
+# Per-thread re-entrancy depth for withCommitLock. The lockfile PID is unsafe
+# as a re-entrancy signal because containers can have colliding PID namespaces
+# on a shared filesystem. Track "I already hold it" in process memory instead.
+var commitLockDepth* {.threadvar.}: int
+
 proc ensurePlanWorktreeLockInitialized*() {.gcsafe.} =
   ## Initialize the in-process plan worktree lock once.
   if not planWorktreeLockInitialized:
@@ -91,6 +96,13 @@ proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
   ## Acquire a file-based transactional commit lock with retry and staleness detection.
   ## Writes a JSON payload with PID and timestamp. Stale locks (>= 30s) are stolen.
   ## Fresh locks cause polling retries up to CommitLockMaxRetries times.
+  ## Re-entrant on the same OS thread: nested calls skip the file lock since this
+  ## thread already holds it. Cross-process safety remains via the file lock.
+  if commitLockDepth > 0:
+    inc commitLockDepth
+    defer: dec commitLockDepth
+    return operation()
+
   let lockPath = commitLockPath(repoPath)
   createDir(parentDir(lockPath))
 
@@ -100,7 +112,9 @@ proc withCommitLock*[T](repoPath: string, operation: proc(): T): T =
     let payload = CommitLockFile(pid: currentPid, timestamp: now)
     if tryCreateCommitLock(lockPath, payload.toJson()):
       logDebug(&"commit lock acquired: {lockPath}")
+      commitLockDepth = 1
       defer:
+        commitLockDepth = 0
         if fileExists(lockPath):
           removeFile(lockPath)
         logDebug(&"commit lock released: {lockPath}")

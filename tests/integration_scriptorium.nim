@@ -72,7 +72,7 @@ suite "config":
     var writtenCfg = defaultConfig()
     writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6", reasoningEffort: "medium")
     writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
-    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.1-codex-mini", reasoningEffort: "low")
+    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.3-codex", reasoningEffort: "low")
     writtenCfg.endpoints.local = "http://localhost:1234/v1"
     writeScriptoriumConfig(tmp, writtenCfg)
 
@@ -81,7 +81,7 @@ suite "config":
     check cfg.agents.architect.harness == harnessClaudeCode
     check cfg.agents.coding.model == "grok-code-fast-1"
     check cfg.agents.coding.harness == harnessTypoi
-    check cfg.agents.manager.model == "gpt-5.1-codex-mini"
+    check cfg.agents.manager.model == "gpt-5.3-codex"
     check cfg.agents.manager.harness == harnessCodex
     check cfg.agents.architect.reasoningEffort == "medium"
     check cfg.agents.coding.reasoningEffort == "high"

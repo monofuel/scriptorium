@@ -12,6 +12,10 @@ const
   PlanMergeQueuePendingDir* = "queue/merge/pending"
   PlanMergeQueueActivePath* = "queue/merge/active.md"
   PlanSpecPath* = "spec.md"
+  PlanQuestsDir* = "quests"
+  PlanQuestActivePath* = "quests/active.md"
+  PlanQuestVerdictPath* = "quests/active-verdict.json"
+  PlanQuestsDoneDir* = "quests/done"
   DefaultAgentAttempt* = 1
   DefaultAgentMaxAttempts* = 2
   DefaultLocalEndpoint* = "http://127.0.0.1:8097"

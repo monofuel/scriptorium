@@ -333,6 +333,15 @@ proc collectOpenAndInProgressAreas*(planPath: string): HashSet[string] =
       if areaId.len > 0:
         result.incl(areaId)
 
+proc collectAreasWithAnyTickets*(planPath: string): HashSet[string] =
+  ## Collect area identifiers referenced by tickets in any state.
+  result = initHashSet[string]()
+  for stateDir in [PlanTicketsOpenDir, PlanTicketsInProgressDir, PlanTicketsDoneDir, PlanTicketsStuckDir]:
+    for ticketPath in listMarkdownFiles(planPath / stateDir):
+      let areaId = parseAreaFromTicketContent(readFile(ticketPath))
+      if areaId.len > 0:
+        result.incl(areaId)
+
 proc areasNeedingTicketsInPlanPath*(planPath: string): seq[string] =
   ## Return area files eligible for ticket generation.
   ## Requires area hashes file; returns empty when missing to let bootstrap create it.
@@ -474,10 +483,18 @@ proc runArchitectAreas*(repoPath: string, caller: string, runner: AgentRunner = 
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", "scriptorium: initialize spec hash marker")
 
-    # Migration: bootstrap area hashes for existing areas without one.
+    # Migration: bootstrap area hashes for existing areas without one. Only
+    # record hashes for areas that already have tickets — those are assumed to
+    # have been ticketed in a prior version and should not be re-ticketed.
+    # Areas without any tickets get no entry, so the manager step picks them up.
     if not areasMissingInPlanPath(planPath) and not fileExists(planPath / AreaHashesPath):
-      let currentHashes = computeAllAreaHashes(planPath)
-      writeAreaHashes(planPath, currentHashes)
+      let allHashes = computeAllAreaHashes(planPath)
+      let ticketedAreas = collectAreasWithAnyTickets(planPath)
+      var bootstrapHashes = initTable[string, string]()
+      for areaId, hash in allHashes:
+        if areaId in ticketedAreas:
+          bootstrapHashes[areaId] = hash
+      writeAreaHashes(planPath, bootstrapHashes)
       gitRun(planPath, "add", AreaHashesPath)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", "scriptorium: bootstrap area hashes")
@@ -505,6 +522,16 @@ proc runArchitectAreas*(repoPath: string, caller: string, runner: AgentRunner = 
     gitRun(planPath, "add", PlanAreasDir)
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
       gitRun(planPath, "commit", "-m", AreaCommitMessage)
+
+    # On fresh init the architect just created areas but no hashes file exists.
+    # Write it empty so areasNeedingTickets returns all new areas this tick
+    # instead of bailing; the migration block above handles the legacy-upgrade
+    # case where areas pre-existed without hashes.
+    if not fileExists(planPath / AreaHashesPath):
+      writeAreaHashes(planPath, initTable[string, string]())
+      gitRun(planPath, "add", AreaHashesPath)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: initialize empty area hashes")
 
     # Write updated spec hash marker after architect commits
     writeSpecHashMarker(planPath)

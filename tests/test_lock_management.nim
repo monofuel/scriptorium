@@ -324,6 +324,53 @@ suite "commit lock":
     check executed
     check not fileExists(commitLockPath(tmp))
 
+  test "withCommitLock is re-entrant on the same thread":
+    ## Regression: before the threadvar depth counter, a nested withCommitLock
+    ## call would poll for 30s against its own outer lockfile, then "steal" itself.
+    let tmp = createTempDir("commit_lock_reentrant_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    let lockPath = commitLockPath(tmp)
+    var innerRan = false
+    let t0 = epochTime()
+    discard withCommitLock[int](tmp, proc(): int =
+      check fileExists(lockPath)
+      check commitLockDepth == 1
+      discard withCommitLock[int](tmp, proc(): int =
+        innerRan = true
+        check fileExists(lockPath)
+        check commitLockDepth == 2
+        result = 0
+      )
+      check commitLockDepth == 1
+      result = 0
+    )
+    let elapsed = epochTime() - t0
+    check innerRan
+    check commitLockDepth == 0
+    check not fileExists(lockPath)
+    check elapsed < 1.0  # pre-fix: ~30s self-steal
+
+  test "withCommitLock depth resets when nested operation raises":
+    let tmp = createTempDir("commit_lock_reentrant_exc_", "", getTempDir())
+    defer: removeDir(tmp)
+    createDir(tmp / ManagedStateDirName)
+
+    var raised = false
+    try:
+      discard withCommitLock[int](tmp, proc(): int =
+        discard withCommitLock[int](tmp, proc(): int =
+          raise newException(ValueError, "boom")
+        )
+        result = 0
+      )
+    except ValueError:
+      raised = true
+    check raised
+    check commitLockDepth == 0
+    check not fileExists(commitLockPath(tmp))
+
 suite "orchestrator PID guard corrupted file":
   test "corrupted PID file is overwritten":
     let tmp = createTempDir("pid_guard_corrupt_", "", getTempDir())

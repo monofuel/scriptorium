@@ -1,10 +1,10 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
   mcport,
-  ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, quest_system, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
-  agent_pool, architect_agent, audit_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, pause_flag, stuck_investigation
+  agent_pool, architect_agent, audit_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, quest_system, pause_flag, stuck_investigation
 
 const
   IdleSleepMs = 200
@@ -166,9 +166,10 @@ proc availableDiskSpaceGB*(path: string): float =
   let availBytes = stat.f_bavail.float * stat.f_frsize.float
   result = availBytes / (1024.0 * 1024.0 * 1024.0)
 
-proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner) =
+proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner, questMode: bool = false) =
   ## Execute the orchestrator polling loop with interleaved manager/coder execution.
   ## Tick order: poll completions → backoff/health → architect → managers → coders → merge → sleep.
+  ## When questMode is true, step 8 runs the architect quest evaluator instead of the loop system.
   discard recoverFromCrash(repoPath, PlanCallerOrchestrator)
   agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
@@ -378,7 +379,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           else:
             let slotsAvailable = emptySlotCount(maxAgents)
             if slotsAvailable > 0:
-              let assignments = assignOpenTickets(repoPath, PlanCallerOrchestrator, 1)
+              let assignments = assignOpenTickets(repoPath, PlanCallerOrchestrator, slotsAvailable)
               for assignment in assignments:
                 let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
                 runTicketPrediction(repoPath, PlanCallerOrchestrator, assignment.inProgressTicket, runner)
@@ -453,8 +454,16 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           logInfo(&"recovery: starting recovery agent for unhealthy commit {masterHealthState.head}")
           runRecoveryAgent(repoPath, PlanCallerOrchestrator, runner, masterHealthState.testOutput, masterHealthState.head)
 
-        # Step 8: Loop system — feedback cycle when queue is drained or force eval is pending.
-        if loopCfg.enabled and loopCfg.feedback.len > 0:
+        # Step 8: Quest evaluator or loop system.
+        if questMode:
+          try:
+            let questDone = runQuestEvalIfDrained(repoPath, PlanCallerOrchestrator, runner)
+            if questDone:
+              logInfo("quest: architect declared done, exiting main loop")
+              idle = false
+          except CatchableError as e:
+            logWarn(&"quest: iteration failed: {e.msg}")
+        elif loopCfg.enabled and loopCfg.feedback.len > 0:
           let drained = withPlanWorktree(repoPath, PlanCallerOrchestrator, proc(planPath: string): bool =
             isQueueDrained(planPath)
           )
@@ -538,6 +547,7 @@ proc runOrchestratorLoop(
   endpoint: OrchestratorEndpoint,
   maxTicks: int,
   runner: AgentRunner,
+  questMode: bool = false,
 ) =
   ## Start HTTP transport and execute the orchestrator idle event loop.
   shouldRun = true
@@ -546,7 +556,7 @@ proc runOrchestratorLoop(
   var serverThread: Thread[ServerThreadArgs]
   createThread(serverThread, runHttpServer, (httpServer, endpoint.address, endpoint.port))
   waitForServerReady(endpoint.address, endpoint.port)
-  runOrchestratorMainLoop(repoPath, maxTicks, runner)
+  runOrchestratorMainLoop(repoPath, maxTicks, runner, questMode)
 
   shouldRun = false
   signalServerShutdown()
@@ -554,14 +564,14 @@ proc runOrchestratorLoop(
   joinThread(serverThread)
   logDebug("HTTP server thread exited")
 
-proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent) =
+proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunner = runAgent, questMode: bool = false) =
   ## Run a bounded orchestrator loop without starting the MCP HTTP server.
   acquireOrchestratorPidGuard(repoPath)
   defer:
     teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
     releaseOrchestratorPidGuard(repoPath)
   shouldRun = true
-  runOrchestratorMainLoop(repoPath, maxTicks, runner)
+  runOrchestratorMainLoop(repoPath, maxTicks, runner, questMode)
   shouldRun = false
 
 proc harnessBinaryName(h: Harness): string =
@@ -672,3 +682,39 @@ proc runOrchestrator*(repoPath: string) =
   let httpServer = createOrchestratorServer()
   defer: closeLog()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent)
+
+proc runQuest*(repoPath: string, questPrompt: string) =
+  ## Start a quest run: plant the quest prompt and run the orchestrator until the
+  ## architect declares the quest done or the user interrupts.
+  if questPrompt.strip().len == 0:
+    raise newException(ValueError, "quest prompt cannot be empty")
+  preflightValidation(repoPath)
+  acquireOrchestratorPidGuard(repoPath)
+  defer:
+    teardownPlanWorktree(repoPath, PlanCallerOrchestrator)
+    releaseOrchestratorPidGuard(repoPath)
+  normalizeConfig(repoPath)
+  let cfg = loadConfig(repoPath)
+  if cfg.syncAgentsMd:
+    syncAgentsMd(repoPath)
+  ensureScriptoriumIgnored(repoPath)
+  initLog(repoPath)
+  applyLogLevelFromConfig(repoPath)
+  let endpoint = loadOrchestratorEndpoint(repoPath)
+  logInfo(&"quest: starting — {questPrompt}")
+  logInfo(&"orchestrator listening on http://{endpoint.address}:{endpoint.port}")
+  logInfo(&"repo: {repoPath}")
+  logInfo(&"build: {BuildCommitHash}")
+  logInfo(&"log file: {logFilePath}")
+  startQuest(repoPath, PlanCallerOrchestrator, questPrompt)
+  let httpServer = createOrchestratorServer()
+  defer: closeLog()
+  let t0 = epochTime()
+  runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent, questMode = true)
+  let elapsed = epochTime() - t0
+  let finalVerdict = latestQuestVerdict(repoPath, PlanCallerOrchestrator)
+  archiveQuest(repoPath, PlanCallerOrchestrator, finalVerdict)
+  let status = if finalVerdict.done: "done" else: "interrupted"
+  let elapsedStr = formatDuration(elapsed)
+  echo &"quest {status}: {finalVerdict.reason}"
+  echo &"  iterations: {finalVerdict.iteration}  wall time: {elapsedStr}"

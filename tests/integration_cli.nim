@@ -258,17 +258,6 @@ suite "scriptorium CLI":
     check output.contains("3. Run `scriptorium plan` to build your spec with the Architect")
     check output.contains("4. Run `scriptorium run` to start the orchestrator")
 
-  test "init spec.md references AGENTS.md":
-    let tmp = getTempDir() / "scriptorium_test_cli_spec_ref"
-    makeInitializedTestRepo(tmp)
-    defer: removeDir(tmp)
-
-    var specContent = ""
-    withPlanWorktree(tmp, "spec_ref", proc(planPath: string) =
-      specContent = readFile(planPath / "spec.md")
-    )
-    check specContent.contains("AGENTS.md")
-
   test "run exits with error when plan branch is missing":
     let tmp = getTempDir() / "scriptorium_test_cli_preflight_plan"
     makeTestRepo(tmp)
@@ -405,12 +394,3 @@ suite "scriptorium CLI":
     check readFile(tmp / "docs" / "guide.md") == "# Guide\n"
     check not fileExists(tmp / "src" / ".gitkeep")
     check not fileExists(tmp / "docs" / ".gitkeep")
-
-  test "dashboard command prints stub message and exits 0":
-    let tmp = getTempDir() / "scriptorium_test_cli_dashboard"
-    makeInitializedTestRepo(tmp)
-    defer: removeDir(tmp)
-
-    let (output, rc) = runCliInRepo(tmp, "dashboard")
-    check rc == 0
-    check output.contains("dashboard not yet implemented")

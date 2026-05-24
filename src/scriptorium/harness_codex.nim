@@ -6,8 +6,6 @@ import
 const
   DefaultCodexBinary = "codex"
   DefaultCodexDeveloperInstructions = "developer_instructions=\"\""
-  Gpt51CodexMiniModel = "gpt-5.1-codex-mini"
-  Gpt51CodexMiniDefaultReasoningEffort = "high"
   DefaultTicketId = "adhoc"
   DefaultAttempt = 1
   DefaultLogRoot = ".scriptorium/logs"
@@ -183,10 +181,6 @@ proc normalizeReasoningEffort(value: string): string =
 proc resolveReasoningEffort(request: CodexRunRequest): string =
   ## Resolve the codex reasoning effort override for this request.
   result = normalizeReasoningEffort(request.reasoningEffort)
-  let model = request.model.strip().toLowerAscii()
-  if model == Gpt51CodexMiniModel:
-    if result.len == 0 or result == "xhigh":
-      result = Gpt51CodexMiniDefaultReasoningEffort
 
 proc elapsedMs(since: MonoTime): int64 =
   ## Return elapsed milliseconds from since until now.

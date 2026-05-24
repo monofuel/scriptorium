@@ -24,7 +24,7 @@ proc newBaseRequest(tmpDir: string, codexPath: string, ticketId: string): CodexR
   result = CodexRunRequest(
     prompt: "Implement the task.",
     workingDir: worktreePath,
-    model: "gpt-5.1-codex-mini",
+    model: "gpt-5.3-codex",
     ticketId: ticketId,
     codexBinary: codexPath,
     logRoot: tmpDir / "logs",
@@ -34,7 +34,7 @@ suite "harness codex":
   test "buildCodexExecArgs matches expected arg order":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.3-codex",
       skipGitRepoCheck: true,
     )
 
@@ -42,8 +42,6 @@ suite "harness codex":
     check args == @[
       "-c",
       "developer_instructions=\"\"",
-      "-c",
-      "model_reasoning_effort=\"high\"",
       "exec",
       "--json",
       "--output-last-message",
@@ -51,20 +49,11 @@ suite "harness codex":
       "--cd",
       "/tmp/worktree",
       "--model",
-      "gpt-5.1-codex-mini",
+      "gpt-5.3-codex",
       "--dangerously-bypass-approvals-and-sandbox",
       "--skip-git-repo-check",
       "-",
     ]
-
-  test "buildCodexExecArgs sets mini reasoning effort to high by default":
-    let request = CodexRunRequest(
-      workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
-    )
-
-    let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
-    check "model_reasoning_effort=\"high\"" in args
 
   test "buildCodexMcpListArgs includes mcp config and mcp list --json":
     let request = CodexRunRequest(
@@ -87,7 +76,7 @@ suite "harness codex":
   test "buildCodexExecArgs includes mcp server when endpoint is configured":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.3-codex",
       mcpEndpoint: "http://127.0.0.1:8097",
     )
 
@@ -99,7 +88,7 @@ suite "harness codex":
   test "buildCodexExecArgs trims trailing slash from mcp endpoint":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.3-codex",
       mcpEndpoint: "http://127.0.0.1:8097/",
     )
 
@@ -111,7 +100,7 @@ suite "harness codex":
   test "buildCodexExecArgs includes reasoning effort override when configured":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.3-codex",
       reasoningEffort: "high",
     )
 
@@ -119,7 +108,7 @@ suite "harness codex":
     check "-c" in args
     check "model_reasoning_effort=\"high\"" in args
 
-  test "buildCodexExecArgs keeps xhigh for non-mini models":
+  test "buildCodexExecArgs preserves explicit xhigh reasoning effort":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
       model: "gpt-5.3-codex",
@@ -129,17 +118,7 @@ suite "harness codex":
     let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
     check "model_reasoning_effort=\"xhigh\"" in args
 
-  test "buildCodexExecArgs maps mini xhigh to high":
-    let request = CodexRunRequest(
-      workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
-      reasoningEffort: "xhigh",
-    )
-
-    let args = buildCodexExecArgs(request, "/tmp/last-message.txt")
-    check "model_reasoning_effort=\"high\"" in args
-
-  test "buildCodexExecArgs leaves reasoning unset for non-mini models":
+  test "buildCodexExecArgs leaves reasoning unset when not specified":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
       model: "gpt-5.3-codex",
@@ -151,7 +130,7 @@ suite "harness codex":
   test "buildCodexExecArgs rejects unsupported reasoning effort values":
     let request = CodexRunRequest(
       workingDir: "/tmp/worktree",
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.3-codex",
       reasoningEffort: "maximum",
     )
 
@@ -186,7 +165,7 @@ printf 'final:%s\n' "$model" > "$last_message"
       check result.timeoutKind == codexTimeoutNone
       check fileExists(result.logFile)
       check result.stdout.contains("\"type\":\"message\"")
-      check result.lastMessage.contains("final:gpt-5.1-codex-mini")
+      check result.lastMessage.contains("final:gpt-5.3-codex")
       check result.command.len > 0
       check result.command[0] == codexPath
     )

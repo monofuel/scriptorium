@@ -235,6 +235,21 @@ proc buildArchitectLoopPrompt*(repoPath: string, planPath: string, goal: string,
     ],
   ))))
 
+proc buildArchitectQuestPrompt*(repoPath: string, planPath: string, questPrompt: string, iterationNumber: int, recentVerdicts: string, ticketSummary: string): string =
+  ## Build the architect quest prompt: quest goal, prior verdicts, ticket state, and verdict instructions.
+  result = withMethod(withHygiene(withTone(renderPromptTemplate(
+    ArchitectQuestTemplate,
+    [
+      (name: "PLAN_SCOPE", value: buildPlanScopePrompt(repoPath, planPath).strip()),
+      (name: "QUEST_PROMPT", value: questPrompt.strip()),
+      (name: "ITERATION_NUMBER", value: $iterationNumber),
+      (name: "RECENT_VERDICTS", value: recentVerdicts.strip()),
+      (name: "TICKET_SUMMARY", value: ticketSummary.strip()),
+      (name: "REPO_PATH", value: repoPath),
+      (name: "PLAN_PATH", value: planPath),
+    ],
+  ))))
+
 proc buildInvestigateStuckPrompt*(repoPath: string, ticketContent: string, failureClassification: string, gitStatus: string, recentCommits: string): string =
   ## Build the architect prompt for investigating a stuck ticket.
   result = withMethod(withHygiene(withTone(renderPromptTemplate(

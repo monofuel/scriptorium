@@ -20,6 +20,7 @@ const
   ArchitectDoTemplate* = staticRead(PromptDirectory & "architect_do.md")
   ArchitectInvestigateStuckTemplate* = staticRead(PromptDirectory & "architect_investigate_stuck.md")
   ArchitectLoopTemplate* = staticRead(PromptDirectory & "architect_loop.md")
+  ArchitectQuestTemplate* = staticRead(PromptDirectory & "architect_quest.md")
   IntentClassifierTemplate* = staticRead(PromptDirectory & "intent_classifier.md")
   DevopsGuidanceTemplate* = staticRead(PromptDirectory & "devops_guidance.md")
   ToneTemplate* = staticRead(PromptDirectory & "tone.md")

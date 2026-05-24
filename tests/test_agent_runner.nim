@@ -40,7 +40,7 @@ printf 'done\n' > "$last_message"
         prompt: "Write code.",
         workingDir: worktreePath,
         harness: harnessCodex,
-        model: "gpt-5.1-codex-mini",
+        model: "gpt-5.3-codex",
         reasoningEffort: "high",
         mcpEndpoint: "http://127.0.0.1:8097",
         ticketId: "0001",
