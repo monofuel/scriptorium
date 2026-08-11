@@ -7,6 +7,7 @@ type
     harnessClaudeCode = "claude-code"
     harnessCodex = "codex"
     harnessTypoi = "typoi"
+    harnessGrokBuild = "grok-build"
 
 const
   ConfigFile = "scriptorium.json"
@@ -180,6 +181,8 @@ proc inferHarness*(model: string): Harness =
     harnessClaudeCode
   elif model.startsWith("codex-") or model.startsWith("gpt-"):
     harnessCodex
+  elif model.startsWith("grok-4") or model.startsWith("grok-build"):
+    harnessGrokBuild
   else:
     harnessTypoi
 

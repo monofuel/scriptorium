@@ -1,6 +1,6 @@
 import
   std/strformat,
-  ./[common, config, harness_claude_code, harness_codex, harness_typoi]
+  ./[common, config, harness_claude_code, harness_codex, harness_grok_build, harness_typoi]
 
 type
   AgentStreamEventKind* = enum
@@ -107,6 +107,24 @@ proc mapTypoiEvent(event: TypoiStreamEvent): AgentStreamEvent =
   of typoiEventStatus:
     result.kind = agentEventStatus
   of typoiEventMessage:
+    result.kind = agentEventMessage
+
+proc mapGrokBuildEvent(event: GrokBuildStreamEvent): AgentStreamEvent =
+  ## Convert one grok-build stream event into an agent stream event.
+  result = AgentStreamEvent(
+    text: event.text,
+    rawLine: event.rawLine,
+  )
+  case event.kind
+  of grokBuildEventHeartbeat:
+    result.kind = agentEventHeartbeat
+  of grokBuildEventReasoning:
+    result.kind = agentEventReasoning
+  of grokBuildEventTool:
+    result.kind = agentEventTool
+  of grokBuildEventStatus:
+    result.kind = agentEventStatus
+  of grokBuildEventMessage:
     result.kind = agentEventMessage
 
 proc runAgent*(request: AgentRunRequest): AgentRunResult =
@@ -223,4 +241,39 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessageFile: typoiResult.lastMessageFile,
       lastMessage: typoiResult.lastMessage,
       timeoutKind: $typoiResult.timeoutKind,
+    )
+  of harnessGrokBuild:
+    let grokResult = runGrokBuild(GrokBuildRunRequest(
+      prompt: request.prompt,
+      workingDir: request.workingDir,
+      model: request.model,
+      reasoningEffort: request.reasoningEffort,
+      mcpEndpoint: request.mcpEndpoint,
+      ticketId: request.ticketId,
+      attempt: request.attempt,
+      grokBuildBinary: request.binary,
+      logRoot: request.logRoot,
+      noOutputTimeoutMs: request.noOutputTimeoutMs,
+      hardTimeoutMs: request.hardTimeoutMs,
+      progressTimeoutMs: request.progressTimeoutMs,
+      heartbeatIntervalMs: request.heartbeatIntervalMs,
+      maxAttempts: request.maxAttempts,
+      continuationPrompt: request.continuationPrompt,
+      continuationPromptBuilder: request.continuationPromptBuilder,
+      onEvent: proc(event: GrokBuildStreamEvent) =
+        ## Forward grok-build streaming events to the optional agent callback.
+        if not request.onEvent.isNil:
+          request.onEvent(mapGrokBuildEvent(event))
+    ))
+    result = AgentRunResult(
+      backend: request.harness,
+      command: grokResult.command,
+      exitCode: grokResult.exitCode,
+      attempt: grokResult.attempt,
+      attemptCount: grokResult.attemptCount,
+      stdout: grokResult.stdout,
+      logFile: grokResult.logFile,
+      lastMessageFile: grokResult.lastMessageFile,
+      lastMessage: grokResult.lastMessage,
+      timeoutKind: $grokResult.timeoutKind,
     )

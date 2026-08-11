@@ -45,6 +45,7 @@ proc integrationHarness*(): Harness =
     of "codex": result = harnessCodex
     of "claude-code": result = harnessClaudeCode
     of "typoi": result = harnessTypoi
+    of "grok-build": result = harnessGrokBuild
     else:
       raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
   else:
@@ -58,6 +59,7 @@ proc integrationCodingHarness*(): Harness =
     of "codex": result = harnessCodex
     of "claude-code": result = harnessClaudeCode
     of "typoi": result = harnessTypoi
+    of "grok-build": result = harnessGrokBuild
     else:
       raise newException(ValueError, "unknown SCRIPTORIUM_TEST_CODING_HARNESS: " & envVal)
   else:
@@ -70,6 +72,7 @@ proc requiredAgentBinary*(): string =
   of harnessCodex: result = "codex"
   of harnessClaudeCode: result = "claude"
   of harnessTypoi: result = "typoi"
+  of harnessGrokBuild: result = "grok"
 
 proc codexAuthPath*(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.
@@ -92,6 +95,10 @@ proc hasAgentAuth*(): bool =
     result = hasApiKey or hasOauth
   of harnessTypoi:
     result = true
+  of harnessGrokBuild:
+    let hasApiKey = getEnv("XAI_API_KEY", "").len > 0
+    let hasOauth = fileExists(expandTilde("~/.grok/auth.json"))
+    result = hasApiKey or hasOauth
 
 proc runCmdOrDie*(cmd: string) =
   ## Run one shell command and fail immediately when it exits non-zero.

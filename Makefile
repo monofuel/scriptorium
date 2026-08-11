@@ -1,4 +1,4 @@
-.PHONY: test integration-test integration-test-claude integration-test-typoi e2e-test e2e-test-claude e2e-test-typoi build docker-build docker-build-push ci check-updates
+.PHONY: test integration-test integration-test-claude integration-test-typoi integration-test-grok e2e-test e2e-test-claude e2e-test-typoi build docker-build docker-build-push ci check-updates
 
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
@@ -59,6 +59,11 @@ integration-test-claude:
 integration-test-typoi:
 	SCRIPTORIUM_TEST_MODEL=claude-opus-4-6 \
 	SCRIPTORIUM_TEST_HARNESS=typoi \
+	$(MAKE) integration-test
+
+integration-test-grok:
+	SCRIPTORIUM_TEST_MODEL=grok-4.5 \
+	SCRIPTORIUM_TEST_HARNESS=grok-build \
 	$(MAKE) integration-test
 
 e2e-test: nim.cfg

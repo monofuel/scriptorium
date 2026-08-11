@@ -580,6 +580,7 @@ proc harnessBinaryName(h: Harness): string =
   of harnessClaudeCode: "claude"
   of harnessCodex: "codex"
   of harnessTypoi: "typoi"
+  of harnessGrokBuild: "grok"
 
 proc preflightValidation*(repoPath: string) =
   ## Validate that the repo is ready for the orchestrator to run.
@@ -651,6 +652,9 @@ proc preflightValidation*(repoPath: string) =
   of harnessTypoi:
     hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
               getEnv("OPENAI_API_KEY").len > 0
+  of harnessGrokBuild:
+    hasAuth = getEnv("XAI_API_KEY").len > 0 or
+              fileExists(getHomeDir() / ".grok" / "auth.json")
 
   if not hasAuth:
     stderr.writeLine("WARNING: No API credentials detected for " & binaryName & ". Set the appropriate API key environment variable.")

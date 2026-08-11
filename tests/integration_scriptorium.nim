@@ -104,6 +104,7 @@ suite "config":
   test "inferHarness works for reviewer models":
     check inferHarness("claude-sonnet-4-6") == harnessClaudeCode
     check inferHarness("codex-mini-review") == harnessCodex
+    check inferHarness("grok-4.5") == harnessGrokBuild
     check inferHarness("grok-review-1") == harnessTypoi
 
   test "manager model remains independent when manager is unset":
@@ -139,6 +140,8 @@ suite "config":
     check inferHarness("claude-haiku-4-5") == harnessClaudeCode
     check inferHarness("codex-mini") == harnessCodex
     check inferHarness("gpt-4o") == harnessCodex
+    check inferHarness("grok-4.5") == harnessGrokBuild
+    check inferHarness("grok-build") == harnessGrokBuild
     check inferHarness("grok-code-fast-1") == harnessTypoi
     check inferHarness("local/qwen3.5-35b-a3b") == harnessTypoi
 

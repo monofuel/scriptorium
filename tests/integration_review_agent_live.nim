@@ -39,6 +39,7 @@ proc integrationHarness(): Harness =
     of "codex": result = harnessCodex
     of "claude-code": result = harnessClaudeCode
     of "typoi": result = harnessTypoi
+    of "grok-build": result = harnessGrokBuild
     else:
       raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
   else:
@@ -58,6 +59,10 @@ proc hasAgentAuth(): bool =
     result = hasApiKey or hasOauth
   of harnessTypoi:
     result = true
+  of harnessGrokBuild:
+    let hasApiKey = getEnv("XAI_API_KEY", "").len > 0
+    let hasOauth = fileExists(expandTilde("~/.grok/auth.json"))
+    result = hasApiKey or hasOauth
 
 proc requiredAgentBinary(): string =
   ## Return the binary name needed for the configured test harness.
@@ -66,6 +71,7 @@ proc requiredAgentBinary(): string =
   of harnessCodex: result = "codex"
   of harnessClaudeCode: result = "claude"
   of harnessTypoi: result = "typoi"
+  of harnessGrokBuild: result = "grok"
 
 proc mcpPort(offset: int): int =
   ## Return a deterministic local MCP port for one test offset.

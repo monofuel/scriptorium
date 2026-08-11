@@ -299,6 +299,9 @@ proc testInferHarness() =
   doAssert inferHarness("claude-opus-4-6") == harnessClaudeCode
   doAssert inferHarness("codex-mini") == harnessCodex
   doAssert inferHarness("gpt-4o") == harnessCodex
+  doAssert inferHarness("grok-4.5") == harnessGrokBuild
+  doAssert inferHarness("grok-build") == harnessGrokBuild
+  doAssert inferHarness("grok-code-fast-1") == harnessTypoi
   doAssert inferHarness("some-random-model") == harnessTypoi
   doAssert inferHarness("llama-3") == harnessTypoi
   echo "[OK] inferHarness maps model prefixes to correct harnesses"

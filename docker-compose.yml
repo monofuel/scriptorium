@@ -11,6 +11,7 @@ services:
       - ~/.codex:/home/scriptorium/.codex
       - ~/.claude:/home/scriptorium/.claude
       - ~/.claude.json:/home/scriptorium/.claude.json
+      - ~/.grok:/home/scriptorium/.grok
       - ~/.aws:/home/scriptorium/.aws:ro
       - ~/.ssh:/home/scriptorium/.ssh:ro
     working_dir: /workspace
@@ -26,6 +27,7 @@ services:
       - ANTHROPIC_SMALL_FAST_MODEL
       - AWS_PROFILE
       - AWS_REGION
+      - XAI_API_KEY
     entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]
 
