@@ -28,7 +28,7 @@ proc setupPlanBranch(repoPath: string, setupProc: proc(planDir: string)) =
 
 proc cleanupTestRepo(repoPath: string) =
   ## Tear down plan worktree and remove the temp repo.
-  teardownPlanWorktree(repoPath, TestCaller)
+  teardownPlanWorktree(repoPath)
   removeDir(repoPath)
 
 proc testParseChatModeAsk() =

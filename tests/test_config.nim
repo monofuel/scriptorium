@@ -5,7 +5,7 @@ import
 proc testDefaultConfigValues() =
   ## Verify defaultConfig returns expected default values for all fields.
   let cfg = defaultConfig()
-  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.agents.architect.model == "claude-opus-5"
   doAssert cfg.agents.coding.model == "claude-sonnet-4-6"
   doAssert cfg.agents.manager.model == "claude-sonnet-4-6"
   doAssert cfg.agents.reviewer.model == "claude-sonnet-4-6"
@@ -52,7 +52,7 @@ proc testPartialJsonMerge() =
   let cfg = loadConfig(tmpDir)
   doAssert cfg.agents.coding.model == "custom-model"
   doAssert cfg.agents.coding.harness == harnessTypoi  # inferHarness("custom-model")
-  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.agents.architect.model == "claude-opus-5"
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] partial JSON overrides only specified field"
 
@@ -215,7 +215,7 @@ proc testDashboardConfigLoading() =
   let cfg = loadConfig(tmpDir)
   doAssert cfg.dashboard.port == 9000
   doAssert cfg.dashboard.host == "0.0.0.0"
-  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.agents.architect.model == "claude-opus-5"
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] dashboard config fields loaded correctly"
 
@@ -650,7 +650,7 @@ proc testDiskSpaceMinGBPartialOverride() =
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.diskSpaceMinGB == 50
-  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.agents.architect.model == "claude-opus-5"
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] diskSpaceMinGB partial override loads custom value with other defaults preserved"
 

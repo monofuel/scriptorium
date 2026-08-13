@@ -2,7 +2,7 @@
   "agents": {
     "architect": {
       "harness": "claude-code",
-      "model": "claude-opus-4-6",
+      "model": "claude-opus-5",
       "reasoningEffort": "",
       "hardTimeout": 7200000,
       "noOutputTimeout": 600000,
@@ -10,7 +10,7 @@
     },
     "coding": {
       "harness": "claude-code",
-      "model": "claude-opus-4-6",
+      "model": "claude-opus-5",
       "reasoningEffort": "",
       "hardTimeout": 14400000,
       "noOutputTimeout": 300000,
@@ -18,7 +18,7 @@
     },
     "manager": {
       "harness": "claude-code",
-      "model": "claude-opus-4-6",
+      "model": "claude-opus-5",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,
@@ -26,7 +26,7 @@
     },
     "reviewer": {
       "harness": "claude-code",
-      "model": "claude-opus-4-6",
+      "model": "claude-opus-5",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,

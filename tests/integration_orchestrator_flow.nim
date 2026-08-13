@@ -154,7 +154,7 @@ suite "orchestrator agent enqueue with fakes":
       proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
         ## Return one deterministic area document from spec input.
         inc architectCalls
-        check model == "claude-opus-4-6"
+        check model == "claude-opus-5"
         check "scriptorium plan" in spec
         result = @[
           AreaDocument(

@@ -52,7 +52,7 @@ suite "scriptorium init":
 suite "config":
   test "defaults to claude models with claude-code harness for all roles":
     let cfg = defaultConfig()
-    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.architect.model == "claude-opus-5"
     check cfg.agents.coding.model == "claude-sonnet-4-6"
     check cfg.agents.manager.model == "claude-sonnet-4-6"
     check cfg.agents.reviewer.model == "claude-sonnet-4-6"
@@ -128,7 +128,7 @@ suite "config":
     defer: removeDir(tmp)
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.architect.model == "claude-opus-5"
     check cfg.agents.coding.model == "claude-sonnet-4-6"
     check cfg.agents.manager.model == "claude-sonnet-4-6"
     check cfg.agents.architect.reasoningEffort == ""
