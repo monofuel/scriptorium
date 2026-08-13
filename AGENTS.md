@@ -1,6 +1,10 @@
 # scriptorium
 
 - agentic coding orchestrator
+- NO AWS Bedrock (2026-08-13): the work account ran out of Bedrock
+  credits. Never set `CLAUDE_CODE_USE_BEDROCK`; `resolveModel`'s
+  Bedrock mapping in config.nim is dormant legacy kept only so pinned
+  configs still parse.
 
 ## Running
 
