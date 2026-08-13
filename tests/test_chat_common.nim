@@ -225,7 +225,7 @@ proc testFormatStatusNotRunningNotPaused() =
     writeFile(planDir / "queue" / "merge" / "pending" / ".gitkeep", "")
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Orchestrator running:** no" in result
   doAssert "**Paused:** no" in result
   doAssert "Open: 0" in result
@@ -257,7 +257,7 @@ proc testFormatStatusRunning() =
   writeFile(pidPath, "12345")
   defer: removeFile(pidPath)
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Orchestrator running:** yes" in result
   echo "[OK] formatStatusMessage running with PID file"
 
@@ -281,7 +281,7 @@ proc testFormatStatusPaused() =
 
   writePauseFlag(tmp)
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Paused:** yes" in result
   echo "[OK] formatStatusMessage paused"
 
@@ -305,7 +305,7 @@ proc testFormatStatusTicketCounts() =
     writeFile(planDir / "tickets" / "stuck" / "0006-stuck-too.md", "# Also stuck")
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "Open: 2" in result
   doAssert "In-Progress: 1" in result
   doAssert "Done: 1" in result
@@ -330,7 +330,7 @@ proc testFormatStatusActiveAgentNone() =
     writeFile(planDir / "tickets" / "stuck" / ".gitkeep", "")
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Active agent:** none" in result
   echo "[OK] formatStatusMessage active agent none"
 
@@ -359,7 +359,7 @@ proc testFormatStatusActiveAgent() =
     writeFile(planDir / "queue" / "merge" / "active.md", "queue/merge/pending/0042-active-ticket.md")
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Active agent:** 0042" in result
   echo "[OK] formatStatusMessage active agent with ticket ID"
 
@@ -387,7 +387,7 @@ proc testFormatStatusInProgressElapsed() =
     writeFile(planDir / "tickets" / "in-progress" / "0050-elapsed-test.md", ticketContent)
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**In-progress tickets:**" in result
   doAssert "0050" in result
   echo "[OK] formatStatusMessage in-progress elapsed times"
@@ -412,7 +412,7 @@ proc testFormatStatusWaitingTickets() =
     writeFile(planDir / "tickets" / "open" / "0100-waiting-ticket.md", ticketContent)
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Waiting:** 0100" in result
   doAssert "0098" in result
   doAssert "0099" in result
@@ -442,7 +442,7 @@ proc testFormatStatusBlockedTickets() =
     writeFile(planDir / "tickets" / "open" / "0071-ticket-b.md", "# Ticket B\n**Depends:** 0070")
   )
 
-  let result = formatStatusMessage(tmp, TestCaller)
+  let result = formatStatusMessage(tmp)
   doAssert "**Waiting:** 0070" in result
   echo "[OK] formatStatusMessage cycle dependencies produce waiting tickets"
 
@@ -462,7 +462,7 @@ proc testFormatQueueEmpty() =
     writeFile(planDir / "queue" / "merge" / "pending" / ".gitkeep", "")
   )
 
-  let result = formatQueueMessage(tmp, TestCaller)
+  let result = formatQueueMessage(tmp)
   doAssert "**Merge queue:** 0 item(s)" in result
   doAssert "**In-progress tickets:** 0" in result
   doAssert "**Open tickets:** 0" in result
@@ -488,7 +488,7 @@ proc testFormatQueueWithItems() =
     writeFile(planDir / "tickets" / "open" / "0020-open-ticket.md", "# Open ticket")
   )
 
-  let result = formatQueueMessage(tmp, TestCaller)
+  let result = formatQueueMessage(tmp)
   doAssert "**Merge queue:** 1 item(s)" in result
   doAssert "0010" in result
   doAssert "Fix the widget" in result
@@ -517,7 +517,7 @@ proc testFormatQueueMultipleItems() =
     writeFile(planDir / "tickets" / "open" / "0042-open-c.md", "# Open C")
   )
 
-  let result = formatQueueMessage(tmp, TestCaller)
+  let result = formatQueueMessage(tmp)
   doAssert "**Merge queue:** 0 item(s)" in result
   doAssert "**In-progress tickets:** 2" in result
   doAssert "0030" in result

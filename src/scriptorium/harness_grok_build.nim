@@ -203,12 +203,18 @@ proc buildGrokBuildMcpServers*(endpoint: string): JsonNode =
 
 proc buildAcpInitializeParams*(): JsonNode =
   ## Build initialize params for the ACP handshake.
+  ## fs capabilities MUST stay false: this harness has no handler for the
+  ## agent->client fs/read_text_file / fs/write_text_file requests, so
+  ## advertising them deadlocks the agent mid-turn (it blocks on a reply
+  ## that never comes until the no-output watchdog kills it — observed
+  ## 2026-08-13 on conductor review runs). The grok agent falls back to
+  ## its own native file tools, which work headless.
   result = %*{
     "protocolVersion": AcpProtocolVersion,
     "clientCapabilities": {
       "fs": {
-        "readTextFile": true,
-        "writeTextFile": true,
+        "readTextFile": false,
+        "writeTextFile": false,
       },
       "terminal": false,
     },
