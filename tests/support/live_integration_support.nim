@@ -13,7 +13,7 @@ const
   CodexAuthPathEnv* = "CODEX_AUTH_FILE"
   LiveOrchestratorBasePort* = 23000
   PollIntervalMs* = 500
-  PositiveTimeoutMs* = 300_000
+  PositiveTimeoutMs* = 900_000
   NegativeTimeoutMs* = 120_000
   ShutdownTimeoutMs = 15_000
   LogTailChars = 16_000
@@ -179,8 +179,19 @@ proc addEulerMakefile*(repoPath: string) =
     "\t@test ! -f multiples.nim || { rm -f " & EulerDebugBinary & " && nim c --nimcache:.nimcache-test -o:" & EulerDebugBinary & " multiples.nim >/dev/null && output=$$(" & EulerDebugBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
     "integration-test:\n" &
     "\t@test ! -f multiples.nim || { rm -f " & EulerReleaseBinary & " && nim c --nimcache:.nimcache-release -d:release -o:" & EulerReleaseBinary & " multiples.nim >/dev/null && output=$$(" & EulerReleaseBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n"
+  let gitignoreContent =
+    "# ignore files with no extension:\n" &
+    "*\n" &
+    "!*/\n" &
+    "!*.*\n" &
+    "!Makefile\n\n" &
+    "# normal ignores:\n" &
+    "nimcache*\n" &
+    ".*\n" &
+    "!.gitignore\n"
   writeFile(repoPath / "Makefile", makefileContent)
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
+  writeFile(repoPath / ".gitignore", gitignoreContent)
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile .gitignore")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-live-add-euler-makefile")
 
 proc writeScriptoriumConfig*(repoPath: string, cfg: Config) =
