@@ -438,6 +438,51 @@ suite "orchestrator merge queue":
     check "**Review:** changes requested" in ticketContent
     check "**Review Feedback:** fix the formatting" in ticketContent
 
+  test "processMergeQueue parks ticket after repeated review rejections":
+    let tmp = getTempDir() / "scriptorium_test_review_rejection_parking"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    var priorRejections = ""
+    for i in 1 .. 4:
+      priorRejections.add("\n\n## Review\n**Review:** changes requested\n\n**Review Feedback:** prior rejection " & $i & "\n")
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n" & priorRejections)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "still not right")
+
+    proc rejectAgainRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that records one more request_changes decision.
+      discard request
+      recordReviewDecision("request_changes", "same problem again")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, rejectAgainRunner)
+    check processed
+
+    let files = planTreeFiles(tmp)
+    check "tickets/stuck/0001-first.md" in files
+    check "tickets/open/0001-first.md" notin files
+    check "tickets/in-progress/0001-first.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/stuck/0001-first.md"
+    )
+    check ticketRc == 0
+    check "## Stuck Count: 1" in ticketContent
+    check "**Review Feedback:** same problem again" in ticketContent
+
+    let commits = latestPlanCommits(tmp, 3)
+    var sawParkCommit = false
+    for commit in commits:
+      if "scriptorium: park stuck ticket 0001" in commit:
+        sawParkCommit = true
+    check sawParkCommit
+
   test "processMergeQueue review stall defaults to approve":
     let tmp = getTempDir() / "scriptorium_test_review_stall"
     makeInitializedTestRepo(tmp)

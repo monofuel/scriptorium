@@ -10,6 +10,8 @@ const
   MergeQueueCleanupCommitPrefix = "scriptorium: cleanup merge queue"
   MergeQueueStuckCommitPrefix* = "scriptorium: park stuck ticket"
   MaxMergeFailures = 5
+  MaxReviewRejections = 5
+  ReviewRejectionMarker = "**Review:** changes requested"
   RequiredQualityTargets* = ["test", "integration-test"]
   QualityCheckTimeoutMs* = 300_000
   MakeTestTimeoutMs* = 300_000
@@ -445,10 +447,32 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       ticketAttemptCounts[item.ticketId] = attempts + 1
       let startTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)
       let totalWall = if startTime > 0.0: formatDuration(epochTime() - startTime) else: "unknown"
-      logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=review changes requested, attempts={attempts + 1}, total wall={totalWall})")
+      let currentContent = readFile(ticketPath)
+      let rejectionCount = currentContent.count(ReviewRejectionMarker)
+      if rejectionCount >= MaxReviewRejections:
+        logWarn(fmt"processMergeQueue: parking stuck ticket {item.ticketId} after {rejectionCount} review rejections")
+        sessionStats.ticketsParked += 1
+        let metricsNote = formatMetricsNote(item.ticketId, "parked", "parked").strip()
+        let parkedWallSeconds = if startTime > 0.0: int(epochTime() - startTime) else: 0
+        cleanupTicketTimings(item.ticketId)
+        let stuckRelPath = PlanTicketsStuckDir / extractFilename(item.ticketPath)
+        let currentStuckCount = parseStuckCount(currentContent)
+        let contentWithStuckCount = setStuckCount(currentContent, currentStuckCount + 1)
+        let contentWithMetrics = runPostAnalysis(contentWithStuckCount.strip() & "\n\n" & metricsNote & "\n", item.ticketId, "parked", attempts + 1, parkedWallSeconds)
+        let stuckCommitMsg = MergeQueueStuckCommitPrefix & " " & item.ticketId
+        let stuckSteps = @[
+          newWriteStep(item.ticketPath, contentWithMetrics),
+          newMoveStep(item.ticketPath, stuckRelPath),
+          newWriteStep(PlanMergeQueueActivePath, ""),
+        ]
+        beginJournalTransition(planPath, "park " & item.ticketId, stuckSteps, stuckCommitMsg)
+        executeJournalSteps(planPath)
+        completeJournalTransition(planPath)
+        postNotification(repoPath, "stuck", &"Ticket {item.ticketId} is stuck after {rejectionCount} review rejections. The architect is investigating — no action needed.")
+        return true
+      logInfo(fmt"ticket {item.ticketId}: in-progress -> open (reopened, reason=review changes requested, rejections={rejectionCount}/{MaxReviewRejections}, total wall={totalWall})")
       sessionStats.ticketsReopened += 1
       let openRelPath = PlanTicketsOpenDir / extractFilename(item.ticketPath)
-      let currentContent = readFile(ticketPath)
       let reviewReopenCommitMsg = MergeQueueReopenCommitPrefix & " " & item.ticketId
       let reviewReopenSteps = @[
         newWriteStep(item.ticketPath, currentContent),
