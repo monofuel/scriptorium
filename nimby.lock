@@ -10,8 +10,8 @@ libcurl 1.0.0 https://github.com/Araq/libcurl 7a420498f60a31d99fc8513886ce36c4e8
 openai_leap 11.3.0 https://github.com/monofuel/openai_leap ddb57d1514b88f58b8f0588789eed3db75e1f057
 chroma 1.0.0 https://github.com/treeform/chroma 2381748f92e5ea16cb2403ff7e20c6dd5443a59d
 bumpy 1.1.3 https://github.com/treeform/bumpy dc9a3d6d15680ec7f603959d65ba8ee4f1ddbc72
-vmath 2.0.1 https://github.com/treeform/vmath b1cb7ec85f6e7690cf1261227cd2d552275e3e53
-ws 0.5.0 https://github.com/treeform/ws cbb8f763b436669392d10baec2a45778395395cc
+vmath 3.0.0 https://github.com/treeform/vmath a57a0a7f823a3b6f341cc9d1ebbf976f64a33ecd
+ws 0.6.0 https://github.com/treeform/ws c9c0c7b51e2e83cc9305a895a0b144a297b4bea8
 guildy 2.0.0 https://github.com/monofuel/guildy cfbc9c3bc7c34a56f6dd2856bbf8b6e1b6806ef2
 Typos 0.0.0 https://github.com/monofuel/Typos.git a821634854384fdeca5da263f7cd8e339066b093
 mosty 0.1.0 https://github.com/monofuel/mosty 5e905e380641a47b59de1ff43680e79fc1f6d5e4
