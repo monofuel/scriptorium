@@ -214,6 +214,21 @@ proc fixupHarnesses(cfg: var Config, userJson: JsonNode) =
   fixup(cfg.agents.reviewer, "reviewer")
   fixup(cfg.agents.audit, "audit")
 
+proc backfillEmptyFields(cfg: var Config) =
+  ## Restore defaults for fields where an empty value is never meaningful.
+  let def = defaultConfig()
+  template fill(agent: var AgentConfig, defAgent: AgentConfig) =
+    if agent.model.len == 0:
+      agent.model = defAgent.model
+      agent.harness = defAgent.harness
+  fill(cfg.agents.architect, def.agents.architect)
+  fill(cfg.agents.coding, def.agents.coding)
+  fill(cfg.agents.manager, def.agents.manager)
+  fill(cfg.agents.reviewer, def.agents.reviewer)
+  fill(cfg.agents.audit, def.agents.audit)
+  if cfg.endpoints.local.len == 0:
+    cfg.endpoints.local = def.endpoints.local
+
 proc saveConfig*(repoPath: string, cfg: Config) =
   ## Write config as pretty-printed JSON.
   let path = repoPath / ConfigFile
@@ -239,6 +254,7 @@ proc loadConfig*(repoPath: string): Config =
   let merged = deepMerge(defaultJson, userJson)
   result = fromJson($merged, Config)
   fixupHarnesses(result, userJson)
+  backfillEmptyFields(result)
   # Apply env overrides.
   let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
   if envLogLevel.len > 0:

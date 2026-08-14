@@ -392,6 +392,7 @@ suite "orchestrator manager ticket bootstrap":
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+    writeAreaHashesInPlan(tmp, initTable[string, string]())
 
     let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed
@@ -439,19 +440,7 @@ suite "orchestrator architect areas":
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
     check "Read `spec.md` in this working directory and write/update area markdown files directly under `areas/` in this working directory." in capturedRequest.prompt
     check "areas/01-arch.md" in files
-    check after == before + 2  # areas commit + spec hash marker commit
-
-  test "done tickets suppress areas from areasNeedingTickets":
-    let tmp = getTempDir() / "scriptorium_test_done_ticket_suppression"
-    makeInitializedTestRepo(tmp)
-    defer: removeDir(tmp)
-    addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
-    addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
-    addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
-
-    let needed = areasNeedingTickets(tmp)
-    check "areas/02-pending-area.md" in needed
-    check "areas/01-done-area.md" notin needed
+    check after == before + 3  # areas commit + empty area-hashes sentinel commit + spec hash marker commit
 
   test "done ticket with unchanged area hash suppresses area":
     let tmp = getTempDir() / "scriptorium_test_done_unchanged_hash"

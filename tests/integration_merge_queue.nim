@@ -617,13 +617,18 @@ suite "orchestrator merge queue":
     check commits.len > 1
     check "scriptorium: park stuck ticket 0001" in commits[1]
 
-  test "stuck tickets excluded from areasNeedingTickets":
-    let tmp = getTempDir() / "scriptorium_test_stuck_areas_excluded"
+  test "stuck area with unchanged hash stays excluded until content changes":
+    let tmp = getTempDir() / "scriptorium_test_stuck_area_hash"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "stuck", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+    let hashes = {
+      "01-cli": computeContentHash("# Area 01\n"),
+      "02-core": computeContentHash("# Area 02 old\n"),
+    }.toTable
+    writeAreaHashesInPlan(tmp, hashes)
 
     let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed
