@@ -8,7 +8,8 @@ import
 const
   LiveIntegrationRoot* = "/tmp/scriptorium/integration"
   CliBinaryName = "scriptorium_integration_live"
-  DefaultIntegrationModel* = "gpt-5.4"
+  DefaultIntegrationModel* = "claude-opus-5"
+  DefaultIntegrationCodingModel* = "claude-sonnet-5"
   CodexAuthPathEnv* = "CODEX_AUTH_FILE"
   LiveOrchestratorBasePort* = 23000
   PollIntervalMs* = 500
@@ -32,10 +33,12 @@ proc integrationModel*(): string =
     result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
 
 proc integrationCodingModel*(): string =
-  ## Return the coding-role model override, falling back to integrationModel.
+  ## Return the coding-role model override, falling back to the shared test model.
   result = getEnv("SCRIPTORIUM_TEST_CODING_MODEL", "")
   if result.len == 0:
-    result = integrationModel()
+    result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
+  if result.len == 0:
+    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationCodingModel)
 
 proc integrationHarness*(): Harness =
   ## Return the test harness from env, or infer from model.

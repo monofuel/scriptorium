@@ -70,7 +70,7 @@ suite "orchestrator plan spec update":
     check changed
     check not unchanged
     check callCount == 2
-    check capturedFirstModel == "claude-opus-4-6"
+    check capturedFirstModel == "claude-opus-5"
     check capturedFirstReasoningEffort == "high"
     check capturedFirstWorkingDir != tmp
     check capturedFirstRepoPath == tmp
@@ -332,7 +332,7 @@ suite "orchestrator planning bootstrap":
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6")
+    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-5")
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -350,7 +350,7 @@ suite "orchestrator planning bootstrap":
     let synced = syncAreasFromSpec(tmp, generator)
     check synced
     check callCount == 1
-    check capturedModel == "claude-opus-4-6"
+    check capturedModel == "claude-opus-5"
     check "scriptorium plan" in capturedSpec
 
     let (files, rc) = execCmdEx("git -C " & quoteShell(tmp) & " ls-tree -r --name-only scriptorium/plan")
@@ -431,7 +431,7 @@ suite "orchestrator architect areas":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "run"
-    check capturedRequest.model == "claude-opus-4-6"
+    check capturedRequest.model == "claude-opus-5"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect" / "areas"
     check tmp in capturedRequest.prompt

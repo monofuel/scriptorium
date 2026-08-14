@@ -6,7 +6,7 @@ import
   scriptorium/[config, harness_grok_build, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "grok-4.5"
+  DefaultIntegrationModel = "grok-4.6"
   LiveMcpBasePort = 22300
 
 type

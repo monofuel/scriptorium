@@ -6,7 +6,7 @@ import
   scriptorium/[config, harness_typoi, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "gpt-5.4"
+  DefaultIntegrationModel = "gpt-5.6-terra"
   LiveMcpBasePort = 22300
 
 type

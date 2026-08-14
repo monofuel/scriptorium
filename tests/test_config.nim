@@ -6,9 +6,9 @@ proc testDefaultConfigValues() =
   ## Verify defaultConfig returns expected default values for all fields.
   let cfg = defaultConfig()
   doAssert cfg.agents.architect.model == "claude-opus-5"
-  doAssert cfg.agents.coding.model == "claude-sonnet-4-6"
-  doAssert cfg.agents.manager.model == "claude-sonnet-4-6"
-  doAssert cfg.agents.reviewer.model == "claude-sonnet-4-6"
+  doAssert cfg.agents.coding.model == "claude-sonnet-5"
+  doAssert cfg.agents.manager.model == "claude-sonnet-5"
+  doAssert cfg.agents.reviewer.model == "claude-sonnet-5"
   doAssert cfg.agents.audit.model == "claude-haiku-4-5-20251001"
   doAssert cfg.agents.architect.harness == harnessClaudeCode
   doAssert cfg.agents.coding.harness == harnessClaudeCode
@@ -191,14 +191,14 @@ proc testResolveModel() =
 
   # Without bedrock, model passes through unchanged.
   delEnv("CLAUDE_CODE_USE_BEDROCK")
-  doAssert resolveModel("claude-opus-4-6") == "claude-opus-4-6"
-  doAssert resolveModel("claude-sonnet-4-6") == "claude-sonnet-4-6"
+  doAssert resolveModel("claude-opus-5") == "claude-opus-5"
+  doAssert resolveModel("claude-sonnet-5") == "claude-sonnet-5"
   doAssert resolveModel("some-other-model") == "some-other-model"
 
   # With bedrock, claude models are translated.
   putEnv("CLAUDE_CODE_USE_BEDROCK", "1")
-  doAssert resolveModel("claude-opus-4-6") == "us.anthropic.claude-opus-4-6-v1"
-  doAssert resolveModel("claude-sonnet-4-6") == "us.anthropic.claude-sonnet-4-6"
+  doAssert resolveModel("claude-opus-5") == "us.anthropic.claude-opus-5-v1"
+  doAssert resolveModel("claude-sonnet-5") == "us.anthropic.claude-sonnet-5-v1"
   doAssert resolveModel("claude-haiku-4-5-20251001") == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   doAssert resolveModel("some-other-model") == "some-other-model"
   echo "[OK] resolveModel translates correctly with and without CLAUDE_CODE_USE_BEDROCK"
@@ -295,11 +295,11 @@ proc testMattermostTokenPresent() =
 
 proc testInferHarness() =
   ## Verify inferHarness maps model prefixes to correct harnesses.
-  doAssert inferHarness("claude-sonnet-4-6") == harnessClaudeCode
-  doAssert inferHarness("claude-opus-4-6") == harnessClaudeCode
+  doAssert inferHarness("claude-sonnet-5") == harnessClaudeCode
+  doAssert inferHarness("claude-opus-5") == harnessClaudeCode
   doAssert inferHarness("codex-mini") == harnessCodex
   doAssert inferHarness("gpt-4o") == harnessCodex
-  doAssert inferHarness("grok-4.5") == harnessGrokBuild
+  doAssert inferHarness("grok-4.6") == harnessGrokBuild
   doAssert inferHarness("grok-build") == harnessGrokBuild
   doAssert inferHarness("grok-code-fast-1") == harnessTypoi
   doAssert inferHarness("some-random-model") == harnessTypoi
@@ -402,7 +402,7 @@ proc testNormalizeConfigWriteBack() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"agents": {"architect": {"model": "claude-sonnet-4-6"}}}"""
+  let json = """{"agents": {"architect": {"model": "claude-sonnet-5"}}}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   normalizeConfig(tmpDir)
@@ -416,7 +416,7 @@ proc testNormalizeConfigWriteBack() =
   doAssert "dashboard" in written
   doAssert "devops" in written
   # User value preserved.
-  doAssert "claude-sonnet-4-6" in written
+  doAssert "claude-sonnet-5" in written
   echo "[OK] normalizeConfig writes back pretty-printed JSON with all defaults"
 
 proc testNormalizeConfigPreservesUnknownKeys() =
@@ -425,7 +425,7 @@ proc testNormalizeConfigPreservesUnknownKeys() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"agents": {"architect": {"model": "claude-opus-4-6"}}, "bogusKey": "should-be-kept", "anotherUnknown": 42}"""
+  let json = """{"agents": {"architect": {"model": "claude-opus-5"}}, "bogusKey": "should-be-kept", "anotherUnknown": 42}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   normalizeConfig(tmpDir)
@@ -445,12 +445,12 @@ proc testDeepMergePreservesUserOnlyKeys() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"agents": {"architect": {"model": "claude-opus-4-6", "customFlag": true}, "extraAgent": {"model": "x"}}, "topLevelExtra": "hello"}"""
+  let json = """{"agents": {"architect": {"model": "claude-opus-5", "customFlag": true}, "extraAgent": {"model": "x"}}, "topLevelExtra": "hello"}"""
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
   # Known fields still work.
-  doAssert cfg.agents.architect.model == "claude-opus-4-6"
+  doAssert cfg.agents.architect.model == "claude-opus-5"
 
   # Verify unknown keys survive normalizeConfig round-trip.
   normalizeConfig(tmpDir)
@@ -466,7 +466,7 @@ proc testLoadConfigIsReadOnly() =
   createDir(tmpDir)
   defer: removeDir(tmpDir)
 
-  let json = """{"agents": {"architect": {"model": "claude-sonnet-4-6"}}}"""
+  let json = """{"agents": {"architect": {"model": "claude-sonnet-5"}}}"""
   let configPath = tmpDir / "scriptorium.json"
   writeFile(configPath, json)
 

@@ -12,9 +12,9 @@ type
 const
   ConfigFile = "scriptorium.json"
   DefaultArchitectModel = "claude-opus-5"
-  DefaultCodingModel = "claude-sonnet-4-6"
-  DefaultManagerModel = "claude-sonnet-4-6"
-  DefaultReviewerModel = "claude-sonnet-4-6"
+  DefaultCodingModel = "claude-sonnet-5"
+  DefaultManagerModel = "claude-sonnet-5"
+  DefaultReviewerModel = "claude-sonnet-5"
   DefaultAuditModel* = "claude-haiku-4-5-20251001"
   DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
@@ -172,6 +172,7 @@ proc resolveModel*(model: string): string =
   case model
   of "claude-opus-5": "us.anthropic.claude-opus-5-v1"
   of "claude-opus-4-6": "us.anthropic.claude-opus-4-6-v1"
+  of "claude-sonnet-5": "us.anthropic.claude-sonnet-5-v1"
   of "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6"
   of "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   else: model

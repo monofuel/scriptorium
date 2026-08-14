@@ -52,17 +52,17 @@ integration-test: nim.cfg
 	exit $$fail
 
 integration-test-claude:
-	SCRIPTORIUM_TEST_MODEL=claude-sonnet-4-6 \
+	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=claude-code \
 	$(MAKE) integration-test
 
 integration-test-typoi:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-4-6 \
+	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=typoi \
 	$(MAKE) integration-test
 
 integration-test-grok:
-	SCRIPTORIUM_TEST_MODEL=grok-4.5 \
+	SCRIPTORIUM_TEST_MODEL=grok-4.6 \
 	SCRIPTORIUM_TEST_HARNESS=grok-build \
 	$(MAKE) integration-test
 
@@ -79,12 +79,12 @@ e2e-test: nim.cfg
 	fi
 
 e2e-test-claude:
-	SCRIPTORIUM_TEST_MODEL=claude-sonnet-4-6 \
+	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=claude-code \
 	$(MAKE) e2e-test
 
 e2e-test-typoi:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-4-6 \
+	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=typoi \
 	$(MAKE) e2e-test
 

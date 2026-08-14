@@ -53,9 +53,9 @@ suite "config":
   test "defaults to claude models with claude-code harness for all roles":
     let cfg = defaultConfig()
     check cfg.agents.architect.model == "claude-opus-5"
-    check cfg.agents.coding.model == "claude-sonnet-4-6"
-    check cfg.agents.manager.model == "claude-sonnet-4-6"
-    check cfg.agents.reviewer.model == "claude-sonnet-4-6"
+    check cfg.agents.coding.model == "claude-sonnet-5"
+    check cfg.agents.manager.model == "claude-sonnet-5"
+    check cfg.agents.reviewer.model == "claude-sonnet-5"
     check cfg.agents.architect.harness == harnessClaudeCode
     check cfg.agents.coding.harness == harnessClaudeCode
     check cfg.agents.manager.harness == harnessClaudeCode
@@ -70,18 +70,18 @@ suite "config":
     createDir(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6", reasoningEffort: "medium")
+    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-5", reasoningEffort: "medium")
     writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
-    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.3-codex", reasoningEffort: "low")
+    writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.6-terra", reasoningEffort: "low")
     writtenCfg.endpoints.local = "http://localhost:1234/v1"
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.architect.model == "claude-opus-4-6"
+    check cfg.agents.architect.model == "claude-opus-5"
     check cfg.agents.architect.harness == harnessClaudeCode
     check cfg.agents.coding.model == "grok-code-fast-1"
     check cfg.agents.coding.harness == harnessTypoi
-    check cfg.agents.manager.model == "gpt-5.3-codex"
+    check cfg.agents.manager.model == "gpt-5.6-terra"
     check cfg.agents.manager.harness == harnessCodex
     check cfg.agents.architect.reasoningEffort == "medium"
     check cfg.agents.coding.reasoningEffort == "high"
@@ -93,18 +93,18 @@ suite "config":
     createDir(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.agents.reviewer = AgentConfig(harness: harnessClaudeCode, model: "claude-sonnet-4-6", reasoningEffort: "low")
+    writtenCfg.agents.reviewer = AgentConfig(harness: harnessClaudeCode, model: "claude-sonnet-5", reasoningEffort: "low")
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.reviewer.model == "claude-sonnet-4-6"
+    check cfg.agents.reviewer.model == "claude-sonnet-5"
     check cfg.agents.reviewer.harness == harnessClaudeCode
     check cfg.agents.reviewer.reasoningEffort == "low"
 
   test "inferHarness works for reviewer models":
-    check inferHarness("claude-sonnet-4-6") == harnessClaudeCode
+    check inferHarness("claude-sonnet-5") == harnessClaudeCode
     check inferHarness("codex-mini-review") == harnessCodex
-    check inferHarness("grok-4.5") == harnessGrokBuild
+    check inferHarness("grok-4.6") == harnessGrokBuild
     check inferHarness("grok-review-1") == harnessTypoi
 
   test "manager model remains independent when manager is unset":
@@ -118,7 +118,7 @@ suite "config":
 
     let cfg = loadConfig(tmp)
     check cfg.agents.coding.model == "grok-code-fast-1"
-    check cfg.agents.manager.model == "claude-sonnet-4-6"
+    check cfg.agents.manager.model == "claude-sonnet-5"
     check cfg.agents.coding.reasoningEffort == "high"
     check cfg.agents.manager.reasoningEffort == ""
 
@@ -129,18 +129,18 @@ suite "config":
 
     let cfg = loadConfig(tmp)
     check cfg.agents.architect.model == "claude-opus-5"
-    check cfg.agents.coding.model == "claude-sonnet-4-6"
-    check cfg.agents.manager.model == "claude-sonnet-4-6"
+    check cfg.agents.coding.model == "claude-sonnet-5"
+    check cfg.agents.manager.model == "claude-sonnet-5"
     check cfg.agents.architect.reasoningEffort == ""
     check cfg.agents.coding.reasoningEffort == ""
     check cfg.agents.manager.reasoningEffort == ""
 
   test "inferHarness routing":
-    check inferHarness("claude-opus-4-6") == harnessClaudeCode
+    check inferHarness("claude-opus-5") == harnessClaudeCode
     check inferHarness("claude-haiku-4-5") == harnessClaudeCode
     check inferHarness("codex-mini") == harnessCodex
     check inferHarness("gpt-4o") == harnessCodex
-    check inferHarness("grok-4.5") == harnessGrokBuild
+    check inferHarness("grok-4.6") == harnessGrokBuild
     check inferHarness("grok-build") == harnessGrokBuild
     check inferHarness("grok-code-fast-1") == harnessTypoi
     check inferHarness("local/qwen3.5-35b-a3b") == harnessTypoi
@@ -257,10 +257,10 @@ suite "config":
     let tmp = getTempDir() / "scriptorium_test_config_audit_override"
     createDir(tmp)
     defer: removeDir(tmp)
-    writeFile(tmp / "scriptorium.json", """{"agents": {"audit": {"model": "claude-sonnet-4-6"}}}""")
+    writeFile(tmp / "scriptorium.json", """{"agents": {"audit": {"model": "claude-sonnet-5"}}}""")
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.audit.model == "claude-sonnet-4-6"
+    check cfg.agents.audit.model == "claude-sonnet-5"
     check cfg.agents.audit.harness == harnessClaudeCode
 
   test "loop defaults when key is absent":
@@ -290,7 +290,7 @@ suite "config":
     let tmp = getTempDir() / "scriptorium_test_config_audit_absent"
     createDir(tmp)
     defer: removeDir(tmp)
-    writeFile(tmp / "scriptorium.json", """{"agents": {"coding": {"model": "claude-sonnet-4-6"}}}""")
+    writeFile(tmp / "scriptorium.json", """{"agents": {"coding": {"model": "claude-sonnet-5"}}}""")
 
     let cfg = loadConfig(tmp)
     check cfg.agents.audit.model == "claude-haiku-4-5-20251001"

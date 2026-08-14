@@ -121,7 +121,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
 
     check callCount == 2
-    check capturedRequest.model == "claude-sonnet-4-6"
+    check capturedRequest.model == "claude-sonnet-5"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
     check capturedRequest.workingDir == assignment.worktree
@@ -139,7 +139,7 @@ suite "orchestrator coding agent execution":
     )
     check ticketRc == 0
     check "## Agent Run" in ticketContent
-    check "- Model: claude-sonnet-4-6" in ticketContent
+    check "- Model: claude-sonnet-5" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
     let commits = latestPlanCommits(tmp, 4)

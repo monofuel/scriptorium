@@ -148,7 +148,8 @@ To run the full integration suite (including live tests) without expected failur
 
 ## Model Guidance For Live Tool Calling
 
-- `gpt-5.4` is the default model for this repository's live MCP tool-calling integration tests.
+- `gpt-5.6-terra` is the default model for this repository's live MCP tool-calling integration tests.
+- The live e2e orchestrator flow defaults to `claude-opus-5` for architect/manager and `claude-sonnet-5` for the coding role.
 - `gpt-5.1-codex-mini` is known bad for this repository's MCP tool-calling integration tests.
 
 ## Notes
