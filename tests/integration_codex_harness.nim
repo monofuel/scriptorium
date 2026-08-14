@@ -6,7 +6,7 @@ import
   scriptorium/[harness_codex, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "gpt-5.6-terra"
+  DefaultIntegrationModel = "gpt-5.6-sol"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   LiveMcpBasePort = 22100
 

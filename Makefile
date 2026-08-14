@@ -1,4 +1,6 @@
-.PHONY: test integration-test integration-test-claude integration-test-typoi integration-test-grok e2e-test e2e-test-claude e2e-test-typoi build docker-build docker-build-push ci check-updates
+.PHONY: test integration-test integration-test-claude integration-test-grok e2e-test e2e-test-claude build docker-build docker-build-push ci check-updates
+
+SHELL := bash
 
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
@@ -25,7 +27,7 @@ test: nim.cfg
 	fail=0; \
 	pids=""; \
 	for f in $$files; do \
-		( nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
+		( set -o pipefail; nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
 		pids="$$pids $$!"; \
 	done; \
 	for pid in $$pids; do \
@@ -43,7 +45,7 @@ integration-test: nim.cfg
 	fail=0; \
 	pids=""; \
 	for f in $$files; do \
-		( nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
+		( set -o pipefail; nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
 		pids="$$pids $$!"; \
 	done; \
 	for pid in $$pids; do \
@@ -54,11 +56,6 @@ integration-test: nim.cfg
 integration-test-claude:
 	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=claude-code \
-	$(MAKE) integration-test
-
-integration-test-typoi:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
-	SCRIPTORIUM_TEST_HARNESS=typoi \
 	$(MAKE) integration-test
 
 integration-test-grok:
@@ -81,11 +78,6 @@ e2e-test: nim.cfg
 e2e-test-claude:
 	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
 	SCRIPTORIUM_TEST_HARNESS=claude-code \
-	$(MAKE) e2e-test
-
-e2e-test-typoi:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
-	SCRIPTORIUM_TEST_HARNESS=typoi \
 	$(MAKE) e2e-test
 
 ci:
