@@ -361,21 +361,27 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
   # Lock around startProcess and close, but not during readAll/waitForExit
   # since this is used for long-running commands like make test.
   acquireProcessLock()
-  let process = startProcess(
-    command,
-    workingDir = workingDir,
-    args = args,
-    options = {poUsePath, poStdErrToStdOut},
-  )
+  let process =
+    try:
+      startProcess(
+        command,
+        workingDir = workingDir,
+        args = args,
+        options = {poUsePath, poStdErrToStdOut},
+      )
+    finally:
+      releaseProcessLock()
   discard process.outputStream
-  releaseProcessLock()
+  defer:
+    acquireProcessLock()
+    try:
+      process.close()
+    finally:
+      releaseProcessLock()
   let output = process.outputStream.readAll()
   let exitCode = process.waitForExit(timeoutMs)
   if exitCode == -1 and running(process):
     process.kill()
-  acquireProcessLock()
-  process.close()
-  releaseProcessLock()
   if exitCode == -1:
     let cmdStr = command & " " & args.join(" ")
     raise newException(IOError, &"{cmdStr} timed out after {timeoutMs div 1000}s")

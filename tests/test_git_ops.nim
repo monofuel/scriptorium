@@ -157,3 +157,11 @@ suite "validateGitDir":
   test "rejects non-existent directory":
     expect IOError:
       validateGitDir(getTempDir() / "validate_gitdir_nonexistent_99999")
+
+suite "runCommandCapture":
+  test "releases the process lock when command startup fails":
+    expect OSError:
+      discard runCommandCapture(getTempDir(),
+        "scriptorium-command-that-does-not-exist", @[])
+    let recovered = runCommandCapture(getTempDir(), "true", @[])
+    check recovered.exitCode == 0
