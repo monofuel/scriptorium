@@ -6,7 +6,7 @@ import
   scriptorium/[config, harness_claude_code, mcp_server, orchestrator]
 
 const
-  DefaultIntegrationModel = "claude-opus-4-6"
+  DefaultIntegrationModel = "claude-opus-5"
   LiveMcpBasePort = 22200
 
 type

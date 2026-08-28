@@ -48,6 +48,11 @@ IMPORTANT: Before calling submit_pr, you MUST:
    then continue with `git rebase --continue`.
    If you cannot resolve the conflicts, call submit_pr anyway — the merge queue
    will handle it.
+3. Clean up anything you do not intend to ship. Any file still untracked or
+   modified in the worktree when you call submit_pr is auto-committed by the
+   orchestrator and will appear in the reviewed diff — delete build artifacts,
+   test binaries, and scratch files (or confirm they are gitignored) before
+   calling submit_pr.
 
 When your work is complete and all changes are committed and rebased, call the `submit_pr`
 MCP tool with a short summary of what you did and include the `ticket_id`

@@ -5,7 +5,7 @@ import
   scriptorium/[agent_runner, config, intent_classifier, shared_state]
 
 const
-  DefaultIntegrationModel = "claude-opus-4-6"
+  DefaultIntegrationModel = "claude-opus-5"
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.

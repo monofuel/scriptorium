@@ -24,7 +24,7 @@ proc newBaseRequest(tmpDir: string, claudePath: string, ticketId: string): Claud
   result = ClaudeCodeRunRequest(
     prompt: "Implement the task.",
     workingDir: worktreePath,
-    model: "claude-opus-4-6",
+    model: "claude-opus-5",
     ticketId: ticketId,
     claudeCodeBinary: claudePath,
     logRoot: tmpDir / "logs",
@@ -33,7 +33,7 @@ proc newBaseRequest(tmpDir: string, claudePath: string, ticketId: string): Claud
 suite "harness claude-code":
   test "buildClaudeCodeExecArgs matches expected arg order":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
     )
 
     let args = buildClaudeCodeExecArgs(request)
@@ -42,12 +42,12 @@ suite "harness claude-code":
       "--output-format", "stream-json",
       "--verbose",
       "--dangerously-skip-permissions",
-      "--model", "claude-opus-4-6",
+      "--model", "claude-opus-5",
     ]
 
   test "buildClaudeCodeExecArgs includes effort when configured":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
       reasoningEffort: "high",
     )
 
@@ -57,7 +57,7 @@ suite "harness claude-code":
 
   test "buildClaudeCodeExecArgs includes mcp config when endpoint is configured":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
       mcpEndpoint: "http://127.0.0.1:8097",
     )
 
@@ -74,7 +74,7 @@ suite "harness claude-code":
 
   test "buildClaudeCodeExecArgs trims trailing slash from mcp endpoint":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
       mcpEndpoint: "http://127.0.0.1:8097/",
     )
 
@@ -90,7 +90,7 @@ suite "harness claude-code":
 
   test "buildClaudeCodeExecArgs omits mcp config when endpoint is empty":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
       mcpEndpoint: "",
     )
 
@@ -99,7 +99,7 @@ suite "harness claude-code":
 
   test "buildClaudeCodeExecArgs rejects unsupported reasoning effort values":
     let request = ClaudeCodeRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
       reasoningEffort: "xhigh",
     )
     expect ValueError:
@@ -116,10 +116,10 @@ suite "harness claude-code":
     check buildMcpConfigJson("   ") == ""
 
   test "buildClaudeCodeStreamEvent parses system init":
-    let line = """{"type":"system","subtype":"init","model":"claude-opus-4-6","session_id":"abc"}"""
+    let line = """{"type":"system","subtype":"init","model":"claude-opus-5","session_id":"abc"}"""
     let event = buildClaudeCodeStreamEvent(line)
     check event.kind == claudeCodeEventStatus
-    check "claude-opus-4-6" in event.text
+    check "claude-opus-5" in event.text
 
   test "buildClaudeCodeStreamEvent parses assistant thinking":
     let line = """{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"planning the work"}]}}"""
@@ -189,7 +189,7 @@ suite "harness claude-code":
     check event.text == ""
 
   test "extractLastMessageFromStream extracts final text from result":
-    let output = """{"type":"system","subtype":"init","model":"claude-opus-4-6"}
+    let output = """{"type":"system","subtype":"init","model":"claude-opus-5"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"hello world","stop_reason":"end_turn"}
 """
@@ -215,7 +215,7 @@ suite "harness claude-code":
       let claudePath = tmpDir / "fake-claude.sh"
       writeExecutableScript(claudePath, """
 cat >/dev/null
-printf '{"type":"system","subtype":"init","model":"claude-opus-4-6"}\n'
+printf '{"type":"system","subtype":"init","model":"claude-opus-5"}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"hello world"}]}}\n'
 printf '{"type":"result","subtype":"success","is_error":false,"result":"hello world","stop_reason":"end_turn"}\n'
 """)
@@ -237,7 +237,7 @@ printf '{"type":"result","subtype":"success","is_error":false,"result":"hello wo
       let claudePath = tmpDir / "fake-claude.sh"
       writeExecutableScript(claudePath, """
 cat >/dev/null
-printf '{"type":"system","subtype":"init","model":"claude-opus-4-6"}\n'
+printf '{"type":"system","subtype":"init","model":"claude-opus-5"}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"planning"}]}}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","id":"t1","input":{"command":"ls"}}]}}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}\n'

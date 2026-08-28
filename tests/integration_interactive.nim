@@ -330,7 +330,7 @@ suite "interactive ask session":
 
     let prompt = buildInteractiveAskPrompt(tmp, tmp, "# My Spec\n", @[], "what is this?")
     check "read-only" in prompt.toLowerAscii()
-    check "Do NOT edit any files" in prompt
+    check "You MUST NOT write, edit, create, or modify any files" in prompt
     check "# My Spec" in prompt
     check "what is this?" in prompt
     check "AGENTS.md" in prompt

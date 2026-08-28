@@ -148,8 +148,10 @@ To run the full integration suite (including live tests) without expected failur
 
 ## Model Guidance For Live Tool Calling
 
-- `gpt-5.4` is the default model for this repository's live MCP tool-calling integration tests.
+- `gpt-5.6-sol` is the default model for this repository's live MCP tool-calling integration tests.
+- The live e2e orchestrator flow defaults to `claude-opus-5` for architect/manager and `claude-sonnet-5` for the coding role.
 - `gpt-5.1-codex-mini` is known bad for this repository's MCP tool-calling integration tests.
+- codex-cli 0.147.0 exec mode has flaky MCP tool exposure: the handshake succeeds (initialize / notifications/initialized / tools/list all return correctly — verified with a traffic tap) but the tools are nondeterministically absent from the model's toolset. Observed rates: `gpt-5.6-terra` worst, `gpt-5.6-sol` best, reasoning-effort level made no difference. Plain `gpt-5.6` is rejected outright under ChatGPT-plan auth. Expect occasional `IT-LIVE-02` failures until an upstream codex fix; retest slugs when codex releases a new stable.
 
 ## Notes
 

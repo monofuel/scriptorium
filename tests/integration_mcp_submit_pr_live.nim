@@ -7,7 +7,7 @@ import
 
 const
   LiveMcpBasePort = 22000
-  DefaultIntegrationModel = "gpt-5.4"
+  DefaultIntegrationModel = "gpt-5.6-sol"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   RpcTimeoutMs = 30_000
   CodexHardTimeoutMs = 120_000

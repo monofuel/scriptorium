@@ -67,7 +67,7 @@ suite "harness typoi":
 
   test "buildTypoiExecArgs infers anthropic provider for claude models":
     let request = TypoiRunRequest(
-      model: "claude-opus-4-6",
+      model: "claude-opus-5",
     )
 
     let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")
@@ -76,7 +76,7 @@ suite "harness typoi":
 
   test "buildTypoiExecArgs does not add provider for non-claude models":
     let request = TypoiRunRequest(
-      model: "gpt-5.4",
+      model: "gpt-5.6-terra",
     )
 
     let args = buildTypoiExecArgs(request, "/tmp/last-message.txt")

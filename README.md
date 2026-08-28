@@ -205,10 +205,10 @@ Create `scriptorium.json` in repo root:
 ```json
 {
   "agents": {
-    "architect": { "model": "claude-opus-4-6" },
-    "coding":    { "model": "claude-sonnet-4-6" },
-    "manager":   { "model": "claude-sonnet-4-6" },
-    "reviewer":  { "model": "claude-sonnet-4-6" },
+    "architect": { "model": "claude-opus-5" },
+    "coding":    { "model": "claude-sonnet-5" },
+    "manager":   { "model": "claude-sonnet-5" },
+    "reviewer":  { "model": "claude-sonnet-5" },
     "audit":     { "model": "claude-haiku-4-5-20251001" }
   },
   "endpoints": {

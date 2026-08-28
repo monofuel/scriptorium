@@ -14,31 +14,29 @@ const
 
 export agent_pool
 
-proc gitAddFiltered*(worktreePath: string, maxFileBytes: int = MaxAutoCommitFileBytes) =
+proc gitAddFiltered*(worktreePath: string, maxFileBytes: int = MaxAutoCommitFileBytes): seq[string] =
   ## Stage all modified and untracked files except those exceeding maxFileBytes.
-  ## Logs a warning for each skipped file.
-  let result = gitRunCapture(worktreePath, @["ls-files", "--others", "--modified", "--exclude-standard"])
-  if result.exitCode != 0 or result.output.strip().len == 0:
+  ## Logs a warning for each skipped file. Returns the staged file paths.
+  let listing = gitRunCapture(worktreePath, @["ls-files", "--others", "--modified", "--exclude-standard"])
+  if listing.exitCode != 0 or listing.output.strip().len == 0:
     gitRun(worktreePath, "add", "-A")
-    return
-  var filesToAdd: seq[string] = @[]
-  for line in result.output.strip().splitLines():
+    return @[]
+  for line in listing.output.strip().splitLines():
     let relPath = line.strip()
     if relPath.len == 0:
       continue
     let fullPath = worktreePath / relPath
     if not fileExists(fullPath):
-      filesToAdd.add(relPath)
+      result.add(relPath)
       continue
     let size = getFileSize(fullPath)
     if size > maxFileBytes:
       let sizeMB = size div (1024 * 1024)
       logWarn(&"skipping large file from auto-commit: {relPath} ({sizeMB}MB)")
     else:
-      filesToAdd.add(relPath)
-  if filesToAdd.len > 0:
-    for f in filesToAdd:
-      gitRun(worktreePath, "add", f)
+      result.add(relPath)
+  for f in result:
+    gitRun(worktreePath, "add", f)
 
 proc detectPriorWork*(worktreePath: string, ticketId: string): int =
   ## Detect commits ahead of the default branch on the ticket branch.
@@ -63,7 +61,7 @@ proc validateWorktreeHealth*(repoPath: string, worktreePath: string, branch: str
     addWorktreeWithRecovery(repoPath, worktreePath, branch)
   elif statusResult.output.strip().len > 0:
     let commitMsg = PartialWorkCommitPrefix & $attempt & ")"
-    gitAddFiltered(worktreePath)
+    discard gitAddFiltered(worktreePath)
     gitRun(worktreePath, "commit", "-m", commitMsg)
     logInfo(&"ticket {ticketId}: saved uncommitted agent work before retry")
 
@@ -314,9 +312,13 @@ proc executeAssignedTicket*(
     logInfo(fmt"ticket {ticketId}: submit_pr called (summary=""{submitSummary}"")")
     let dirtyCheck = gitRunCapture(assignment.worktree, @["status", "--porcelain"])
     if dirtyCheck.exitCode == 0 and dirtyCheck.output.strip().len > 0:
-      logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes")
-      gitAddFiltered(assignment.worktree)
-      gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
+      let sweptFiles = gitAddFiltered(assignment.worktree)
+      let sweptList = sweptFiles.join(", ")
+      logInfo(fmt"executeAssignedTicket: auto-committing uncommitted changes ({sweptList})")
+      if sweptFiles.len > 0:
+        gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes", "-m", "Swept by the orchestrator, not staged by the agent: " & sweptList)
+      else:
+        gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
   else:

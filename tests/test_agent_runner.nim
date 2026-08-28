@@ -40,7 +40,7 @@ printf 'done\n' > "$last_message"
         prompt: "Write code.",
         workingDir: worktreePath,
         harness: harnessCodex,
-        model: "gpt-5.3-codex",
+        model: "gpt-5.6-terra",
         reasoningEffort: "high",
         mcpEndpoint: "http://127.0.0.1:8097",
         ticketId: "0001",
@@ -80,7 +80,7 @@ printf '{"type":"result","subtype":"success","is_error":false,"result":"ok","sto
         prompt: "Write code.",
         workingDir: worktreePath,
         harness: harnessClaudeCode,
-        model: "claude-opus-4-6",
+        model: "claude-opus-5",
         binary: claudePath,
         logRoot: tmpDir / "logs",
       )

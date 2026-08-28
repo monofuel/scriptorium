@@ -70,7 +70,7 @@ suite "orchestrator plan spec update":
     check changed
     check not unchanged
     check callCount == 2
-    check capturedFirstModel == "claude-opus-4-6"
+    check capturedFirstModel == "claude-opus-5"
     check capturedFirstReasoningEffort == "high"
     check capturedFirstWorkingDir != tmp
     check capturedFirstRepoPath == tmp
@@ -332,7 +332,7 @@ suite "orchestrator planning bootstrap":
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-4-6")
+    writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-5")
     writeScriptoriumConfig(tmp, writtenCfg)
 
     var callCount = 0
@@ -350,7 +350,7 @@ suite "orchestrator planning bootstrap":
     let synced = syncAreasFromSpec(tmp, generator)
     check synced
     check callCount == 1
-    check capturedModel == "claude-opus-4-6"
+    check capturedModel == "claude-opus-5"
     check "scriptorium plan" in capturedSpec
 
     let (files, rc) = execCmdEx("git -C " & quoteShell(tmp) & " ls-tree -r --name-only scriptorium/plan")
@@ -392,6 +392,7 @@ suite "orchestrator manager ticket bootstrap":
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "open", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+    writeAreaHashesInPlan(tmp, initTable[string, string]())
 
     let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed
@@ -431,7 +432,7 @@ suite "orchestrator architect areas":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "run"
-    check capturedRequest.model == "claude-opus-4-6"
+    check capturedRequest.model == "claude-opus-5"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect" / "areas"
     check tmp in capturedRequest.prompt
@@ -439,19 +440,7 @@ suite "orchestrator architect areas":
     check "Active working directory path (this is the scriptorium plan worktree):" in capturedRequest.prompt
     check "Read `spec.md` in this working directory and write/update area markdown files directly under `areas/` in this working directory." in capturedRequest.prompt
     check "areas/01-arch.md" in files
-    check after == before + 2  # areas commit + spec hash marker commit
-
-  test "done tickets suppress areas from areasNeedingTickets":
-    let tmp = getTempDir() / "scriptorium_test_done_ticket_suppression"
-    makeInitializedTestRepo(tmp)
-    defer: removeDir(tmp)
-    addAreaToPlan(tmp, "01-done-area.md", "# Area 01\n")
-    addAreaToPlan(tmp, "02-pending-area.md", "# Area 02\n")
-    addTicketToPlan(tmp, "done", "0001-done-area-summary.md", "# Done\n\n**Area:** 01-done-area\n")
-
-    let needed = areasNeedingTickets(tmp)
-    check "areas/02-pending-area.md" in needed
-    check "areas/01-done-area.md" notin needed
+    check after == before + 3  # areas commit + empty area-hashes sentinel commit + spec hash marker commit
 
   test "done ticket with unchanged area hash suppresses area":
     let tmp = getTempDir() / "scriptorium_test_done_unchanged_hash"

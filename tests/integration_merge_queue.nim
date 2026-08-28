@@ -121,7 +121,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
 
     check callCount == 2
-    check capturedRequest.model == "claude-sonnet-4-6"
+    check capturedRequest.model == "claude-sonnet-5"
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
     check capturedRequest.workingDir == assignment.worktree
@@ -139,7 +139,7 @@ suite "orchestrator coding agent execution":
     )
     check ticketRc == 0
     check "## Agent Run" in ticketContent
-    check "- Model: claude-sonnet-4-6" in ticketContent
+    check "- Model: claude-sonnet-5" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
     let commits = latestPlanCommits(tmp, 4)
@@ -438,6 +438,51 @@ suite "orchestrator merge queue":
     check "**Review:** changes requested" in ticketContent
     check "**Review Feedback:** fix the formatting" in ticketContent
 
+  test "processMergeQueue parks ticket after repeated review rejections":
+    let tmp = getTempDir() / "scriptorium_test_review_rejection_parking"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    var priorRejections = ""
+    for i in 1 .. 4:
+      priorRejections.add("\n\n## Review\n**Review:** changes requested\n\n**Review Feedback:** prior rejection " & $i & "\n")
+    addTicketToPlan(tmp, "open", "0001-first.md", "# Ticket 1\n\n**Area:** a\n" & priorRejections)
+
+    let assignment = assignOldestOpenTicket(tmp)
+    writeFile(assignment.worktree / "ticket-output.txt", "done\n")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " add ticket-output.txt")
+    runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
+    discard enqueueMergeRequest(tmp, assignment, "still not right")
+
+    proc rejectAgainRunner(request: AgentRunRequest): AgentRunResult =
+      ## Fake runner that records one more request_changes decision.
+      discard request
+      recordReviewDecision("request_changes", "same problem again")
+      AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+    discard consumeReviewDecision()
+    let processed = processMergeQueue(tmp, rejectAgainRunner)
+    check processed
+
+    let files = planTreeFiles(tmp)
+    check "tickets/stuck/0001-first.md" in files
+    check "tickets/open/0001-first.md" notin files
+    check "tickets/in-progress/0001-first.md" notin files
+
+    let (ticketContent, ticketRc) = execCmdEx(
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/stuck/0001-first.md"
+    )
+    check ticketRc == 0
+    check "## Stuck Count: 1" in ticketContent
+    check "**Review Feedback:** same problem again" in ticketContent
+
+    let commits = latestPlanCommits(tmp, 3)
+    var sawParkCommit = false
+    for commit in commits:
+      if "scriptorium: park stuck ticket 0001" in commit:
+        sawParkCommit = true
+    check sawParkCommit
+
   test "processMergeQueue review stall defaults to approve":
     let tmp = getTempDir() / "scriptorium_test_review_stall"
     makeInitializedTestRepo(tmp)
@@ -617,13 +662,18 @@ suite "orchestrator merge queue":
     check commits.len > 1
     check "scriptorium: park stuck ticket 0001" in commits[1]
 
-  test "stuck tickets excluded from areasNeedingTickets":
-    let tmp = getTempDir() / "scriptorium_test_stuck_areas_excluded"
+  test "stuck area with unchanged hash stays excluded until content changes":
+    let tmp = getTempDir() / "scriptorium_test_stuck_area_hash"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
     addAreaToPlan(tmp, "01-cli.md", "# Area 01\n")
     addAreaToPlan(tmp, "02-core.md", "# Area 02\n")
     addTicketToPlan(tmp, "stuck", "0001-cli-ticket.md", "# Ticket\n\n**Area:** 01-cli\n")
+    let hashes = {
+      "01-cli": computeContentHash("# Area 01\n"),
+      "02-core": computeContentHash("# Area 02 old\n"),
+    }.toTable
+    writeAreaHashesInPlan(tmp, hashes)
 
     let needed = areasNeedingTickets(tmp)
     check "areas/02-core.md" in needed

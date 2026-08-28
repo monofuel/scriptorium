@@ -8,11 +8,12 @@ import
 const
   LiveIntegrationRoot* = "/tmp/scriptorium/integration"
   CliBinaryName = "scriptorium_integration_live"
-  DefaultIntegrationModel* = "gpt-5.4"
+  DefaultIntegrationModel* = "claude-opus-5"
+  DefaultIntegrationCodingModel* = "claude-sonnet-5"
   CodexAuthPathEnv* = "CODEX_AUTH_FILE"
   LiveOrchestratorBasePort* = 23000
   PollIntervalMs* = 500
-  PositiveTimeoutMs* = 300_000
+  PositiveTimeoutMs* = 900_000
   NegativeTimeoutMs* = 120_000
   ShutdownTimeoutMs = 15_000
   LogTailChars = 16_000
@@ -32,10 +33,12 @@ proc integrationModel*(): string =
     result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
 
 proc integrationCodingModel*(): string =
-  ## Return the coding-role model override, falling back to integrationModel.
+  ## Return the coding-role model override, falling back to the shared test model.
   result = getEnv("SCRIPTORIUM_TEST_CODING_MODEL", "")
   if result.len == 0:
-    result = integrationModel()
+    result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
+  if result.len == 0:
+    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationCodingModel)
 
 proc integrationHarness*(): Harness =
   ## Return the test harness from env, or infer from model.
@@ -176,8 +179,19 @@ proc addEulerMakefile*(repoPath: string) =
     "\t@test ! -f multiples.nim || { rm -f " & EulerDebugBinary & " && nim c --nimcache:.nimcache-test -o:" & EulerDebugBinary & " multiples.nim >/dev/null && output=$$(" & EulerDebugBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n\n" &
     "integration-test:\n" &
     "\t@test ! -f multiples.nim || { rm -f " & EulerReleaseBinary & " && nim c --nimcache:.nimcache-release -d:release -o:" & EulerReleaseBinary & " multiples.nim >/dev/null && output=$$(" & EulerReleaseBinary & "); test \"$$output\" = \"$(EXPECTED)\"; }\n"
+  let gitignoreContent =
+    "# ignore files with no extension:\n" &
+    "*\n" &
+    "!*/\n" &
+    "!*.*\n" &
+    "!Makefile\n\n" &
+    "# normal ignores:\n" &
+    "nimcache*\n" &
+    ".*\n" &
+    "!.gitignore\n"
   writeFile(repoPath / "Makefile", makefileContent)
-  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile")
+  writeFile(repoPath / ".gitignore", gitignoreContent)
+  runCmdOrDie("git -C " & quoteShell(repoPath) & " add Makefile .gitignore")
   runCmdOrDie("git -C " & quoteShell(repoPath) & " commit -m integration-live-add-euler-makefile")
 
 proc writeScriptoriumConfig*(repoPath: string, cfg: Config) =

@@ -20,20 +20,20 @@ proc writeExecutableScript(path: string, body: string) =
 suite "harness grok-build":
   test "buildGrokBuildCmdArgs matches expected arg order":
     let request = GrokBuildRunRequest(
-      model: "grok-4.5",
+      model: "grok-4.6",
     )
     let args = buildGrokBuildCmdArgs(request)
     check args == @[
       "agent",
       "--always-approve",
       "--model",
-      "grok-4.5",
+      "grok-4.6",
       "stdio",
     ]
 
   test "buildGrokBuildCmdArgs includes reasoning effort when set":
     let request = GrokBuildRunRequest(
-      model: "grok-4.5",
+      model: "grok-4.6",
       reasoningEffort: "high",
     )
     let args = buildGrokBuildCmdArgs(request)
@@ -127,7 +127,7 @@ while True:
       let request = GrokBuildRunRequest(
         prompt: "Say ok",
         workingDir: worktreePath,
-        model: "grok-4.5",
+        model: "grok-4.6",
         ticketId: "fake-acp",
         grokBuildBinary: grokPath,
         logRoot: tmpDir / "logs",
@@ -162,7 +162,7 @@ sys.stdout.flush()
       let request = GrokBuildRunRequest(
         prompt: "hi",
         workingDir: worktreePath,
-        model: "grok-4.5",
+        model: "grok-4.6",
         ticketId: "fake-fail",
         grokBuildBinary: grokPath,
         logRoot: tmpDir / "logs",

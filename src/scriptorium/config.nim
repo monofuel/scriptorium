@@ -12,9 +12,9 @@ type
 const
   ConfigFile = "scriptorium.json"
   DefaultArchitectModel = "claude-opus-5"
-  DefaultCodingModel = "claude-sonnet-4-6"
-  DefaultManagerModel = "claude-sonnet-4-6"
-  DefaultReviewerModel = "claude-sonnet-4-6"
+  DefaultCodingModel = "claude-sonnet-5"
+  DefaultManagerModel = "claude-sonnet-5"
+  DefaultReviewerModel = "claude-sonnet-5"
   DefaultAuditModel* = "claude-haiku-4-5-20251001"
   DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
@@ -172,6 +172,7 @@ proc resolveModel*(model: string): string =
   case model
   of "claude-opus-5": "us.anthropic.claude-opus-5-v1"
   of "claude-opus-4-6": "us.anthropic.claude-opus-4-6-v1"
+  of "claude-sonnet-5": "us.anthropic.claude-sonnet-5-v1"
   of "claude-sonnet-4-6": "us.anthropic.claude-sonnet-4-6"
   of "claude-haiku-4-5-20251001": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   else: model
@@ -213,6 +214,21 @@ proc fixupHarnesses(cfg: var Config, userJson: JsonNode) =
   fixup(cfg.agents.reviewer, "reviewer")
   fixup(cfg.agents.audit, "audit")
 
+proc backfillEmptyFields(cfg: var Config) =
+  ## Restore defaults for fields where an empty value is never meaningful.
+  let def = defaultConfig()
+  template fill(agent: var AgentConfig, defAgent: AgentConfig) =
+    if agent.model.len == 0:
+      agent.model = defAgent.model
+      agent.harness = defAgent.harness
+  fill(cfg.agents.architect, def.agents.architect)
+  fill(cfg.agents.coding, def.agents.coding)
+  fill(cfg.agents.manager, def.agents.manager)
+  fill(cfg.agents.reviewer, def.agents.reviewer)
+  fill(cfg.agents.audit, def.agents.audit)
+  if cfg.endpoints.local.len == 0:
+    cfg.endpoints.local = def.endpoints.local
+
 proc saveConfig*(repoPath: string, cfg: Config) =
   ## Write config as pretty-printed JSON.
   let path = repoPath / ConfigFile
@@ -238,6 +254,7 @@ proc loadConfig*(repoPath: string): Config =
   let merged = deepMerge(defaultJson, userJson)
   result = fromJson($merged, Config)
   fixupHarnesses(result, userJson)
+  backfillEmptyFields(result)
   # Apply env overrides.
   let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
   if envLogLevel.len > 0:
