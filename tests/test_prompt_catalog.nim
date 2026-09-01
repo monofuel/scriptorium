@@ -49,6 +49,9 @@ suite "prompt catalog":
     check PlanScopeTemplate.contains("{{WORKTREE_PATH}}")
     check ArchitectPlanOneShotTemplate.contains("{{USER_REQUEST}}")
     check ArchitectPlanInteractiveTemplate.contains("{{USER_MESSAGE}}")
+    check ArchitectImportTemplate.contains("{{PROJECT_REPO_PATH}}")
+    check ArchitectImportTemplate.contains("{{WORKTREE_PATH}}")
+    check ArchitectImportTemplate.contains("{{CURRENT_SPEC}}")
     check ReviewAgentTemplate.contains("submit_review")
     check ReviewAgentTemplate.contains("verify that the `submit_review` MCP tool")
     check CodexRetryContinuationTemplate.contains("{{TIMEOUT_KIND}}")
@@ -73,4 +76,3 @@ suite "prompt catalog":
     check ArchitectPlanOneShotTemplate.contains("Dependency guidance")
     check ArchitectPlanInteractiveTemplate.contains("Dependency guidance")
     check ManagerTicketsTemplate.contains("Dependency guidance")
-

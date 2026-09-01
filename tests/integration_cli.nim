@@ -235,6 +235,47 @@ suite "scriptorium CLI":
     let (_, branchRc) = execCmdEx("git -C " & tmp & " rev-parse --verify scriptorium/plan")
     check branchRc == 0
 
+  test "help advertises import subcommand without a flag alias":
+    let tmp = getTempDir() / "scriptorium_test_cli_import_help"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "--help")
+
+    check rc == 0
+    check output.contains("scriptorium import")
+    check not output.contains("scriptorium --import")
+
+  test "import requires an initialized workspace":
+    let tmp = getTempDir() / "scriptorium_test_cli_import_init_required"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "import")
+
+    check rc != 0
+    check output.contains("run `scriptorium init` first")
+
+  test "--import is not accepted as a legacy alias":
+    let tmp = getTempDir() / "scriptorium_test_cli_import_no_alias"
+    makeTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "--import")
+
+    check rc != 0
+    check output.contains("unknown command '--import'")
+
+  test "import rejects positional arguments":
+    let tmp = getTempDir() / "scriptorium_test_cli_import_args"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+
+    let (output, rc) = runCliInRepo(tmp, "import unexpected")
+
+    check rc != 0
+    check output.contains("no arguments are accepted")
+
   test "init output lists created files and next steps":
     let tmp = getTempDir() / "scriptorium_test_cli_init_output"
     makeTestRepo(tmp)
@@ -255,7 +296,7 @@ suite "scriptorium CLI":
     # Numbered next steps.
     check output.contains("1. Edit scriptorium.json to configure your agent models and harnesses")
     check output.contains("2. Edit AGENTS.md to describe your project conventions")
-    check output.contains("3. Run `scriptorium plan` to build your spec with the Architect")
+    check output.contains("3. Run `scriptorium import` for an existing project, or `scriptorium plan` to build a new spec")
     check output.contains("4. Run `scriptorium run` to start the orchestrator")
 
   test "run exits with error when plan branch is missing":

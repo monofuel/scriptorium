@@ -24,6 +24,7 @@ Prompt path terminology should stay aligned with `docs/terms.md`.
 - `architect_loop.md`: Architect loop-driven development cycle prompt.
 - `architect_plan_oneshot.md`: one-shot `scriptorium plan <prompt>` prompt.
 - `architect_plan_interactive.md`: per-turn interactive `scriptorium plan` prompt.
+- `architect_import.md`: repository-to-spec reconciliation for `scriptorium import`.
 - `codex_retry_continuation.md`: retry continuation prompt for codex harness.
 - `codex_retry_default_continuation.md`: default retry continuation sentence.
 

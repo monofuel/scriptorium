@@ -97,6 +97,8 @@ Use `scriptorium ask` for read-only questions to the Architect. It has the same 
 
 Use `scriptorium do` for ad-hoc tasks that need full repo access — running tests, pushing to remotes, fixing one-off issues, or any work that doesn't belong in the spec. The Architect operates directly in the repo root with no write guards.
 
+Use `scriptorium import` after initialization to reconcile `spec.md` with the project as it currently exists. Import reads the repository but writes only `spec.md`; it does not create tickets, edit source code, or start workers. Explicitly planned future work remains in the spec and stays distinguished from implemented behavior.
+
 Once your spec is ready, run `scriptorium run` in a terminal (or in tmux) to start the main orchestration loop. It watches the spec, generates tickets, assigns coding agents, reviews their work, and merges passing changes into `master`.
 
 ```bash
@@ -116,24 +118,25 @@ scriptorium run
 ### Importing an existing project
 
 If you already have a project and want scriptorium to manage it, run
-`scriptorium init` in the repo root, then use `scriptorium plan` to tell the
-Architect about what's already there:
+`scriptorium init` followed by `scriptorium import` in the repo root:
 
 ```bash
 scriptorium init
-scriptorium plan "Read the existing source code and write a spec that describes the current project structure, features, and areas."
+scriptorium import
 ```
 
-The Architect will read your source tree and produce a `spec.md` that matches
-the project as it exists. From there you can iterate on the spec to plan new
-work, and `scriptorium run` will pick up tickets as usual.
+The Architect reads the source, tests, configuration, README, and relevant
+documentation, then reconciles `spec.md` with the project as it exists. Import
+preserves clearly marked future plans and may be run again as the repository
+evolves. From there, use `scriptorium plan` for new goals and `scriptorium run`
+to begin implementation.
 
 Path and workflow terminology is defined in `docs/terms.md`.
 
 ## Status
 
 Current features:
-- CLI commands: `init`, `run`, `status`, `plan`, `ask`, `do`, `audit`, `dashboard`, `discord`, `sync`, `worktrees`, `--version`, `--help`
+- CLI commands: `init`, `import`, `run`, `status`, `plan`, `ask`, `do`, `quest`, `audit`, `dashboard`, `discord`, `mattermost`, `sync`, `worktrees`, `--version`, `--help`
 - Architect → Manager → Coding → Review agent workflow
 - `do` mode for ad-hoc tasks with full repo access (no ticket pipeline)
 - Parallel coding agents with area-based conflict avoidance
@@ -170,7 +173,7 @@ At a high level:
 8. When the loop system is enabled and all queues drain, a feedback command runs and the Architect updates the spec to start the next iteration.
 
 If `spec.md` is missing or still the placeholder, the loop idles and logs:
-`WAITING: no spec — run 'scriptorium plan'`
+`WAITING: no spec — run 'scriptorium plan' or 'scriptorium import'`
 
 ## Quick start
 
@@ -379,6 +382,7 @@ tail -f .scriptorium/logs/orchestrator/run_*.log
 
 ```text
 scriptorium init [path]      Initialize workspace (--init also works)
+scriptorium import           Reconcile spec.md with the current repository
 scriptorium run              Start orchestrator daemon
 scriptorium status           Show ticket counts and active agent info
 scriptorium plan             Interactive Architect planning session

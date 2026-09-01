@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[config, dashboard, discord_bot, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
+  ./scriptorium/[config, dashboard, discord_bot, git_ops, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
   Version = "19.5.0"
@@ -9,6 +9,7 @@ const
 Usage:
   scriptorium init [path]      Initialize a new scriptorium workspace
   scriptorium --init [path]    Alias for init
+  scriptorium import           Reconcile spec.md with the current repository
   scriptorium run              Start the orchestrator daemon
   scriptorium status           Show ticket counts and agent activity
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
@@ -34,6 +35,18 @@ proc cmdInit(path: string) =
 proc cmdRun() =
   ## Start the orchestrator daemon.
   runOrchestrator(getCurrentDir())
+
+proc cmdImport() =
+  ## Reconcile spec.md with the current repository implementation.
+  let repoPath = getCurrentDir()
+  if not hasPlanBranch(repoPath):
+    stderr.writeLine("scriptorium import: workspace is not initialized; run `scriptorium init` first")
+    quit(1)
+  let changed = importSpecFromRepository(repoPath)
+  if changed:
+    echo "scriptorium: imported repository state into spec.md"
+  else:
+    echo "scriptorium: spec.md already matches the repository"
 
 proc cmdStatus() =
   ## Show ticket counts, agent activity, elapsed times, recent done tickets, and first-attempt success rate.
@@ -173,6 +186,11 @@ when isMainModule:
   case args[0]
   of "run":
     cmdRun()
+  of "import":
+    if args.len > 1:
+      stderr.writeLine("scriptorium import: no arguments are accepted")
+      quit(1)
+    cmdImport()
   of "status":
     cmdStatus()
   of "plan":

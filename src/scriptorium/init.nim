@@ -165,6 +165,6 @@ proc runInit*(path: string, quiet: bool = false) =
     if createdAgents:
       echo &"  {stepNum}. Edit AGENTS.md to describe your project conventions"
       stepNum += 1
-    echo &"  {stepNum}. Run `scriptorium plan` to build your spec with the Architect"
+    echo &"  {stepNum}. Run `scriptorium import` for an existing project, or `scriptorium plan` to build a new spec"
     stepNum += 1
     echo &"  {stepNum}. Run `scriptorium run` to start the orchestrator"

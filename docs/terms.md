@@ -32,6 +32,15 @@ A temporary or managed checkout of the `scriptorium/plan` branch.
 
 Architect and Manager runs execute in the plan worktree. Planning files such as `spec.md`, `areas/`, and `tickets/` are read and written here.
 
+## Import
+
+`scriptorium import` is a repository-to-spec synchronization operation. It
+reads the project repository and reconciles `spec.md` with implemented reality
+while preserving explicitly planned future work. It writes only `spec.md` and
+does not create areas or tickets, edit project source, or start the
+orchestrator. The workspace must already be initialized; run
+`scriptorium init` first.
+
 ## Ticket Worktree
 
 A managed checkout for one ticket branch such as `scriptorium/ticket-0001`.

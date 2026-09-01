@@ -10,7 +10,7 @@ const
   IdleSleepMs = 200
   AgentPollSleepMs = 10_000
   IdleBackoffSleepMs = 30_000
-  WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan'"
+  WaitingNoSpecMessage = "WAITING: no spec — run 'scriptorium plan' or 'scriptorium import'"
   UnstickCommitPrefix = "scriptorium: unstick ticket"
   UnhealthyAlertThreshold = 20
   UnhealthyRepeatInterval = 100

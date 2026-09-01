@@ -10,6 +10,7 @@ const
   PlanScopeReadonlyTemplate* = staticRead(PromptDirectory & "plan_scope_readonly.md")
   ArchitectPlanOneShotTemplate* = staticRead(PromptDirectory & "architect_plan_oneshot.md")
   ArchitectPlanInteractiveTemplate* = staticRead(PromptDirectory & "architect_plan_interactive.md")
+  ArchitectImportTemplate* = staticRead(PromptDirectory & "architect_import.md")
   CodexRetryContinuationTemplate* = staticRead(PromptDirectory & "codex_retry_continuation.md")
   CodexRetryDefaultContinuationText* = staticRead(PromptDirectory & "codex_retry_default_continuation.md")
   ArchitectAskInteractiveTemplate* = staticRead(PromptDirectory & "architect_ask_interactive.md")

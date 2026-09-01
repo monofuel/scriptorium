@@ -201,6 +201,17 @@ proc buildArchitectPlanPrompt*(repoPath: string, planPath: string, userPrompt: s
     ],
   ))))
 
+proc buildArchitectImportPrompt*(repoPath: string, planPath: string, currentSpec: string): string =
+  ## Build the architect prompt that reconciles spec.md with the current repository.
+  result = withHumanAuthority(withMethod(withHygiene(withTone(renderPromptTemplate(
+    ArchitectImportTemplate,
+    [
+      (name: "PROJECT_REPO_PATH", value: repoPath),
+      (name: "WORKTREE_PATH", value: planPath),
+      (name: "CURRENT_SPEC", value: currentSpec.strip()),
+    ],
+  )))))
+
 proc buildInteractivePlanPrompt*(repoPath: string, planPath: string, spec: string, history: seq[PlanTurn], userMsg: string, username: string = "engineer"): string =
   ## Assemble the multi-turn architect prompt with spec, history, and current message.
   var conversationHistory = ""
