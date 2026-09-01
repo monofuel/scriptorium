@@ -1,6 +1,5 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
-  mcport,
   ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, quest_system, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
@@ -543,7 +542,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
 proc runOrchestratorLoop(
   repoPath: string,
-  httpServer: HttpMcpServer,
+  httpServer: AgentMcpHost,
   endpoint: OrchestratorEndpoint,
   maxTicks: int,
   runner: AgentRunner,
@@ -683,7 +682,7 @@ proc runOrchestrator*(repoPath: string) =
   logInfo(&"repo: {repoPath}")
   logInfo(&"build: {BuildCommitHash}")
   logInfo(&"log file: {logFilePath}")
-  let httpServer = createOrchestratorServer()
+  let httpServer = createAgentMcpHost()
   defer: closeLog()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent)
 
@@ -711,7 +710,7 @@ proc runQuest*(repoPath: string, questPrompt: string) =
   logInfo(&"build: {BuildCommitHash}")
   logInfo(&"log file: {logFilePath}")
   startQuest(repoPath, questPrompt)
-  let httpServer = createOrchestratorServer()
+  let httpServer = createAgentMcpHost()
   defer: closeLog()
   let t0 = epochTime()
   runOrchestratorLoop(repoPath, httpServer, endpoint, -1, runAgent, questMode = true)

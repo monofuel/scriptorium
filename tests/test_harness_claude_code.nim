@@ -42,6 +42,7 @@ suite "harness claude-code":
       "--output-format", "stream-json",
       "--verbose",
       "--dangerously-skip-permissions",
+      "--strict-mcp-config",
       "--model", "claude-opus-5",
     ]
 
@@ -63,6 +64,7 @@ suite "harness claude-code":
 
     let args = buildClaudeCodeExecArgs(request)
     check "--mcp-config" in args
+    check "--strict-mcp-config" in args
     var mcpConfigIdx = -1
     for i, arg in args:
       if arg == "--mcp-config":
@@ -96,6 +98,7 @@ suite "harness claude-code":
 
     let args = buildClaudeCodeExecArgs(request)
     check "--mcp-config" notin args
+    check "--strict-mcp-config" in args
 
   test "buildClaudeCodeExecArgs rejects unsupported reasoning effort values":
     let request = ClaudeCodeRunRequest(

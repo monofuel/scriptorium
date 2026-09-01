@@ -29,11 +29,6 @@ Your job is to review the changes made by the coding agent and decide whether to
 
 ## Instructions
 
-CRITICAL: Before starting your review, verify that the `submit_review` MCP tool
-is available. If it is not listed in your available tools, stop immediately and
-report the error — do NOT proceed with the review, as there is no way to submit
-your verdict without this tool.
-
 Review the diff above against the ticket requirements, area context, project conventions, and spec. Apply the following checks:
 
 ### Convention enforcement

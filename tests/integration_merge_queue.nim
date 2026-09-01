@@ -6,83 +6,6 @@ import
   scriptorium/[agent_runner, config, continuation_builder, init, logging, orchestrator, ticket_metadata],
   helpers
 
-suite "orchestrator mcp tools":
-  test "createOrchestratorServer registers submit_pr and consumeSubmitPrSummary clears state":
-    discard consumeSubmitPrSummary()
-    let httpServer = createOrchestratorServer()
-
-    check httpServer.server.tools.hasKey("submit_pr")
-    check httpServer.server.toolHandlers.hasKey("submit_pr")
-    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
-    let toolResponse = submitPrHandler(%*{"summary": "ship tool"})
-    check toolResponse.getStr() == "Merge request enqueued."
-    check consumeSubmitPrSummary() == "ship tool"
-    check consumeSubmitPrSummary() == ""
-
-  test "submit_review tool is registered and handler stores decision":
-    discard consumeReviewDecision()
-    let httpServer = createOrchestratorServer()
-
-    check httpServer.server.tools.hasKey("submit_review")
-    check httpServer.server.toolHandlers.hasKey("submit_review")
-    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
-    let approveResponse = reviewHandler(%*{"action": "approve"})
-    check approveResponse.getStr() == "Review decision recorded."
-    let decision = consumeReviewDecision()
-    check decision.action == "approve"
-    check decision.feedback == ""
-    check consumeReviewDecision().action == ""
-
-    let changesResponse = reviewHandler(%*{"action": "request_changes", "feedback": "fix the tests"})
-    check changesResponse.getStr() == "Review decision recorded."
-    let decision2 = consumeReviewDecision()
-    check decision2.action == "request_changes"
-    check decision2.feedback == "fix the tests"
-
-  test "submit_review rejects request_changes without feedback":
-    let httpServer = createOrchestratorServer()
-    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
-    let response = reviewHandler(%*{"action": "request_changes"})
-    check "Feedback is required" in response.getStr()
-    check consumeReviewDecision().action == ""
-
-  test "submit_review rejects invalid action":
-    let httpServer = createOrchestratorServer()
-    let reviewHandler = httpServer.server.toolHandlers["submit_review"]
-    let response = reviewHandler(%*{"action": "reject"})
-    check "Invalid action" in response.getStr()
-    check consumeReviewDecision().action == ""
-
-  test "submit_pr enqueues immediately with active worktree":
-    discard consumeSubmitPrSummary()
-    let tmp = getTempDir() / "scriptorium_test_submit_pr_pass"
-    createDir(tmp)
-    defer: removeDir(tmp)
-    writeFile(tmp / "Makefile", "test:\n\t@echo PASS test\nintegration-test:\n\t@echo PASS integration-test\n")
-    setActiveTicketWorktree(tmp, "0099")
-    defer: clearActiveTicketWorktree()
-
-    let httpServer = createOrchestratorServer()
-    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
-    let toolResponse = submitPrHandler(%*{"summary": "tests pass"})
-    check toolResponse.getStr() == "Merge request enqueued."
-    check consumeSubmitPrSummary() == "tests pass"
-
-  test "submit_pr enqueues even when tests would fail (merge queue is the gate)":
-    discard consumeSubmitPrSummary()
-    let tmp = getTempDir() / "scriptorium_test_submit_pr_fail"
-    createDir(tmp)
-    defer: removeDir(tmp)
-    writeFile(tmp / "Makefile", "test:\n\t@echo FAIL test\n\t@false\n")
-    setActiveTicketWorktree(tmp, "0099")
-    defer: clearActiveTicketWorktree()
-
-    let httpServer = createOrchestratorServer()
-    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
-    let toolResponse = submitPrHandler(%*{"summary": "tests fail"})
-    check toolResponse.getStr() == "Merge request enqueued."
-    check consumeSubmitPrSummary() == "tests fail"
-
 suite "orchestrator coding agent execution":
   test "executeAssignedTicket runs agent and appends run summary":
     let tmp = getTempDir() / "scriptorium_test_execute_assigned_ticket"
@@ -123,7 +46,7 @@ suite "orchestrator coding agent execution":
     check callCount == 2
     check capturedRequest.model == "claude-sonnet-5"
     check capturedRequest.reasoningEffort == "high"
-    check capturedRequest.mcpEndpoint == "http://127.0.0.1:19042"
+    check capturedRequest.mcpEndpoint.startsWith("http://127.0.0.1:19042/agents/")
     check capturedRequest.workingDir == assignment.worktree
     check capturedRequest.ticketId == "0001"
     check "Ticket 1" in capturedRequest.prompt
@@ -158,7 +81,7 @@ suite "orchestrator coding agent execution":
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       ## Return a deterministic run result and signal completion with submit_pr.
       discard request
-      callSubmitPrTool("ship it")
+      callSubmitPrTool(request, "ship it")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -358,11 +281,9 @@ suite "orchestrator merge queue":
 
     proc approveRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that records an approve decision.
-      discard request
-      recordReviewDecision("approve", "")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{"action": "approve"})
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, approveRunner)
     check processed
 
@@ -393,10 +314,9 @@ suite "orchestrator merge queue":
     proc capturingRunner(request: AgentRunRequest): AgentRunResult =
       ## Capture the review request and approve.
       capturedRequest = request
-      recordReviewDecision("approve", "")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{"action": "approve"})
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, capturingRunner)
     check processed
     check capturedRequest.continuationPromptBuilder != nil
@@ -418,11 +338,12 @@ suite "orchestrator merge queue":
 
     proc changesRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that records a request_changes decision.
-      discard request
-      recordReviewDecision("request_changes", "fix the formatting")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{
+        "action": "request_changes",
+        "feedback": "fix the formatting",
+      })
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, changesRunner)
     check processed
 
@@ -456,11 +377,12 @@ suite "orchestrator merge queue":
 
     proc rejectAgainRunner(request: AgentRunRequest): AgentRunResult =
       ## Fake runner that records one more request_changes decision.
-      discard request
-      recordReviewDecision("request_changes", "same problem again")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{
+        "action": "request_changes",
+        "feedback": "same problem again",
+      })
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, rejectAgainRunner)
     check processed
 
@@ -496,7 +418,6 @@ suite "orchestrator merge queue":
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
     discard enqueueMergeRequest(tmp, assignment, "stall test")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, noopRunner)
     check processed
 
@@ -529,10 +450,9 @@ suite "orchestrator merge queue":
         request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: "The code looks correct."))
         request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: "All tests pass and naming is consistent."))
         request.onEvent(AgentStreamEvent(kind: agentEventTool, text: "submit_review"))
-      recordReviewDecision("approve", "")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{"action": "approve"})
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, reasoningRunner)
     check processed
 
@@ -563,10 +483,9 @@ suite "orchestrator merge queue":
       ## Fake runner that emits a very long message event.
       if not request.onEvent.isNil:
         request.onEvent(AgentStreamEvent(kind: agentEventMessage, text: longText))
-      recordReviewDecision("approve", "")
+      discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{"action": "approve"})
       AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
 
-    discard consumeReviewDecision()
     let processed = processMergeQueue(tmp, longReasoningRunner)
     check processed
 
@@ -589,7 +508,7 @@ suite "orchestrator merge queue":
       ## Write a file but do not commit, then signal submit_pr.
       discard request
       writeFile(assignment.worktree / "uncommitted.txt", "dirty\n")
-      callSubmitPrTool("auto-commit test")
+      callSubmitPrTool(request, "auto-commit test")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],

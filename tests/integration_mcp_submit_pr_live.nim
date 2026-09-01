@@ -1,33 +1,22 @@
 ## Integration tests for live MCP submit_pr transport and real Codex tool calling.
 
 import
-  std/[httpclient, json, os, osproc, strformat, strutils, tempfiles, times, unittest],
-  mcport,
+  std/[httpclient, json, os, strformat, strutils, tempfiles, times, unittest],
   scriptorium/[agent_runner, config, harness_codex, orchestrator]
 
 const
   LiveMcpBasePort = 22000
+  LiveMcpPortRange = 80
   DefaultIntegrationModel = "gpt-5.6-sol"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   RpcTimeoutMs = 30_000
   CodexHardTimeoutMs = 120_000
   CodexNoOutputTimeoutMs = 45_000
-  ServerStartupSleepMs = 250
   ClientProtocolVersion = "2025-06-18"
 
-type
-  ServerThreadArgs = tuple[
-    httpServer: HttpMcpServer,
-    address: string,
-    port: int,
-  ]
-
 var
-  liveServers: seq[HttpMcpServer] = @[]
-
-proc runHttpServer(args: ServerThreadArgs) {.thread.} =
-  ## Run one MCP HTTP server in a background thread.
-  args.httpServer.serve(args.port, args.address)
+  liveMcpHost: AgentMcpHost
+  liveMcpThread: Thread[ServerThreadArgs]
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
@@ -90,11 +79,20 @@ proc requiredAgentBinary(): string =
 
 proc mcpPort(offset: int): int =
   ## Return a deterministic local MCP port for one test offset.
-  result = LiveMcpBasePort + (getCurrentProcessId().int mod 1000) + offset
+  result = LiveMcpBasePort + (getCurrentProcessId().int mod LiveMcpPortRange) + offset
 
 proc mcpBaseUrl(port: int): string =
   ## Return the base MCP HTTP URL for one local port.
   result = &"http://127.0.0.1:{port}"
+
+proc sharedMcpEndpoint(): string =
+  ## Start and return the single MCP transport host shared by all tests in this process.
+  let port = mcpPort(1)
+  if liveMcpHost.isNil:
+    liveMcpHost = createAgentMcpHost()
+    createThread(liveMcpThread, runHttpServer, (liveMcpHost, "127.0.0.1", port))
+    waitForServerReady("127.0.0.1", port)
+  result = mcpBaseUrl(port)
 
 proc mcpRequest(mcpUrl: string, requestId: int, methodName: string, params: JsonNode): JsonNode =
   ## Send one MCP JSON-RPC request over HTTP and return parsed JSON response.
@@ -134,26 +132,18 @@ proc initializeMcpSession(mcpUrl: string) =
 
 suite "integration mcp submit_pr live":
   test "IT-LIVE-01 real MCP HTTP tools/list and tools/call for submit_pr":
-    discard consumeSubmitPrSummary()
-    let port = mcpPort(1)
-    let mcpUrl = mcpBaseUrl(port) & "/mcp"
-
-    let httpServer = createOrchestratorServer()
-    var serverThread: Thread[ServerThreadArgs]
-    createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-    sleep(ServerStartupSleepMs)
-    liveServers.add(httpServer)
+    let endpoint = sharedMcpEndpoint()
+    let mcpSession = newCodingMcpSession(endpoint, "0022", "ticket-0022", "/tmp/scriptorium-live-mcp")
+    defer: unregisterAgentMcpSession(mcpSession)
+    let mcpUrl = mcpSession.endpoint & "/mcp"
 
     initializeMcpSession(mcpUrl)
 
     let listResponse = mcpRequest(mcpUrl, 2, "tools/list", %*{})
     let tools = listResponse["result"]["tools"]
-    var foundSubmitPr = false
-    for tool in tools:
-      if tool["name"].getStr() == "submit_pr":
-        foundSubmitPr = true
-
-    check foundSubmitPr
+    check tools.len == 1
+    check tools[0]["name"].getStr() == "submit_pr"
+    check not tools[0]["inputSchema"]["properties"].hasKey("ticket_id")
 
     let summary = "integration-live-mcp-http"
     let callResponse = mcpRequest(
@@ -168,9 +158,8 @@ suite "integration mcp submit_pr live":
       },
     )
     let responseText = callResponse["result"]["content"][0]["text"].getStr()
-    check responseText == "Merge request enqueued."
-    check consumeSubmitPrSummary() == summary
-    check consumeSubmitPrSummary() == ""
+    check responseText == "Merge request recorded."
+    check codingSubmission(mcpSession).summary == summary
 
   test "IT-LIVE-02 real agent calls submit_pr against live MCP HTTP server":
     let agentBinary = requiredAgentBinary()
@@ -179,15 +168,7 @@ suite "integration mcp submit_pr live":
     doAssert hasAgentAuth(),
       "API credentials are required for live integration tests"
 
-    discard consumeSubmitPrSummary()
-    let port = mcpPort(2)
-    let endpoint = mcpBaseUrl(port)
-
-    let httpServer = createOrchestratorServer()
-    var serverThread: Thread[ServerThreadArgs]
-    createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-    sleep(ServerStartupSleepMs)
-    liveServers.add(httpServer)
+    let endpoint = sharedMcpEndpoint()
 
     let tmpDir = createTempDir("scriptorium_integration_live_mcp_agent_", "", getTempDir())
     defer:
@@ -203,16 +184,17 @@ suite "integration mcp submit_pr live":
         "You have a function called submit_pr in your tool list. " &
         "Use the submit_pr function exactly once with the argument summary=\"" & nonce & "\". " &
         "Do not execute any shell commands. Do not search the filesystem. " &
-        "if the function is missing, fail immediately." &
         "After the function call succeeds, reply with exactly DONE."
     createDir(worktreePath)
+    let mcpSession = newCodingMcpSession(endpoint, "0022", "ticket-0022", worktreePath)
+    defer: unregisterAgentMcpSession(mcpSession)
 
     let request = AgentRunRequest(
       prompt: prompt,
       workingDir: worktreePath,
       harness: harness,
       model: integrationModel(),
-      mcpEndpoint: endpoint,
+      mcpEndpoint: mcpSession.endpoint,
       ticketId: "integration-live-submit-pr",
       attempt: 1,
       skipGitRepoCheck: true,
@@ -227,12 +209,17 @@ suite "integration mcp submit_pr live":
       "agent failed to complete live MCP submit_pr integration.\n" &
       "Command: " & runResult.command.join(" ") & "\n" &
       "Stdout:\n" & runResult.stdout
-    let consumedSummary = consumeSubmitPrSummary()
+    let consumedSummary = codingSubmission(mcpSession).summary
     doAssert consumedSummary == nonce,
       "expected live submit_pr summary was not captured.\n" &
       "Expected: " & nonce & "\n" &
       "Actual: " & consumedSummary & "\n" &
+      "MCP requests: " & mcpRequestMethods(mcpSession).join(", ") & "\n" &
       "Stdout:\n" & runResult.stdout
+    let requestMethods = mcpRequestMethods(mcpSession)
+    check "initialize" in requestMethods
+    check "tools/list" in requestMethods
+    check "tools/call" in requestMethods
 
   test "IT-LIVE-03 codex-specific: mcp list confirms server is enabled and required":
     let harnessEnv3 = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip()
@@ -242,29 +229,17 @@ suite "integration mcp submit_pr live":
       let codexPath = findExe("codex")
       doAssert codexPath.len > 0, "codex binary is required for live integration tests"
 
-      let port = mcpPort(3)
-      let endpoint = mcpBaseUrl(port)
-
-      let httpServer = createOrchestratorServer()
-      var serverThread: Thread[ServerThreadArgs]
-      createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-      sleep(ServerStartupSleepMs)
-      liveServers.add(httpServer)
+      let endpoint = sharedMcpEndpoint()
+      let mcpSession = newCodingMcpSession(endpoint, "mcp-list", "mcp-list", getTempDir())
+      defer: unregisterAgentMcpSession(mcpSession)
 
       let request = CodexRunRequest(
-        mcpEndpoint: endpoint,
+        mcpEndpoint: mcpSession.endpoint,
       )
-      let args = buildCodexMcpListArgs(request)
-      let cmdParts = @[codexPath] & args
-      var quotedCommandParts: seq[string] = @[]
-      for part in cmdParts:
-        quotedCommandParts.add(quoteShell(part))
-      let fullCommand = quotedCommandParts.join(" ")
-      let (output, exitCode) = execCmdEx(fullCommand)
+      let (output, exitCode) = runCodexMcpList(codexPath, request)
 
       doAssert exitCode == 0,
         "codex mcp list --json failed.\n" &
-        "Command: " & fullCommand & "\n" &
         "Output:\n" & output
 
       let jsonOutput = parseJson(output.strip())

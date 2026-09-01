@@ -1,5 +1,5 @@
 import
-  std/[monotimes, os, osproc, posix, streams, strformat, strutils, times],
+  std/[monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, tempfiles, times],
   jsony,
   ./[common, logging, prompt_catalog]
 
@@ -17,6 +17,11 @@ const
   OutputChunkSize = 4096
   ContinuationTailChars = 1200
   ToolArgSummaryMaxLen = 80
+  McpStartupTimeoutSec = 60
+  CodexHomeEnv = "CODEX_HOME"
+  CodexAuthFileEnv = "CODEX_AUTH_FILE"
+  CodexAuthFileName = "auth.json"
+  IsolatedCodexHomePrefix = "scriptorium_codex_home_"
 
 type
   CodexStreamEventKind* = enum
@@ -110,6 +115,44 @@ type
     tool: CodexJsonEventFields
     data: CodexJsonEventFields
     event: CodexJsonEventFields
+
+  CodexProcessEnvironment = object
+    homePath: string
+    values: StringTableRef
+
+proc resolveCodexAuthPath(): string =
+  ## Resolve the OAuth credential file that should be copied into an isolated Codex home.
+  let overridePath = getEnv(CodexAuthFileEnv, "").strip()
+  if overridePath.len > 0:
+    return overridePath
+
+  let configuredHome = getEnv(CodexHomeEnv, "").strip()
+  if configuredHome.len > 0:
+    return configuredHome / CodexAuthFileName
+
+  result = getHomeDir() / ".codex" / CodexAuthFileName
+
+proc createCodexProcessEnvironment(): CodexProcessEnvironment =
+  ## Create a temporary Codex home containing credentials but no inherited configuration.
+  let runtimeRoot = getCacheDir() / "scriptorium" / "codex-homes"
+  createDir(runtimeRoot)
+  setFilePermissions(runtimeRoot, {fpUserRead, fpUserWrite, fpUserExec})
+  result.homePath = createTempDir(IsolatedCodexHomePrefix, "", runtimeRoot)
+  result.values = newStringTable()
+  for key, value in envPairs():
+    result.values[key] = value
+  result.values[CodexHomeEnv] = result.homePath
+
+  let authSourcePath = resolveCodexAuthPath()
+  if fileExists(authSourcePath):
+    let authTargetPath = result.homePath / CodexAuthFileName
+    copyFile(authSourcePath, authTargetPath)
+    setFilePermissions(authTargetPath, {fpUserRead, fpUserWrite})
+
+proc removeCodexProcessEnvironment(environment: CodexProcessEnvironment) =
+  ## Remove the temporary Codex home after its child process has exited.
+  if environment.homePath.len > 0 and dirExists(environment.homePath):
+    removeDir(environment.homePath)
 
 proc sanitizePathSegment(value: string): string =
   ## Sanitize a string so it can safely be used as a path segment.
@@ -246,11 +289,35 @@ proc buildMcpServersArgs(request: CodexRunRequest): seq[string] =
     "-c", &"mcp_servers.scriptorium.url=\"{mcpUrl}\"",
     "-c", "mcp_servers.scriptorium.enabled=true",
     "-c", "mcp_servers.scriptorium.required=true",
+    "-c", &"mcp_servers.scriptorium.startup_timeout_sec={McpStartupTimeoutSec}",
+    "-c", "mcp_servers.scriptorium.default_tools_approval_mode=\"approve\"",
   ]
 
 proc buildCodexMcpListArgs*(request: CodexRunRequest): seq[string] =
   ## Build the codex argument list for `mcp list --json`.
   result = buildMcpServersArgs(request) & @["mcp", "list", "--json"]
+
+proc runCodexMcpList*(codexBinary: string, request: CodexRunRequest): tuple[output: string, exitCode: int] =
+  ## Run `codex mcp list --json` without loading the user's Codex configuration.
+  if codexBinary.len == 0:
+    raise newException(ValueError, "codexBinary is required")
+
+  let environment = createCodexProcessEnvironment()
+  defer:
+    removeCodexProcessEnvironment(environment)
+
+  let process = startProcess(
+    codexBinary,
+    workingDir = request.workingDir,
+    args = buildCodexMcpListArgs(request),
+    env = environment.values,
+    options = {poUsePath, poStdErrToStdOut},
+  )
+  defer:
+    process.close()
+
+  result.output = process.outputStream.readAll()
+  result.exitCode = process.waitForExit()
 
 proc buildCodexExecArgs*(request: CodexRunRequest, lastMessagePath: string): seq[string] =
   ## Build the codex exec argument list in a deterministic order.
@@ -563,7 +630,12 @@ proc flushPendingCodexEvents(onEvent: CodexEventHandler, pendingLine: var string
     emitCodexEvent(onEvent, buildCodexStreamEvent(line))
   pendingLine = ""
 
-proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int): CodexRunResult =
+proc runCodexAttempt(
+  request: CodexRunRequest,
+  prompt: string,
+  attemptValue: int,
+  environment: StringTableRef,
+): CodexRunResult =
   ## Run one codex attempt and capture streamed output, logs, and timeout state.
   if request.workingDir.len == 0:
     raise newException(ValueError, "workingDir is required")
@@ -614,6 +686,7 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
     codexBinary,
     workingDir = request.workingDir,
     args = args,
+    env = environment,
     options = {poUsePath, poStdErrToStdOut}
   )
   defer:
@@ -708,12 +781,15 @@ proc runCodex*(request: CodexRunRequest): CodexRunResult =
   let baseAttempt = resolveAttemptBase(request)
   let maxAttempts = resolveMaxAttempts(request)
   let originalPrompt = request.prompt
+  let environment = createCodexProcessEnvironment()
+  defer:
+    removeCodexProcessEnvironment(environment)
   var prompt = originalPrompt
   var attemptsUsed = 0
 
   while attemptsUsed < maxAttempts:
     let attemptValue = baseAttempt + attemptsUsed
-    result = runCodexAttempt(request, prompt, attemptValue)
+    result = runCodexAttempt(request, prompt, attemptValue, environment.values)
     inc attemptsUsed
     result.attemptCount = attemptsUsed
 

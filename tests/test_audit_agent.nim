@@ -81,18 +81,6 @@ suite "audit report writing":
     let reportPath = writeAuditReport(tmpDir, "test")
     check "/logs/audit/" in reportPath.replace('\\', '/')
 
-suite "audit report capture via shared state":
-  test "recordAuditReport and consumeAuditReport round-trip":
-    recordAuditReport("test report", "test-ticket")
-    let report = consumeAuditReport("test-ticket")
-    check report == "test report"
-
-  test "consumeAuditReport clears after consumption":
-    recordAuditReport("one-time report", "clear-test")
-    discard consumeAuditReport("clear-test")
-    let second = consumeAuditReport("clear-test")
-    check second == ""
-
 suite "agent role enum and pool":
   test "arAudit exists in AgentRole":
     let role: AgentRole = arAudit

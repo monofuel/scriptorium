@@ -6,8 +6,9 @@ Read and follow project instructions in `{{PROJECT_REPO_PATH}}/AGENTS.md`.
 Do NOT write files to disk. The orchestrator will write tickets for you.
 
 When you have generated all tickets, call the `submit_tickets` MCP tool with:
-- `area_id`: "{{AREA_ID}}"
 - `tickets`: an array of ticket markdown content strings
+
+The tool is already bound to area `{{AREA_ID}}`; do not provide an area ID.
 
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} {{AREA_ID}}`.
 Start IDs at {{NEXT_ID}} and increase monotonically for additional tickets.

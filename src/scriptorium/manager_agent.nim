@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils, tables],
-  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, lock_management, log_forwarding, logging, prompt_builders, shared_state, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, lock_management, log_forwarding, logging, mcp_server, prompt_builders, shared_state, ticket_metadata]
 
 const
   TicketCommitMessage = "scriptorium: create tickets from areas"
@@ -63,31 +63,29 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
   let areaRelPath = PlanAreasDir / areaId & ".md"
   let prompt = buildManagerTicketsPrompt(repoPath, areaId, areaRelPath, areaContent, nextId)
 
-  # Clear any stale tickets from a previous run for this area.
-  discard consumeSubmitTickets(areaId)
-
-  discard runner(AgentRunRequest(
-    prompt: prompt,
-    workingDir: repoPath,
-    harness: cfg.agents.manager.harness,
-    model: cfg.agents.manager.model,
-    reasoningEffort: cfg.agents.manager.reasoningEffort,
-    mcpEndpoint: cfg.endpoints.local,
-    ticketId: ManagerTicketIdPrefix & areaId,
-    attempt: DefaultAgentAttempt,
-    skipGitRepoCheck: true,
-    logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / areaId),
-    noOutputTimeoutMs: cfg.agents.manager.noOutputTimeout,
-    hardTimeoutMs: cfg.agents.manager.hardTimeout,
-    progressTimeoutMs: cfg.agents.manager.progressTimeout,
-    maxAttempts: DefaultAgentMaxAttempts,
-    continuationPromptBuilder: buildAgentsReinjectPrompt,
-    onEvent: proc(event: AgentStreamEvent) =
-      forwardAgentEvent("manager", areaId, event),
-  ))
-
-  # Consume tickets submitted via the MCP tool.
-  result = consumeSubmitTickets(areaId)
+  let mcpSession = newManagerMcpSession(cfg.endpoints.local, areaId)
+  block:
+    defer: unregisterAgentMcpSession(mcpSession)
+    discard runner(AgentRunRequest(
+      prompt: prompt,
+      workingDir: repoPath,
+      harness: cfg.agents.manager.harness,
+      model: cfg.agents.manager.model,
+      reasoningEffort: cfg.agents.manager.reasoningEffort,
+      mcpEndpoint: mcpSession.endpoint,
+      ticketId: ManagerTicketIdPrefix & areaId,
+      attempt: DefaultAgentAttempt,
+      skipGitRepoCheck: true,
+      logRoot: planAgentLogRoot(repoPath, ManagerLogDirName / areaId),
+      noOutputTimeoutMs: cfg.agents.manager.noOutputTimeout,
+      hardTimeoutMs: cfg.agents.manager.hardTimeout,
+      progressTimeoutMs: cfg.agents.manager.progressTimeout,
+      maxAttempts: DefaultAgentMaxAttempts,
+      continuationPromptBuilder: buildAgentsReinjectPrompt,
+      onEvent: proc(event: AgentStreamEvent) =
+        forwardAgentEvent("manager", areaId, event),
+    ))
+  result = managerSubmission(mcpSession).tickets
 
 proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     ticketDocs: seq[string], nextId: int) =

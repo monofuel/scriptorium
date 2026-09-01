@@ -19,7 +19,7 @@ suite "continuation builder":
     let tmpDir = createTempDir("scriptorium_cb_test_", "")
     defer: removeDir(tmpDir)
     let output = buildAgentsReinjectPrompt(tmpDir)
-    check output == "Continue from the previous attempt and complete the ticket. When done, call the `submit_pr` MCP tool with a summary."
+    check output == "Continue from the previous attempt and complete the ticket. When done, call the `submit_pr` MCP tool. A summary is optional."
 
   test "truncates large AGENTS.md":
     let tmpDir = createTempDir("scriptorium_cb_test_", "")

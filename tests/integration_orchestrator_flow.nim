@@ -8,7 +8,6 @@ import
 suite "orchestrator final v1 flow":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
   teardown:
@@ -44,7 +43,9 @@ suite "orchestrator final v1 flow":
           timeoutKind: "none",
         )
       of "manager-01-full-flow":
-        recordSubmitTickets("01-full-flow", @["# Full Flow\n\n**Area:** 01-full-flow"])
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{
+          "tickets": ["# Full Flow\n\n**Area:** 01-full-flow"],
+        })
         result = AgentRunResult(
           backend: harnessCodex,
           exitCode: 0,
@@ -66,7 +67,7 @@ suite "orchestrator final v1 flow":
         writeFile(request.workingDir / "flow-output.txt", "done\n")
         runCmdOrDie("git -C " & quoteShell(request.workingDir) & " add flow-output.txt")
         runCmdOrDie("git -C " & quoteShell(request.workingDir) & " commit -m test-v1-39-flow-output")
-        callSubmitPrTool("ship flow")
+        callSubmitPrTool(request, "ship flow")
         result = AgentRunResult(
           backend: harnessCodex,
           exitCode: 0,
@@ -98,7 +99,6 @@ suite "orchestrator final v1 flow":
 suite "orchestrator agent enqueue with fakes":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
   teardown:
@@ -185,7 +185,7 @@ suite "orchestrator agent enqueue with fakes":
       proc fakeRunner(request: AgentRunRequest): AgentRunResult =
         ## Return a deterministic successful output and request merge submission.
         discard request
-        callSubmitPrTool("ship e2e")
+        callSubmitPrTool(request, "ship e2e")
         result = AgentRunResult(
           backend: harnessCodex,
           command: @["codex", "exec"],
@@ -229,8 +229,6 @@ suite "orchestrator agent enqueue with fakes":
 suite "non-blocking tick loop":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
-    discard consumeReviewDecision()
     tickSleepOverrideMs = 0
 
   teardown:
@@ -254,7 +252,7 @@ suite "non-blocking tick loop":
         return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
       elif request.ticketId == "0001":
         codingCalled = true
-        recordSubmitPrSummary("serial done", "0001")
+        callSubmitPrTool(request, "serial done")
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
@@ -298,18 +296,22 @@ suite "non-blocking tick loop":
       if request.ticketId == "run":
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId == "manager-area-a":
-        recordSubmitTickets("area-a", @["# Task A\n\n**Area:** area-a"])
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{
+          "tickets": ["# Task A\n\n**Area:** area-a"],
+        })
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId == "manager-area-b":
-        recordSubmitTickets("area-b", @["# Task B\n\n**Area:** area-b"])
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{
+          "tickets": ["# Task B\n\n**Area:** area-b"],
+        })
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.endsWith("-prediction"):
         return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
       elif request.ticketId == "0001":
-        recordSubmitPrSummary("serial a done", "0001")
+        callSubmitPrTool(request, "serial a done")
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       elif request.ticketId == "0002":
-        recordSubmitPrSummary("serial b done", "0002")
+        callSubmitPrTool(request, "serial b done")
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
@@ -339,7 +341,6 @@ suite "non-blocking tick loop":
 suite "concurrent agent execution":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
   teardown:
@@ -376,7 +377,7 @@ suite "concurrent agent execution":
           inc codingCallCount
           seenTickets.add(request.ticketId)
           release(codingCallLock)
-        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        callSubmitPrTool(request, "done " & request.ticketId)
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
@@ -410,20 +411,17 @@ suite "concurrent agent execution":
     check assignment1.inProgressTicket.len > 0
     check assignment2.inProgressTicket.len > 0
 
-    setActiveTicketWorktree(assignment1.worktree, "0001")
-    setActiveTicketWorktree(assignment2.worktree, "0002")
-    defer: clearActiveTicketWorktree()
+    let first = newCodingMcpSession("http://127.0.0.1:19097", "0001", assignment1.branch, assignment1.worktree)
+    let second = newCodingMcpSession("http://127.0.0.1:19097", "0002", assignment2.branch, assignment2.worktree)
+    defer:
+      unregisterAgentMcpSession(first)
+      unregisterAgentMcpSession(second)
 
-    let httpServer = createOrchestratorServer()
-    let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
+    discard invokeAgentMcpTool(first.endpoint, "submit_pr", %*{"summary": "done ticket 1"})
+    discard invokeAgentMcpTool(second.endpoint, "submit_pr", %*{"summary": "done ticket 2"})
 
-    discard submitPrHandler(%*{"summary": "done ticket 1", "ticket_id": "0001"})
-    discard submitPrHandler(%*{"summary": "done ticket 2", "ticket_id": "0002"})
-
-    let summary1 = consumeSubmitPrSummary("0001")
-    let summary2 = consumeSubmitPrSummary("0002")
-    check summary1 == "done ticket 1"
-    check summary2 == "done ticket 2"
+    check codingSubmission(first).summary == "done ticket 1"
+    check codingSubmission(second).summary == "done ticket 2"
 
   test "concurrent start: all open tickets fill available slots in one tick":
     let tmp = getTempDir() / "scriptorium_test_concurrent_start"
@@ -461,7 +459,7 @@ suite "concurrent agent execution":
           acquire(tickCounterLock)
           codingStartTicks[request.ticketId] = tickCounter
           release(tickCounterLock)
-        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        callSubmitPrTool(request, "done " & request.ticketId)
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
@@ -520,7 +518,7 @@ suite "concurrent agent execution":
           acquire(callOrderLock)
           callOrder.add(request.ticketId)
           release(callOrderLock)
-        recordSubmitPrSummary("done 0001", "0001")
+        callSubmitPrTool(request, "done 0001")
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
@@ -585,7 +583,7 @@ suite "concurrent agent execution":
 
     proc submittingRunner(request: AgentRunRequest): AgentRunResult =
       ## Submits immediately on first call.
-      recordSubmitPrSummary("submitted", "0002")
+      callSubmitPrTool(request, "submitted")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -716,7 +714,6 @@ suite "agent pool thread lifecycle":
 suite "concurrent manager completion ticket ID serialization":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
   teardown:
@@ -736,20 +733,24 @@ suite "concurrent manager completion ticket ID serialization":
     writeScriptoriumConfig(tmp, cfg)
 
     let fakeRunner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
-      ## Architect no-ops; managers submit 2 tickets each via recordSubmitTickets.
+      ## Architect no-ops; managers submit two tickets through scoped MCP tools.
       if request.ticketId == "run":
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId == "manager-area-a":
-        recordSubmitTickets("area-a", @[
-          "# Task A1\n\n**Area:** area-a",
-          "# Task A2\n\n**Area:** area-a",
-        ])
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{
+          "tickets": [
+            "# Task A1\n\n**Area:** area-a",
+            "# Task A2\n\n**Area:** area-a",
+          ],
+        })
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId == "manager-area-b":
-        recordSubmitTickets("area-b", @[
-          "# Task B1\n\n**Area:** area-b",
-          "# Task B2\n\n**Area:** area-b",
-        ])
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{
+          "tickets": [
+            "# Task B1\n\n**Area:** area-b",
+            "# Task B2\n\n**Area:** area-b",
+          ],
+        })
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.endsWith("-prediction"):
         return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
@@ -796,7 +797,6 @@ suite "concurrent manager completion ticket ID serialization":
 suite "token budget gates coding but allows managers":
   setup:
 
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
     capturedLogs = @[]
     captureLogs = true
@@ -848,7 +848,7 @@ suite "token budget gates coding but allows managers":
           acquire(invocationLock)
           codingInvoked = true
           release(invocationLock)
-        recordSubmitPrSummary("done " & request.ticketId, request.ticketId)
+        callSubmitPrTool(request, "done " & request.ticketId)
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
 
     runOrchestratorForTicks(tmp, 2, fakeRunner)

@@ -2,26 +2,17 @@
 
 import
   std/[os, strformat, strutils, tempfiles, times, unittest],
-  mcport,
   scriptorium/[harness_codex, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "gpt-5.6-sol"
   CodexAuthPathEnv = "CODEX_AUTH_FILE"
   LiveMcpBasePort = 22100
-
-type
-  ServerThreadArgs = tuple[
-    httpServer: HttpMcpServer,
-    address: string,
-    port: int,
-  ]
-
-proc runHttpServer(args: ServerThreadArgs) {.thread.} =
-  args.httpServer.serve(args.port, args.address)
+  LiveMcpPortRange = 80
 
 proc mcpPort(offset: int): int =
-  result = LiveMcpBasePort + (getCurrentProcessId().int mod 1000) + offset
+  ## Return a process-specific port within this test file's reserved range.
+  result = LiveMcpBasePort + (getCurrentProcessId().int mod LiveMcpPortRange) + offset
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
@@ -95,11 +86,10 @@ suite "integration codex harness":
         "OPENAI_API_KEY/CODEX_API_KEY or a Codex OAuth auth file is required for integration tests (" &
         codexAuthPath() & ")"
 
-      discard consumeSubmitPrSummary()
       let port = mcpPort(1)
       let endpoint = &"http://127.0.0.1:{port}"
 
-      let httpServer = createOrchestratorServer()
+      let httpServer = createAgentMcpHost()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
       waitForServerReady("127.0.0.1", port)
@@ -113,20 +103,21 @@ suite "integration codex harness":
         timestamp = now().utc().format("yyyyMMddHHmmss")
         nonce = &"it-codex-mcp-{getCurrentProcessId()}-{timestamp}"
       createDir(worktreePath)
+      let mcpSession = newCodingMcpSession(endpoint, "integration-codex-mcp", "integration", worktreePath)
+      defer: unregisterAgentMcpSession(mcpSession)
 
       let prompt =
         "You are running an integration test. " &
         "You have a function called submit_pr in your tool list. " &
         "Use the submit_pr function exactly once with the argument summary=\"" & nonce & "\". " &
         "Do not execute any shell commands. Do not search the filesystem. " &
-        "If the function is missing, fail immediately. " &
         "After the function call succeeds, reply with exactly DONE."
 
       let request = CodexRunRequest(
         prompt: prompt,
         workingDir: worktreePath,
         model: integrationModel(),
-        mcpEndpoint: endpoint,
+        mcpEndpoint: mcpSession.endpoint,
         ticketId: "integration-codex-mcp",
         skipGitRepoCheck: true,
         logRoot: tmpDir / "logs",
@@ -139,9 +130,14 @@ suite "integration codex harness":
         "codex MCP tool call failed.\n" &
         "Command: " & runResult.command.join(" ") & "\n" &
         "Stdout:\n" & runResult.stdout
-      let consumedSummary = consumeSubmitPrSummary()
+      let consumedSummary = codingSubmission(mcpSession).summary
       doAssert consumedSummary == nonce,
         "expected submit_pr summary not captured.\n" &
         "Expected: " & nonce & "\n" &
         "Actual: " & consumedSummary & "\n" &
+        "MCP requests: " & mcpRequestMethods(mcpSession).join(", ") & "\n" &
         "Stdout:\n" & runResult.stdout
+      let requestMethods = mcpRequestMethods(mcpSession)
+      check "initialize" in requestMethods
+      check "tools/list" in requestMethods
+      check "tools/call" in requestMethods

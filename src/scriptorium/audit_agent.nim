@@ -2,7 +2,7 @@ import
   std/[os, strformat, strutils, times],
   jsony,
   ./[agent_pool, agent_runner, architect_agent, config, git_ops, lock_management,
-     logging, prompt_builders, shared_state]
+     logging, mcp_server, prompt_builders, shared_state]
 
 const
   AuditLogDirName* = "audit"
@@ -88,13 +88,14 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
   let noOutputTimeoutMs =
     if auditCfg.noOutputTimeout > 0: auditCfg.noOutputTimeout
     else: DefaultAuditNoOutputTimeoutMs
+  let mcpSession = newAuditMcpSession(cfg.endpoints.local)
   let request = AgentRunRequest(
     prompt: prompt,
     workingDir: repoPath,
     harness: auditCfg.harness,
     model: resolveModel(auditCfg.model),
     reasoningEffort: auditCfg.reasoningEffort,
-    mcpEndpoint: cfg.endpoints.local,
+    mcpEndpoint: mcpSession.endpoint,
     ticketId: "audit",
     skipGitRepoCheck: true,
     logRoot: planAgentLogRoot(repoPath, AuditLogDirName),
@@ -102,14 +103,15 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
     noOutputTimeoutMs: noOutputTimeoutMs,
   )
 
-  let agentResult =
+  let agentResult = block:
+    defer: unregisterAgentMcpSession(mcpSession)
     if runner.isNil: runAgent(request)
     else: runner(request)
 
   if agentResult.exitCode != 0:
     logWarn(&"audit agent exited with code {agentResult.exitCode}")
 
-  let report = consumeAuditReport()
+  let report = auditSubmission(mcpSession).report
   if report.len == 0:
     logWarn("audit: agent did not submit a report via submit_audit_report")
     return ""

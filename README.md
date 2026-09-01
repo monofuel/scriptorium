@@ -162,7 +162,7 @@ At a high level:
 3. Orchestrator generates `tickets/open/*.md` from areas (Manager).
 4. Open tickets are assigned to `.scriptorium/worktrees/tickets/<ticket>/` worktrees and moved to `tickets/in-progress/`. Multiple tickets are assigned concurrently when they touch independent areas.
    - Tickets with unsatisfied `**Depends:**` references are skipped until their dependencies reach `done/`.
-5. Coding agent implements the ticket and calls the `submit_pr` MCP tool with a summary.
+5. Coding agent implements the ticket and calls its ticket-scoped `submit_pr` MCP tool, optionally with a summary.
 6. Review agent evaluates the changes — approves or requests changes. Rejected work gets a new coding session with feedback.
 7. Merge queue processes one item at a time:
    - merge `master` into ticket branch

@@ -12,6 +12,7 @@ const
   DefaultIntegrationCodingModel* = "claude-sonnet-5"
   CodexAuthPathEnv* = "CODEX_AUTH_FILE"
   LiveOrchestratorBasePort* = 23000
+  LiveOrchestratorPortRange = 800
   PollIntervalMs* = 500
   PositiveTimeoutMs* = 900_000
   NegativeTimeoutMs* = 120_000
@@ -242,7 +243,7 @@ proc ensureCliBinary*(): string =
 
 proc orchestratorPort*(offset: int): int =
   ## Return a deterministic local orchestrator port for one test offset.
-  result = LiveOrchestratorBasePort + (getCurrentProcessId().int mod 1000) + offset
+  result = LiveOrchestratorBasePort + (getCurrentProcessId().int mod LiveOrchestratorPortRange) + offset
 
 proc latestOrchestratorLogPath*(repoPath: string): string =
   ## Return the latest orchestrator log file path for one test repository.

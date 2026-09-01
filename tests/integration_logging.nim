@@ -115,7 +115,7 @@ suite "logging":
       inc callCount
       capturedRequests.add(request)
       if callCount == 2:
-        callSubmitPrTool("stall retry done")
+        callSubmitPrTool(request, "stall retry done")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -192,7 +192,7 @@ suite "logging":
       inc callCount
       capturedRequests.add(request)
       if callCount == 2:
-        callSubmitPrTool("test pass retry done")
+        callSubmitPrTool(request, "test pass retry done")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -229,7 +229,7 @@ suite "logging":
       inc callCount
       capturedRequests.add(request)
       if callCount == 2:
-        callSubmitPrTool("test fail retry done")
+        callSubmitPrTool(request, "test fail retry done")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -267,7 +267,7 @@ suite "logging":
       ## Stall on first call, then submit_pr on second.
       inc callCount
       if callCount == 2:
-        callSubmitPrTool("testwall done")
+        callSubmitPrTool(request, "testwall done")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],

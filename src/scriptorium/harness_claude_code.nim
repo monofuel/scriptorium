@@ -209,6 +209,7 @@ proc buildClaudeCodeExecArgs*(request: ClaudeCodeRunRequest): seq[string] =
     "--output-format", "stream-json",
     "--verbose",
     "--dangerously-skip-permissions",
+    "--strict-mcp-config",
     "--model", resolvedModel,
   ]
 

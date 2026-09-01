@@ -11,6 +11,7 @@ export agent_runner, config, git_ops, init, lock_management, orchestrator, ticke
 
 const
   OrchestratorTestBasePort* = 19000
+  OrchestratorTestPortRange = 800
   GitUserConfig = "\n[user]\n\temail = test@test.com\n\tname = Test\n"
 
 type
@@ -77,7 +78,7 @@ proc writeScriptoriumConfig*(repoPath: string, cfg: Config) =
 
 proc writeOrchestratorEndpointConfig*(repoPath: string, portOffset: int, maxAttempts: int = 2) =
   ## Write a unique local orchestrator endpoint configuration for one test.
-  let basePort = OrchestratorTestBasePort + (getCurrentProcessId().int mod 1000)
+  let basePort = OrchestratorTestBasePort + (getCurrentProcessId().int mod OrchestratorTestPortRange)
   let orchestratorPort = basePort + portOffset
   var cfg = defaultConfig()
   cfg.endpoints.local = &"http://127.0.0.1:{orchestratorPort}"
@@ -250,13 +251,10 @@ proc latestPlanCommits*(repoPath: string, count: int): seq[string] =
   doAssert rc == 0
   result = output.splitLines().filterIt(it.len > 0)
 
-proc callSubmitPrTool*(summary: string) =
+proc callSubmitPrTool*(request: AgentRunRequest, summary: string = "") =
   ## Simulate one coding-agent submit_pr MCP tool call.
-  discard consumeSubmitPrSummary()
-  let httpServer = createOrchestratorServer()
-  doAssert httpServer.server.toolHandlers.hasKey("submit_pr")
-  let submitPrHandler = httpServer.server.toolHandlers["submit_pr"]
-  discard submitPrHandler(%*{"summary": summary})
+  let arguments = if summary.len > 0: %*{"summary": summary} else: %*{}
+  discard invokeAgentMcpTool(request.mcpEndpoint, "submit_pr", arguments)
 
 proc noopRunner*(request: AgentRunRequest): AgentRunResult =
   ## Fake agent runner that returns immediately with no review decision.

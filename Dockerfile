@@ -7,11 +7,16 @@ RUN mkdir -p /etc/portage/package.use && \
 RUN emerge --quiet net-libs/nodejs \
     && node --version \
     && npm --version
-ARG CODEX_VERSION=0.116.0
+ARG CODEX_VERSION=0.152.0
 ARG CLAUDE_CODE_VERSION=2.1.80
-RUN npm install --global @openai/codex@${CODEX_VERSION} @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+ARG GROK_VERSION=1.0.13
+RUN npm install --global \
+      @openai/codex@${CODEX_VERSION} \
+      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+      @xai-official/grok@${GROK_VERSION} \
     && codex --version \
-    && claude --version
+    && claude --version \
+    && grok --version
 
 COPY nimby.lock scriptorium.nimble Makefile config.nims ./
 COPY src ./src

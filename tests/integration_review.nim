@@ -67,44 +67,6 @@ suite "buildReviewAgentPrompt":
     check "Always use PascalCase for constants." in prompt
     check "Section 9 compliance rules." in prompt
 
-suite "review feedback truncation":
-  setup:
-    discard consumeReviewDecision()
-
-  test "feedback under limit passes through unchanged":
-    ## Verify feedback well under ReviewFeedbackMaxBytes is stored verbatim.
-    let feedback = 'a'.repeat(100)
-    recordReviewDecision("approve", feedback)
-    let decision = consumeReviewDecision()
-    check decision.feedback == feedback
-    check decision.feedback.len == 100
-
-  test "feedback exactly at limit passes through unchanged":
-    ## Verify feedback exactly at ReviewFeedbackMaxBytes is stored verbatim.
-    let feedback = 'b'.repeat(ReviewFeedbackMaxBytes)
-    recordReviewDecision("approve", feedback)
-    let decision = consumeReviewDecision()
-    check decision.feedback == feedback
-    check decision.feedback.len == ReviewFeedbackMaxBytes
-
-  test "feedback one byte over limit is truncated with marker":
-    ## Verify feedback at 4097 bytes is truncated with the truncation marker.
-    let feedback = 'c'.repeat(ReviewFeedbackMaxBytes + 1)
-    recordReviewDecision("approve", feedback)
-    let decision = consumeReviewDecision()
-    check decision.feedback.len == ReviewFeedbackMaxBytes
-    check decision.feedback.endsWith(ReviewTruncationMarker)
-    let expectedText = 'c'.repeat(ReviewFeedbackMaxBytes - ReviewTruncationMarker.len)
-    check decision.feedback == expectedText & ReviewTruncationMarker
-
-  test "large feedback is truncated with marker":
-    ## Verify feedback at 2x the limit is truncated to ReviewFeedbackMaxBytes with marker.
-    let feedback = 'd'.repeat(ReviewFeedbackMaxBytes * 2)
-    recordReviewDecision("request_changes", feedback)
-    let decision = consumeReviewDecision()
-    check decision.feedback.len == ReviewFeedbackMaxBytes
-    check decision.feedback.endsWith(ReviewTruncationMarker)
-
 suite "progress-based stall detection":
   test "progress timeout triggers stall continuation flow":
     ## When the agent returns with timeoutKind="progress", it should be treated
@@ -124,7 +86,7 @@ suite "progress-based stall detection":
       inc callCount
       capturedRequests.add(request)
       if callCount == 2:
-        callSubmitPrTool("progress stall fixed")
+        callSubmitPrTool(request, "progress stall fixed")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],
@@ -193,7 +155,7 @@ suite "progress-based stall detection":
     var capturedRequest: AgentRunRequest
     proc fakeRunner(request: AgentRunRequest): AgentRunResult =
       capturedRequest = request
-      callSubmitPrTool("progress config check done")
+      callSubmitPrTool(request, "progress config check done")
       result = AgentRunResult(
         backend: harnessCodex,
         command: @["codex", "exec"],

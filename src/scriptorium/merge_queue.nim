@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -256,18 +256,17 @@ proc runReviewAgent*(
 
   let prompt = buildReviewAgentPrompt(ticketContent, diffContent, areaContent, submitSummary, agentsContent, specContent)
 
-  discard consumeReviewDecision()
-
   logInfo(fmt"ticket {item.ticketId}: review started (model={model})")
   let reviewStartTime = epochTime()
   var reviewReasoning = ""
+  let mcpSession = newReviewerMcpSession(cfg.endpoints.local, item.ticketId)
   let request = AgentRunRequest(
     prompt: prompt,
     workingDir: item.worktree,
     harness: cfg.agents.reviewer.harness,
     model: cfg.agents.reviewer.model,
     reasoningEffort: cfg.agents.reviewer.reasoningEffort,
-    mcpEndpoint: cfg.endpoints.local,
+    mcpEndpoint: mcpSession.endpoint,
     logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "review",
     ticketId: item.ticketId,
     attempt: 1,
@@ -283,14 +282,17 @@ proc runReviewAgent*(
           reviewReasoning &= "\n"
         reviewReasoning &= event.text,
   )
-  let agentResult = runner(request)
+  let agentResult = block:
+    defer: unregisterAgentMcpSession(mcpSession)
+    runner(request)
   let truncatedReasoning = truncateTail(reviewReasoning.strip(), ReviewReasoningMaxChars)
   if truncatedReasoning.len > 0:
     logDebug(&"review[{item.ticketId}]: reasoning: {truncatedReasoning}")
   let reviewWallTime = epochTime() - reviewStartTime
   let reviewWallDuration = formatDuration(reviewWallTime)
 
-  result = consumeReviewDecision()
+  let submission = reviewerSubmission(mcpSession)
+  result = (action: submission.action, feedback: submission.feedback)
 
   if result.action == "approve":
     logInfo(fmt"ticket {item.ticketId}: review approved")

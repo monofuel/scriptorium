@@ -4,7 +4,7 @@ import
 const
   AgentsFileName = "AGENTS.md"
   MaxAgentsFileChars = 4000
-  DefaultContinuationText = "Continue from the previous attempt and complete the ticket. When done, call the `submit_pr` MCP tool with a summary."
+  DefaultContinuationText = "Continue from the previous attempt and complete the ticket. When done, call the `submit_pr` MCP tool. A summary is optional."
 
 proc buildAgentsReinjectPrompt*(workingDir: string): string =
   ## Build a continuation prompt that re-injects AGENTS.md project rules.

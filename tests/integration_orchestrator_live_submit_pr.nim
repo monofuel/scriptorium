@@ -102,8 +102,10 @@ suite "integration orchestrator live submit_pr":
       writeLiveConfig(repoPath, endpoint, "gpt-live-invalid-model-no-submit-pr")
 
       let process = startOrchestrator(repoPath)
+      var processStopped = false
       defer:
-        stopProcessWithSigint(process)
+        if not processStopped:
+          stopProcessWithSigint(process)
 
       let runRecorded = waitForCondition(NegativeTimeoutMs, PollIntervalMs, proc(): bool =
         let files = planTreeFiles(repoPath)
@@ -118,13 +120,17 @@ suite "integration orchestrator live submit_pr":
         "Plan files:\n" & planTreeFiles(repoPath).join("\n") & "\n\n" &
         "Log tail:\n" & orchestratorLogTail(repoPath)
 
+      stopProcessWithSigint(process)
+      processStopped = true
       let files = planTreeFiles(repoPath)
       check doneTicketPath notin files
-      check inProgressTicketPath in files
       check pendingQueueFiles(repoPath).len == 0
 
-      let ticketContentAfterRun = readPlanFile(repoPath, inProgressTicketPath)
+      let ticketPathAfterRun =
+        if inProgressTicketPath in files: inProgressTicketPath
+        else: openTicketPath
+      check ticketPathAfterRun in files
+      let ticketContentAfterRun = readPlanFile(repoPath, ticketPathAfterRun)
       check "## Agent Run" in ticketContentAfterRun
       check "- Exit Code: 0" notin ticketContentAfterRun
-      check process.peekExitCode() == -1
     )

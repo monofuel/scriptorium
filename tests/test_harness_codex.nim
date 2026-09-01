@@ -84,6 +84,8 @@ suite "harness codex":
     check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in args
     check "mcp_servers.scriptorium.enabled=true" in args
     check "mcp_servers.scriptorium.required=true" in args
+    check "mcp_servers.scriptorium.startup_timeout_sec=60" in args
+    check "mcp_servers.scriptorium.default_tools_approval_mode=\"approve\"" in args
 
   test "buildCodexExecArgs trims trailing slash from mcp endpoint":
     let request = CodexRunRequest(
@@ -96,6 +98,8 @@ suite "harness codex":
     check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in args
     check "mcp_servers.scriptorium.enabled=true" in args
     check "mcp_servers.scriptorium.required=true" in args
+    check "mcp_servers.scriptorium.startup_timeout_sec=60" in args
+    check "mcp_servers.scriptorium.default_tools_approval_mode=\"approve\"" in args
 
   test "buildCodexExecArgs includes reasoning effort override when configured":
     let request = CodexRunRequest(
@@ -168,6 +172,45 @@ printf 'final:%s\n' "$model" > "$last_message"
       check result.lastMessage.contains("final:gpt-5.6-terra")
       check result.command.len > 0
       check result.command[0] == codexPath
+    )
+
+  test "runCodex isolates credentials from user configuration":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let
+        sourceHome = tmpDir / "source-codex-home"
+        codexPath = tmpDir / "fake-codex-isolation.sh"
+        previousHome = getEnv("CODEX_HOME", "")
+        hadPreviousHome = existsEnv("CODEX_HOME")
+      createDir(sourceHome)
+      writeFile(sourceHome / "auth.json", "test credentials")
+      writeFile(sourceHome / "config.toml", "[mcp_servers.unwanted]")
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+test -f "$CODEX_HOME/auth.json"
+test "$(cat "$CODEX_HOME/auth.json")" = "test credentials"
+test ! -e "$CODEX_HOME/config.toml"
+printf 'isolated\n' > "$last_message"
+""")
+
+      putEnv("CODEX_HOME", sourceHome)
+      defer:
+        if hadPreviousHome:
+          putEnv("CODEX_HOME", previousHome)
+        else:
+          delEnv("CODEX_HOME")
+
+      let request = newBaseRequest(tmpDir, codexPath, "ticket-isolation")
+      let result = runCodex(request)
+
+      check result.exitCode == 0
+      check result.lastMessage.strip() == "isolated"
     )
 
   test "runCodex emits heartbeat and parsed stream events":

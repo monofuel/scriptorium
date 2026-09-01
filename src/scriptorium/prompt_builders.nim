@@ -4,7 +4,7 @@ import
 
 const
   PlanStreamPreviewChars* = 140
-  StallContinuationText* = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` with a summary when done."
+  StallContinuationText* = "The previous attempt exited cleanly without calling the `submit_pr` MCP tool.\nThis is a stall — the agent exited without completing the ticket.\nContinue working on the ticket and call `submit_pr` when done. A summary is optional."
   StallTestOutputMaxBytes* = 8192
 
 proc withTone*(prompt: string): string =

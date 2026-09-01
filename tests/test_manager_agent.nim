@@ -41,25 +41,6 @@ suite "buildManagerTicketsPrompt":
     )
     check prompt.contains("0007")
 
-suite "submit_tickets MCP state":
-  test "recordSubmitTickets and consumeSubmitTickets round-trip":
-    let tickets = @["# Ticket 1\n\nContent.", "# Ticket 2\n\nMore content."]
-    recordSubmitTickets("backend", tickets)
-    let consumed = consumeSubmitTickets("backend")
-    check consumed.len == 2
-    check consumed[0].contains("# Ticket 1")
-    check consumed[1].contains("# Ticket 2")
-
-  test "consumeSubmitTickets returns empty when no tickets recorded":
-    let consumed = consumeSubmitTickets("nonexistent")
-    check consumed.len == 0
-
-  test "consumeSubmitTickets clears state after consumption":
-    recordSubmitTickets("frontend", @["# T1\n\nContent."])
-    discard consumeSubmitTickets("frontend")
-    let second = consumeSubmitTickets("frontend")
-    check second.len == 0
-
 suite "writeTicketsForAreaFromStrings":
   test "writes ticket files with area field and sequential IDs":
     let tmpDir = getTempDir() / "test_write_tickets_from_strings"

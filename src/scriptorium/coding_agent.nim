@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -188,13 +188,11 @@ proc executeAssignedTicket*(
   var currentPrompt = initialPrompt
   var currentAttemptBase = DefaultAgentAttempt
   var totalAttemptsUsed = 0
+  var submitCalled = false
   var submitSummary = ""
   let agentCfg = if agentConfigOverride.model.len > 0: agentConfigOverride else: cfg.agents.coding
   let model = agentCfg.model
   let maxAttempts = cfg.timeouts.codingAgentMaxAttempts
-
-  setActiveTicketWorktree(assignment.worktree, ticketId)
-  defer: clearActiveTicketWorktree(ticketId)
 
   while totalAttemptsUsed < maxAttempts:
     if totalAttemptsUsed > 0:
@@ -202,13 +200,19 @@ proc executeAssignedTicket*(
     let attemptsForThisCall = maxAttempts - totalAttemptsUsed
     logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
     let agentStartTime = epochTime()
+    let mcpSession = newCodingMcpSession(
+      cfg.endpoints.local,
+      ticketId,
+      assignment.branch,
+      assignment.worktree,
+    )
     let request = AgentRunRequest(
       prompt: currentPrompt,
       workingDir: assignment.worktree,
       harness: agentCfg.harness,
       model: agentCfg.model,
       reasoningEffort: agentCfg.reasoningEffort,
-      mcpEndpoint: cfg.endpoints.local,
+      mcpEndpoint: mcpSession.endpoint,
       ticketId: ticketId,
       attempt: currentAttemptBase,
       logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "coder",
@@ -221,10 +225,13 @@ proc executeAssignedTicket*(
       onEvent: proc(event: AgentStreamEvent) =
         forwardAgentEvent("coding", ticketId, event),
     )
-    discard consumeSubmitPrSummary(ticketId)
-
     logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{maxAttempts})")
-    let agentResult = runner(request)
+    let agentResult = block:
+      defer: unregisterAgentMcpSession(mcpSession)
+      runner(request)
+    let submission = codingSubmission(mcpSession)
+    submitCalled = submission.called
+    submitSummary = submission.summary
     result = agentResult
     totalAttemptsUsed += max(agentResult.attemptCount, 1)
 
@@ -279,8 +286,7 @@ proc executeAssignedTicket*(
       0
     )
 
-    submitSummary = consumeSubmitPrSummary(ticketId)
-    if submitSummary.len > 0:
+    if submitCalled:
       break
 
     if isStall and totalAttemptsUsed < maxAttempts:
@@ -307,7 +313,7 @@ proc executeAssignedTicket*(
 
     break
 
-  if submitSummary.len > 0:
+  if submitCalled:
     result.submitted = true
     logInfo(fmt"ticket {ticketId}: submit_pr called (summary=""{submitSummary}"")")
     let dirtyCheck = gitRunCapture(assignment.worktree, @["status", "--porcelain"])

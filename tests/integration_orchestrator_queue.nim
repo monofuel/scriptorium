@@ -11,10 +11,11 @@ const
 
 const
   OrchestratorBasePort = 18000
+  OrchestratorPortRange = 800
 
 proc writeOrchestratorEndpointConfig(repoPath: string, portOffset: int) =
   ## Write a unique local orchestrator endpoint configuration for test isolation.
-  let basePort = OrchestratorBasePort + (getCurrentProcessId().int mod 1000)
+  let basePort = OrchestratorBasePort + (getCurrentProcessId().int mod OrchestratorPortRange)
   let orchestratorPort = basePort + portOffset
   var cfg = defaultConfig()
   cfg.endpoints.local = &"http://127.0.0.1:{orchestratorPort}"

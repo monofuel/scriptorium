@@ -2,25 +2,16 @@
 
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
-  mcport,
   scriptorium/[config, harness_claude_code, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "claude-opus-5"
   LiveMcpBasePort = 22200
-
-type
-  ServerThreadArgs = tuple[
-    httpServer: HttpMcpServer,
-    address: string,
-    port: int,
-  ]
-
-proc runHttpServer(args: ServerThreadArgs) {.thread.} =
-  args.httpServer.serve(args.port, args.address)
+  LiveMcpPortRange = 80
 
 proc mcpPort(offset: int): int =
-  result = LiveMcpBasePort + (getCurrentProcessId().int mod 1000) + offset
+  ## Return a process-specific port within this test file's reserved range.
+  result = LiveMcpBasePort + (getCurrentProcessId().int mod LiveMcpPortRange) + offset
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
@@ -91,11 +82,10 @@ suite "integration claude-code harness":
       doAssert hasClaudeAuth(),
         "Claude Code auth is required (ANTHROPIC_API_KEY or ~/.claude/.credentials.json)"
 
-      discard consumeSubmitPrSummary()
       let port = mcpPort(1)
       let endpoint = &"http://127.0.0.1:{port}"
 
-      let httpServer = createOrchestratorServer()
+      let httpServer = createAgentMcpHost()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
       waitForServerReady("127.0.0.1", port)
@@ -109,6 +99,8 @@ suite "integration claude-code harness":
         timestamp = now().utc().format("yyyyMMddHHmmss")
         nonce = &"it-claude-mcp-{getCurrentProcessId()}-{timestamp}"
       createDir(worktreePath)
+      let mcpSession = newCodingMcpSession(endpoint, "integration-claude-mcp", "integration", worktreePath)
+      defer: unregisterAgentMcpSession(mcpSession)
 
       let prompt =
         "You are running an integration test. " &
@@ -122,7 +114,7 @@ suite "integration claude-code harness":
         prompt: prompt,
         workingDir: worktreePath,
         model: integrationModel(),
-        mcpEndpoint: endpoint,
+        mcpEndpoint: mcpSession.endpoint,
         ticketId: "integration-claude-mcp",
         logRoot: tmpDir / "logs",
         hardTimeoutMs: 120_000,
@@ -134,7 +126,7 @@ suite "integration claude-code harness":
         "claude-code MCP tool call failed.\n" &
         "Command: " & runResult.command.join(" ") & "\n" &
         "Stdout:\n" & runResult.stdout
-      let consumedSummary = consumeSubmitPrSummary()
+      let consumedSummary = codingSubmission(mcpSession).summary
       doAssert consumedSummary == nonce,
         "expected submit_pr summary not captured.\n" &
         "Expected: " & nonce & "\n" &

@@ -2,25 +2,16 @@
 
 import
   std/[os, sequtils, strformat, strutils, tempfiles, times, unittest],
-  mcport,
   scriptorium/[config, harness_grok_build, mcp_server, orchestrator]
 
 const
   DefaultIntegrationModel = "grok-4.6"
   LiveMcpBasePort = 22300
-
-type
-  ServerThreadArgs = tuple[
-    httpServer: HttpMcpServer,
-    address: string,
-    port: int,
-  ]
-
-proc runHttpServer(args: ServerThreadArgs) {.thread.} =
-  args.httpServer.serve(args.port, args.address)
+  LiveMcpPortRange = 80
 
 proc mcpPort(offset: int): int =
-  result = LiveMcpBasePort + (getCurrentProcessId().int mod 1000) + offset
+  ## Return a process-specific port within this test file's reserved range.
+  result = LiveMcpBasePort + (getCurrentProcessId().int mod LiveMcpPortRange) + offset
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default model.
@@ -89,11 +80,10 @@ suite "integration grok-build harness":
       doAssert hasGrokAuth(),
         "Grok auth is required (XAI_API_KEY or ~/.grok/auth.json)"
 
-      discard consumeSubmitPrSummary()
       let port = mcpPort(1)
       let endpoint = &"http://127.0.0.1:{port}"
 
-      let httpServer = createOrchestratorServer()
+      let httpServer = createAgentMcpHost()
       var serverThread: Thread[ServerThreadArgs]
       createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
       waitForServerReady("127.0.0.1", port)
@@ -107,6 +97,8 @@ suite "integration grok-build harness":
         timestamp = now().utc().format("yyyyMMddHHmmss")
         nonce = &"it-grok-mcp-{getCurrentProcessId()}-{timestamp}"
       createDir(worktreePath)
+      let mcpSession = newCodingMcpSession(endpoint, "integration-grok-mcp", "integration", worktreePath)
+      defer: unregisterAgentMcpSession(mcpSession)
 
       let prompt =
         "You are running an integration test.\n" &
@@ -120,7 +112,7 @@ suite "integration grok-build harness":
         prompt: prompt,
         workingDir: worktreePath,
         model: integrationModel(),
-        mcpEndpoint: endpoint,
+        mcpEndpoint: mcpSession.endpoint,
         ticketId: "integration-mcp",
         logRoot: tmpDir / "logs",
         hardTimeoutMs: 180_000,
@@ -132,7 +124,7 @@ suite "integration grok-build harness":
         "grok-build MCP run failed.\n" &
         "Command: " & runResult.command.join(" ") & "\n" &
         "Stdout:\n" & runResult.stdout
-      let summary = consumeSubmitPrSummary()
+      let summary = codingSubmission(mcpSession).summary
       doAssert summary == nonce,
         "submit_pr was not recorded with the expected summary.\n" &
         "Got: " & summary & "\n" &

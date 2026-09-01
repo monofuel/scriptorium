@@ -7,7 +7,6 @@ import
 
 suite "scriptorium quest":
   setup:
-    while consumeSubmitPrSummary() != "": discard
     tickSleepOverrideMs = 0
 
   teardown:

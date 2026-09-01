@@ -2,28 +2,16 @@
 
 import
   std/[json, os, osproc, strformat, strutils, tempfiles, times, unittest],
-  mcport,
-  scriptorium/[agent_runner, config, orchestrator, prompt_builders, shared_state]
+  scriptorium/[agent_runner, config, orchestrator, prompt_builders]
 
 const
   LiveMcpBasePort = 24000
-  ServerStartupSleepMs = 250
+  LiveMcpPortRange = 80
   ReviewHardTimeoutMs = 300_000
   ReviewNoOutputTimeoutMs = 120_000
 
-type
-  ServerThreadArgs = tuple[
-    httpServer: HttpMcpServer,
-    address: string,
-    port: int,
-  ]
-
 var
-  liveServers: seq[HttpMcpServer] = @[]
-
-proc runHttpServer(args: ServerThreadArgs) {.thread.} =
-  ## Run one MCP HTTP server in a background thread.
-  args.httpServer.serve(args.port, args.address)
+  liveServers: seq[AgentMcpHost] = @[]
 
 proc integrationModel(): string =
   ## Return the configured integration model, or the default.
@@ -75,7 +63,7 @@ proc requiredAgentBinary(): string =
 
 proc mcpPort(offset: int): int =
   ## Return a deterministic local MCP port for one test offset.
-  result = LiveMcpBasePort + (getCurrentProcessId().int mod 1000) + offset
+  result = LiveMcpBasePort + (getCurrentProcessId().int mod LiveMcpPortRange) + offset
 
 proc mcpBaseUrl(port: int): string =
   ## Return the base MCP HTTP URL for one local port.
@@ -108,15 +96,13 @@ suite "integration review agent live":
     doAssert hasAgentAuth(),
       "API credentials are required for live review agent integration tests"
 
-    discard consumeReviewDecision()
-
     let port = mcpPort(1)
     let endpoint = mcpBaseUrl(port)
 
-    let httpServer = createOrchestratorServer()
+    let httpServer = createAgentMcpHost()
     var serverThread: Thread[ServerThreadArgs]
     createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
-    sleep(ServerStartupSleepMs)
+    waitForServerReady("127.0.0.1", port)
     liveServers.add(httpServer)
 
     let tmpDir = createTempDir("scriptorium_integration_review_agent_", "", getTempDir())
@@ -125,6 +111,8 @@ suite "integration review agent live":
 
     let repoPath = tmpDir / "repo"
     makeTestRepo(repoPath)
+    let mcpSession = newReviewerMcpSession(endpoint, "integration-review-agent-live")
+    defer: unregisterAgentMcpSession(mcpSession)
 
     let diffResult = execCmdEx("git -C " & quoteShell(repoPath) & " diff master...review-test-branch")
     doAssert diffResult[1] == 0, "failed to generate diff"
@@ -144,7 +132,7 @@ suite "integration review agent live":
       workingDir: repoPath,
       harness: harness,
       model: model,
-      mcpEndpoint: endpoint,
+      mcpEndpoint: mcpSession.endpoint,
       ticketId: "integration-review-agent-live",
       attempt: 1,
       skipGitRepoCheck: true,
@@ -160,14 +148,11 @@ suite "integration review agent live":
       "Exit code: " & $agentResult.exitCode & "\n" &
       "Stdout:\n" & agentResult.stdout
 
-    let decision = consumeReviewDecision()
-    doAssert decision.action == "approve" or decision.action == "request_changes",
+    let decision = reviewerSubmission(mcpSession)
+    doAssert decision.action in ["approve", "approve_with_warnings", "request_changes"],
       "review agent did not call submit_review with a valid action.\n" &
       "Action: \"" & decision.action & "\"\n" &
       "Feedback: \"" & decision.feedback & "\"\n" &
       "Stdout:\n" & agentResult.stdout
 
-    check decision.action in ["approve", "request_changes"]
-
-    let secondDecision = consumeReviewDecision()
-    check secondDecision.action == ""
+    check decision.called

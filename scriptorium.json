@@ -1,32 +1,32 @@
 {
   "agents": {
     "architect": {
-      "harness": "claude-code",
-      "model": "claude-opus-5",
+      "harness": "codex",
+      "model": "gpt-5.6-sol",
       "reasoningEffort": "",
       "hardTimeout": 7200000,
       "noOutputTimeout": 600000,
       "progressTimeout": 0
     },
     "coding": {
-      "harness": "claude-code",
-      "model": "claude-opus-5",
+      "harness": "grok-build",
+      "model": "grok-4.6",
       "reasoningEffort": "",
       "hardTimeout": 14400000,
       "noOutputTimeout": 300000,
       "progressTimeout": 600000
     },
     "manager": {
-      "harness": "claude-code",
-      "model": "claude-opus-5",
+      "harness": "codex",
+      "model": "gpt-5.6-sol",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,
       "progressTimeout": 0
     },
     "reviewer": {
-      "harness": "claude-code",
-      "model": "claude-opus-5",
+      "harness": "codex",
+      "model": "gpt-5.6-sol",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,
