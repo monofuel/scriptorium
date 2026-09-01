@@ -54,6 +54,8 @@ type
     progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: GrokBuildEventHandler
+    onProcessStarted*: ProcessStartedHandler
+    cancellationRequested*: CancellationCheck
     maxAttempts*: int
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
@@ -68,6 +70,7 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: GrokBuildTimeoutKind
+    cancelled*: bool
 
 proc sanitizePathSegment(value: string): string =
   ## Sanitize a string so it can safely be used as a path segment.
@@ -497,6 +500,8 @@ proc runGrokBuildAttempt(request: GrokBuildRunRequest, prompt: string, attemptVa
   )
   defer:
     process.close()
+  if not request.onProcessStarted.isNil:
+    request.onProcessStarted(process.processID())
 
   let inputStream = process.inputStream
   let outputFd = cint(process.outputHandle)
@@ -605,6 +610,11 @@ proc runGrokBuildAttempt(request: GrokBuildRunRequest, prompt: string, attemptVa
     if promptCompleted or acpError.len > 0:
       break
 
+    if not request.cancellationRequested.isNil and request.cancellationRequested():
+      runResult.cancelled = true
+      process.kill()
+      stopRequested = true
+
     if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and
@@ -711,6 +721,8 @@ proc runGrokBuild*(request: GrokBuildRunRequest): GrokBuildRunResult =
     inc attemptsUsed
     result.attemptCount = attemptsUsed
 
+    if result.cancelled:
+      break
     let completed = result.exitCode == 0 and result.timeoutKind == grokBuildTimeoutNone
     if completed:
       break

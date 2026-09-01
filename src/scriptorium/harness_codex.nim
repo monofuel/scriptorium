@@ -55,6 +55,8 @@ type
     progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: CodexEventHandler
+    onProcessStarted*: ProcessStartedHandler
+    cancellationRequested*: CancellationCheck
     maxAttempts*: int
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
@@ -69,6 +71,7 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: CodexTimeoutKind
+    cancelled*: bool
 
   CodexJsonEventFields = object
     name: string
@@ -615,6 +618,8 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
   )
   defer:
     process.close()
+  if not request.onProcessStarted.isNil:
+    request.onProcessStarted(process.processID())
 
   let inputStream = process.inputStream
   inputStream.write(prompt)
@@ -639,6 +644,10 @@ proc runCodexAttempt(request: CodexRunRequest, prompt: string, attemptValue: int
       request.onEvent(event)
 
   while not stopRequested:
+    if not request.cancellationRequested.isNil and request.cancellationRequested():
+      result.cancelled = true
+      process.kill()
+      stopRequested = true
     if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
@@ -708,6 +717,8 @@ proc runCodex*(request: CodexRunRequest): CodexRunResult =
     inc attemptsUsed
     result.attemptCount = attemptsUsed
 
+    if result.cancelled:
+      break
     let completed = result.exitCode == 0 and result.timeoutKind == codexTimeoutNone
     if completed:
       break

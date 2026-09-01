@@ -52,6 +52,8 @@ type
     progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: ClaudeCodeEventHandler
+    onProcessStarted*: ProcessStartedHandler
+    cancellationRequested*: CancellationCheck
     maxAttempts*: int
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
@@ -67,6 +69,7 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: ClaudeCodeTimeoutKind
+    cancelled*: bool
 
 proc sanitizePathSegment(value: string): string =
   ## Sanitize a string so it can safely be used as a path segment.
@@ -508,6 +511,8 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
   )
   defer:
     process.close()
+  if not request.onProcessStarted.isNil:
+    request.onProcessStarted(process.processID())
 
   let inputStream = process.inputStream
   inputStream.write(prompt)
@@ -532,6 +537,10 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
       request.onEvent(event)
 
   while not stopRequested:
+    if not request.cancellationRequested.isNil and request.cancellationRequested():
+      result.cancelled = true
+      process.kill()
+      stopRequested = true
     if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
@@ -610,6 +619,8 @@ proc runClaudeCode*(request: ClaudeCodeRunRequest): ClaudeCodeRunResult =
     inc attemptsUsed
     result.attemptCount = attemptsUsed
 
+    if result.cancelled:
+      break
     let completed = result.exitCode == 0 and result.timeoutKind == claudeCodeTimeoutNone
     if completed:
       break

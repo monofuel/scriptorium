@@ -220,6 +220,35 @@ printf 'done\n' > "$last_message"
       check sawToolDone
     )
 
+  test "runCodex reports and cancels only its owned process":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-cancel.sh"
+      writeExecutableScript(codexPath, """
+cat >/dev/null
+sleep 30
+""")
+
+      var
+        request = newBaseRequest(tmpDir, codexPath, "ticket-cancel")
+        startedPid = 0
+        cancelNow = false
+      request.maxAttempts = 3
+      request.onProcessStarted = proc(pid: int) =
+        ## Capture the exact child created by this request.
+        startedPid = pid
+        cancelNow = true
+      request.cancellationRequested = proc(): bool =
+        ## Cancel after the lifecycle callback identifies the child.
+        result = cancelNow
+
+      let result = runCodex(request)
+
+      check startedPid > 0
+      check result.cancelled
+      check result.exitCode != 0
+      check result.attemptCount == 1
+    )
+
   test "runCodex parses nested json event fields":
     withTempHarnessDir(proc(tmpDir: string) =
       let codexPath = tmpDir / "fake-codex-nested-events.sh"

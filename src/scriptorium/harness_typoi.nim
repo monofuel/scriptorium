@@ -52,6 +52,8 @@ type
     progressTimeoutMs*: int
     heartbeatIntervalMs*: int
     onEvent*: TypoiEventHandler
+    onProcessStarted*: ProcessStartedHandler
+    cancellationRequested*: CancellationCheck
     maxAttempts*: int
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
@@ -66,6 +68,7 @@ type
     lastMessageFile*: string
     lastMessage*: string
     timeoutKind*: TypoiTimeoutKind
+    cancelled*: bool
 
   TypoiJsonEnvelope = object
     `type`: string
@@ -371,6 +374,8 @@ proc runTypoiAttempt(request: TypoiRunRequest, prompt: string, attemptValue: int
   )
   defer:
     process.close()
+  if not request.onProcessStarted.isNil:
+    request.onProcessStarted(process.processID())
 
   let inputStream = process.inputStream
   inputStream.write(prompt)
@@ -395,6 +400,10 @@ proc runTypoiAttempt(request: TypoiRunRequest, prompt: string, attemptValue: int
       request.onEvent(event)
 
   while not stopRequested:
+    if not request.cancellationRequested.isNil and request.cancellationRequested():
+      result.cancelled = true
+      process.kill()
+      stopRequested = true
     if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
       if elapsedMs(lastOutputTime) >= heartbeatIntervalMs.int64 and elapsedMs(lastHeartbeatTime) >= heartbeatIntervalMs.int64:
@@ -461,6 +470,8 @@ proc runTypoi*(request: TypoiRunRequest): TypoiRunResult =
     inc attemptsUsed
     result.attemptCount = attemptsUsed
 
+    if result.cancelled:
+      break
     let completed = result.exitCode == 0 and result.timeoutKind == typoiTimeoutNone
     if completed:
       break

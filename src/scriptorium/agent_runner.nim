@@ -37,6 +37,8 @@ type
     continuationPrompt*: string
     continuationPromptBuilder*: ContinuationPromptBuilder
     onEvent*: AgentEventHandler
+    onProcessStarted*: ProcessStartedHandler
+    cancellationRequested*: CancellationCheck
     allowedTools*: seq[string]
 
   AgentRunResult* = object
@@ -52,6 +54,7 @@ type
     timeoutKind*: string
     ticketId*: string
     submitted*: bool
+    cancelled*: bool
 
   AgentRunner* = proc(request: AgentRunRequest): AgentRunResult
 
@@ -157,7 +160,9 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       onEvent: proc(event: CodexStreamEvent) =
         ## Forward codex streaming events to the optional agent callback.
         if not request.onEvent.isNil:
-          request.onEvent(mapCodexEvent(event))
+          request.onEvent(mapCodexEvent(event)),
+      onProcessStarted: request.onProcessStarted,
+      cancellationRequested: request.cancellationRequested,
     ))
     result = AgentRunResult(
       backend: request.harness,
@@ -170,6 +175,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessageFile: codexResult.lastMessageFile,
       lastMessage: codexResult.lastMessage,
       timeoutKind: $codexResult.timeoutKind,
+      cancelled: codexResult.cancelled,
     )
   of harnessClaudeCode:
     let claudeResult = runClaudeCode(ClaudeCodeRunRequest(
@@ -193,7 +199,9 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       onEvent: proc(event: ClaudeCodeStreamEvent) =
         ## Forward Claude Code streaming events to the optional agent callback.
         if not request.onEvent.isNil:
-          request.onEvent(mapClaudeCodeEvent(event))
+          request.onEvent(mapClaudeCodeEvent(event)),
+      onProcessStarted: request.onProcessStarted,
+      cancellationRequested: request.cancellationRequested,
     ))
     result = AgentRunResult(
       backend: request.harness,
@@ -206,6 +214,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessageFile: claudeResult.lastMessageFile,
       lastMessage: claudeResult.lastMessage,
       timeoutKind: $claudeResult.timeoutKind,
+      cancelled: claudeResult.cancelled,
     )
   of harnessTypoi:
     let typoiResult = runTypoi(TypoiRunRequest(
@@ -228,7 +237,9 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       onEvent: proc(event: TypoiStreamEvent) =
         ## Forward typoi streaming events to the optional agent callback.
         if not request.onEvent.isNil:
-          request.onEvent(mapTypoiEvent(event))
+          request.onEvent(mapTypoiEvent(event)),
+      onProcessStarted: request.onProcessStarted,
+      cancellationRequested: request.cancellationRequested,
     ))
     result = AgentRunResult(
       backend: request.harness,
@@ -241,6 +252,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessageFile: typoiResult.lastMessageFile,
       lastMessage: typoiResult.lastMessage,
       timeoutKind: $typoiResult.timeoutKind,
+      cancelled: typoiResult.cancelled,
     )
   of harnessGrokBuild:
     let grokResult = runGrokBuild(GrokBuildRunRequest(
@@ -263,7 +275,9 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       onEvent: proc(event: GrokBuildStreamEvent) =
         ## Forward grok-build streaming events to the optional agent callback.
         if not request.onEvent.isNil:
-          request.onEvent(mapGrokBuildEvent(event))
+          request.onEvent(mapGrokBuildEvent(event)),
+      onProcessStarted: request.onProcessStarted,
+      cancellationRequested: request.cancellationRequested,
     ))
     result = AgentRunResult(
       backend: request.harness,
@@ -276,4 +290,5 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
       lastMessageFile: grokResult.lastMessageFile,
       lastMessage: grokResult.lastMessage,
       timeoutKind: $grokResult.timeoutKind,
+      cancelled: grokResult.cancelled,
     )
