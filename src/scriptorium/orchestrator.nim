@@ -580,6 +580,7 @@ proc harnessBinaryName(h: Harness): string =
   of harnessCodex: "codex"
   of harnessTypoi: "typoi"
   of harnessGrokBuild: "grok"
+  of harnessHermes: "coworld-hermes-runner"
 
 proc preflightValidation*(repoPath: string) =
   ## Validate that the repo is ready for the orchestrator to run.
@@ -654,6 +655,10 @@ proc preflightValidation*(repoPath: string) =
   of harnessGrokBuild:
     hasAuth = getEnv("XAI_API_KEY").len > 0 or
               fileExists(getHomeDir() / ".grok" / "auth.json")
+
+  of harnessHermes:
+    hasAuth = getEnv("SOFTMAX_OPENROUTER_API_KEY").len > 0 or
+      fileExists(getEnv("COWORLD_HERMES_KEY_FILE"))
 
   if not hasAuth:
     stderr.writeLine("WARNING: No API credentials detected for " & binaryName & ". Set the appropriate API key environment variable.")

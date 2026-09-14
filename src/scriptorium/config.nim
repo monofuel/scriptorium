@@ -8,6 +8,7 @@ type
     harnessCodex = "codex"
     harnessTypoi = "typoi"
     harnessGrokBuild = "grok-build"
+    harnessHermes = "hermes"
 
 const
   ConfigFile = "scriptorium.json"
