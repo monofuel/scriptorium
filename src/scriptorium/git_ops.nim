@@ -1,6 +1,6 @@
 import
-  std/[locks, os, osproc, streams, strformat, strutils, times],
-  ./logging
+  std/[os, osproc, streams, strformat, strutils, times],
+  ./[logging, process_lock]
 
 const
   GitCommandTimeoutMs* = 60_000
@@ -21,27 +21,6 @@ const
   CommitLockStalenessSeconds* = 30
   CommitLockPollMs* = 500
   CommitLockMaxRetries* = 600
-
-var
-  processLock: Lock
-  processLockInitialized = false
-
-proc ensureProcessLockInitialized*() =
-  ## Initialize the global process creation lock once.
-  if not processLockInitialized:
-    initLock(processLock)
-    processLockInitialized = true
-
-proc acquireProcessLock() =
-  ## Acquire the global process lock, initializing if needed.
-  ensureProcessLockInitialized()
-  {.cast(gcsafe).}:
-    acquire(processLock)
-
-proc releaseProcessLock() =
-  ## Release the global process lock.
-  {.cast(gcsafe).}:
-    release(processLock)
 
 proc cleanStaleGitLocks*(repoPath: string) =
   ## Remove stale git lock files that may have been left behind on NFS.
@@ -77,14 +56,14 @@ proc gitRunOnce(dir: string, argsSeq: seq[string]): tuple[exitCode: int, output:
   ## Run a git subcommand once and return exit code and output.
   validateGitDir(dir)
   let allArgs = @["-C", dir] & argsSeq
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
   let rc = process.waitForExit(GitCommandTimeoutMs)
   if rc == -1 and running(process):
     process.kill()
   process.close()
-  releaseProcessLock()
+  releaseProcessCreationLock()
   if rc == -1:
     let argsStr = argsSeq.join(" ")
     raise newException(IOError, &"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
@@ -111,14 +90,14 @@ proc gitCheck*(dir: string, args: varargs[string]): int =
   ## Does NOT validate .git presence — used for probing (e.g. rev-parse --git-dir).
   ## State-modifying git commands should use gitRun instead.
   let allArgs = @["-C", dir] & @args
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   discard process.outputStream.readAll()
   result = process.waitForExit(GitCommandTimeoutMs)
   if result == -1 and running(process):
     process.kill()
   process.close()
-  releaseProcessLock()
+  releaseProcessCreationLock()
   if result == -1:
     let argsStr = (@args).join(" ")
     raise newException(IOError, &"git {argsStr} timed out after {GitCommandTimeoutMs div 1000}s")
@@ -258,7 +237,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
   while true:
     let args = @["-C", repoPath, "worktree", "add", worktreePath, branch]
 
-    acquireProcessLock()
+    acquireProcessCreationLock()
     let addProcess = startProcess(
       "git",
       args = args,
@@ -267,7 +246,7 @@ proc addWorktreeWithRecovery*(repoPath: string, worktreePath: string, branch: st
     let addOutput = addProcess.outputStream.readAll()
     let addRc = addProcess.waitForExit()
     addProcess.close()
-    releaseProcessLock()
+    releaseProcessCreationLock()
 
     if addRc == 0:
       break
@@ -289,7 +268,7 @@ proc hasPlanBranch*(repoPath: string): bool =
 proc resolveDefaultBranch*(repoPath: string): string =
   ## Dynamically detect the default branch for the repository.
   ## Checks refs/remotes/origin/HEAD first, then probes for master, main, develop.
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let symrefProcess = startProcess(
     "git",
     args = @["-C", repoPath, "symbolic-ref", "refs/remotes/origin/HEAD"],
@@ -298,7 +277,7 @@ proc resolveDefaultBranch*(repoPath: string): string =
   let symrefOutput = symrefProcess.outputStream.readAll()
   let symrefRc = symrefProcess.waitForExit()
   symrefProcess.close()
-  releaseProcessLock()
+  releaseProcessCreationLock()
   if symrefRc == 0:
     let symref = symrefOutput.strip()
     let prefix = "refs/remotes/origin/"
@@ -325,7 +304,7 @@ proc resolveDefaultBranchOrEmpty*(repoPath: string): string =
 proc defaultBranchHeadCommit*(repoPath: string): string =
   ## Return the current default branch commit SHA.
   let branch = resolveDefaultBranch(repoPath)
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let process = startProcess(
     "git",
     args = @["-C", repoPath, "rev-parse", branch],
@@ -334,7 +313,7 @@ proc defaultBranchHeadCommit*(repoPath: string): string =
   let output = process.outputStream.readAll()
   let rc = process.waitForExit()
   process.close()
-  releaseProcessLock()
+  releaseProcessCreationLock()
   if rc != 0:
     let errMsg = output.strip()
     raise newException(IOError, &"git rev-parse {branch} failed: {errMsg}")
@@ -343,12 +322,12 @@ proc defaultBranchHeadCommit*(repoPath: string): string =
 proc listGitWorktreePaths*(repoPath: string): seq[string] =
   ## Return absolute worktree paths from git worktree list.
   let allArgs = @["-C", repoPath, "worktree", "list", "--porcelain"]
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let process = startProcess("git", args = allArgs, options = {poUsePath, poStdErrToStdOut})
   let output = process.outputStream.readAll()
   let rc = process.waitForExit()
   process.close()
-  releaseProcessLock()
+  releaseProcessCreationLock()
   if rc != 0:
     raise newException(IOError, &"git worktree list failed: {output.strip()}")
 
@@ -360,7 +339,7 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
   ## Run a process and return combined stdout/stderr with its exit code.
   # Lock around startProcess and close, but not during readAll/waitForExit
   # since this is used for long-running commands like make test.
-  acquireProcessLock()
+  acquireProcessCreationLock()
   let process =
     try:
       startProcess(
@@ -370,14 +349,14 @@ proc runCommandCapture*(workingDir: string, command: string, args: seq[string], 
         options = {poUsePath, poStdErrToStdOut},
       )
     finally:
-      releaseProcessLock()
+      releaseProcessCreationLock()
   discard process.outputStream
   defer:
-    acquireProcessLock()
+    acquireProcessCreationLock()
     try:
       process.close()
     finally:
-      releaseProcessLock()
+      releaseProcessCreationLock()
   let output = process.outputStream.readAll()
   let exitCode = process.waitForExit(timeoutMs)
   if exitCode == -1 and running(process):

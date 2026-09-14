@@ -213,6 +213,32 @@ printf 'isolated\n' > "$last_message"
       check result.lastMessage.strip() == "isolated"
     )
 
+  test "runCodex uses the requested process home":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let
+        campaignHome = tmpDir / "campaign-home"
+        codexPath = tmpDir / "fake-codex-home.sh"
+      createDir(campaignHome)
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+printf '%s\n' "$HOME" > "$last_message"
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath, "ticket-home")
+      request.homeDirectory = campaignHome
+      let result = runCodex(request)
+
+      check result.exitCode == 0
+      check result.lastMessage.strip() == campaignHome
+    )
+
   test "runCodex emits heartbeat and parsed stream events":
     withTempHarnessDir(proc(tmpDir: string) =
       let codexPath = tmpDir / "fake-codex-events.sh"
@@ -468,6 +494,36 @@ done
       check result.timeoutKind == codexTimeoutHard
       check result.exitCode != 0
       check result.attemptCount == 1
+    )
+
+  test "runCodex hard timeout stops descendant processes":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let
+        codexPath = tmpDir / "fake-codex-descendant.sh"
+        heartbeatPath = tmpDir / "descendant-heartbeat.txt"
+      writeExecutableScript(codexPath, """
+cat >/dev/null
+(
+  while true; do
+    printf 'tick\n' >> """ & heartbeatPath & """
+    sleep 0.02
+  done
+) &
+wait
+""")
+
+      var request = newBaseRequest(tmpDir, codexPath,
+        "ticket-timeout-descendant")
+      request.noOutputTimeoutMs = 0
+      request.hardTimeoutMs = 250
+      let result = runCodex(request)
+
+      check result.timeoutKind == codexTimeoutHard
+      check result.exitCode != 0
+      check fileExists(heartbeatPath)
+      let sizeAfterTimeout = getFileSize(heartbeatPath)
+      sleep(200)
+      check getFileSize(heartbeatPath) == sizeAfterTimeout
     )
 
   test "runCodex includes file_path arg summary in tool events":

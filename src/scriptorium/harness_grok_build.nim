@@ -1,6 +1,7 @@
 import
-  std/[json, monotimes, os, osproc, posix, streams, strformat, strutils, times],
-  ./[common, logging, prompt_catalog]
+  std/[envvars, json, monotimes, os, osproc, posix, streams, strformat, strtabs,
+    strutils, times],
+  ./[common, logging, process_lock, prompt_catalog]
 
 const
   DefaultGrokBuildBinary = "grok"
@@ -42,6 +43,7 @@ type
   GrokBuildRunRequest* = object
     prompt*: string
     workingDir*: string
+    homeDirectory*: string
     model*: string
     reasoningEffort*: string
     mcpEndpoint*: string
@@ -491,11 +493,18 @@ proc runGrokBuildAttempt(request: GrokBuildRunRequest, prompt: string, attemptVa
   defer:
     logFile.close()
 
+  var environment = newStringTable()
+  for key, value in envPairs():
+    environment[key] = value
+  if request.homeDirectory.len > 0:
+    environment["HOME"] = request.homeDirectory
+
   # Keep stderr separate so JSON-RPC on stdout stays clean.
-  let process = startProcess(
+  let process = startProcessGuarded(
     grokBinary,
     workingDir = request.workingDir,
     args = args,
+    env = environment,
     options = {poUsePath},
   )
   defer:

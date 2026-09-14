@@ -1,6 +1,6 @@
 import
   std/[envvars, json, monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, times],
-  ./[common, config, logging, prompt_catalog]
+  ./[common, config, logging, process_lock, prompt_catalog]
 
 const
   DefaultClaudeCodeBinary = "claude"
@@ -40,6 +40,7 @@ type
   ClaudeCodeRunRequest* = object
     prompt*: string
     workingDir*: string
+    homeDirectory*: string
     model*: string
     reasoningEffort*: string
     mcpEndpoint*: string
@@ -502,8 +503,10 @@ proc runClaudeCodeAttempt(request: ClaudeCodeRunRequest, prompt: string, attempt
   for key, val in envPairs():
     if key != "CLAUDECODE":
       env[key] = val
+  if request.homeDirectory.len > 0:
+    env["HOME"] = request.homeDirectory
 
-  let process = startProcess(
+  let process = startProcessGuarded(
     claudeBinary,
     workingDir = request.workingDir,
     args = args,

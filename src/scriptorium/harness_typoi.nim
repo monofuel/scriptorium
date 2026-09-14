@@ -1,7 +1,8 @@
 import
-  std/[monotimes, os, osproc, posix, streams, strformat, strutils, times],
+  std/[envvars, monotimes, os, osproc, posix, streams, strformat, strtabs,
+    strutils, times],
   jsony,
-  ./[common, logging, prompt_catalog]
+  ./[common, logging, process_lock, prompt_catalog]
 
 const
   DefaultTypoiBinary = "typoi"
@@ -40,6 +41,7 @@ type
   TypoiRunRequest* = object
     prompt*: string
     workingDir*: string
+    homeDirectory*: string
     model*: string
     reasoningEffort*: string
     mcpEndpoint*: string
@@ -366,10 +368,17 @@ proc runTypoiAttempt(request: TypoiRunRequest, prompt: string, attemptValue: int
   defer:
     logFile.close()
 
-  let process = startProcess(
+  var environment = newStringTable()
+  for key, value in envPairs():
+    environment[key] = value
+  if request.homeDirectory.len > 0:
+    environment["HOME"] = request.homeDirectory
+
+  let process = startProcessGuarded(
     typoiBinary,
     workingDir = request.workingDir,
     args = args,
+    env = environment,
     options = {poUsePath, poStdErrToStdOut}
   )
   defer:

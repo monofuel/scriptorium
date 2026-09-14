@@ -20,6 +20,7 @@ type
   AgentRunRequest* = object
     prompt*: string
     workingDir*: string
+    homeDirectory*: string
     harness*: Harness
     model*: string
     reasoningEffort*: string
@@ -142,6 +143,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
     let codexResult = runCodex(CodexRunRequest(
       prompt: request.prompt,
       workingDir: request.workingDir,
+      homeDirectory: request.homeDirectory,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,
@@ -181,6 +183,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
     let claudeResult = runClaudeCode(ClaudeCodeRunRequest(
       prompt: request.prompt,
       workingDir: request.workingDir,
+      homeDirectory: request.homeDirectory,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,
@@ -220,6 +223,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
     let typoiResult = runTypoi(TypoiRunRequest(
       prompt: request.prompt,
       workingDir: request.workingDir,
+      homeDirectory: request.homeDirectory,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,
@@ -258,6 +262,7 @@ proc runAgent*(request: AgentRunRequest): AgentRunResult =
     let grokResult = runGrokBuild(GrokBuildRunRequest(
       prompt: request.prompt,
       workingDir: request.workingDir,
+      homeDirectory: request.homeDirectory,
       model: request.model,
       reasoningEffort: request.reasoningEffort,
       mcpEndpoint: request.mcpEndpoint,

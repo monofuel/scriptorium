@@ -1,7 +1,7 @@
 import
   std/[monotimes, os, osproc, posix, streams, strformat, strtabs, strutils, tempfiles, times],
   jsony,
-  ./[common, logging, prompt_catalog]
+  ./[common, logging, process_lock, prompt_catalog]
 
 const
   DefaultCodexBinary = "codex"
@@ -47,6 +47,7 @@ type
   CodexRunRequest* = object
     prompt*: string
     workingDir*: string
+    homeDirectory*: string
     model*: string
     reasoningEffort*: string
     mcpEndpoint*: string
@@ -132,7 +133,7 @@ proc resolveCodexAuthPath(): string =
 
   result = getHomeDir() / ".codex" / CodexAuthFileName
 
-proc createCodexProcessEnvironment(): CodexProcessEnvironment =
+proc createCodexProcessEnvironment(homeDirectory = ""): CodexProcessEnvironment =
   ## Create a temporary Codex home containing credentials but no inherited configuration.
   let runtimeRoot = getCacheDir() / "scriptorium" / "codex-homes"
   createDir(runtimeRoot)
@@ -141,6 +142,8 @@ proc createCodexProcessEnvironment(): CodexProcessEnvironment =
   result.values = newStringTable()
   for key, value in envPairs():
     result.values[key] = value
+  if homeDirectory.len > 0:
+    result.values["HOME"] = homeDirectory
   result.values[CodexHomeEnv] = result.homePath
 
   let authSourcePath = resolveCodexAuthPath()
@@ -302,11 +305,11 @@ proc runCodexMcpList*(codexBinary: string, request: CodexRunRequest): tuple[outp
   if codexBinary.len == 0:
     raise newException(ValueError, "codexBinary is required")
 
-  let environment = createCodexProcessEnvironment()
+  let environment = createCodexProcessEnvironment(request.homeDirectory)
   defer:
     removeCodexProcessEnvironment(environment)
 
-  let process = startProcess(
+  let process = startProcessGuarded(
     codexBinary,
     workingDir = request.workingDir,
     args = buildCodexMcpListArgs(request),
@@ -630,6 +633,43 @@ proc flushPendingCodexEvents(onEvent: CodexEventHandler, pendingLine: var string
     emitCodexEvent(onEvent, buildCodexStreamEvent(line))
   pendingLine = ""
 
+proc startCodexProcess(
+  codexBinary: string,
+  workingDir: string,
+  args: seq[string],
+  environment: StringTableRef,
+): Process =
+  ## Start the managed Codex launcher.
+  result = startProcessGuarded(
+    codexBinary,
+    workingDir = workingDir,
+    args = args,
+    env = environment,
+    options = {poUsePath, poStdErrToStdOut},
+  )
+
+proc stopAndCollectProcessTree(processId: int, processIds: var seq[int]) =
+  ## Freeze and collect one Linux process tree from children to parent.
+  when defined(linux):
+    if processId <= 0 or posix.kill(Pid(processId), SIGSTOP) != 0:
+      return
+    let childrenPath = &"/proc/{processId}/task/{processId}/children"
+    if fileExists(childrenPath):
+      for childValue in readFile(childrenPath).splitWhitespace():
+        let childProcessId = parseInt(childValue)
+        stopAndCollectProcessTree(childProcessId, processIds)
+    processIds.add(processId)
+
+proc killCodexProcessTree(process: Process) =
+  ## Stop every process descended from this managed Codex session.
+  when defined(linux):
+    var processIds: seq[int] = @[]
+    stopAndCollectProcessTree(process.processID(), processIds)
+    for processId in processIds:
+      discard posix.kill(Pid(processId), SIGKILL)
+  else:
+    process.kill()
+
 proc runCodexAttempt(
   request: CodexRunRequest,
   prompt: string,
@@ -682,12 +722,11 @@ proc runCodexAttempt(
   defer:
     logFile.close()
 
-  let process = startProcess(
+  let process = startCodexProcess(
     codexBinary,
-    workingDir = request.workingDir,
-    args = args,
-    env = environment,
-    options = {poUsePath, poStdErrToStdOut}
+    request.workingDir,
+    args,
+    environment,
   )
   defer:
     process.close()
@@ -719,7 +758,7 @@ proc runCodexAttempt(
   while not stopRequested:
     if not request.cancellationRequested.isNil and request.cancellationRequested():
       result.cancelled = true
-      process.kill()
+      process.killCodexProcessTree()
       stopRequested = true
     if heartbeatIntervalMs > 0 and not wrappedOnEvent.isNil:
       let now = getMonoTime()
@@ -736,17 +775,17 @@ proc runCodexAttempt(
 
     if hardTimeoutMs > 0 and elapsedMs(startTime) >= hardTimeoutMs.int64:
       result.timeoutKind = codexTimeoutHard
-      process.kill()
+      process.killCodexProcessTree()
       stopRequested = true
     if noOutputTimeoutMs > 0 and elapsedMs(lastOutputTime) >= noOutputTimeoutMs.int64:
       result.timeoutKind = codexTimeoutNoOutput
-      process.kill()
+      process.killCodexProcessTree()
       stopRequested = true
     if progressTimeoutMs > 0 and elapsedMs(lastToolTime) >= progressTimeoutMs.int64:
       # Only fire if there has been output since the last tool call (agent is alive but not progressing).
       if elapsedMs(lastOutputTime) < elapsedMs(lastToolTime):
         result.timeoutKind = codexTimeoutProgress
-        process.kill()
+        process.killCodexProcessTree()
         stopRequested = true
 
     if not streamClosed and waitForReadable(outputFd, DefaultPollIntervalMs):
@@ -781,7 +820,7 @@ proc runCodex*(request: CodexRunRequest): CodexRunResult =
   let baseAttempt = resolveAttemptBase(request)
   let maxAttempts = resolveMaxAttempts(request)
   let originalPrompt = request.prompt
-  let environment = createCodexProcessEnvironment()
+  let environment = createCodexProcessEnvironment(request.homeDirectory)
   defer:
     removeCodexProcessEnvironment(environment)
   var prompt = originalPrompt
