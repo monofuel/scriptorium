@@ -239,6 +239,74 @@ printf '%s\n' "$HOME" > "$last_message"
       check result.lastMessage.strip() == campaignHome
     )
 
+  test "native CLI items keep productive turns alive and expose messages":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-native-items.sh"
+      writeExecutableScript(codexPath, """
+last_message=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cat >/dev/null
+for step in 1 2 3 4; do
+  printf '{"type":"item.started","item":{"id":"cmd","type":"command_execution","command":"nim check bot.nim","status":"in_progress"}}\n'
+  sleep 0.2
+  printf '{"type":"item.completed","item":{"id":"cmd","type":"command_execution","command":"nim check bot.nim","status":"completed","exit_code":0}}\n'
+done
+printf '{"type":"item.completed","item":{"type":"file_change","changes":[{"path":"bot.nim","kind":"update"}],"status":"completed"}}\n'
+printf '{"type":"item.completed","item":{"type":"mcp_tool_call","server":"league","tool":"results","status":"completed"}}\n'
+printf '{"type":"item.completed","item":{"type":"web_search","query":"fixture"}}\n'
+printf '{"type":"item.completed","item":{"type":"reasoning","text":"Checked candidate."}}\n'
+printf '{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n'
+printf 'done\n' > "$last_message"
+""")
+      var
+        request = newBaseRequest(tmpDir, codexPath, "native-items")
+        events: seq[CodexStreamEvent]
+      request.progressTimeoutMs = 500
+      request.hardTimeoutMs = 5000
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Retain normalized events for observable progress assertions.
+        events.add(event)
+      let result = runCodex(request)
+      check result.exitCode == 0
+      check result.timeoutKind == codexTimeoutNone
+      check result.lastMessage.strip() == "done"
+      check events.countIt(it.kind == codexEventTool) == 11
+      check events.anyIt(it.kind == codexEventTool and "bot.nim" in it.text)
+      check events.anyIt(it.kind == codexEventTool and "league.results" in it.text)
+      check events.anyIt(it.kind == codexEventReasoning and it.text == "Checked candidate.")
+      check events.anyIt(it.kind == codexEventMessage and it.text == "done")
+    )
+
+  test "native status and error items do not disguise a lack of tool progress":
+    withTempHarnessDir(proc(tmpDir: string) =
+      let codexPath = tmpDir / "fake-codex-status-items.sh"
+      writeExecutableScript(codexPath, """
+cat >/dev/null
+printf '{"type":"item.completed","item":{"type":"error","message":"fixture error"}}\n'
+for step in $(seq 1 30); do
+  printf '{"type":"turn.started"}\n'
+  sleep 0.1
+done
+""")
+      var
+        request = newBaseRequest(tmpDir, codexPath, "native-no-progress")
+        events: seq[CodexStreamEvent]
+      request.progressTimeoutMs = 500
+      request.hardTimeoutMs = 5000
+      request.onEvent = proc(event: CodexStreamEvent) =
+        ## Distinguish provider status from productive tools.
+        events.add(event)
+      let result = runCodex(request)
+      check result.timeoutKind == codexTimeoutProgress
+      check events.countIt(it.kind == codexEventTool) == 0
+      check events.anyIt(it.kind == codexEventStatus and "fixture error" in it.text)
+    )
+
   test "runCodex emits heartbeat and parsed stream events":
     withTempHarnessDir(proc(tmpDir: string) =
       let codexPath = tmpDir / "fake-codex-events.sh"

@@ -96,6 +96,19 @@ type
     file: string
     command: string
 
+  CodexJsonChange = object
+    path: string
+
+  CodexJsonItem = object
+    `type`: string
+    text: string
+    message: string
+    command: string
+    status: string
+    server: string
+    tool: string
+    changes: seq[CodexJsonChange]
+
   CodexJsonEnvelope = object
     `type`: string
     name: string
@@ -116,6 +129,7 @@ type
     tool: CodexJsonEventFields
     data: CodexJsonEventFields
     event: CodexJsonEventFields
+    item: CodexJsonItem
 
   CodexProcessEnvironment = object
     homePath: string
@@ -554,6 +568,29 @@ proc buildCodexStreamEventFromEnvelope(
   result = CodexStreamEvent(kind: codexEventStatus, text: "", rawLine: line)
   if eventType.len == 0:
     return
+
+  if eventType.startsWith("item."):
+    let item = envelope.item
+    case item.`type`
+    of "command_execution", "file_change", "mcp_tool_call", "web_search":
+      let
+        name = if item.`type` == "mcp_tool_call": item.server & "." & item.tool
+          else: item.`type`
+        argument = if item.command.len > 0: truncateSummary(item.command)
+          elif item.changes.len > 0: truncateSummary(item.changes[0].path)
+          else: ""
+        label = if argument.len > 0: name & " " & argument else: name
+        state = if item.status.len > 0: item.status else: eventType["item.".len..^1]
+      return CodexStreamEvent(kind: codexEventTool,
+        text: buildToolEventText(eventType, label, state), rawLine: line)
+    of "agent_message":
+      return CodexStreamEvent(kind: codexEventMessage, text: item.text, rawLine: line)
+    of "reasoning":
+      return CodexStreamEvent(kind: codexEventReasoning, text: item.text, rawLine: line)
+    of "error":
+      return CodexStreamEvent(kind: codexEventStatus,
+        text: "Codex error: " & item.message, rawLine: line)
+    else: discard
 
   if eventType.contains("tool"):
     let toolName = resolveCodexToolName(envelope)
