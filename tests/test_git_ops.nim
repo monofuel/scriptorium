@@ -125,7 +125,7 @@ suite "resolveDefaultBranchOrEmpty":
   test "returns branch name for valid git repo":
     let tmp = createTempDir("resolve_branch_valid_", "", getTempDir())
     defer: removeDir(tmp)
-    gitRun(tmp, "init", "-b", "master")
+    doAssert execCmd("git -C " & quoteShell(tmp) & " init -b master") == 0
     gitRun(tmp, "config", "user.name", "Scriptorium Test")
     gitRun(tmp, "config", "user.email", "scriptorium-test@example.invalid")
     gitRun(tmp, "commit", "--allow-empty", "-m", "init")
