@@ -1,8 +1,18 @@
 ## Unit tests for architect agent continuation prompt builder wiring.
 
 import
-  std/[os, tables, unittest],
+  std/[os, posix, tables, unittest],
   scriptorium/[agent_runner, architect_agent, config, shared_state]
+
+proc withUnprivilegedRead(action: proc()) =
+  ## Exercise real permission failures even when the CI container runs as root.
+  let originalUid = geteuid()
+  if originalUid == 0 and seteuid(Uid(65534)) != 0:
+    raiseOSError(osLastError())
+  defer:
+    if originalUid == 0 and seteuid(originalUid) != 0:
+      raiseOSError(osLastError())
+  action()
 
 suite "architect agent continuationPromptBuilder":
   test "runPlanArchitectRequest sets continuationPromptBuilder":
@@ -65,7 +75,9 @@ suite "readSpecHashMarker":
       removeDir(tmpDir)
     writeFile(tmpDir / "areas" / ".spec-hash", "abc123\n")
     setFilePermissions(tmpDir / "areas" / ".spec-hash", {})
-    check readSpecHashMarker(tmpDir) == ""
+    withUnprivilegedRead(proc() =
+      ## Read without the superuser's permission bypass.
+      check readSpecHashMarker(tmpDir) == "")
 
 suite "readAreaHashes":
   test "returns empty table when file does not exist":
@@ -102,4 +114,6 @@ suite "readAreaHashes":
       removeDir(tmpDir)
     writeFile(tmpDir / "tickets" / ".area-hashes", "core:abc123\n")
     setFilePermissions(tmpDir / "tickets" / ".area-hashes", {})
-    check readAreaHashes(tmpDir).len == 0
+    withUnprivilegedRead(proc() =
+      ## Read without the superuser's permission bypass.
+      check readAreaHashes(tmpDir).len == 0)
