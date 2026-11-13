@@ -1,5 +1,5 @@
 import
-  std/[json, os, strutils],
+  std/[json, os, strutils, tables],
   jsony
 
 type
@@ -12,11 +12,11 @@ type
 
 const
   ConfigFile = "scriptorium.json"
-  DefaultArchitectModel = "claude-opus-5"
-  DefaultCodingModel = "claude-sonnet-5"
-  DefaultManagerModel = "claude-sonnet-5"
-  DefaultReviewerModel = "claude-sonnet-5"
-  DefaultAuditModel* = "claude-haiku-4-5-20251001"
+  DefaultArchitectModel = ""
+  DefaultCodingModel = ""
+  DefaultManagerModel = ""
+  DefaultReviewerModel = ""
+  DefaultAuditModel* = ""
   DefaultHarness = harnessClaudeCode
   DefaultReasoningEffort = ""
   DefaultLocalEndpoint = "http://127.0.0.1:8097"
@@ -25,7 +25,20 @@ const
   DefaultFeedbackTimeoutMs* = 7_200_000
 
 type
+  AcpAgentProfile* = object
+    command*: string
+    args*: seq[string]
+    readOnlyArgs*: seq[string]
+    env*: Table[string, string]
+    modelOption*: string
+    effortOption*: string
+    readOnlyMode*: string
+    writeMode*: string
+    authMethod*: string
+
   AgentConfig* = object
+    acpAgent*: string
+    configOptions*: Table[string, JsonNode]
     harness*: Harness
     model*: string
     reasoningEffort*: string
@@ -76,6 +89,7 @@ type
 
   ConcurrencyConfig* = object
     maxAgents*: int
+    outputBudgetMB*: int
     tokenBudgetMB*: int
 
   TimeoutConfig* = object
@@ -89,6 +103,7 @@ type
 
   Config* = object
     agents*: AgentConfigs
+    acpAgents*: Table[string, AcpAgentProfile]
     endpoints*: Endpoints
     concurrency*: ConcurrencyConfig
     timeouts*: TimeoutConfig
@@ -103,10 +118,44 @@ type
     logLevel*: string
     fileLogLevel*: string
 
+proc defaultAcpAgents*(): Table[string, AcpAgentProfile] =
+  ## Define launch profiles for the three supported ACP agents.
+  result["codex"] = AcpAgentProfile(command: "codex-acp",
+    readOnlyMode: "read-only", writeMode: "agent",
+    env: {"NO_BROWSER": "1"}.toTable())
+  result["claude"] = AcpAgentProfile(command: "claude-agent-acp",
+    readOnlyMode: "plan", writeMode: "default",
+    env: {"CLAUDE_AGENT_ACP_PROTOCOL": "v1"}.toTable())
+  result["grok"] = AcpAgentProfile(command: "grok",
+    args: @["--no-auto-update", "agent", "--no-leader", "stdio"],
+    readOnlyArgs: @["--permission-mode", "dontAsk", "--deny", "Edit",
+      "--deny", "Bash", "--deny", "MCPTool", "--no-subagents"],
+    readOnlyMode: "plan", writeMode: "default")
+
+proc profileName*(harness: Harness): string =
+  ## Translate a supported legacy harness identifier to an ACP profile.
+  case harness
+  of harnessCodex: "codex"
+  of harnessClaudeCode: "claude"
+  of harnessGrokBuild: "grok"
+  of harnessTypoi, harnessHermes:
+    raise newException(ValueError, "The " & $harness &
+      " runner was retired in v20. Configure a named acpAgents profile and select acpAgent.")
+
+proc resolveAcpProfile*(cfg: Config, agent: AgentConfig): AcpAgentProfile =
+  ## Resolve one role to its configured ACP executable and launch settings.
+  let name = if agent.acpAgent.len > 0: agent.acpAgent else: profileName(agent.harness)
+  if not cfg.acpAgents.hasKey(name):
+    raise newException(ValueError, "Unknown ACP agent profile: " & name)
+  result = cfg.acpAgents[name]
+  if result.command.strip().len == 0:
+    raise newException(ValueError, "ACP agent profile requires command: " & name)
+
 proc defaultAgentConfig(model: string, hardTimeout: int = 0,
     noOutputTimeout: int = 0, progressTimeout: int = 0): AgentConfig =
   ## Return an AgentConfig populated with default values for a given model and timeouts.
   AgentConfig(
+    acpAgent: "claude",
     harness: DefaultHarness,
     model: model,
     reasoningEffort: DefaultReasoningEffort,
@@ -118,6 +167,7 @@ proc defaultAgentConfig(model: string, hardTimeout: int = 0,
 proc defaultConfig*(): Config =
   ## Return a Config populated with default values.
   Config(
+    acpAgents: defaultAcpAgents(),
     agents: AgentConfigs(
       architect: defaultAgentConfig(DefaultArchitectModel,
         hardTimeout = 7_200_000, noOutputTimeout = 600_000),
@@ -203,12 +253,28 @@ proc deepMerge(defaults: JsonNode, user: JsonNode): JsonNode =
     result = copy(user)
 
 proc fixupHarnesses(cfg: var Config, userJson: JsonNode) =
-  ## Infer harness from model when user set model but not harness.
+  ## Translate legacy routing while giving explicit ACP profiles precedence.
   template fixup(agent: var AgentConfig, agentKey: string) =
     if userJson.hasKey("agents") and userJson["agents"].hasKey(agentKey):
       let aj = userJson["agents"][agentKey]
-      if aj.hasKey("model") and not aj.hasKey("harness"):
-        agent.harness = inferHarness(agent.model)
+      if aj.hasKey("acpAgent"):
+        if agent.acpAgent.len == 0:
+          agent.acpAgent = profileName(agent.harness)
+        case agent.acpAgent
+        of "codex": agent.harness = harnessCodex
+        of "claude": agent.harness = harnessClaudeCode
+        of "grok": agent.harness = harnessGrokBuild
+        else: discard
+      elif aj.hasKey("harness"):
+        agent.acpAgent = profileName(agent.harness)
+        stderr.writeLine("scriptorium: agents." & agentKey &
+          ".harness is deprecated; use acpAgent: " & agent.acpAgent)
+      elif aj.hasKey("model") and agent.model.len > 0:
+        let inferred = inferHarness(agent.model)
+        if inferred notin {harnessTypoi, harnessHermes}:
+          agent.harness = inferred
+          agent.acpAgent = profileName(inferred)
+      discard cfg.resolveAcpProfile(agent)
   fixup(cfg.agents.architect, "architect")
   fixup(cfg.agents.coding, "coding")
   fixup(cfg.agents.manager, "manager")
@@ -217,18 +283,8 @@ proc fixupHarnesses(cfg: var Config, userJson: JsonNode) =
 
 proc backfillEmptyFields(cfg: var Config) =
   ## Restore defaults for fields where an empty value is never meaningful.
-  let def = defaultConfig()
-  template fill(agent: var AgentConfig, defAgent: AgentConfig) =
-    if agent.model.len == 0:
-      agent.model = defAgent.model
-      agent.harness = defAgent.harness
-  fill(cfg.agents.architect, def.agents.architect)
-  fill(cfg.agents.coding, def.agents.coding)
-  fill(cfg.agents.manager, def.agents.manager)
-  fill(cfg.agents.reviewer, def.agents.reviewer)
-  fill(cfg.agents.audit, def.agents.audit)
   if cfg.endpoints.local.len == 0:
-    cfg.endpoints.local = def.endpoints.local
+    cfg.endpoints.local = DefaultLocalEndpoint
 
 proc saveConfig*(repoPath: string, cfg: Config) =
   ## Write config as pretty-printed JSON.
@@ -256,6 +312,11 @@ proc loadConfig*(repoPath: string): Config =
   result = fromJson($merged, Config)
   fixupHarnesses(result, userJson)
   backfillEmptyFields(result)
+  let concurrency = userJson.getOrDefault("concurrency")
+  if not concurrency.isNil and concurrency.kind == JObject and not concurrency.hasKey("outputBudgetMB"):
+    result.concurrency.outputBudgetMB = result.concurrency.tokenBudgetMB
+  if result.concurrency.maxAgents < 1 or result.concurrency.outputBudgetMB < 0:
+    raise newException(ValueError, "Concurrency requires maxAgents >= 1 and outputBudgetMB >= 0")
   # Apply env overrides.
   let envLogLevel = getEnv("SCRIPTORIUM_LOG_LEVEL")
   if envLogLevel.len > 0:
@@ -274,4 +335,9 @@ proc normalizeConfig*(repoPath: string) =
   let userJson = parseJson(raw)
   let defaultJson = parseJson(defaultConfig().toJson())
   let merged = deepMerge(defaultJson, userJson)
+  let loaded = loadConfig(repoPath)
+  for key in ["architect", "coding", "manager", "reviewer", "audit"]:
+    let translated = parseJson(loaded.toJson())["agents"][key]
+    merged["agents"][key]["acpAgent"] = translated["acpAgent"]
+  merged["concurrency"]["outputBudgetMB"] = %loaded.concurrency.outputBudgetMB
   writeFile(path, merged.pretty() & "\n")

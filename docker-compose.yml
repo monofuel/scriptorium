@@ -5,30 +5,18 @@ services:
     build:
       context: .
     volumes:
-      # Mount a target repo for scriptorium to work on
       - .:/workspace
-      # Pass through CLI tool credentials
       - ~/.codex:/home/scriptorium/.codex
       - ~/.claude:/home/scriptorium/.claude
       - ~/.claude.json:/home/scriptorium/.claude.json
       - ~/.grok:/home/scriptorium/.grok
-      - ~/.aws:/home/scriptorium/.aws:ro
       - ~/.ssh:/home/scriptorium/.ssh:ro
     working_dir: /workspace
     environment:
-      # Unset direct API keys — Bedrock auth uses AWS credentials only.
-      # Do NOT set these to "disabled"; Claude Code would try to use the
-      # invalid key instead of falling through to Bedrock.
-      - OPENAI_API_KEY=
-      - CODEX_API_KEY=
-      - ANTHROPIC_API_KEY=
-      - CLAUDE_CODE_USE_BEDROCK
-      - ANTHROPIC_MODEL
-      - ANTHROPIC_SMALL_FAST_MODEL
-      - AWS_PROFILE
-      - AWS_REGION
+      - OPENAI_API_KEY
+      - CODEX_API_KEY
+      - ANTHROPIC_API_KEY
       - XAI_API_KEY
-    entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["run"]
 
   dashboard:
@@ -41,24 +29,7 @@ services:
     working_dir: /workspace
     ports:
       - "8098:8098"
-    entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["dashboard"]
-
-  # discord:
-  #   init: true
-  #   build:
-  #     context: .
-  #   volumes:
-  #     - .:/workspace
-  #     - ~/.aws:/home/scriptorium/.aws:ro
-  #   working_dir: /workspace
-  #   env_file: .env
-  #   environment:
-  #     - CLAUDE_CODE_USE_BEDROCK
-  #     - AWS_PROFILE
-  #     - AWS_REGION
-  #   entrypoint: ["/app/scripts/entrypoint.sh"]
-  #   command: ["discord"]
 
   mattermost:
     init: true
@@ -67,15 +38,14 @@ services:
       context: .
     volumes:
       - .:/workspace
-      - ~/.aws:/home/scriptorium/.aws:ro
+      - ~/.codex:/home/scriptorium/.codex
+      - ~/.claude:/home/scriptorium/.claude
+      - ~/.claude.json:/home/scriptorium/.claude.json
+      - ~/.grok:/home/scriptorium/.grok
       - ~/.ssh:/home/scriptorium/.ssh:ro
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     working_dir: /workspace
     env_file: .env
     environment:
-      - CLAUDE_CODE_USE_BEDROCK
-      - AWS_PROFILE
-      - AWS_REGION
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-    entrypoint: ["/app/scripts/entrypoint.sh"]
     command: ["mattermost"]

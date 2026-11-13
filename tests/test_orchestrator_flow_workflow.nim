@@ -79,7 +79,7 @@ suite "orchestrator final v1 flow":
       else:
         raise newException(ValueError, "unexpected runner ticket id: " & request.ticketId)
 
-    runOrchestratorForTicks(tmp, 1, fakeRunner)
+    runOrchestratorForTicks(tmp, 1, reviewAwareRunner(fakeRunner))
 
     let files = planTreeFiles(tmp)
     check callOrder == @["run", "manager-01-full-flow", "0001-prediction", "0001"]
@@ -130,7 +130,7 @@ suite "orchestrator agent enqueue with fakes":
           return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", lastMessage: "ok", timeoutKind: "none")
 
       writeOrchestratorEndpointConfig(repoPath, 0)
-      runOrchestratorForTicks(repoPath, 1, fakeRunner)
+      runOrchestratorForTicks(repoPath, 1, reviewAwareRunner(fakeRunner))
 
       let files = planTreeFiles(repoPath)
       check "tickets/done/0001-first.md" in files
@@ -154,7 +154,7 @@ suite "orchestrator agent enqueue with fakes":
       proc architectGenerator(model: string, spec: string): seq[AreaDocument] =
         ## Return one deterministic area document from spec input.
         inc architectCalls
-        check model == "claude-opus-5"
+        check model.len == 0
         check "scriptorium plan" in spec
         result = @[
           AreaDocument(
@@ -261,7 +261,7 @@ suite "non-blocking tick loop":
     cfg.concurrency.maxAgents = 1
     writeScriptoriumConfig(tmp, cfg)
 
-    runOrchestratorForTicks(tmp, 1, fakeRunner)
+    runOrchestratorForTicks(tmp, 1, reviewAwareRunner(fakeRunner))
 
     check codingCalled
     let files = planTreeFiles(tmp)
@@ -317,7 +317,7 @@ suite "non-blocking tick loop":
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
     # Run enough ticks to process both tickets through full lifecycle.
-    runOrchestratorForTicks(tmp, 3, fakeRunner)
+    runOrchestratorForTicks(tmp, 3, reviewAwareRunner(fakeRunner))
 
     # runningAgentCount must stay 0 throughout (no pool slots used in serial mode).
     check maxRunningAgents == 0
@@ -382,7 +382,7 @@ suite "concurrent agent execution":
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 3, fakeRunner)
+    runOrchestratorForTicks(tmp, 3, reviewAwareRunner(fakeRunner))
 
     acquire(codingCallLock)
     let finalCount = codingCallCount
@@ -464,7 +464,7 @@ suite "concurrent agent execution":
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 3, fakeRunner)
+    runOrchestratorForTicks(tmp, 3, reviewAwareRunner(fakeRunner))
 
     acquire(tickCounterLock)
     let finalTicks = codingStartTicks
@@ -523,7 +523,7 @@ suite "concurrent agent execution":
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 4, fakeRunner)
+    runOrchestratorForTicks(tmp, 4, reviewAwareRunner(fakeRunner))
 
     acquire(callOrderLock)
     let finalOrder = callOrder
@@ -563,8 +563,8 @@ suite "concurrent agent execution":
     ticketTestWalls["0002"] = 0.0
     ticketModels["0001"] = ""
     ticketModels["0002"] = ""
-    ticketStdoutBytes["0001"] = 0
-    ticketStdoutBytes["0002"] = 0
+    ticketOutputBytes["0001"] = 0
+    ticketOutputBytes["0002"] = 0
 
     var stallCallCount = 0
     proc stallingRunner(request: AgentRunRequest): AgentRunResult =
@@ -757,7 +757,7 @@ suite "concurrent manager completion ticket ID serialization":
       else:
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 3, fakeRunner)
+    runOrchestratorForTicks(tmp, 3, reviewAwareRunner(fakeRunner))
 
     # Collect ticket files from tickets/open/ on the plan branch.
     let allFiles = planTreeFiles(tmp)
@@ -805,7 +805,7 @@ suite "token budget gates coding but allows managers":
     tickSleepOverrideMs = -1
     captureLogs = false
     capturedLogs = @[]
-    ticketStdoutBytes.clear()
+    ticketOutputBytes.clear()
 
   test "budget exceeded pauses coding agents but still spawns managers":
     let tmp = getTempDir() / "scriptorium_test_token_budget_gate"
@@ -820,11 +820,12 @@ suite "token budget gates coding but allows managers":
 
     var cfg = defaultConfig()
     cfg.concurrency.maxAgents = 4
-    cfg.concurrency.tokenBudgetMB = 1
+    cfg.concurrency.outputBudgetMB = 1
     writeScriptoriumConfig(tmp, cfg)
 
     # Pre-seed stdout bytes exceeding the 1 MB budget.
-    ticketStdoutBytes["seed"] = 2 * 1024 * 1024
+    ticketOutputBytes["seed"] = 2 * 1024 * 1024
+    recordOutputBytes(2 * 1024 * 1024)
 
     var managerInvoked = false
     var codingInvoked = false
@@ -851,7 +852,7 @@ suite "token budget gates coding but allows managers":
         callSubmitPrTool(request, "done " & request.ticketId)
         return AgentRunResult(exitCode: 0, attemptCount: 1, lastMessage: "Done.", timeoutKind: "none")
 
-    runOrchestratorForTicks(tmp, 2, fakeRunner)
+    runOrchestratorForTicks(tmp, 2, reviewAwareRunner(fakeRunner))
 
     acquire(invocationLock)
     let finalManagerInvoked = managerInvoked

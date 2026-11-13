@@ -24,7 +24,6 @@ proc formatDuration*(seconds: float): string =
 proc formatAgentRunNote*(model: string, runResult: AgentRunResult): string =
   ## Format a markdown note summarizing one coding-agent run.
   let messagePreview = truncateTail(runResult.lastMessage.strip(), AgentMessagePreviewChars)
-  let stdoutPreview = truncateTail(runResult.stdout.strip(), AgentStdoutPreviewChars)
   result =
     "## Agent Run\n" &
     fmt"- Model: {model}\n" &
@@ -33,6 +32,9 @@ proc formatAgentRunNote*(model: string, runResult: AgentRunResult): string =
     fmt"- Attempt: {runResult.attempt}\n" &
     fmt"- Attempt Count: {runResult.attemptCount}\n" &
     fmt"- Timeout: {runResult.timeoutKind}\n" &
+    &"- ACP Session: {runResult.sessionId}\n" &
+    &"- Transcript Bytes: {runResult.outputBytes}\n" &
+    &"- Failure: {runResult.failureKind} {runResult.errorMessage}\n" &
     fmt"- Log File: {runResult.logFile}\n" &
     fmt"- Last Message File: {runResult.lastMessageFile}\n"
 
@@ -43,12 +45,6 @@ proc formatAgentRunNote*(model: string, runResult: AgentRunResult): string =
       messagePreview & "\n" &
       "```\n"
 
-  if stdoutPreview.len > 0:
-    result &=
-      "\n### Agent Stdout Tail\n" &
-      "```text\n" &
-      stdoutPreview & "\n" &
-      "```\n"
 
 proc appendAgentRunNote*(ticketContent: string, model: string, runResult: AgentRunResult): string =
   ## Append a formatted coding-agent run note to a ticket markdown document.
@@ -65,7 +61,7 @@ proc formatMetricsNote*(ticketId: string, outcome: string, failureReason: string
   let testWallSeconds = int(ticketTestWalls.getOrDefault(ticketId, 0.0))
   let attemptCount = ticketAttemptCounts.getOrDefault(ticketId, 0)
   let model = ticketModels.getOrDefault(ticketId, "unknown")
-  let stdoutBytes = ticketStdoutBytes.getOrDefault(ticketId, 0)
+  let outputBytes = ticketOutputBytes.getOrDefault(ticketId, 0)
   result =
     "## Metrics\n" &
     &"- wall_time_seconds: {wallTimeSeconds}\n" &
@@ -75,7 +71,7 @@ proc formatMetricsNote*(ticketId: string, outcome: string, failureReason: string
     &"- outcome: {outcome}\n" &
     &"- failure_reason: {failureReason}\n" &
     &"- model: {model}\n" &
-    &"- stdout_bytes: {stdoutBytes}\n"
+    &"- output_bytes: {outputBytes}\n"
 
 proc appendMetricsNote*(ticketContent: string, ticketId: string, outcome: string, failureReason: string): string =
   ## Append a structured metrics section to a ticket markdown document.

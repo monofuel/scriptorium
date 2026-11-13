@@ -19,8 +19,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: treeform/setup-nim-action@v6
-      - run: nimby sync -g nimby.lock
-      - run: make test
+        with:
+          nim-version: "2.2.14"
+      - run: |
+          curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
+          sudo install -m755 "$RUNNER_TEMP/nimby" /usr/local/bin/nimby
+          sudo apt-get update
+          sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+          make setup
+      - run: make test test-arc
       - run: make build
 
   linux-binary:
@@ -31,7 +38,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: treeform/setup-nim-action@v6
-      - run: nimby sync -g nimby.lock
+        with:
+          nim-version: "2.2.14"
+      - run: |
+          curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
+          sudo install -m755 "$RUNNER_TEMP/nimby" /usr/local/bin/nimby
+          sudo apt-get update
+          sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+          make setup
       - run: make build
       - name: Package linux binary
         run: |

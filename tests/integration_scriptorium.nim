@@ -50,12 +50,12 @@ suite "scriptorium init":
       runInit(tmp, quiet = true)
 
 suite "config":
-  test "defaults to claude models with claude-code harness for all roles":
+  test "defaults to the Claude ACP agent and its advertised model":
     let cfg = defaultConfig()
-    check cfg.agents.architect.model == "claude-opus-5"
-    check cfg.agents.coding.model == "claude-sonnet-5"
-    check cfg.agents.manager.model == "claude-sonnet-5"
-    check cfg.agents.reviewer.model == "claude-sonnet-5"
+    check cfg.agents.architect.model == ""
+    check cfg.agents.coding.model == ""
+    check cfg.agents.manager.model == ""
+    check cfg.agents.reviewer.model == ""
     check cfg.agents.architect.harness == harnessClaudeCode
     check cfg.agents.coding.harness == harnessClaudeCode
     check cfg.agents.manager.harness == harnessClaudeCode
@@ -71,7 +71,7 @@ suite "config":
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
     writtenCfg.agents.architect = AgentConfig(harness: harnessClaudeCode, model: "claude-opus-5", reasoningEffort: "medium")
-    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
+    writtenCfg.agents.coding = AgentConfig(harness: harnessGrokBuild, model: "grok-code-fast-1", reasoningEffort: "high")
     writtenCfg.agents.manager = AgentConfig(harness: harnessCodex, model: "gpt-5.6-terra", reasoningEffort: "low")
     writtenCfg.endpoints.local = "http://localhost:1234/v1"
     writeScriptoriumConfig(tmp, writtenCfg)
@@ -80,7 +80,7 @@ suite "config":
     check cfg.agents.architect.model == "claude-opus-5"
     check cfg.agents.architect.harness == harnessClaudeCode
     check cfg.agents.coding.model == "grok-code-fast-1"
-    check cfg.agents.coding.harness == harnessTypoi
+    check cfg.agents.coding.harness == harnessGrokBuild
     check cfg.agents.manager.model == "gpt-5.6-terra"
     check cfg.agents.manager.harness == harnessCodex
     check cfg.agents.architect.reasoningEffort == "medium"
@@ -112,13 +112,13 @@ suite "config":
     createDir(tmp)
     defer: removeDir(tmp)
     var writtenCfg = defaultConfig()
-    writtenCfg.agents.coding = AgentConfig(harness: harnessTypoi, model: "grok-code-fast-1", reasoningEffort: "high")
+    writtenCfg.agents.coding = AgentConfig(harness: harnessGrokBuild, model: "grok-code-fast-1", reasoningEffort: "high")
     writtenCfg.agents.manager = AgentConfig()
     writeScriptoriumConfig(tmp, writtenCfg)
 
     let cfg = loadConfig(tmp)
     check cfg.agents.coding.model == "grok-code-fast-1"
-    check cfg.agents.manager.model == "claude-sonnet-5"
+    check cfg.agents.manager.model == ""
     check cfg.agents.coding.reasoningEffort == "high"
     check cfg.agents.manager.reasoningEffort == ""
 
@@ -128,9 +128,9 @@ suite "config":
     defer: removeDir(tmp)
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.architect.model == "claude-opus-5"
-    check cfg.agents.coding.model == "claude-sonnet-5"
-    check cfg.agents.manager.model == "claude-sonnet-5"
+    check cfg.agents.architect.model == ""
+    check cfg.agents.coding.model == ""
+    check cfg.agents.manager.model == ""
     check cfg.agents.architect.reasoningEffort == ""
     check cfg.agents.coding.reasoningEffort == ""
     check cfg.agents.manager.reasoningEffort == ""
@@ -248,9 +248,9 @@ suite "config":
     let cfg = loadConfig(tmp)
     check cfg.syncAgentsMd == true
 
-  test "default audit model is claude-haiku-4-5-20251001":
+  test "audit uses the agent default model":
     let cfg = defaultConfig()
-    check cfg.agents.audit.model == "claude-haiku-4-5-20251001"
+    check cfg.agents.audit.model == ""
     check cfg.agents.audit.harness == harnessClaudeCode
 
   test "audit config overrides from JSON":
@@ -293,7 +293,7 @@ suite "config":
     writeFile(tmp / "scriptorium.json", """{"agents": {"coding": {"model": "claude-sonnet-5"}}}""")
 
     let cfg = loadConfig(tmp)
-    check cfg.agents.audit.model == "claude-haiku-4-5-20251001"
+    check cfg.agents.audit.model == ""
     check cfg.agents.audit.harness == harnessClaudeCode
 
 suite "orchestrator endpoint":

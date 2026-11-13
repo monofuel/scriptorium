@@ -50,6 +50,7 @@ suite "integration orchestrator live submit_pr":
         stopProcessWithSigint(process)
 
       let completed = waitForCondition(PositiveTimeoutMs, PollIntervalMs, proc(): bool =
+        doAssert process.peekExitCode() == -1, "Orchestrator exited unexpectedly.\n" & e2eDebugContext(repoPath)
         let files = planTreeFiles(repoPath)
         doneTicketPath in files and
         openTicketPath notin files and
@@ -108,9 +109,11 @@ suite "integration orchestrator live submit_pr":
           stopProcessWithSigint(process)
 
       let runRecorded = waitForCondition(NegativeTimeoutMs, PollIntervalMs, proc(): bool =
+        doAssert process.peekExitCode() == -1, "Orchestrator exited unexpectedly.\n" & e2eDebugContext(repoPath)
         let files = planTreeFiles(repoPath)
-        if inProgressTicketPath in files and openTicketPath notin files:
-          let content = readPlanFile(repoPath, inProgressTicketPath)
+        if inProgressTicketPath in files or openTicketPath in files:
+          let recordedPath = if inProgressTicketPath in files: inProgressTicketPath else: openTicketPath
+          let content = readPlanFile(repoPath, recordedPath)
           "## Agent Run" in content
         else:
           false

@@ -89,7 +89,7 @@ suite "logging":
     check runResult.exitCode == 137
 
     let after = planCommitCount(tmp)
-    check after == before + 4
+    check after == before + 5
 
     let files = planTreeFiles(tmp)
     check "tickets/open/0032-fail.md" in files

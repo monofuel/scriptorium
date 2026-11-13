@@ -253,11 +253,20 @@ proc latestPlanCommits*(repoPath: string, count: int): seq[string] =
 
 proc callSubmitPrTool*(request: AgentRunRequest, summary: string = "") =
   ## Simulate one coding-agent submit_pr MCP tool call.
-  let arguments = if summary.len > 0: %*{"summary": summary} else: %*{}
+  let arguments = %*{"summary": (if summary.len > 0: summary else: "Completed unit fixture") }
   discard invokeAgentMcpTool(request.mcpEndpoint, "submit_pr", arguments)
 
 proc noopRunner*(request: AgentRunRequest): AgentRunResult =
-  ## Fake agent runner that returns immediately with no review decision.
-  ## When used with processMergeQueue the review agent stalls and defaults to approve.
-  discard request
+  ## Explicitly approve review requests without a live model dependency.
+  if request.logRoot.endsWith(DirSep & "review"):
+    discard invokeAgentMcpTool(request.mcpEndpoint, "submit_review", %*{"action": "approve"})
   AgentRunResult(exitCode: 0, backend: harnessCodex, timeoutKind: "none")
+
+proc reviewAwareRunner*(runner: AgentRunner): AgentRunner =
+  ## Supply a distinct review decision when a workflow fixture mocks other roles.
+  result = proc(request: AgentRunRequest): AgentRunResult =
+    ## Keep coding submissions separate from the review MCP contract.
+    if request.logRoot.endsWith(DirSep & "review"):
+      noopRunner(request)
+    else:
+      runner(request)

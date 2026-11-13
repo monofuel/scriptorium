@@ -1,5 +1,5 @@
 import
-  std/[strformat, strutils],
+  std/[os, strformat, strutils],
   ./[agent_runner, config, prompt_catalog, shared_state]
 
 type
@@ -52,19 +52,22 @@ proc classifyIntent*(runner: AgentRunner, repoPath: string,
   {.cast(gcsafe).}:
     let prompt = buildClassifierPrompt(message, history, username, devopsEnabled)
     try:
+      let cfg = loadConfig(repoPath)
       let agentResult = runner(AgentRunRequest(
         prompt: prompt,
         workingDir: repoPath,
         harness: agentCfg.harness,
+        acpAgent: agentCfg.acpAgent,
+        profile: cfg.resolveAcpProfile(agentCfg),
+        configOptions: agentCfg.configOptions,
+        sessionRoot: repoPath / ".scriptorium" / "sessions",
         model: agentCfg.model,
         reasoningEffort: agentCfg.reasoningEffort,
         noOutputTimeoutMs: agentCfg.noOutputTimeout,
         hardTimeoutMs: agentCfg.hardTimeout,
       ))
       let output = agentResult.lastMessage.strip()
-      let fallback = agentResult.stdout.strip()
-      let text = if output.len > 0: output else: fallback
-      parseIntent(text)
+      parseIntent(output)
     except CatchableError as e:
       echo &"scriptorium: intent classification failed: {e.msg}"
       intentAsk

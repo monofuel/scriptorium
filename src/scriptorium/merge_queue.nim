@@ -1,6 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
-  ./[agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
+  ./[agent_runner, agent_sessions, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
   MergeQueueInitCommitMessage = "scriptorium: initialize merge queue"
@@ -264,6 +264,10 @@ proc runReviewAgent*(
     prompt: prompt,
     workingDir: item.worktree,
     harness: cfg.agents.reviewer.harness,
+    acpAgent: cfg.agents.reviewer.acpAgent,
+    profile: cfg.resolveAcpProfile(cfg.agents.reviewer),
+    configOptions: cfg.agents.reviewer.configOptions,
+    sessionRoot: repoPath / ".scriptorium" / "sessions",
     model: cfg.agents.reviewer.model,
     reasoningEffort: cfg.agents.reviewer.reasoningEffort,
     mcpEndpoint: mcpSession.endpoint,
@@ -302,9 +306,9 @@ proc runReviewAgent*(
     let feedbackSummary = truncateTail(result.feedback.strip(), 200)
     logInfo(&"ticket {item.ticketId}: review requested changes (feedback=\"{feedbackSummary}\")")
   else:
-    logWarn(fmt"ticket {item.ticketId}: review agent stalled, defaulting to approve")
-    result.action = "approve"
-    result.feedback = ""
+    logWarn(fmt"ticket {item.ticketId}: reviewer did not submit a decision")
+    result.action = "request_changes"
+    result.feedback = "The reviewer did not call submit_review. " & agentResult.errorMessage
 
   let ticketPath = planPath / item.ticketPath
   if fileExists(ticketPath):
@@ -603,6 +607,8 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
       beginJournalTransition(planPath, "complete " & item.ticketId, doneSteps, doneCommitMsg)
       executeJournalSteps(planPath)
       completeJournalTransition(planPath)
+
+      completeSessionsForWorktree(repoPath / ".scriptorium" / "sessions", item.worktree)
 
       # Check if the completed ticket had force eval set.
       let ticketContent = readFile(planPath / doneRelPath)

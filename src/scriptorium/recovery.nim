@@ -394,8 +394,7 @@ proc runRecoveryAgent*(repoPath: string, runner: AgentRunner, testOutput: string
     fileName
   )
 
-  # Assign and execute. assignOldestOpenTicket picks up the recovery ticket.
-  let assignment = assignOldestOpenTicket(repoPath)
+  let assignment = assignOldestOpenTicket(repoPath, RecoveryAreaName)
   if assignment.inProgressTicket.len == 0:
     logWarn("recovery: failed to assign recovery ticket")
     return

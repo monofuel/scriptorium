@@ -65,12 +65,12 @@ proc formatPlanStreamEvent*(event: AgentStreamEvent): string =
       result = "[tool] " & text
     else:
       result = "[tool]"
-  of agentEventStatus:
+  of agentEventStatus, agentEventPlan:
     if text.len > 0:
       result = "[status] " & text
     else:
       result = ""
-  of agentEventMessage:
+  of agentEventMessage, agentEventUnknown:
     result = ""
 
 proc buildCodingAgentPrompt*(repoPath: string, worktreePath: string, ticketRelPath: string, ticketContent: string, priorWorkNote: string = ""): string =

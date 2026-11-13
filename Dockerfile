@@ -1,42 +1,29 @@
+FROM node:24-bookworm-slim AS node
 FROM gitea.solution-nine.monofuel.dev/monolab/monolab/monolab-nim:latest
 
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
+
+ARG NIM_VERSION=2.2.14
+ARG NIMBY_VERSION=0.2.4
+ARG BUILD_COMMIT=unknown
+ENV BUILD_COMMIT=${BUILD_COMMIT}
+RUN curl -fsSL "https://nim-lang.org/download/nim-${NIM_VERSION}-linux_x64.tar.xz" | tar -xJ -C /opt
+RUN curl -fsSL "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64" -o /usr/local/bin/nimby \
+    && chmod +x /usr/local/bin/nimby
+ENV PATH="/opt/nim-2.2.14/bin:/usr/local/bin:/app/.build/agent-tools/node_modules/.bin:${PATH}"
+
 WORKDIR /app
-
-RUN mkdir -p /etc/portage/package.use && \
-    echo 'net-libs/nodejs npm' >> /etc/portage/package.use/nodejs
-RUN emerge --quiet net-libs/nodejs \
-    && node --version \
-    && npm --version
-ARG CODEX_VERSION=0.152.0
-ARG CLAUDE_CODE_VERSION=2.1.80
-ARG GROK_VERSION=1.0.13
-RUN npm install --global \
-      @openai/codex@${CODEX_VERSION} \
-      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
-      @xai-official/grok@${GROK_VERSION} \
-    && codex --version \
-    && claude --version \
-    && grok --version
-
-COPY nimby.lock scriptorium.nimble Makefile config.nims ./
+COPY nimby.lock scriptorium.nimble Makefile config.nims package.json package-lock.json ./
 COPY src ./src
 COPY scripts ./scripts
-
-RUN echo 'path = "src"' > nim.cfg
-RUN nimby sync -g nimby.lock
-RUN make build && cp scriptorium /usr/local/bin/
-
-RUN useradd -m -s /bin/bash scriptorium && \
-    cp -r /root/.nimble /home/scriptorium/.nimble && \
-    cp -r /root/.nimby /home/scriptorium/.nimby && \
-    chown -R scriptorium:scriptorium /home/scriptorium/.nimble /home/scriptorium/.nimby
-
-ENV PATH="/home/scriptorium/.nimble/bin:${PATH}"
+RUN make setup agent-setup build && cp scriptorium /usr/local/bin/
+RUN useradd -m -s /bin/bash scriptorium \
+    && chown -R scriptorium:scriptorium /app/.build
 USER scriptorium
-
-RUN git config --global --add safe.directory /workspace && \
-    git config --global user.email "scriptorium@localhost" && \
-    git config --global user.name "Scriptorium"
-
+RUN git config --global --add safe.directory /workspace \
+    && git config --global user.email "scriptorium@localhost" \
+    && git config --global user.name "Scriptorium"
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["--help"]

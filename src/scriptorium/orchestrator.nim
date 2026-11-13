@@ -23,8 +23,15 @@ var
 
 proc handlePosixSignal(signalNumber: cint) {.noconv.} =
   ## Stop the orchestrator loop on SIGINT/SIGTERM.
-  logInfo(&"shutdown: signal {signalNumber} received")
   shouldRun = false
+
+proc waitForNextTick(durationMs: int) =
+  ## Keep idle backoff responsive to shutdown without logging in a signal handler.
+  var remaining = durationMs
+  while shouldRun and remaining > 0:
+    let interval = min(remaining, 100)
+    sleep(interval)
+    remaining -= interval
 
 proc installSignalHandlers() =
   ## Install signal handlers used by the orchestrator run loop.
@@ -243,7 +250,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       # Pause check: skip new assignments but continue merge queue and completions.
       elif isPaused(repoPath):
         logInfo("orchestrator paused, skipping new assignments")
-        let mergeProcessed = processMergeQueue(repoPath)
+        let mergeProcessed = processMergeQueue(repoPath, runner)
         if mergeProcessed:
           logInfo("merge queue: item processed (paused)")
           let cleaned = cleanupStaleTicketWorktrees(repoPath)
@@ -357,8 +364,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if not shouldRun: break
 
           # Step 6: Start coding agents (use remaining slots after managers).
-          let tokenBudgetMB = cfg.concurrency.tokenBudgetMB
-          if isTokenBudgetExceeded(tokenBudgetMB):
+          let outputBudgetMB = cfg.concurrency.outputBudgetMB
+          if isOutputBudgetExceeded(outputBudgetMB):
             codingStatus = "budget-exceeded"
           elif maxAgents <= 1:
             t0 = epochTime()
@@ -403,7 +410,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         # Step 7: Process at most one merge-queue item.
         logDebug("merge queue: processing")
         t0 = epochTime()
-        let mergeProcessed = processMergeQueue(repoPath)
+        let mergeProcessed = processMergeQueue(repoPath, runner)
         let mergeElapsed = epochTime() - t0
         logDebug(&"tick {ticks}: merge queue took {mergeElapsed:.1f}s, processed={mergeProcessed}")
         if mergeProcessed:
@@ -525,13 +532,13 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop
     if tickSleepOverrideMs >= 0:
-      sleep(tickSleepOverrideMs)
+      waitForNextTick(tickSleepOverrideMs)
     elif idle and runningAgentCount() > 0:
-      sleep(AgentPollSleepMs)
+      waitForNextTick(AgentPollSleepMs)
     elif idle:
-      sleep(IdleBackoffSleepMs)
+      waitForNextTick(IdleBackoffSleepMs)
     else:
-      sleep(IdleSleepMs)
+      waitForNextTick(IdleSleepMs)
     inc ticks
   # On shutdown, wait for running agents to complete.
   if runningAgentCount() > 0:
@@ -573,15 +580,6 @@ proc runOrchestratorForTicks*(repoPath: string, maxTicks: int, runner: AgentRunn
   runOrchestratorMainLoop(repoPath, maxTicks, runner, questMode)
   shouldRun = false
 
-proc harnessBinaryName(h: Harness): string =
-  ## Return the expected binary name for a harness.
-  case h
-  of harnessClaudeCode: "claude"
-  of harnessCodex: "codex"
-  of harnessTypoi: "typoi"
-  of harnessGrokBuild: "grok"
-  of harnessHermes: "coworld-hermes-runner"
-
 proc preflightValidation*(repoPath: string) =
   ## Validate that the repo is ready for the orchestrator to run.
   ## Exits with a clear error message if any required precondition is missing.
@@ -605,20 +603,23 @@ proc preflightValidation*(repoPath: string) =
     if not makefileContent.contains("test:"):
       errors.add("Makefile is missing a `test:` target. Add a `test` target to your Makefile.")
 
-  # 5. Agent binary is available.
   let cfg = loadConfig(repoPath)
-  let binaryName = harnessBinaryName(cfg.agents.coding.harness)
-  if findExe(binaryName).len == 0:
-    errors.add("Agent binary `" & binaryName & "` not found in PATH. Install it or update scriptorium.json.")
+  for agent in [cfg.agents.architect, cfg.agents.manager, cfg.agents.coding,
+      cfg.agents.reviewer, cfg.agents.audit]:
+    let profile = cfg.resolveAcpProfile(agent)
+    try:
+      discard executablePath(profile.command)
+    except ValueError as error:
+      errors.add(error.msg)
 
   # 6. nimby is available.
   if findExe("nimby").len == 0:
     errors.add("`nimby` not found in PATH. Install nimby for dependency management.")
 
-  # 7. nim is available and version >= 2.
+  # The compiler floor matches the pinned dependency and CI toolchains.
   let nimPath = findExe("nim")
   if nimPath.len == 0:
-    errors.add("`nim` not found in PATH. Install Nim >= 2.0.")
+    errors.add("`nim` not found in PATH. Install Nim >= 2.2.14.")
   else:
     let (nimVerOut, nimVerRc) = execCmdEx(nimPath & " --version")
     if nimVerRc != 0:
@@ -627,41 +628,18 @@ proc preflightValidation*(repoPath: string) =
       let firstLine = nimVerOut.strip().splitLines()[0]
       let versionStart = firstLine.find("Version ")
       if versionStart >= 0:
-        let versionStr = firstLine[versionStart + 8 .. ^1].strip()
-        let majorStr = versionStr.split('.')[0]
+        let versionStr = firstLine[versionStart + 8 .. ^1].splitWhitespace()[0]
+        let parts = versionStr.split('.')
         try:
-          let major = parseInt(majorStr)
-          if major < 2:
-            errors.add("Nim version " & versionStr & " is too old. Nim >= 2.0 is required.")
+          if parts.len != 3:
+            raise newException(ValueError, "Expected three version components")
+          let version = (parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]))
+          if version < (2, 2, 14):
+            errors.add("Nim version " & versionStr & " is too old. Nim >= 2.2.14 is required.")
         except ValueError:
           errors.add("Could not parse Nim version from: " & firstLine)
       else:
         errors.add("Could not parse Nim version from: " & firstLine)
-
-  # 8. Agent auth is configured (warning only).
-  var hasAuth = false
-  case cfg.agents.coding.harness
-  of harnessClaudeCode:
-    hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
-              dirExists(getHomeDir() / ".claude") or
-              getEnv("CLAUDE_CODE_USE_BEDROCK").len > 0
-  of harnessCodex:
-    hasAuth = getEnv("OPENAI_API_KEY").len > 0 or
-              getEnv("CODEX_API_KEY").len > 0 or
-              dirExists(getHomeDir() / ".codex")
-  of harnessTypoi:
-    hasAuth = getEnv("ANTHROPIC_API_KEY").len > 0 or
-              getEnv("OPENAI_API_KEY").len > 0
-  of harnessGrokBuild:
-    hasAuth = getEnv("XAI_API_KEY").len > 0 or
-              fileExists(getHomeDir() / ".grok" / "auth.json")
-
-  of harnessHermes:
-    hasAuth = getEnv("SOFTMAX_OPENROUTER_API_KEY").len > 0 or
-      fileExists(getEnv("COWORLD_HERMES_KEY_FILE"))
-
-  if not hasAuth:
-    stderr.writeLine("WARNING: No API credentials detected for " & binaryName & ". Set the appropriate API key environment variable.")
 
   if errors.len > 0:
     for err in errors:

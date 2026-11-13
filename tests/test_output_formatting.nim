@@ -42,10 +42,12 @@ suite "formatAgentRunNote":
     check note.contains("### Agent Last Message")
     check note.contains("hello world")
 
-  test "includes stdout tail section when non-empty":
-    let note = formatAgentRunNote("opus-4", makeResult(stdout = "build ok"))
-    check note.contains("### Agent Stdout Tail")
-    check note.contains("build ok")
+  test "reports transcript bytes without copying protocol output":
+    var response = makeResult(stdout = "legacy output")
+    response.outputBytes = 1234
+    let note = formatAgentRunNote("opus-4", response)
+    check "Transcript Bytes: 1234" in note
+    check "legacy output" notin note
 
   test "omits last message section when empty":
     let note = formatAgentRunNote("opus-4", makeResult(lastMessage = ""))
@@ -63,12 +65,6 @@ suite "formatAgentRunNote":
     check note.contains(expected)
     check not note.contains(long)
 
-  test "truncates long stdout to AgentStdoutPreviewChars":
-    let long = 'y'.repeat(AgentStdoutPreviewChars + 500)
-    let note = formatAgentRunNote("m", makeResult(stdout = long))
-    let expected = truncateTail(long.strip(), AgentStdoutPreviewChars)
-    check note.contains(expected)
-    check not note.contains(long)
 
 suite "appendAgentRunNote":
   test "appends run note to existing ticket content":
@@ -130,7 +126,7 @@ suite "per-ticket metrics":
     ticketCodingWalls.clear()
     ticketTestWalls.clear()
     ticketModels.clear()
-    ticketStdoutBytes.clear()
+    ticketOutputBytes.clear()
 
   test "formatMetricsNote includes all required fields for done outcome":
     let ticketId = "0042"
@@ -139,7 +135,7 @@ suite "per-ticket metrics":
     ticketCodingWalls[ticketId] = 95.0
     ticketTestWalls[ticketId] = 20.0
     ticketModels[ticketId] = "claude-sonnet-4-20250514"
-    ticketStdoutBytes[ticketId] = 8192
+    ticketOutputBytes[ticketId] = 8192
 
     let note = formatMetricsNote(ticketId, "done", "")
     check "## Metrics" in note
@@ -150,7 +146,7 @@ suite "per-ticket metrics":
     check "- outcome: done" in note
     check "- failure_reason: " in note
     check "- model: claude-sonnet-4-20250514" in note
-    check "- stdout_bytes: 8192" in note
+    check "- output_bytes: 8192" in note
 
   test "formatMetricsNote includes failure_reason for reopened outcome":
     let ticketId = "0043"
@@ -159,7 +155,7 @@ suite "per-ticket metrics":
     ticketCodingWalls[ticketId] = 50.0
     ticketTestWalls[ticketId] = 5.0
     ticketModels[ticketId] = "test-model"
-    ticketStdoutBytes[ticketId] = 1024
+    ticketOutputBytes[ticketId] = 1024
 
     let note = formatMetricsNote(ticketId, "reopened", "stall")
     check "- outcome: reopened" in note
@@ -172,7 +168,7 @@ suite "per-ticket metrics":
     ticketCodingWalls[ticketId] = 200.0
     ticketTestWalls[ticketId] = 80.0
     ticketModels[ticketId] = "test-model"
-    ticketStdoutBytes[ticketId] = 4096
+    ticketOutputBytes[ticketId] = 4096
 
     let note = formatMetricsNote(ticketId, "parked", "parked")
     check "- outcome: parked" in note
@@ -185,7 +181,7 @@ suite "per-ticket metrics":
     ticketCodingWalls[ticketId] = 25.0
     ticketTestWalls[ticketId] = 3.0
     ticketModels[ticketId] = "test-model"
-    ticketStdoutBytes[ticketId] = 512
+    ticketOutputBytes[ticketId] = 512
 
     let content = "# Test Ticket\n\nSome description."
     let updated = appendMetricsNote(content, ticketId, "done", "")
@@ -201,7 +197,7 @@ suite "per-ticket metrics":
     check "- test_wall_seconds: 0" in note
     check "- attempt_count: 0" in note
     check "- model: unknown" in note
-    check "- stdout_bytes: 0" in note
+    check "- output_bytes: 0" in note
     check "- failure_reason: timeout_hard" in note
 
   test "formatPredictionNote produces expected markdown":

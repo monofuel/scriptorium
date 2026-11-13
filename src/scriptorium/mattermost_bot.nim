@@ -91,8 +91,6 @@ proc handleChatMessage(repoPath: string, client: MostyClient, channelId: string,
 
       var reply = agentResult.lastMessage.strip()
       if reply.len == 0:
-        reply = agentResult.stdout.strip()
-      if reply.len == 0:
         reply = "(no response from architect)"
       reply
     )
@@ -127,8 +125,6 @@ proc handleAskMessage(repoPath: string, client: MostyClient, channelId: string, 
 
       var reply = agentResult.lastMessage.strip()
       if reply.len == 0:
-        reply = agentResult.stdout.strip()
-      if reply.len == 0:
         reply = "(no response from architect)"
       reply
     )
@@ -155,8 +151,6 @@ proc handleDoMessage(repoPath: string, client: MostyClient, channelId: string, m
         MattermostChatTicketId,
       )
       response = agentResult.lastMessage.strip()
-      if response.len == 0:
-        response = agentResult.stdout.strip()
       if response.len == 0:
         response = "(no response from architect)"
     except CatchableError as e:
@@ -188,8 +182,6 @@ proc handleChatResponse(repoPath: string, client: MostyClient, channelId: string
         enforceNoWrites(planPath, "scriptorium mattermost chat")
 
         var reply = agentResult.lastMessage.strip()
-        if reply.len == 0:
-          reply = agentResult.stdout.strip()
         if reply.len == 0:
           reply = "(no response)"
         reply

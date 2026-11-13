@@ -3,74 +3,46 @@ name: End-To-End Tests
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [master]
 
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  e2e:
+  test:
     runs-on: ubuntu-latest
-
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-
+          node-version: "24"
       - uses: treeform/setup-nim-action@v6
-
-      - name: Verify e2e secrets
+        with:
+          nim-version: "2.2.14"
+      - name: Require credentials for every supported backend
         run: |
-          if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "OPENAI_API_KEY secret is required for e2e tests."
-            exit 1
-          fi
-
-      - name: Install codex and claude CLIs
-        run: npm install -g @openai/codex@0.116.0 @anthropic-ai/claude-code@2.1.80
-
-      - name: Verify codex binary and features
+          test -n "$OPENAI_API_KEY"
+          test -n "$ANTHROPIC_API_KEY"
+          test -n "$XAI_API_KEY"
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+      - name: Install pinned Nimby
         run: |
-          which codex
-          codex --version
-          codex exec --help | sed -n '1,140p'
-          codex exec --help | grep -q -- '--json'
-
-      - name: Verify claude binary
-        run: |
-          which claude
-          claude --version
-
-      - name: Install system dependencies
-        run: sudo apt-get install -y libpcre3-dev
-
-      - name: Sync Nim dependencies
-        run: nimby sync -g nimby.lock
-
-      - name: Build and install typoi
-        run: |
-          NIMBY_PATHS=$(awk '{p=ENVIRON["HOME"] "/.nimby/pkgs/" $1; print "--path:" p "/src --path:" p}' nimby.lock | tr '\n' ' ')
-          nim c -d:release $NIMBY_PATHS -o:$HOME/.nimby/bin/typoi ~/.nimby/pkgs/Typos/src/typoi.nim
-          echo "$HOME/.nimby/bin" >> $GITHUB_PATH
-
-      - name: Run e2e tests
-        run: make e2e-test
-
-      - name: Upload e2e debug artifacts
+          curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
+          sudo install -m755 "$RUNNER_TEMP/nimby" /usr/local/bin/nimby
+      - run: make setup agent-setup build
+      - run: make e2e-test
+      - name: Upload diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-debug-artifacts
-          if-no-files-found: ignore
+          name: e2e-diagnostics
           path: |
-            /tmp/scriptorium
-            /tmp/scriptorium-plan-logs
+            .build/test-results
+            .build/live

@@ -44,7 +44,7 @@ suite "orchestrator coding agent execution":
     let after = planCommitCount(tmp)
 
     check callCount == 2
-    check capturedRequest.model == "claude-sonnet-5"
+    check capturedRequest.model.len == 0
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.mcpEndpoint.startsWith("http://127.0.0.1:19042/agents/")
     check capturedRequest.workingDir == assignment.worktree
@@ -62,7 +62,7 @@ suite "orchestrator coding agent execution":
     )
     check ticketRc == 0
     check "## Agent Run" in ticketContent
-    check "- Model: claude-sonnet-5" in ticketContent
+    check "- Model:" in ticketContent
     check "- Exit Code: 0" in ticketContent
 
     let commits = latestPlanCommits(tmp, 4)
@@ -405,7 +405,7 @@ suite "orchestrator merge queue":
         sawParkCommit = true
     check sawParkCommit
 
-  test "processMergeQueue review stall defaults to approve":
+  test "processMergeQueue missing review decision reopens the ticket":
     let tmp = getTempDir() / "scriptorium_test_review_stall"
     makeInitializedTestRepo(tmp)
     defer: removeDir(tmp)
@@ -418,18 +418,21 @@ suite "orchestrator merge queue":
     runCmdOrDie("git -C " & quoteShell(assignment.worktree) & " commit -m ticket-output")
     discard enqueueMergeRequest(tmp, assignment, "stall test")
 
-    let processed = processMergeQueue(tmp, noopRunner)
+    let stalled: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Simulate a reviewer that exits without submitting a decision.
+      AgentRunResult(exitCode: 0)
+    let processed = processMergeQueue(tmp, stalled)
     check processed
 
     let files = planTreeFiles(tmp)
-    check "tickets/done/0001-first.md" in files
+    check "tickets/open/0001-first.md" in files
     check "tickets/in-progress/0001-first.md" notin files
 
     let (ticketContent, ticketRc) = execCmdEx(
-      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/done/0001-first.md"
+      "git -C " & quoteShell(tmp) & " show scriptorium/plan:tickets/open/0001-first.md"
     )
     check ticketRc == 0
-    check "**Review:** approved" in ticketContent
+    check "submit_review" in ticketContent
 
   test "processMergeQueue review captures reasoning from message events":
     let tmp = getTempDir() / "scriptorium_test_review_reasoning"

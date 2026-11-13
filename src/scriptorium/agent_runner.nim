@@ -1,246 +1,59 @@
 import
-  std/strformat,
-  ./[common, config, harness_claude_code, harness_codex, harness_grok_build, harness_typoi, agent_runner_types, harness_hermes]
+  ./[acp_runtime, agent_runner_types, common]
 
-export agent_runner_types
+export agent_runner_types, acp_runtime
 
-proc mapCodexEvent(event: CodexStreamEvent): AgentStreamEvent =
-  ## Convert one codex stream event into an agent stream event.
-  result = AgentStreamEvent(
-    text: event.text,
-    rawLine: event.rawLine,
-  )
-  case event.kind
-  of codexEventHeartbeat:
-    result.kind = agentEventHeartbeat
-  of codexEventReasoning:
-    result.kind = agentEventReasoning
-  of codexEventTool:
-    result.kind = agentEventTool
-  of codexEventStatus:
-    result.kind = agentEventStatus
-  of codexEventMessage:
-    result.kind = agentEventMessage
-
-proc mapClaudeCodeEvent(event: ClaudeCodeStreamEvent): AgentStreamEvent =
-  ## Convert one Claude Code stream event into an agent stream event.
-  result = AgentStreamEvent(
-    text: event.text,
-    rawLine: event.rawLine,
-  )
-  case event.kind
-  of claudeCodeEventHeartbeat:
-    result.kind = agentEventHeartbeat
-  of claudeCodeEventReasoning:
-    result.kind = agentEventReasoning
-  of claudeCodeEventTool:
-    result.kind = agentEventTool
-  of claudeCodeEventStatus:
-    result.kind = agentEventStatus
-  of claudeCodeEventMessage:
-    result.kind = agentEventMessage
-
-proc mapTypoiEvent(event: TypoiStreamEvent): AgentStreamEvent =
-  ## Convert one typoi stream event into an agent stream event.
-  result = AgentStreamEvent(
-    text: event.text,
-    rawLine: event.rawLine,
-  )
-  case event.kind
-  of typoiEventHeartbeat:
-    result.kind = agentEventHeartbeat
-  of typoiEventReasoning:
-    result.kind = agentEventReasoning
-  of typoiEventTool:
-    result.kind = agentEventTool
-  of typoiEventStatus:
-    result.kind = agentEventStatus
-  of typoiEventMessage:
-    result.kind = agentEventMessage
-
-proc mapGrokBuildEvent(event: GrokBuildStreamEvent): AgentStreamEvent =
-  ## Convert one grok-build stream event into an agent stream event.
-  result = AgentStreamEvent(
-    text: event.text,
-    rawLine: event.rawLine,
-  )
-  case event.kind
-  of grokBuildEventHeartbeat:
-    result.kind = agentEventHeartbeat
-  of grokBuildEventReasoning:
-    result.kind = agentEventReasoning
-  of grokBuildEventTool:
-    result.kind = agentEventTool
-  of grokBuildEventStatus:
-    result.kind = agentEventStatus
-  of grokBuildEventMessage:
-    result.kind = agentEventMessage
+type
+  ConversationRunner* = ref object
+    runner*: AgentRunner
+    conversation: AgentConversation
 
 proc runAgent*(request: AgentRunRequest): AgentRunResult =
-  ## Run the configured agent backend for one coding request.
-  if request.workingDir.len == 0:
-    raise newException(ValueError, "workingDir is required")
-  if request.model.len == 0:
-    raise newException(ValueError, "model is required")
+  ## Bound transient retries centrally while retaining a native conversation.
+  var conversation: AgentConversation
+  defer: conversation.close()
+  var
+    turn = request
+    attempts = 0
+    bytes = 0
+  while attempts < max(request.maxAttempts, 1):
+    turn.attempt = max(request.attempt, 1) + attempts
+    result = runInConversation(conversation, turn)
+    inc attempts
+    bytes += result.outputBytes
+    if result.failureKind notin {failureTimeout, failureTransport}: break
+    if result.failureKind == failureTransport: conversation.close()
+    if not request.continuationPromptBuilder.isNil:
+      turn.prompt = request.continuationPromptBuilder(request.workingDir) & "\n" & request.prompt
+    elif request.continuationPrompt.len > 0:
+      turn.prompt = request.continuationPrompt
+  result.attemptCount = attempts
+  result.outputBytes = bytes
 
-  case request.harness
-  of harnessCodex:
-    let codexResult = runCodex(CodexRunRequest(
-      prompt: request.prompt,
-      workingDir: request.workingDir,
-      homeDirectory: request.homeDirectory,
-      model: request.model,
-      reasoningEffort: request.reasoningEffort,
-      mcpEndpoint: request.mcpEndpoint,
-      ticketId: request.ticketId,
-      attempt: request.attempt,
-      codexBinary: request.binary,
-      skipGitRepoCheck: request.skipGitRepoCheck,
-      logRoot: request.logRoot,
-      noOutputTimeoutMs: request.noOutputTimeoutMs,
-      hardTimeoutMs: request.hardTimeoutMs,
-      progressTimeoutMs: request.progressTimeoutMs,
-      heartbeatIntervalMs: request.heartbeatIntervalMs,
-      maxAttempts: request.maxAttempts,
-      continuationPrompt: request.continuationPrompt,
-      continuationPromptBuilder: request.continuationPromptBuilder,
-      onEvent: proc(event: CodexStreamEvent) =
-        ## Forward codex streaming events to the optional agent callback.
-        if not request.onEvent.isNil:
-          request.onEvent(mapCodexEvent(event)),
-      onProcessStarted: request.onProcessStarted,
-      cancellationRequested: request.cancellationRequested,
-    ))
-    result = AgentRunResult(
-      backend: request.harness,
-      command: codexResult.command,
-      exitCode: codexResult.exitCode,
-      attempt: codexResult.attempt,
-      attemptCount: codexResult.attemptCount,
-      stdout: codexResult.stdout,
-      logFile: codexResult.logFile,
-      lastMessageFile: codexResult.lastMessageFile,
-      lastMessage: codexResult.lastMessage,
-      timeoutKind: $codexResult.timeoutKind,
-      cancelled: codexResult.cancelled,
-    )
-  of harnessHermes:
-    result = runHermes(request)
-  of harnessClaudeCode:
-    let claudeResult = runClaudeCode(ClaudeCodeRunRequest(
-      prompt: request.prompt,
-      workingDir: request.workingDir,
-      homeDirectory: request.homeDirectory,
-      model: request.model,
-      reasoningEffort: request.reasoningEffort,
-      mcpEndpoint: request.mcpEndpoint,
-      ticketId: request.ticketId,
-      attempt: request.attempt,
-      claudeCodeBinary: request.binary,
-      logRoot: request.logRoot,
-      noOutputTimeoutMs: request.noOutputTimeoutMs,
-      hardTimeoutMs: request.hardTimeoutMs,
-      progressTimeoutMs: request.progressTimeoutMs,
-      heartbeatIntervalMs: request.heartbeatIntervalMs,
-      maxAttempts: request.maxAttempts,
-      continuationPrompt: request.continuationPrompt,
-      continuationPromptBuilder: request.continuationPromptBuilder,
-      allowedTools: request.allowedTools,
-      onEvent: proc(event: ClaudeCodeStreamEvent) =
-        ## Forward Claude Code streaming events to the optional agent callback.
-        if not request.onEvent.isNil:
-          request.onEvent(mapClaudeCodeEvent(event)),
-      onProcessStarted: request.onProcessStarted,
-      cancellationRequested: request.cancellationRequested,
-    ))
-    result = AgentRunResult(
-      backend: request.harness,
-      command: claudeResult.command,
-      exitCode: claudeResult.exitCode,
-      attempt: claudeResult.attempt,
-      attemptCount: claudeResult.attemptCount,
-      stdout: claudeResult.stdout,
-      logFile: claudeResult.logFile,
-      lastMessageFile: claudeResult.lastMessageFile,
-      lastMessage: claudeResult.lastMessage,
-      timeoutKind: $claudeResult.timeoutKind,
-      cancelled: claudeResult.cancelled,
-    )
-  of harnessTypoi:
-    let typoiResult = runTypoi(TypoiRunRequest(
-      prompt: request.prompt,
-      workingDir: request.workingDir,
-      homeDirectory: request.homeDirectory,
-      model: request.model,
-      reasoningEffort: request.reasoningEffort,
-      mcpEndpoint: request.mcpEndpoint,
-      ticketId: request.ticketId,
-      attempt: request.attempt,
-      typoiBinary: request.binary,
-      logRoot: request.logRoot,
-      noOutputTimeoutMs: request.noOutputTimeoutMs,
-      hardTimeoutMs: request.hardTimeoutMs,
-      progressTimeoutMs: request.progressTimeoutMs,
-      heartbeatIntervalMs: request.heartbeatIntervalMs,
-      maxAttempts: request.maxAttempts,
-      continuationPrompt: request.continuationPrompt,
-      continuationPromptBuilder: request.continuationPromptBuilder,
-      onEvent: proc(event: TypoiStreamEvent) =
-        ## Forward typoi streaming events to the optional agent callback.
-        if not request.onEvent.isNil:
-          request.onEvent(mapTypoiEvent(event)),
-      onProcessStarted: request.onProcessStarted,
-      cancellationRequested: request.cancellationRequested,
-    ))
-    result = AgentRunResult(
-      backend: request.harness,
-      command: typoiResult.command,
-      exitCode: typoiResult.exitCode,
-      attempt: typoiResult.attempt,
-      attemptCount: typoiResult.attemptCount,
-      stdout: typoiResult.stdout,
-      logFile: typoiResult.logFile,
-      lastMessageFile: typoiResult.lastMessageFile,
-      lastMessage: typoiResult.lastMessage,
-      timeoutKind: $typoiResult.timeoutKind,
-      cancelled: typoiResult.cancelled,
-    )
-  of harnessGrokBuild:
-    let grokResult = runGrokBuild(GrokBuildRunRequest(
-      prompt: request.prompt,
-      workingDir: request.workingDir,
-      homeDirectory: request.homeDirectory,
-      model: request.model,
-      reasoningEffort: request.reasoningEffort,
-      mcpEndpoint: request.mcpEndpoint,
-      ticketId: request.ticketId,
-      attempt: request.attempt,
-      grokBuildBinary: request.binary,
-      logRoot: request.logRoot,
-      noOutputTimeoutMs: request.noOutputTimeoutMs,
-      hardTimeoutMs: request.hardTimeoutMs,
-      progressTimeoutMs: request.progressTimeoutMs,
-      heartbeatIntervalMs: request.heartbeatIntervalMs,
-      maxAttempts: request.maxAttempts,
-      continuationPrompt: request.continuationPrompt,
-      continuationPromptBuilder: request.continuationPromptBuilder,
-      onEvent: proc(event: GrokBuildStreamEvent) =
-        ## Forward grok-build streaming events to the optional agent callback.
-        if not request.onEvent.isNil:
-          request.onEvent(mapGrokBuildEvent(event)),
-      onProcessStarted: request.onProcessStarted,
-      cancellationRequested: request.cancellationRequested,
-    ))
-    result = AgentRunResult(
-      backend: request.harness,
-      command: grokResult.command,
-      exitCode: grokResult.exitCode,
-      attempt: grokResult.attempt,
-      attemptCount: grokResult.attemptCount,
-      stdout: grokResult.stdout,
-      logFile: grokResult.logFile,
-      lastMessageFile: grokResult.lastMessageFile,
-      lastMessage: grokResult.lastMessage,
-      timeoutKind: $grokResult.timeoutKind,
-      cancelled: grokResult.cancelled,
-    )
+proc requireAgentCompleted*(response: AgentRunResult) =
+  ## Fail explicitly when a command did not complete its ACP operation.
+  if response.exitCode != 0:
+    raise newException(IOError, "ACP operation failed (" & $response.failureKind &
+      "): " & response.errorMessage & "; transcript: " & response.logFile)
+
+proc newConversationRunner*(fallback: AgentRunner, resumeSessionId = "",
+    cancellationRequested: CancellationCheck = nil): ConversationRunner =
+  ## Reuse native sessions while retaining injected runners for isolated tests.
+  new(result)
+  let state = result
+  if fallback == runAgent:
+    state.runner = proc(request: AgentRunRequest): AgentRunResult =
+      ## Keep one compatible conversation on the calling application thread.
+      var configured = request
+      configured.resumeSessionId = resumeSessionId
+      if not cancellationRequested.isNil:
+        configured.cancellationRequested = cancellationRequested
+      runInConversation(state.conversation, configured)
+  else:
+    state.runner = fallback
+
+proc close*(state: ConversationRunner) =
+  ## Release the native connection and the callback's captured ownership cycle.
+  if state.isNil: return
+  state.conversation.close()
+  state.runner = nil

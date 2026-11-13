@@ -66,10 +66,14 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
   let mcpSession = newManagerMcpSession(cfg.endpoints.local, areaId)
   block:
     defer: unregisterAgentMcpSession(mcpSession)
-    discard runner(AgentRunRequest(
+    let response = runner(AgentRunRequest(
       prompt: prompt,
       workingDir: repoPath,
       harness: cfg.agents.manager.harness,
+      acpAgent: cfg.agents.manager.acpAgent,
+      profile: cfg.resolveAcpProfile(cfg.agents.manager),
+      configOptions: cfg.agents.manager.configOptions,
+      sessionRoot: repoPath / ".scriptorium" / "sessions",
       model: cfg.agents.manager.model,
       reasoningEffort: cfg.agents.manager.reasoningEffort,
       mcpEndpoint: mcpSession.endpoint,
@@ -85,6 +89,7 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
       onEvent: proc(event: AgentStreamEvent) =
         forwardAgentEvent("manager", areaId, event),
     ))
+    response.requireAgentCompleted()
   result = managerSubmission(mcpSession).tickets
 
 proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,

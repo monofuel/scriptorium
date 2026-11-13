@@ -1,0 +1,12 @@
+{
+  "name": "scriptorium-agent-tools",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "2.6.0",
+    "@agentclientprotocol/claude-agent-acp": "0.106.0",
+    "@openai/codex": "0.167.2",
+    "@anthropic-ai/claude-code": "2.1.323",
+    "@xai-official/grok": "1.0.77"
+  }
+}

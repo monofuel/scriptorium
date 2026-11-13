@@ -5,7 +5,8 @@ import
   mcport,
   mummy,
   mummy/routers,
-  webby/httpheaders
+  webby/httpheaders,
+  ./agent_sessions
 
 const
   OrchestratorServerName = "scriptorium-orchestrator"
@@ -61,6 +62,7 @@ var
   shutdownLock: Lock
   shutdownCond: Cond
   shutdownLockInitialized = false
+  shutdownRequested = false
 
 proc ensureAgentMcpLockInitialized() {.gcsafe.} =
   ## Initialize the scoped MCP session registry lock once.
@@ -78,7 +80,8 @@ proc ensureShutdownLockInitialized*() =
 proc signalServerShutdown*() =
   ## Signal the server shutdown monitor to close the HTTP server.
   acquire(shutdownLock)
-  signal(shutdownCond)
+  shutdownRequested = true
+  broadcast(shutdownCond)
   release(shutdownLock)
 
 proc normalizedEndpointBase(endpoint: string): string =
@@ -149,6 +152,16 @@ proc recordRequestMethod(session: AgentMcpSession, requestBody: string) {.gcsafe
     withLock agentMcpLock:
       session.requestMethods.add(methodName)
 
+proc codingReceiptPath(worktree: string): string =
+  ## Locate the durable completion receipt inside managed ticket state.
+  runtimeStateDirectory(worktree) / "submission.json"
+
+proc acknowledgeCodingSubmission*(session: AgentMcpSession) =
+  ## Mark a durable receipt consumed after its merge-queue transition commits.
+  let content = $(%*{"ticketId": session.ticketId, "branch": session.branch,
+    "summary": session.summary, "pending": false})
+  atomicRuntimeWrite(codingReceiptPath(session.worktree), content)
+
 proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMcpSession =
   ## Create and register a coding-agent MCP server bound to one ticket.
   let session = AgentMcpSession(
@@ -158,6 +171,13 @@ proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMc
     worktree: worktree,
     server: newMcpServer(OrchestratorServerName & "-coding", OrchestratorServerVersion),
   )
+  let receiptPath = codingReceiptPath(worktree)
+  if fileExists(receiptPath):
+    let receipt = parseFile(receiptPath)
+    if receipt["ticketId"].getStr() == ticketId and receipt["branch"].getStr() == branch and
+        receipt["pending"].getBool():
+      session.completionCalled = true
+      session.summary = receipt["summary"].getStr()
   let tool = McpTool(
     name: "submit_pr",
     description: "Signal that the assigned ticket is complete and ready for review",
@@ -166,16 +186,23 @@ proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMc
       "properties": {
         "summary": {
           "type": "string",
-          "description": "Optional short summary of changes"
+          "description": "Short summary of the completed changes",
+          "minLength": 1
         }
       },
-      "required": [],
+      "required": ["summary"],
       "additionalProperties": false
     },
   )
   let handler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
-    let summary = if arguments.hasKey("summary"): arguments["summary"].getStr() else: ""
+    if arguments.isNil or arguments.kind != JObject:
+      raise newException(ValueError, "submit_pr requires an object with a nonempty summary")
+    let summary = arguments.getOrDefault("summary").getStr().strip()
+    if summary.len == 0:
+      raise newException(ValueError, "submit_pr requires a nonempty summary; describe the completed changes")
     discard recordCompletion(session, proc() {.gcsafe.} =
+      atomicRuntimeWrite(receiptPath, $(%*{"ticketId": ticketId, "branch": branch,
+        "summary": summary, "pending": true}))
       session.summary = summary
     )
     %*"Merge request recorded."
@@ -351,7 +378,7 @@ proc respondWithMcpResult(request: Request, mcpResult: McpResult) =
   else:
     request.respond(200, headers, mcpResult.response.toJson())
 
-proc createAgentMcpHost*(): AgentMcpHost =
+proc newAgentHttpServer(): mummy.Server =
   ## Create the shared HTTP transport host for scoped agent MCP servers.
   ensureAgentMcpLockInitialized()
   var router: Router
@@ -374,23 +401,32 @@ proc createAgentMcpHost*(): AgentMcpHost =
     recordRequestMethod(session, request.body)
     respondWithMcpResult(request, session.server.handleRequest(request.body))
   )
-  result = AgentMcpHost(httpServer: newServer(router))
+  result = newServer(router, workerThreads = 4)
+
+proc createAgentMcpHost*(): AgentMcpHost =
+  ## Allocate a host while leaving Mummy allocations on the serving thread.
+  ensureAgentMcpLockInitialized()
+  ensureShutdownLockInitialized()
+  withLock shutdownLock:
+    shutdownRequested = false
+  AgentMcpHost()
 
 proc shutdownMonitor(server: mummy.Server) {.thread.} =
-  ## Wait for shutdown without closing Mummy's unsafe destroy path.
-  acquire(shutdownLock)
-  while server != nil:
-    wait(shutdownCond, shutdownLock)
-    break
-  release(shutdownLock)
+  ## Close a listening server through Mummy's documented cross-thread signal.
+  withLock shutdownLock:
+    while not shutdownRequested:
+      wait(shutdownCond, shutdownLock)
+  server.close()
 
 proc runHttpServer*(args: ServerThreadArgs) {.thread.} =
-  ## Run the scoped MCP HTTP host in a background thread.
-  ensureShutdownLockInitialized()
+  ## Construct and destroy Mummy on its owner thread with bounded HTTP workers.
+  let server = newAgentHttpServer()
+  args.httpServer.httpServer = server
   var monitorThread: Thread[mummy.Server]
-  createThread(monitorThread, shutdownMonitor, args.httpServer.httpServer)
-  args.httpServer.httpServer.serve(Port(args.port), args.address)
+  createThread(monitorThread, shutdownMonitor, server)
+  server.serve(Port(args.port), args.address)
   joinThread(monitorThread)
+  args.httpServer.httpServer = nil
 
 proc waitForServerReady*(address: string, port: int, timeoutMs: int = ServerReadyTimeoutMs) =
   ## Poll the MCP host health endpoint until it responds or timeout is reached.

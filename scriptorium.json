@@ -1,44 +1,44 @@
 {
   "agents": {
     "architect": {
-      "harness": "codex",
-      "model": "gpt-5.6-sol",
+      "model": "",
       "reasoningEffort": "",
       "hardTimeout": 7200000,
       "noOutputTimeout": 600000,
-      "progressTimeout": 0
+      "progressTimeout": 0,
+      "acpAgent": "codex"
     },
     "coding": {
-      "harness": "grok-build",
-      "model": "grok-4.6",
+      "model": "",
       "reasoningEffort": "",
       "hardTimeout": 14400000,
       "noOutputTimeout": 300000,
-      "progressTimeout": 600000
+      "progressTimeout": 600000,
+      "acpAgent": "grok"
     },
     "manager": {
-      "harness": "codex",
-      "model": "gpt-5.6-sol",
+      "model": "",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,
-      "progressTimeout": 0
+      "progressTimeout": 0,
+      "acpAgent": "codex"
     },
     "reviewer": {
-      "harness": "codex",
-      "model": "gpt-5.6-sol",
+      "model": "",
       "reasoningEffort": "",
       "hardTimeout": 3600000,
       "noOutputTimeout": 300000,
-      "progressTimeout": 0
+      "progressTimeout": 0,
+      "acpAgent": "codex"
     },
     "audit": {
-      "harness": "claude-code",
-      "model": "claude-haiku-4-5-20251001",
+      "model": "",
       "reasoningEffort": "",
       "hardTimeout": 0,
       "noOutputTimeout": 0,
-      "progressTimeout": 0
+      "progressTimeout": 0,
+      "acpAgent": "claude"
     }
   },
   "endpoints": {
@@ -46,7 +46,7 @@
   },
   "concurrency": {
     "maxAgents": 8,
-    "tokenBudgetMB": 0
+    "outputBudgetMB": 0
   },
   "timeouts": {
     "codingAgentHardTimeoutMs": 14400000,

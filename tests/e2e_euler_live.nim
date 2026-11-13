@@ -55,6 +55,7 @@ suite "integration e2e euler live":
         stopProcessWithSigint(process)
 
       let completed = waitForCondition(PositiveTimeoutMs, PollIntervalMs, proc(): bool =
+        doAssert process.peekExitCode() == -1, "Orchestrator exited unexpectedly.\n" & e2eDebugContext(repoPath)
         let files = planTreeFiles(repoPath)
         let doneTickets = files.filterIt(it.startsWith("tickets/done/") and it.endsWith(".md"))
         let (output, rc) = execCmdEx("git -C " & quoteShell(repoPath) & " show master:multiples.nim")

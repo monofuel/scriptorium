@@ -45,10 +45,15 @@ proc runPlanArchitectRequest*(
   ## Run one architect planning pass with shared harness settings.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+  let cfg = loadConfig(repoPath)
   result = runner(AgentRunRequest(
     prompt: prompt,
     workingDir: planPath,
     harness: agentCfg.harness,
+    acpAgent: agentCfg.acpAgent,
+    profile: cfg.resolveAcpProfile(agentCfg),
+    configOptions: agentCfg.configOptions,
+    sessionRoot: repoPath / ".scriptorium" / "sessions",
     model: agentCfg.model,
     reasoningEffort: agentCfg.reasoningEffort,
     ticketId: ticketId,
@@ -61,6 +66,8 @@ proc runPlanArchitectRequest*(
     maxAttempts: PlanDefaultMaxAttempts,
     onEvent: onEvent,
     allowedTools: allowedTools,
+    accessPolicy: (if allowedTools.len > 0: accessReadOnly else: accessRestricted),
+    allowedWritePaths: @[PlanSpecPath, PlanTicketsOpenDir],
     continuationPromptBuilder: buildAgentsReinjectPrompt,
   ))
 
@@ -76,10 +83,15 @@ proc runDoArchitectRequest*(
   ## Run one architect "do" pass with full repo access (not plan worktree).
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+  let cfg = loadConfig(repoPath)
   result = runner(AgentRunRequest(
     prompt: prompt,
     workingDir: repoPath,
     harness: agentCfg.harness,
+    acpAgent: agentCfg.acpAgent,
+    profile: cfg.resolveAcpProfile(agentCfg),
+    configOptions: agentCfg.configOptions,
+    sessionRoot: repoPath / ".scriptorium" / "sessions",
     model: agentCfg.model,
     reasoningEffort: agentCfg.reasoningEffort,
     ticketId: ticketId,
@@ -505,22 +517,30 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
       return false
 
     let spec = loadSpecFromPlanPath(planPath)
-    discard runner(AgentRunRequest(
+    let response = runner(AgentRunRequest(
       prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
       workingDir: planPath,
       harness: cfg.agents.architect.harness,
+      acpAgent: cfg.agents.architect.acpAgent,
+      profile: cfg.resolveAcpProfile(cfg.agents.architect),
+      configOptions: cfg.agents.architect.configOptions,
+      sessionRoot: repoPath / ".scriptorium" / "sessions",
       model: cfg.agents.architect.model,
       reasoningEffort: cfg.agents.architect.reasoningEffort,
       ticketId: ArchitectAreasRunId,
       attempt: DefaultAgentAttempt,
       skipGitRepoCheck: true,
       logRoot: planAgentLogRoot(repoPath, ArchitectLogDirName / "areas"),
+      noOutputTimeoutMs: cfg.agents.architect.noOutputTimeout,
+      hardTimeoutMs: cfg.agents.architect.hardTimeout,
+      progressTimeoutMs: cfg.agents.architect.progressTimeout,
       maxAttempts: DefaultAgentMaxAttempts,
       onEvent: proc(event: AgentStreamEvent) =
         forwardAgentEvent("architect", "areas", event),
       continuationPromptBuilder: buildAgentsReinjectPrompt,
     ))
 
+    response.requireAgentCompleted()
     gitRun(planPath, "add", PlanAreasDir)
     if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
       gitRun(planPath, "commit", "-m", AreaCommitMessage)
@@ -557,7 +577,7 @@ proc updateSpecFromArchitect*(
   let cfg = loadConfig(repoPath)
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let existingSpec = loadSpecFromPlanPath(planPath)
-    discard runPlanArchitectRequest(
+    let response = runPlanArchitectRequest(
       runner,
       repoPath,
       planPath,
@@ -566,6 +586,8 @@ proc updateSpecFromArchitect*(
       ArchitectSpecTicketId,
     )
     enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+
+    response.requireAgentCompleted()
 
     # Commit any new tickets created by the architect.
     gitRun(planPath, "add", PlanTicketsOpenDir)
@@ -596,7 +618,7 @@ proc importSpecFromRepository*(repoPath: string, runner: AgentRunner): bool =
   let cfg = loadConfig(repoPath)
   result = withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
     let existingSpec = loadSpecFromPlanPath(planPath)
-    discard runPlanArchitectRequest(
+    let response = runPlanArchitectRequest(
       runner,
       repoPath,
       planPath,
@@ -605,6 +627,7 @@ proc importSpecFromRepository*(repoPath: string, runner: AgentRunner): bool =
       "import",
     )
     enforceWriteAllowlist(planPath, [PlanSpecPath], ImportWriteScopeName)
+    response.requireAgentCompleted()
 
     let updatedSpec = loadSpecFromPlanPath(planPath)
     if updatedSpec == existingSpec:

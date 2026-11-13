@@ -70,7 +70,7 @@ suite "orchestrator plan spec update":
     check changed
     check not unchanged
     check callCount == 2
-    check capturedFirstModel == "claude-opus-5"
+    check capturedFirstModel.len == 0
     check capturedFirstReasoningEffort == "high"
     check capturedFirstWorkingDir != tmp
     check capturedFirstRepoPath == tmp
@@ -432,7 +432,7 @@ suite "orchestrator architect areas":
     check changed
     check callCount == 1
     check capturedRequest.ticketId == "run"
-    check capturedRequest.model == "claude-opus-5"
+    check capturedRequest.model.len == 0
     check capturedRequest.reasoningEffort == "high"
     check capturedRequest.logRoot == tmp / ".scriptorium" / "logs" / "architect" / "areas"
     check tmp in capturedRequest.prompt

@@ -10,9 +10,14 @@ Important: we should dogfood scriptorium as much as possible. do not try to hand
 ## Prerequisites
 
 - Docker and docker-compose installed
-- API keys configured (`OPENAI_API_KEY`, `CODEX_API_KEY`, `ANTHROPIC_API_KEY`)
-- Agent credentials mounted (`~/.codex`, `~/.claude`, `~/.claude.json`)
+- All supported backends authenticated via OAuth/login or API keys (`OPENAI_API_KEY`, `CODEX_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`); no Bedrock
+- Agent credentials mounted (`~/.codex`, `~/.claude`, `~/.claude.json`, `~/.grok`)
 - A `docs/v#.md` plan file written and committed
+
+For a major migration, use an isolated clone with the development branch as its
+default branch and `remoteSync.enabled: false`. This allows architect dogfooding
+without scheduling work against the live repository or pushing changes. Let the
+architect reconcile the existing spec; do not hand-edit the planning branch.
 
 ## 1. Write the version plan
 
@@ -168,11 +173,12 @@ Once all TODO items in `docs/v<N>.md` are checked off:
 
 2. Run tests locally to confirm:
    ```bash
-   make test
+   make test test-arc test-orc
    make integration-test
+   make e2e-test
    ```
 
-3. Bump the version in `scriptorium.nimble`.
+3. Bump the version in `scriptorium.nimble`, the CLI, and the ACP client identity.
 
 4. Update the TODO checklist in `docs/v<N>.md` if any items were completed
    by the agents.
@@ -210,4 +216,4 @@ All scripts `cd` to the repo root and use `docker compose run --rm`.
   touch shared files.
 
 - **Cost awareness:** Integration and e2e tests use real API calls. The
-  orchestrator logs cumulative token usage in the session summary on shutdown.
+  output budget measures structured transcript bytes, not tokens or cost.

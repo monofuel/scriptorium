@@ -41,18 +41,23 @@ make docker-build
 
 ## Dependencies
 
-- Nim >= 2.0.0
+- Nim >= 2.2.14
 - nimby for dependency management (not nimble)
-- jsony, mummy, mcport
+- ACPort >= 1.1.1, MCPort >= 1.2.0, jsony, mummy, guildy, mosty
+- Run `make setup` for isolated locked Nim dependencies.
+- Run `make agent-setup` for pinned Codex/Claude/Grok CLIs and official ACP adapters.
+- Node >= 22 (Docker/CI use Node 24).
 
 ## Tests
 
 - Run `make test` to run local unit tests (`tests/test_*.nim`)
   - unit tests SHOULD NOT perform live AI calls or use the real harness.
   - make sure to unset `CLAUDE_CODE_USE_BEDROCK` in the environment before running specific unit tests. make test does this automatically.
-    - we dynamically switch to aws models when using bedrock, but this was too difficult to handle nice in unit tests, so let's just not use it.
 - Run `make integration-test` to run integration tests (`tests/integration_*.nim`) that may call real external services/tools (for example Codex)
-  - important: if `CLAUDE_CODE_USE_BEDROCK` was set in the environment, DO NOT unset it for integration tests. in that case, we want to use bedrock to avoid eating up subscription. same for e2e tests.
+  - Use supported OAuth/API credentials for all three backends; never enable Bedrock.
+  - Named targets `integration-test-codex`, `integration-test-claude`, and `integration-test-grok` select one backend without environment skips.
+- Run `make test-arc test-orc` for shared ACP runtime ownership/lifecycle tests.
+- Run `make e2e-test` for a real spec-to-merge workflow on each supported backend.
 - Individual test files can be run with `nim r tests/test_scriptorium.nim`
 - `tests/config.nims` contains `--path:"../src"` so tests can import project modules directly
 
@@ -64,7 +69,7 @@ not see an error, the tests passed.
 
 - `make test` runs all unit tests in parallel. Each test prints `[OK]` or
   `[FAILED]` per case. Exit code 0 means all tests passed.
-- `make integration-test` runs all integration tests in parallel. Same rules.
+- `make integration-test` runs real integrations and each named ACP backend suite with bounded concurrency. Same rules.
 - Do not run `make test` followed by `make test` again. Tests are slow
   (compilation + execution takes several minutes). Running them twice wastes
   time and tokens for no reason.
@@ -123,7 +128,17 @@ git show scriptorium/plan:spec.md | grep -i "keyword"
 - MCPort uses plain JSON-RPC over HTTP POST (Streamable HTTP). It does NOT support SSE (Server-Sent Events).
 - mummy (the HTTP server MCPort uses) does not support SSE, and SSE is not planned.
 - when configuring MCP server connections for agent harnesses, do NOT set `"type": "sse"`. Either omit the type field or use `"streamable-http"` / `"http"` depending on what the client expects.
-- codex uses `-c mcp_servers.<name>.url=...` with separate `-c` flags for each field. Do NOT use the table/JSON syntax — codex does not parse it correctly.
+- Pass scoped MCP connections using standard ACP `mcpServers` session parameters, with HTTP type. Never construct backend-specific launch flags for MCP connections.
+
+## ACP runtime
+
+- All execution goes through ACPort. Do not restore legacy harness subprocesses or protocol parsers.
+- Codex and Claude use official ACP adapters; Grok uses native ACP stdio.
+- ACP callbacks cross into the owning application thread through channels. Keep transport and child process cleanup inside ACPort.
+- Apply models/effort through advertised configuration options. Empty model means agent default; explicit unsupported choices fail.
+- Keep read-only modes, permission decisions, and operation write guards. Stderr and heartbeats are diagnostics, not progress.
+- Persist session identity and MCP completion receipts without credentials or scoped MCP URLs.
+- Use `outputBudgetMB` for transcript bytes, not inferred token usage. `tokenBudgetMB` is a deprecated config alias.
 
 ## Agent completion protocol
 

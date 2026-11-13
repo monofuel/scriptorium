@@ -1,60 +1,9 @@
 ## Unit tests for the log_forwarding module.
 
 import
-  std/[strutils, unittest],
+  std/[options, strutils, unittest],
+  acport,
   scriptorium/[agent_runner, log_forwarding, logging]
-
-suite "extractFileActivity":
-  test "Read tool returns read activity":
-    check extractFileActivity("Read src/main.nim") == "read src/main.nim"
-
-  test "read_file tool returns read activity":
-    check extractFileActivity("read_file config.toml") == "read config.toml"
-
-  test "Edit tool returns write activity":
-    check extractFileActivity("Edit src/module.nim") == "write src/module.nim"
-
-  test "Write tool returns write activity":
-    check extractFileActivity("Write src/new_file.nim") == "write src/new_file.nim"
-
-  test "write_file tool returns write activity":
-    check extractFileActivity("write_file output.json") == "write output.json"
-
-  test "create_file tool returns write activity":
-    check extractFileActivity("create_file src/new.nim") == "write src/new.nim"
-
-  test "edit_file tool returns write activity":
-    check extractFileActivity("edit_file src/fix.nim") == "write src/fix.nim"
-
-  test "Bash with cat returns read activity":
-    check extractFileActivity("Bash cat /etc/hosts") == "read /etc/hosts"
-
-  test "Bash with touch returns write activity":
-    check extractFileActivity("Bash touch newfile.txt") == "write newfile.txt"
-
-  test "Bash with unknown command returns empty":
-    check extractFileActivity("Bash echo hello") == ""
-
-  test "unknown tool returns empty":
-    check extractFileActivity("Grep pattern") == ""
-
-  test "tool name only with no args returns empty":
-    check extractFileActivity("Read") == ""
-
-  test "empty string returns empty":
-    check extractFileActivity("") == ""
-
-  test "flag-like token is skipped":
-    check extractFileActivity("Read --verbose src/main.nim") == "read src/main.nim"
-
-  test "flag with dot is not matched as file path":
-    check extractFileActivity("Read -flag.txt") == ""
-
-  test "path with slash is detected":
-    check extractFileActivity("Read src/deep/path") == "read src/deep/path"
-
-  test "path with dot is detected":
-    check extractFileActivity("Read config.toml") == "read config.toml"
 
 suite "forwardAgentEvent":
   setup:
@@ -72,7 +21,9 @@ suite "forwardAgentEvent":
     check capturedLogs[0].msg.contains("coding[T-001]: tool Grep pattern")
 
   test "tool event with file activity logs two lines":
-    let event = AgentStreamEvent(kind: agentEventTool, text: "Read src/main.nim")
+    let event = AgentStreamEvent(kind: agentEventTool, text: "Read src/main.nim",
+      update: SessionUpdate(kind: toolCall, tool: ToolCall(kind: "read",
+        locations: some(@[ToolLocation(path: "src/main.nim")]))))
     forwardAgentEvent("coding", "T-002", event)
     check capturedLogs.len == 2
     check capturedLogs[0].msg.contains("coding[T-002]: tool Read src/main.nim")

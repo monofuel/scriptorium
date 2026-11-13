@@ -266,7 +266,7 @@ proc assignOldestOpenTicket*(repoPath: string, areaFilter: string = ""): TicketA
     ticketCodingWalls[ticketId] = 0.0
     ticketTestWalls[ticketId] = 0.0
     ticketModels[ticketId] = ""
-    ticketStdoutBytes[ticketId] = 0
+    ticketOutputBytes[ticketId] = 0
 
     result = TicketAssignment(
       openTicket: openTicket,
@@ -325,7 +325,7 @@ proc assignOpenTickets*(repoPath: string, maxAgents: int, areaFilter: string = "
       ticketCodingWalls[ticketId] = 0.0
       ticketTestWalls[ticketId] = 0.0
       ticketModels[ticketId] = ""
-      ticketStdoutBytes[ticketId] = 0
+      ticketOutputBytes[ticketId] = 0
 
       assignments.add(TicketAssignment(
         openTicket: ticket.rel,

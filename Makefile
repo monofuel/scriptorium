@@ -1,115 +1,65 @@
-.PHONY: test integration-test integration-test-claude integration-test-grok e2e-test e2e-test-claude build docker-build docker-build-push ci check-updates
-
 SHELL := bash
-
+NIM ?= $(if $(wildcard .build/nim-2.2.14/bin/nim),$(CURDIR)/.build/nim-2.2.14/bin/nim,nim)
+export NIM
+export PATH := $(CURDIR)/.build/agent-tools/node_modules/.bin:$(if $(findstring /,$(NIM)),$(dir $(NIM)):$(PATH),$(PATH))
+NIM_FLAGS ?= --hints:off --warnings:off
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
 
-nim.cfg: nimby.lock
-	nimby sync -g nimby.lock
+.PHONY: setup agent-setup build test test-arc test-orc integration-test integration-test-codex integration-test-claude integration-test-grok e2e-test e2e-test-codex e2e-test-claude e2e-test-grok docker-build docker-build-push ci check-updates
 
-build: nim.cfg scriptorium
+setup: nim.cfg
 
-scriptorium: src/scriptorium.nim
-	nim c -o:scriptorium src/scriptorium.nim
+nim.cfg: nimby.lock scripts/setup.nim
+	$(NIM) r $(NIM_FLAGS) scripts/setup.nim
 
-NIM_TEST_FLAGS ?= --hints:off --warnings:off
+agent-setup: package.json package-lock.json
+	$(NIM) r $(NIM_FLAGS) scripts/agent_setup.nim
+
+build: nim.cfg
+	$(NIM) c $(NIM_FLAGS) --nimcache:.build/nimcache/app -o:scriptorium src/scriptorium.nim
 
 test: nim.cfg
-	# Unset CLAUDE_CODE_USE_BEDROCK so resolveModel() returns plain model IDs
-	# in unit tests (which use fake models, never real API calls).
-	@export CLAUDE_CODE_USE_BEDROCK=; \
-	files=$$(ls tests/test_*.nim 2>/dev/null); \
-	if [ -z "$$files" ]; then \
-		echo "No unit tests found in tests/test_*.nim"; \
-		exit 0; \
-	fi; \
-	fail=0; \
-	pids=""; \
-	for f in $$files; do \
-		( set -o pipefail; nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
-		pids="$$pids $$!"; \
-	done; \
-	for pid in $$pids; do \
-		wait $$pid || fail=1; \
-	done; \
-	exit $$fail
+	env -u CLAUDE_CODE_USE_BEDROCK $(NIM) r $(NIM_FLAGS) scripts/test_runner.nim unit
+
+test-arc: nim.cfg
+	env -u CLAUDE_CODE_USE_BEDROCK $(NIM) r $(NIM_FLAGS) --mm:arc --nimcache:.build/test-cache/acp-arc -o:.build/test-binaries/acp-arc tests/test_agent_runner.nim
+
+test-orc: nim.cfg
+	env -u CLAUDE_CODE_USE_BEDROCK $(NIM) r $(NIM_FLAGS) --mm:orc --nimcache:.build/test-cache/acp-orc -o:.build/test-binaries/acp-orc tests/test_agent_runner.nim
 
 integration-test: nim.cfg
-	@integration_tmp=$$(mktemp -d); \
-	trap 'rm -rf "$$integration_tmp"' EXIT; \
-	export TMPDIR="$$integration_tmp"; \
-	files=$$(ls tests/integration_*.nim 2>/dev/null); \
-	if [ -z "$$files" ]; then \
-		echo "No integration tests found in tests/integration_*.nim"; \
-		exit 0; \
-	fi; \
-	fail=0; \
-	pids=""; \
-	for f in $$files; do \
-		( set -o pipefail; nim r $(NIM_TEST_FLAGS) "$$f" 2>&1 | sed "s|^|[$$f] |" ) & \
-		pids="$$pids $$!"; \
-	done; \
-	for pid in $$pids; do \
-		wait $$pid || fail=1; \
-	done; \
-	exit $$fail
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim integration
+	$(MAKE) integration-test-codex integration-test-claude integration-test-grok
 
-integration-test-claude:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
-	SCRIPTORIUM_TEST_HARNESS=claude-code \
-	$(MAKE) integration-test
+integration-test-codex: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_acp_harness.nim codex
 
-integration-test-grok:
-	SCRIPTORIUM_TEST_MODEL=grok-4.6 \
-	SCRIPTORIUM_TEST_HARNESS=grok-build \
-	$(MAKE) integration-test
+integration-test-claude: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_acp_harness.nim claude
 
-e2e-test: nim.cfg
-	@found=0; \
-	for f in tests/e2e_*.nim; do \
-		[ -e "$$f" ] || continue; \
-		found=1; \
-		echo "--- $$f ---"; \
-		nim r $(NIM_TEST_FLAGS) "$$f" || exit 1; \
-	done; \
-	if [ $$found -eq 0 ]; then \
-		echo "No e2e tests found in tests/e2e_*.nim"; \
-	fi
+integration-test-grok: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_acp_harness.nim grok
 
-e2e-test-claude:
-	SCRIPTORIUM_TEST_MODEL=claude-opus-5 \
-	SCRIPTORIUM_TEST_HARNESS=claude-code \
-	$(MAKE) e2e-test
+e2e-test: e2e-test-codex e2e-test-claude e2e-test-grok
+
+e2e-test-codex: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim e2e codex
+
+e2e-test-claude: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim e2e claude
+
+e2e-test-grok: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim e2e grok
+
+docker-build:
+	docker buildx build --build-arg BUILD_COMMIT=$(shell git rev-parse --short HEAD) --platform $(DOCKER_PLATFORM) --load --tag $(DOCKER_IMAGE) .
+
+docker-build-push:
+	docker buildx build --build-arg BUILD_COMMIT=$(shell git rev-parse --short HEAD) --platform $(DOCKER_PLATFORM) --push --tag $(DOCKER_IMAGE) .
 
 ci:
 	act -W .github/workflows/build.yml
 
-docker-build:
-	docker buildx build \
-		--platform $(DOCKER_PLATFORM) \
-		--load \
-		--tag $(DOCKER_IMAGE) \
-		.
-
 check-updates:
-	@echo "Checking for npm package updates..."
-	@echo "--- @openai/codex ---"
-	@pinned=$$(grep 'CODEX_VERSION=' Dockerfile | head -1 | sed 's/.*=//'); \
-	latest=$$(npm view @openai/codex version 2>/dev/null); \
-	echo "  Pinned: $$pinned"; \
-	echo "  Latest: $$latest"; \
-	if [ "$$pinned" != "$$latest" ]; then echo "  ** Update available **"; fi
-	@echo "--- @anthropic-ai/claude-code ---"
-	@pinned=$$(grep 'CLAUDE_CODE_VERSION=' Dockerfile | head -1 | sed 's/.*=//'); \
-	latest=$$(npm view @anthropic-ai/claude-code version 2>/dev/null); \
-	echo "  Pinned: $$pinned"; \
-	echo "  Latest: $$latest"; \
-	if [ "$$pinned" != "$$latest" ]; then echo "  ** Update available **"; fi
-
-docker-build-push:
-	docker buildx build \
-		--platform $(DOCKER_PLATFORM) \
-		--push \
-		--tag $(DOCKER_IMAGE) \
-		.
+	npm outdated --prefix .build/agent-tools

@@ -1,6 +1,8 @@
 import
   std/[locks, strformat, tables, times],
-  ./[agent_runner, logging]
+  ./[agent_runner, agent_usage, logging]
+
+export agent_usage
 
 const
   PlanAreasDir* = "areas"
@@ -151,7 +153,7 @@ var
   ticketCodingWalls*: Table[string, float]
   ticketTestWalls*: Table[string, float]
   ticketModels*: Table[string, string]
-  ticketStdoutBytes*: Table[string, int]
+  ticketOutputBytes*: Table[string, int]
   sessionStats*: SessionStats
   timingsLock*: Lock
   timingsLockInitialized* = false
@@ -171,25 +173,21 @@ proc cleanupTicketTimings*(ticketId: string) =
   ticketCodingWalls.del(ticketId)
   ticketTestWalls.del(ticketId)
   ticketModels.del(ticketId)
-  ticketStdoutBytes.del(ticketId)
+  ticketOutputBytes.del(ticketId)
 
-proc getSessionStdoutBytes*(): int =
-  ## Sum all ticketStdoutBytes values to get the session-level total.
-  for bytes in ticketStdoutBytes.values:
-    result += bytes
-
-proc isTokenBudgetExceeded*(tokenBudgetMB: int): bool =
-  ## Check if cumulative stdout bytes exceed the token budget. Returns false when budget is 0 (unlimited).
-  if tokenBudgetMB <= 0:
+proc isOutputBudgetExceeded*(outputBudgetMB: int): bool =
+  ## Check the transcript byte budget, with zero meaning unlimited.
+  if outputBudgetMB <= 0:
     return false
-  let budgetBytes = tokenBudgetMB * 1024 * 1024
-  let usedBytes = getSessionStdoutBytes()
+  let budgetBytes = outputBudgetMB * 1024 * 1024
+  let usedBytes = getSessionOutputBytes()
   if usedBytes >= budgetBytes:
     let usedMB = usedBytes div (1024 * 1024)
-    logInfo(&"resource limit: token budget exhausted ({usedMB}MB/{tokenBudgetMB}MB), pausing new assignments")
+    logInfo(&"resource limit: output budget exhausted ({usedMB}MB/{outputBudgetMB}MB), pausing new assignments")
     return true
   return false
 
 proc resetSessionStats*() =
   ## Reset session statistics to default values.
   sessionStats = SessionStats(startTime: epochTime())
+  resetOutputUsage()

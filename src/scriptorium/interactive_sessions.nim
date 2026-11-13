@@ -25,10 +25,17 @@ proc runInteractivePlanSession*(
   runner: AgentRunner = runAgent,
   input: PlanSessionInput = nil,
   quiet: bool = false,
+  resumeSessionId: string = "",
 ) =
   ## Run a multi-turn interactive planning session with the Architect.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+
+  let conversation = newConversationRunner(runner, resumeSessionId,
+    proc(): bool =
+      ## Observe Ctrl+C from the owner thread.
+      interactivePlanInterrupted)
+  defer: conversation.close()
 
   interactivePlanInterrupted = false
   setControlCHook(handleInteractivePlanCtrlC)
@@ -99,7 +106,7 @@ proc runInteractivePlanSession*(
 
       let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
-      let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, history, line)
+      let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, (if runner == runAgent: @[] else: history), line)
       var lastStreamLine = "[thinking] working..."
       if not quiet:
         echo lastStreamLine
@@ -112,7 +119,7 @@ proc runInteractivePlanSession*(
           echo rendered
           lastStreamLine = rendered
       let agentResult = runPlanArchitectRequest(
-        runner,
+        conversation.runner,
         repoPath,
         planPath,
         cfg.agents.architect,
@@ -123,14 +130,14 @@ proc runInteractivePlanSession*(
       )
       enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
 
+      agentResult.requireAgentCompleted()
+
       # Commit any new tickets created by the architect.
       gitRun(planPath, "add", PlanTicketsOpenDir)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
 
       var response = agentResult.lastMessage.strip()
-      if response.len == 0:
-        response = agentResult.stdout.strip()
       if response.len > 0 and not quiet:
         echo response
 
@@ -151,10 +158,17 @@ proc runInteractiveAskSession*(
   runner: AgentRunner = runAgent,
   input: PlanSessionInput = nil,
   quiet: bool = false,
+  resumeSessionId: string = "",
 ) =
   ## Run a multi-turn read-only Q&A session with the Architect.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+
+  let conversation = newConversationRunner(runner, resumeSessionId,
+    proc(): bool =
+      ## Observe Ctrl+C from the owner thread.
+      interactivePlanInterrupted)
+  defer: conversation.close()
 
   interactivePlanInterrupted = false
   setControlCHook(handleInteractivePlanCtrlC)
@@ -223,7 +237,7 @@ proc runInteractiveAskSession*(
           continue
 
       let spec = readFile(planPath / PlanSpecPath)
-      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, line)
+      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, (if runner == runAgent: @[] else: history), line)
       var lastStreamLine = "[thinking] working..."
       if not quiet:
         echo lastStreamLine
@@ -236,7 +250,7 @@ proc runInteractiveAskSession*(
           echo rendered
           lastStreamLine = rendered
       let agentResult = runPlanArchitectRequest(
-        runner,
+        conversation.runner,
         repoPath,
         planPath,
         cfg.agents.architect,
@@ -247,10 +261,9 @@ proc runInteractiveAskSession*(
         AskReadOnlyTools,
       )
       enforceNoWrites(planPath, AskWriteScopeName)
+      agentResult.requireAgentCompleted()
 
       var response = agentResult.lastMessage.strip()
-      if response.len == 0:
-        response = agentResult.stdout.strip()
       if response.len > 0 and not quiet:
         echo response
 
@@ -279,9 +292,8 @@ proc runOneShotDoSession*(
     builtPrompt,
     DoSessionTicketId,
   )
+  agentResult.requireAgentCompleted()
   var response = agentResult.lastMessage.strip()
-  if response.len == 0:
-    response = agentResult.stdout.strip()
   if response.len > 0 and not quiet:
     echo response
 
@@ -290,10 +302,17 @@ proc runInteractiveDoSession*(
   runner: AgentRunner = runAgent,
   input: PlanSessionInput = nil,
   quiet: bool = false,
+  resumeSessionId: string = "",
 ) =
   ## Run a multi-turn interactive coding session with the Architect using full repo access.
   if runner.isNil:
     raise newException(ValueError, "agent runner is required")
+
+  let conversation = newConversationRunner(runner, resumeSessionId,
+    proc(): bool =
+      ## Observe Ctrl+C from the owner thread.
+      interactivePlanInterrupted)
+  defer: conversation.close()
 
   interactivePlanInterrupted = false
   setControlCHook(handleInteractivePlanCtrlC)
@@ -351,7 +370,7 @@ proc runInteractiveDoSession*(
           echo fmt"scriptorium: unknown command '{line}'"
         continue
 
-    let prompt = buildInteractiveDoPrompt(repoPath, history, line)
+    let prompt = buildInteractiveDoPrompt(repoPath, (if runner == runAgent: @[] else: history), line)
     var lastStreamLine = "[thinking] working..."
     if not quiet:
       echo lastStreamLine
@@ -364,7 +383,7 @@ proc runInteractiveDoSession*(
         echo rendered
         lastStreamLine = rendered
     let agentResult = runDoArchitectRequest(
-      runner,
+      conversation.runner,
       repoPath,
       cfg.agents.architect,
       prompt,
@@ -373,9 +392,8 @@ proc runInteractiveDoSession*(
       PlanHeartbeatIntervalMs,
     )
 
+    agentResult.requireAgentCompleted()
     var response = agentResult.lastMessage.strip()
-    if response.len == 0:
-      response = agentResult.stdout.strip()
     if response.len > 0 and not quiet:
       echo response
 

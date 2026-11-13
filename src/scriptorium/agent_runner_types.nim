@@ -1,4 +1,7 @@
-import ./[common, config]
+import
+  std/[json, tables],
+  acport,
+  ./[common, config]
 
 type
   AgentStreamEventKind* = enum
@@ -7,11 +10,21 @@ type
     agentEventTool = "tool"
     agentEventStatus = "status"
     agentEventMessage = "message"
+    agentEventPlan = "plan"
+    agentEventUnknown = "unknown"
+
+  AgentAccessPolicy* = enum
+    accessFull, accessReadOnly, accessRestricted
+
+  AgentFailureKind* = enum
+    failureNone, failureCancelled, failureTimeout, failureTransport,
+    failureProtocol, failureRpc, failureRefused, failureLimit
 
   AgentStreamEvent* = object
     kind*: AgentStreamEventKind
     text*: string
     rawLine*: string
+    update*: SessionUpdate
 
   AgentEventHandler* = proc(event: AgentStreamEvent)
 
@@ -20,6 +33,15 @@ type
     workingDir*: string
     homeDirectory*: string
     harness*: Harness
+    acpAgent*: string
+    profile*: AcpAgentProfile
+    configOptions*: Table[string, JsonNode]
+    accessPolicy*: AgentAccessPolicy
+    allowedWritePaths*: seq[string]
+    resumeSessionId*: string
+    conversationKey*: string
+    sessionRoot*: string
+    restoreSession*: bool
     model*: string
     reasoningEffort*: string
     mcpEndpoint*: string
@@ -42,6 +64,15 @@ type
 
   AgentRunResult* = object
     backend*: Harness
+    acpAgent*: string
+    sessionId*: string
+    model*: string
+    outputBytes*: int
+    stopReason*: StopReason
+    failureKind*: AgentFailureKind
+    errorCode*: int
+    errorMessage*: string
+    errorData*: JsonNode
     command*: seq[string]
     exitCode*: int
     attempt*: int

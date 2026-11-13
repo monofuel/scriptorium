@@ -104,6 +104,10 @@ proc predictTicketDifficulty*(
     prompt: prompt,
     workingDir: repoPath,
     harness: cfg.agents.coding.harness,
+    acpAgent: cfg.agents.coding.acpAgent,
+    profile: cfg.resolveAcpProfile(cfg.agents.coding),
+    configOptions: cfg.agents.coding.configOptions,
+    sessionRoot: repoPath / ".scriptorium" / "sessions",
     model: cfg.agents.coding.model,
     reasoningEffort: cfg.agents.coding.reasoningEffort,
     logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "prediction",
@@ -164,6 +168,9 @@ proc executeAssignedTicket*(
   if assignment.worktree.len == 0:
     raise newException(ValueError, "assignment worktree path is required")
 
+  let conversation = newConversationRunner(runner)
+  defer: conversation.close()
+
   logDebug(fmt"executeAssignedTicket: loadConfig")
   let cfg = loadConfig(repoPath)
   let ticketRelPath = assignment.inProgressTicket
@@ -190,26 +197,35 @@ proc executeAssignedTicket*(
   var totalAttemptsUsed = 0
   var submitCalled = false
   var submitSummary = ""
-  let agentCfg = if agentConfigOverride.model.len > 0: agentConfigOverride else: cfg.agents.coding
+  let agentCfg = if agentConfigOverride.model.len > 0 or agentConfigOverride.acpAgent.len > 0: agentConfigOverride else: cfg.agents.coding
   let model = agentCfg.model
   let maxAttempts = cfg.timeouts.codingAgentMaxAttempts
 
-  while totalAttemptsUsed < maxAttempts:
+  let mcpSession = newCodingMcpSession(
+    cfg.endpoints.local,
+    ticketId,
+    assignment.branch,
+    assignment.worktree,
+  )
+  defer: unregisterAgentMcpSession(mcpSession)
+  let recoveredSubmission = codingSubmission(mcpSession)
+  submitCalled = recoveredSubmission.called
+  submitSummary = recoveredSubmission.summary
+
+  while not submitCalled and totalAttemptsUsed < maxAttempts:
     if totalAttemptsUsed > 0:
       validateWorktreeHealth(repoPath, assignment.worktree, assignment.branch, ticketId, currentAttemptBase)
     let attemptsForThisCall = maxAttempts - totalAttemptsUsed
     logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
     let agentStartTime = epochTime()
-    let mcpSession = newCodingMcpSession(
-      cfg.endpoints.local,
-      ticketId,
-      assignment.branch,
-      assignment.worktree,
-    )
     let request = AgentRunRequest(
       prompt: currentPrompt,
       workingDir: assignment.worktree,
       harness: agentCfg.harness,
+      acpAgent: agentCfg.acpAgent,
+      profile: cfg.resolveAcpProfile(agentCfg),
+      configOptions: agentCfg.configOptions,
+      sessionRoot: repoPath / ".scriptorium" / "sessions",
       model: agentCfg.model,
       reasoningEffort: agentCfg.reasoningEffort,
       mcpEndpoint: mcpSession.endpoint,
@@ -220,15 +236,15 @@ proc executeAssignedTicket*(
       noOutputTimeoutMs: agentCfg.noOutputTimeout,
       hardTimeoutMs: agentCfg.hardTimeout,
       progressTimeoutMs: agentCfg.progressTimeout,
-      maxAttempts: attemptsForThisCall,
+      maxAttempts: 1,
+      restoreSession: true,
+      conversationKey: ticketId & "|" & assignment.branch,
       continuationPromptBuilder: buildAgentsReinjectPrompt,
       onEvent: proc(event: AgentStreamEvent) =
         forwardAgentEvent("coding", ticketId, event),
     )
     logDebug(fmt"executeAssignedTicket: running coding agent (attempt {currentAttemptBase}/{maxAttempts})")
-    let agentResult = block:
-      defer: unregisterAgentMcpSession(mcpSession)
-      runner(request)
+    let agentResult = conversation.runner(request)
     let submission = codingSubmission(mcpSession)
     submitCalled = submission.called
     submitSummary = submission.summary
@@ -256,17 +272,15 @@ proc executeAssignedTicket*(
       ticketAttemptCounts[ticketId] = agentResult.attemptCount
 
     ticketModels[ticketId] = model
-    if ticketStdoutBytes.hasKey(ticketId):
-      ticketStdoutBytes[ticketId] = ticketStdoutBytes[ticketId] + agentResult.stdout.len
+    if agentResult.model.len > 0: ticketModels[ticketId] = agentResult.model
+    if ticketOutputBytes.hasKey(ticketId):
+      ticketOutputBytes[ticketId] = ticketOutputBytes[ticketId] + agentResult.outputBytes
     else:
-      ticketStdoutBytes[ticketId] = agentResult.stdout.len
+      ticketOutputBytes[ticketId] = agentResult.outputBytes
     release(timingsLock)
 
-    let stdoutTail = truncateTail(agentResult.stdout.strip(), 500)
     let messageTail = truncateTail(agentResult.lastMessage.strip(), 500)
     logDebug(fmt"executeAssignedTicket: agent finished exit={agentResult.exitCode} timeout={agentResult.timeoutKind}")
-    if stdoutTail.len > 0:
-      logDebug(fmt"executeAssignedTicket: stdout tail: {stdoutTail}")
     if messageTail.len > 0:
       logDebug(fmt"executeAssignedTicket: lastMessage tail: {messageTail}")
 
@@ -289,7 +303,8 @@ proc executeAssignedTicket*(
     if submitCalled:
       break
 
-    if isStall and totalAttemptsUsed < maxAttempts:
+    if not agentResult.cancelled and totalAttemptsUsed < maxAttempts and
+        agentResult.failureKind notin {failureRpc, failureProtocol, failureRefused}:
       logInfo(fmt"ticket {ticketId}: coding agent stalled (attempt {agentResult.attempt}/{maxAttempts}, no submit_pr)")
       let testStartTime = epochTime()
       let testResult = runWorktreeMakeTest(assignment.worktree)
@@ -327,6 +342,7 @@ proc executeAssignedTicket*(
         gitRun(assignment.worktree, "commit", "-m", "scriptorium: auto-commit agent changes")
     logDebug(fmt"executeAssignedTicket: enqueueing merge request")
     discard enqueueMergeRequest(repoPath, assignment, submitSummary)
+    acknowledgeCodingSubmission(mcpSession)
   else:
     let attempts = ticketAttemptCounts.getOrDefault(ticketId, totalAttemptsUsed)
     let startTime = ticketStartTimes.getOrDefault(ticketId, 0.0)

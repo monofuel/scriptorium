@@ -1,145 +1,178 @@
-## Unit tests for the backend-agnostic agent runner interface.
-
 import
-  std/[os, sequtils, strutils, tempfiles, unittest],
-  scriptorium/[agent_runner, config]
+  std/[json, options, os, osproc, strutils, tables, tempfiles, unittest],
+  acport,
+  scriptorium/[acp_permissions, agent_runner, agent_sessions, config]
 
-proc withTempAgentDir(action: proc(tmpDir: string)) =
-  ## Run action inside a temporary directory and remove it afterwards.
-  let tmpDir = createTempDir("scriptorium_test_agent_runner_", "", getTempDir())
-  defer:
-    removeDir(tmpDir)
-  action(tmpDir)
+let fixture = getTempDir() / ("scriptorium-acp-fixture-" & $getCurrentProcessId())
+let compiler = getEnv("NIM", "nim")
+let process = startProcess(compiler, args = @["c", "--hints:off", "--warnings:off",
+  "-o:" & fixture, currentSourcePath().parentDir / "fixtures" / "acp_agent.nim"],
+  options = {poUsePath, poParentStreams})
+let compileExit = process.waitForExit()
+process.close()
+doAssert compileExit == 0, "Could not compile independent ACP unit fixture"
 
-proc writeExecutableScript(path: string, body: string) =
-  ## Write a bash script to path and mark it executable.
-  let scriptContent = "#!/usr/bin/env bash\nset -euo pipefail\n" & body
-  writeFile(path, scriptContent)
-  setFilePermissions(path, {fpUserRead, fpUserWrite, fpUserExec})
+proc requestFor(directory, prompt: string): AgentRunRequest =
+  ## Build a request that exercises real ACPort against an independent unit peer.
+  AgentRunRequest(prompt: prompt, workingDir: directory, harness: harnessCodex,
+    acpAgent: "codex", binary: fixture, ticketId: "unit",
+    model: "fixture-model", reasoningEffort: "high", hardTimeoutMs: 5000,
+    logRoot: directory / "logs", sessionRoot: directory / "sessions")
 
-suite "agent runner":
-  test "runAgent routes codex harness to codex backend":
-    withTempAgentDir(proc(tmpDir: string) =
-      let codexPath = tmpDir / "fake-codex.sh"
-      writeExecutableScript(codexPath, """
-last_message=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --output-last-message) last_message="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-cat >/dev/null
-printf '{"type":"message","text":"ok"}\n'
-printf 'done\n' > "$last_message"
-""")
+suite "shared ACP runner":
+  test "ordered callbacks stay on the caller thread and retain final chunks":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    let owner = getThreadId()
+    var request = requestFor(directory, "hello")
+    var chunks: seq[string]
+    request.onEvent = proc(event: AgentStreamEvent) =
+      ## Verify application callbacks remain on their owning thread.
+      check getThreadId() == owner
+      if event.kind == agentEventMessage: chunks.add(event.text)
+    let response = runAgent(request)
+    check response.exitCode == 0
+    check response.lastMessage == "hello-tail"
+    check chunks == @["hello", "-tail"]
+    check response.outputBytes > 0
+    check response.stdout.len == 0
+    check readFile(response.lastMessageFile) == response.lastMessage
 
-      let worktreePath = tmpDir / "worktree"
-      createDir(worktreePath)
-      let request = AgentRunRequest(
-        prompt: "Write code.",
-        workingDir: worktreePath,
-        harness: harnessCodex,
-        model: "gpt-5.6-terra",
-        reasoningEffort: "high",
-        mcpEndpoint: "http://127.0.0.1:8097",
-        ticketId: "0001",
-        binary: codexPath,
-        logRoot: tmpDir / "logs",
-      )
-      var streamedEvents: seq[string] = @[]
-      var mutableRequest = request
-      mutableRequest.onEvent = proc(event: AgentStreamEvent) =
-        ## Capture streamed agent events for callback wiring assertions.
-        streamedEvents.add($event.kind & ":" & event.text)
-      let result = runAgent(mutableRequest)
-      check result.backend == harnessCodex
-      check result.exitCode == 0
-      check result.timeoutKind == "none"
-      check result.lastMessage.contains("done")
-      check "model_reasoning_effort=\"high\"" in result.command
-      check "mcp_servers.scriptorium.url=\"http://127.0.0.1:8097/mcp\"" in result.command
-      check "mcp_servers.scriptorium.enabled=true" in result.command
-      check "mcp_servers.scriptorium.required=true" in result.command
-      check streamedEvents.len > 0
-      check streamedEvents[0].contains("message:ok")
-    )
+  test "native turns reuse one session and resumed history is not a new reply":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "first")
+    let session = openConversation(request)
+    let first = session.runTurn(request)
+    request.prompt = "second"
+    let second = session.runTurn(request)
+    check first.sessionId == second.sessionId
+    check second.lastMessage == "second-tail"
+    session.close()
+    request.restoreSession = true
+    request.prompt = "third"
+    let resumed = runAgent(request)
+    check resumed.sessionId == first.sessionId
+    check resumed.lastMessage == "third-tail"
 
-  test "runAgent routes claude-code harness to claude-code backend":
-    withTempAgentDir(proc(tmpDir: string) =
-      let claudePath = tmpDir / "fake-claude.sh"
-      writeExecutableScript(claudePath, """
-cat >/dev/null
-printf '{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}\n'
-printf '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn"}\n'
-""")
+  test "model and dependent effort are selected before prompting":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    let response = runAgent(requestFor(directory, "settings"))
+    check response.lastMessage == "fixture-model:high:agent-tail"
 
-      let worktreePath = tmpDir / "worktree"
-      createDir(worktreePath)
-      var request = AgentRunRequest(
-        prompt: "Write code.",
-        workingDir: worktreePath,
-        harness: harnessClaudeCode,
-        model: "claude-opus-5",
-        binary: claudePath,
-        logRoot: tmpDir / "logs",
-      )
-      var streamedEvents: seq[string] = @[]
-      request.onEvent = proc(event: AgentStreamEvent) =
-        ## Capture streamed agent events for callback wiring assertions.
-        streamedEvents.add($event.kind & ":" & event.text)
-      let result = runAgent(request)
+  test "read-only permissions reject writes":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "permission")
+    request.accessPolicy = accessReadOnly
+    let response = runAgent(request)
+    check response.lastMessage == "no-tail"
 
-      check result.backend == harnessClaudeCode
-      check result.exitCode == 0
-      check result.timeoutKind == "none"
-      check result.lastMessage == "ok"
-      check streamedEvents.len > 0
-      check streamedEvents.anyIt("message" in it and "ok" in it)
-    )
+  test "restricted writes require reported paths in the operation allowlist":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "permission")
+    request.accessPolicy = accessRestricted
+    request.allowedWritePaths = @["allowed.txt"]
+    check runAgent(request).lastMessage == "yes-tail"
+    request.allowedWritePaths = @["elsewhere"]
+    check runAgent(request).lastMessage == "no-tail"
 
-  test "runAgent routes typoi harness to typoi backend":
-    withTempAgentDir(proc(tmpDir: string) =
-      let typoiPath = tmpDir / "fake-typoi.sh"
-      writeExecutableScript(typoiPath, """
-last_message=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --output-last-message) last_message="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-cat >/dev/null
-printf '{"type":"status","text":"init"}\n'
-printf '{"type":"message","text":"ok"}\n'
-printf '{"type":"status","text":"done"}\n'
-printf 'done\n' > "$last_message"
-""")
+  test "restricted paths cannot escape through a symlink":
+    let directory = createTempDir("scriptorium-acp-paths-", "")
+    defer: removeDir(directory)
+    createDir(directory / "allowed")
+    createDir(directory / "outside")
+    createSymlink(directory / "outside", directory / "allowed" / "escape")
+    check not pathAllowed("allowed/escape/new.txt", directory, @["allowed"])
+    check pathAllowed("allowed/new.txt", directory, @["allowed"])
+    check not pathAllowed("allowed/../outside/new.txt", directory, @["allowed"])
 
-      let worktreePath = tmpDir / "worktree"
-      createDir(worktreePath)
-      var request = AgentRunRequest(
-        prompt: "Write code.",
-        workingDir: worktreePath,
-        harness: harnessTypoi,
-        model: "grok-code-fast-1",
-        mcpEndpoint: "http://127.0.0.1:8097",
-        ticketId: "0001",
-        binary: typoiPath,
-        logRoot: tmpDir / "logs",
-      )
-      var streamedEvents: seq[string] = @[]
-      request.onEvent = proc(event: AgentStreamEvent) =
-        ## Capture streamed agent events for callback wiring assertions.
-        streamedEvents.add($event.kind & ":" & event.text)
-      let result = runAgent(request)
+  test "disconnects settle pending handles as transport errors":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    let response = runAgent(requestFor(directory, "disconnect"))
+    check response.exitCode == 1
+    check response.failureKind == failureTransport
 
-      check result.backend == harnessTypoi
-      check result.exitCode == 0
-      check result.timeoutKind == "none"
-      check result.lastMessage.contains("done")
-      check "--mcp-server-url" in result.command
-      check "http://127.0.0.1:8097/mcp" in result.command
-      check streamedEvents.len > 0
-      check streamedEvents.anyIt("message" in it and "ok" in it)
-    )
+  test "transient retry limits are owned by the shared runner":
+    let directory = createTempDir("scriptorium-acp-retry-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "disconnect")
+    request.maxAttempts = 2
+    check runAgent(request).attemptCount == 2
+    request.prompt = "error"
+    let permanent = runAgent(request)
+    check permanent.attemptCount == 1
+    check permanent.failureKind == failureRpc
+
+  test "RPC errors retain code and data":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    let response = runAgent(requestFor(directory, "error"))
+    check response.failureKind == failureRpc
+    check response.errorCode == -32010
+    check response.errorData["detail"].getStr() == "retained"
+
+  test "inactivity cancels cooperatively and keeps the session reusable":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "silent")
+    request.noOutputTimeoutMs = 50
+    let session = openConversation(request)
+    defer: session.close()
+    let cancelled = session.runTurn(request)
+    check cancelled.failureKind == failureTimeout
+    check cancelled.timeoutKind == "no-output"
+    request.prompt = "after"
+    check session.runTurn(request).lastMessage == "after-tail"
+
+  test "stderr is diagnostic and cannot reset inactivity":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "noise")
+    request.noOutputTimeoutMs = 50
+    let response = runAgent(request)
+    check response.failureKind == failureTimeout
+    check "diagnostic noise" in readFile(response.logFile.replace(".jsonl", ".stderr.log"))
+    check "diagnostic noise" notin readFile(response.logFile)
+
+  test "unknown payloads remain structured and available to callers":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "unknown")
+    var retained = false
+    request.onEvent = proc(event: AgentStreamEvent) =
+      ## Inspect a future update without text-based protocol inference.
+      if event.kind == agentEventUnknown:
+        retained = event.update.raw["future"].getBool()
+    discard runAgent(request)
+    check retained
+
+  test "saved conversations cannot change access policy":
+    let directory = createTempDir("scriptorium-acp-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "first")
+    let response = runAgent(request)
+    request.resumeSessionId = response.sessionId
+    request.accessPolicy = accessReadOnly
+    expect ValueError:
+      discard runAgent(request)
+
+  test "completed assignments retire saved conversations":
+    let directory = createTempDir("scriptorium-acp-complete-", "")
+    defer: removeDir(directory)
+    let request = normalizeRequest(requestFor(directory, "completed"))
+    discard runAgent(request)
+    completeSessionsForWorktree(request.sessionRoot, directory)
+    check readSessionRecord(request).completed
+
+  test "retired backends have no execution fallback":
+    var request = requestFor(getTempDir(), "unused")
+    request.acpAgent = ""
+    request.harness = harnessTypoi
+    expect ValueError:
+      discard normalizeRequest(request)
+
+removeFile(fixture)

@@ -1,15 +1,15 @@
 import
-  std/[os, strutils],
+  std/[json, os, strutils, tables, tempfiles, unittest],
   scriptorium/[config, logging]
 
 proc testDefaultConfigValues() =
   ## Verify defaultConfig returns expected default values for all fields.
   let cfg = defaultConfig()
-  doAssert cfg.agents.architect.model == "claude-opus-5"
-  doAssert cfg.agents.coding.model == "claude-sonnet-5"
-  doAssert cfg.agents.manager.model == "claude-sonnet-5"
-  doAssert cfg.agents.reviewer.model == "claude-sonnet-5"
-  doAssert cfg.agents.audit.model == "claude-haiku-4-5-20251001"
+  doAssert cfg.agents.architect.model.len == 0
+  doAssert cfg.agents.coding.model.len == 0
+  doAssert cfg.agents.manager.model.len == 0
+  doAssert cfg.agents.reviewer.model.len == 0
+  doAssert cfg.agents.audit.model.len == 0
   doAssert cfg.agents.architect.harness == harnessClaudeCode
   doAssert cfg.agents.coding.harness == harnessClaudeCode
   doAssert cfg.endpoints.local == "http://127.0.0.1:8097"
@@ -51,8 +51,8 @@ proc testPartialJsonMerge() =
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.agents.coding.model == "custom-model"
-  doAssert cfg.agents.coding.harness == harnessTypoi  # inferHarness("custom-model")
-  doAssert cfg.agents.architect.model == "claude-opus-5"
+  doAssert cfg.agents.coding.acpAgent == "claude"
+  doAssert cfg.agents.architect.model.len == 0
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] partial JSON overrides only specified field"
 
@@ -215,7 +215,7 @@ proc testDashboardConfigLoading() =
   let cfg = loadConfig(tmpDir)
   doAssert cfg.dashboard.port == 9000
   doAssert cfg.dashboard.host == "0.0.0.0"
-  doAssert cfg.agents.architect.model == "claude-opus-5"
+  doAssert cfg.agents.architect.model.len == 0
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] dashboard config fields loaded correctly"
 
@@ -449,7 +449,7 @@ proc testDeepMergePreservesUserOnlyKeys() =
   writeFile(tmpDir / "scriptorium.json", json)
 
   let cfg = loadConfig(tmpDir)
-  # Known fields still work.
+  # Explicit model identifiers survive normalization.
   doAssert cfg.agents.architect.model == "claude-opus-5"
 
   # Verify unknown keys survive normalizeConfig round-trip.
@@ -650,7 +650,7 @@ proc testDiskSpaceMinGBPartialOverride() =
 
   let cfg = loadConfig(tmpDir)
   doAssert cfg.diskSpaceMinGB == 50
-  doAssert cfg.agents.architect.model == "claude-opus-5"
+  doAssert cfg.agents.architect.model.len == 0
   doAssert cfg.concurrency.maxAgents == 4
   echo "[OK] diskSpaceMinGB partial override loads custom value with other defaults preserved"
 
@@ -707,3 +707,40 @@ when isMainModule:
   testSaveConfigRoundTrip()
   testDiskSpaceMinGBPartialOverride()
   testCorruptedJsonRaisesValueError()
+
+
+suite "ACP configuration migration":
+  setup:
+    let directory = createTempDir("scriptorium-config-acp-", "")
+    let path = directory / "scriptorium.json"
+  teardown:
+    removeDir(directory)
+
+  test "legacy translation is read-only and normalization preserves unknown keys":
+    let original = """{"agents":{"coding":{"harness":"codex","model":"pinned"}},"custom":{"keep":true}}"""
+    writeFile(path, original)
+    let cfg = loadConfig(directory)
+    check cfg.agents.coding.acpAgent == "codex"
+    check cfg.agents.coding.model == "pinned"
+    check readFile(path) == original
+    normalizeConfig(directory)
+    let saved = parseFile(path)
+    check saved["custom"]["keep"].getBool()
+    check saved["agents"]["coding"]["acpAgent"].getStr() == "codex"
+    check loadConfig(directory).agents.coding.acpAgent == "codex"
+
+  test "explicit profiles and canonical budget override legacy aliases":
+    writeFile(path, """{"agents":{"coding":{"acpAgent":"custom","harness":"typoi","configOptions":{"thinking":true}}},"acpAgents":{"custom":{"command":"my-acp","args":["--stdio"],"env":{"FOO":"bar"},"readOnlyMode":"read"}},"concurrency":{"outputBudgetMB":7,"tokenBudgetMB":99}}""")
+    let cfg = loadConfig(directory)
+    check cfg.agents.coding.acpAgent == "custom"
+    check cfg.resolveAcpProfile(cfg.agents.coding).command == "my-acp"
+    check cfg.agents.coding.configOptions["thinking"].getBool()
+    check cfg.concurrency.outputBudgetMB == 7
+
+  test "legacy budgets translate and retired runners fail explicitly":
+    writeFile(path, """{"concurrency":{"tokenBudgetMB":42}}""")
+    check loadConfig(directory).concurrency.outputBudgetMB == 42
+    for retired in ["typoi", "hermes"]:
+      writeFile(path, $(%*{"agents": {"coding": {"harness": retired}}}))
+      expect ValueError:
+        discard loadConfig(directory)

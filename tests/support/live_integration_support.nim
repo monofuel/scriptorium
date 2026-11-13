@@ -8,8 +8,8 @@ import
 const
   LiveIntegrationRoot* = "/tmp/scriptorium/integration"
   CliBinaryName = "scriptorium_integration_live"
-  DefaultIntegrationModel* = "claude-opus-5"
-  DefaultIntegrationCodingModel* = "claude-sonnet-5"
+  DefaultIntegrationModel* = ""
+  DefaultIntegrationCodingModel* = ""
   CodexAuthPathEnv* = "CODEX_AUTH_FILE"
   LiveOrchestratorBasePort* = 23000
   LiveOrchestratorPortRange = 800
@@ -27,56 +27,35 @@ let
 var
   cliBinaryPath = ""
 
+const AcpBackend {.strdefine.} = "codex"
+
 proc integrationModel*(): string =
-  ## Return the configured integration model from env, or the default.
-  result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
-  if result.len == 0:
-    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationModel)
+  ## Use the adapter default unless a caller explicitly configures a model.
+  ""
 
 proc integrationCodingModel*(): string =
-  ## Return the coding-role model override, falling back to the shared test model.
-  result = getEnv("SCRIPTORIUM_TEST_CODING_MODEL", "")
-  if result.len == 0:
-    result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
-  if result.len == 0:
-    result = getEnv("CODEX_INTEGRATION_MODEL", DefaultIntegrationCodingModel)
+  ## Keep live tests independent of retired model identifiers.
+  ""
 
 proc integrationHarness*(): Harness =
-  ## Return the test harness from env, or infer from model.
-  let envVal = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip().toLowerAscii()
-  if envVal.len > 0:
-    case envVal
-    of "codex": result = harnessCodex
-    of "claude-code": result = harnessClaudeCode
-    of "typoi": result = harnessTypoi
-    of "grok-build": result = harnessGrokBuild
-    else:
-      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
-  else:
-    result = inferHarness(integrationModel())
+  ## Select a real backend through the named Make target's compile definition.
+  case AcpBackend
+  of "codex": harnessCodex
+  of "claude": harnessClaudeCode
+  of "grok": harnessGrokBuild
+  else: raise newException(ValueError, "Unknown ACP backend: " & AcpBackend)
 
 proc integrationCodingHarness*(): Harness =
-  ## Return the coding-role harness override, falling back to integrationHarness.
-  let envVal = getEnv("SCRIPTORIUM_TEST_CODING_HARNESS", "").strip().toLowerAscii()
-  if envVal.len > 0:
-    case envVal
-    of "codex": result = harnessCodex
-    of "claude-code": result = harnessClaudeCode
-    of "typoi": result = harnessTypoi
-    of "grok-build": result = harnessGrokBuild
-    else:
-      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_CODING_HARNESS: " & envVal)
-  else:
-    result = integrationHarness()
+  ## Exercise the same selected backend for every workflow role.
+  integrationHarness()
 
 proc requiredAgentBinary*(): string =
-  ## Return the binary name needed for the configured test harness.
-  let h = integrationHarness()
-  case h
-  of harnessCodex: result = "codex"
-  of harnessClaudeCode: result = "claude"
-  of harnessTypoi: result = "typoi"
-  of harnessGrokBuild: result = "grok"
+  ## Require the actual ACP executable rather than a legacy exec-mode CLI.
+  case integrationHarness()
+  of harnessCodex: "codex-acp"
+  of harnessClaudeCode: "claude-agent-acp"
+  of harnessGrokBuild: "grok"
+  else: raise newException(ValueError, "Retired backend")
 
 proc codexAuthPath*(): string =
   ## Return the configured Codex auth file path used for OAuth credentials.
@@ -97,8 +76,8 @@ proc hasAgentAuth*(): bool =
     let hasApiKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
     let hasOauth = fileExists(expandTilde("~/.claude/.credentials.json"))
     result = hasApiKey or hasOauth
-  of harnessTypoi:
-    result = true
+  of harnessTypoi, harnessHermes:
+    raise newException(ValueError, "Retired backend")
   of harnessGrokBuild:
     let hasApiKey = getEnv("XAI_API_KEY", "").len > 0
     let hasOauth = fileExists(expandTilde("~/.grok/auth.json"))
@@ -206,9 +185,17 @@ proc writeLiveConfig*(repoPath: string, endpoint: string, codingModel: string = 
   let h = integrationHarness()
   let cModel = if codingModel.len > 0: codingModel else: integrationCodingModel()
   let cHarness = if codingModel.len > 0: inferHarness(codingModel) else: integrationCodingHarness()
-  cfg.agents.architect = AgentConfig(harness: h, model: model)
-  cfg.agents.manager = AgentConfig(harness: h, model: model)
-  cfg.agents.coding = AgentConfig(harness: cHarness, model: cModel)
+  let agent = AgentConfig(acpAgent: profileName(h), harness: h, model: model,
+    hardTimeout: 300_000, noOutputTimeout: 120_000, progressTimeout: 180_000)
+  cfg.agents.architect = agent
+  cfg.agents.manager = agent
+  cfg.agents.reviewer = agent
+  cfg.agents.audit = agent
+  cfg.agents.coding = AgentConfig(acpAgent: profileName(cHarness), harness: cHarness,
+    model: cModel, hardTimeout: 300_000, noOutputTimeout: 120_000, progressTimeout: 180_000)
+  cfg.concurrency.maxAgents = 2
+  cfg.diskSpaceMinGB = 0
+  cfg.remoteSync.enabled = false
   cfg.endpoints.local = endpoint
   writeScriptoriumConfig(repoPath, cfg)
 
@@ -235,9 +222,9 @@ proc readPlanFile*(repoPath: string, relPath: string): string =
 proc ensureCliBinary*(): string =
   ## Build and cache the scriptorium CLI binary for live daemon tests.
   if cliBinaryPath.len == 0:
-    cliBinaryPath = getTempDir() / CliBinaryName
+    cliBinaryPath = ProjectRoot / ".build" / "test-binaries" / (CliBinaryName & "-" & AcpBackend & "-" & $getCurrentProcessId())
     runCmdOrDie(
-      "nim c -o:" & quoteShell(cliBinaryPath) & " " & quoteShell(ProjectRoot / "src/scriptorium.nim")
+      "nim c --hints:off --nimcache:" & quoteShell(ProjectRoot / ".build" / "test-cache" / ("live-cli-" & AcpBackend & "-" & $getCurrentProcessId())) & " -o:" & quoteShell(cliBinaryPath) & " " & quoteShell(ProjectRoot / "src/scriptorium.nim")
     )
   result = cliBinaryPath
 
@@ -247,7 +234,7 @@ proc orchestratorPort*(offset: int): int =
 
 proc latestOrchestratorLogPath*(repoPath: string): string =
   ## Return the latest orchestrator log file path for one test repository.
-  let logDir = "/tmp/scriptorium" / lastPathPart(repoPath)
+  let logDir = repoPath / ".scriptorium" / "logs" / "orchestrator"
   if dirExists(logDir):
     for filePath in walkDirRec(logDir):
       if filePath.toLowerAscii().endsWith(".log"):
@@ -300,12 +287,16 @@ proc waitForCondition*(timeoutMs: int, pollMs: int, condition: proc(): bool): bo
     elapsedMs = (epochTime() - startedAt) * 1000.0
 
 proc stopProcessWithSigint*(process: Process) =
-  ## Send SIGINT to one process, wait briefly, then close process handles.
-  if process.peekExitCode() == -1:
-    let pid = processID(process)
-    discard posix.kill(Pid(pid), SIGINT)
-    discard process.waitForExit(ShutdownTimeoutMs)
+  ## Require clean shutdown and report timeout/crash cleanup as a test failure.
+  var code = process.peekExitCode()
+  if code == -1:
+    discard posix.kill(Pid(processID(process)), SIGINT)
+    code = process.waitForExit(ShutdownTimeoutMs)
+  if code == -1:
+    process.kill()
+    discard process.waitForExit()
   process.close()
+  doAssert code == 0, "Orchestrator did not stop cleanly; exit=" & $code
 
 proc startOrchestrator*(repoPath: string): Process =
   ## Start the live orchestrator process in repoPath.

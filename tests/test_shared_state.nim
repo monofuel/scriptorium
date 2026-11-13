@@ -11,7 +11,7 @@ suite "cleanupTicketTimings":
     ticketCodingWalls.clear()
     ticketTestWalls.clear()
     ticketModels.clear()
-    ticketStdoutBytes.clear()
+    ticketOutputBytes.clear()
 
   test "removes all state for a ticket":
     let ticketId = "0046"
@@ -20,7 +20,7 @@ suite "cleanupTicketTimings":
     ticketCodingWalls[ticketId] = 10.0
     ticketTestWalls[ticketId] = 5.0
     ticketModels[ticketId] = "test-model"
-    ticketStdoutBytes[ticketId] = 100
+    ticketOutputBytes[ticketId] = 100
 
     cleanupTicketTimings(ticketId)
     check ticketId notin ticketStartTimes
@@ -28,7 +28,7 @@ suite "cleanupTicketTimings":
     check ticketId notin ticketCodingWalls
     check ticketId notin ticketTestWalls
     check ticketId notin ticketModels
-    check ticketId notin ticketStdoutBytes
+    check ticketId notin ticketOutputBytes
 
 suite "health cache persistence":
   test "readHealthCache returns empty table when file does not exist":
@@ -140,43 +140,61 @@ suite "agent slot types":
   test "emptySlotCount returns maxAgents when no agents running":
     check emptySlotCount(4) == 4
 
-suite "token budget tracking":
+suite "output budget tracking":
   setup:
-    ticketStdoutBytes.clear()
+    ticketOutputBytes.clear()
+    resetSessionStats()
 
-  test "getSessionStdoutBytes sums all ticket values":
-    ticketStdoutBytes["0001"] = 1000
-    ticketStdoutBytes["0002"] = 2000
-    ticketStdoutBytes["0003"] = 3000
-    check getSessionStdoutBytes() == 6000
+  test "getSessionOutputBytes sums all ticket values":
+    ticketOutputBytes["0001"] = 1000
+    recordOutputBytes(1000)
+    ticketOutputBytes["0002"] = 2000
+    recordOutputBytes(2000)
+    ticketOutputBytes["0003"] = 3000
+    recordOutputBytes(3000)
+    check getSessionOutputBytes() == 6000
 
-  test "getSessionStdoutBytes returns 0 when empty":
-    check getSessionStdoutBytes() == 0
+  test "getSessionOutputBytes returns 0 when empty":
+    check getSessionOutputBytes() == 0
 
-  test "isTokenBudgetExceeded returns false when tokenBudgetMB is 0":
-    ticketStdoutBytes["0001"] = 100 * 1024 * 1024
-    check isTokenBudgetExceeded(0) == false
+  test "isOutputBudgetExceeded returns false when tokenBudgetMB is 0":
+    ticketOutputBytes["0001"] = 100 * 1024 * 1024
+    recordOutputBytes(100 * 1024 * 1024)
+    check isOutputBudgetExceeded(0) == false
 
-  test "isTokenBudgetExceeded returns false when tokenBudgetMB is negative":
-    ticketStdoutBytes["0001"] = 100 * 1024 * 1024
-    check isTokenBudgetExceeded(-1) == false
+  test "isOutputBudgetExceeded returns false when tokenBudgetMB is negative":
+    ticketOutputBytes["0001"] = 100 * 1024 * 1024
+    recordOutputBytes(100 * 1024 * 1024)
+    check isOutputBudgetExceeded(-1) == false
 
-  test "isTokenBudgetExceeded returns true when budget exceeded":
-    ticketStdoutBytes["0001"] = 5 * 1024 * 1024
-    ticketStdoutBytes["0002"] = 6 * 1024 * 1024
-    check isTokenBudgetExceeded(10) == true
+  test "isOutputBudgetExceeded returns true when budget exceeded":
+    ticketOutputBytes["0001"] = 5 * 1024 * 1024
+    recordOutputBytes(5 * 1024 * 1024)
+    ticketOutputBytes["0002"] = 6 * 1024 * 1024
+    recordOutputBytes(6 * 1024 * 1024)
+    check isOutputBudgetExceeded(10) == true
 
-  test "isTokenBudgetExceeded returns false when under budget":
-    ticketStdoutBytes["0001"] = 2 * 1024 * 1024
-    ticketStdoutBytes["0002"] = 3 * 1024 * 1024
-    check isTokenBudgetExceeded(10) == false
+  test "isOutputBudgetExceeded returns false when under budget":
+    ticketOutputBytes["0001"] = 2 * 1024 * 1024
+    recordOutputBytes(2 * 1024 * 1024)
+    ticketOutputBytes["0002"] = 3 * 1024 * 1024
+    recordOutputBytes(3 * 1024 * 1024)
+    check isOutputBudgetExceeded(10) == false
 
   test "running agents not interrupted when budget exceeded":
-    ## Verify that ticketStdoutBytes entries remain intact when budget is exceeded.
-    ticketStdoutBytes["0001"] = 5 * 1024 * 1024
-    ticketStdoutBytes["0002"] = 6 * 1024 * 1024
-    let exceeded = isTokenBudgetExceeded(10)
+    ## Verify that ticketOutputBytes entries remain intact when budget is exceeded.
+    ticketOutputBytes["0001"] = 5 * 1024 * 1024
+    recordOutputBytes(5 * 1024 * 1024)
+    ticketOutputBytes["0002"] = 6 * 1024 * 1024
+    recordOutputBytes(6 * 1024 * 1024)
+    let exceeded = isOutputBudgetExceeded(10)
     check exceeded == true
     # Existing entries are not cleared or modified.
-    check ticketStdoutBytes["0001"] == 5 * 1024 * 1024
-    check ticketStdoutBytes["0002"] == 6 * 1024 * 1024
+    check ticketOutputBytes["0001"] == 5 * 1024 * 1024
+    check ticketOutputBytes["0002"] == 6 * 1024 * 1024
+
+  test "completed tickets do not replenish the session budget":
+    ticketOutputBytes["done"] = 1024
+    recordOutputBytes(1024)
+    cleanupTicketTimings("done")
+    check getSessionOutputBytes() == 1024

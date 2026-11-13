@@ -2,7 +2,8 @@
 
 import
   std/[json, os, osproc, strformat, strutils, tempfiles, times, unittest],
-  scriptorium/[agent_runner, config, orchestrator, prompt_builders]
+  scriptorium/[agent_runner, config, orchestrator, prompt_builders],
+  ./support/live_integration_support
 
 const
   LiveMcpBasePort = 24000
@@ -12,54 +13,6 @@ const
 
 var
   liveServers: seq[AgentMcpHost] = @[]
-
-proc integrationModel(): string =
-  ## Return the configured integration model, or the default.
-  result = getEnv("SCRIPTORIUM_TEST_MODEL", "")
-  if result.len == 0:
-    result = getEnv("CODEX_INTEGRATION_MODEL", "gpt-5.6-sol")
-
-proc integrationHarness(): Harness =
-  ## Return the test harness from env, or infer from model.
-  let envVal = getEnv("SCRIPTORIUM_TEST_HARNESS", "").strip().toLowerAscii()
-  if envVal.len > 0:
-    case envVal
-    of "codex": result = harnessCodex
-    of "claude-code": result = harnessClaudeCode
-    of "typoi": result = harnessTypoi
-    of "grok-build": result = harnessGrokBuild
-    else:
-      raise newException(ValueError, "unknown SCRIPTORIUM_TEST_HARNESS: " & envVal)
-  else:
-    result = inferHarness(integrationModel())
-
-proc hasAgentAuth(): bool =
-  ## Return true when API keys are available for the configured test harness.
-  let h = integrationHarness()
-  case h
-  of harnessCodex:
-    let hasApiKey = getEnv("OPENAI_API_KEY", "").len > 0 or getEnv("CODEX_API_KEY", "").len > 0
-    let hasOauth = fileExists(expandTilde("~/.codex/auth.json"))
-    result = hasApiKey or hasOauth
-  of harnessClaudeCode:
-    let hasApiKey = getEnv("ANTHROPIC_API_KEY", "").len > 0
-    let hasOauth = fileExists(expandTilde("~/.claude/.credentials.json"))
-    result = hasApiKey or hasOauth
-  of harnessTypoi:
-    result = true
-  of harnessGrokBuild:
-    let hasApiKey = getEnv("XAI_API_KEY", "").len > 0
-    let hasOauth = fileExists(expandTilde("~/.grok/auth.json"))
-    result = hasApiKey or hasOauth
-
-proc requiredAgentBinary(): string =
-  ## Return the binary name needed for the configured test harness.
-  let h = integrationHarness()
-  case h
-  of harnessCodex: result = "codex"
-  of harnessClaudeCode: result = "claude"
-  of harnessTypoi: result = "typoi"
-  of harnessGrokBuild: result = "grok"
 
 proc mcpPort(offset: int): int =
   ## Return a deterministic local MCP port for one test offset.
@@ -103,7 +56,9 @@ suite "integration review agent live":
     var serverThread: Thread[ServerThreadArgs]
     createThread(serverThread, runHttpServer, (httpServer, "127.0.0.1", port))
     waitForServerReady("127.0.0.1", port)
-    liveServers.add(httpServer)
+    defer:
+      signalServerShutdown()
+      joinThread(serverThread)
 
     let tmpDir = createTempDir("scriptorium_integration_review_agent_", "", getTempDir())
     defer:
@@ -146,13 +101,13 @@ suite "integration review agent live":
     doAssert agentResult.exitCode == 0,
       "review agent failed to complete.\n" &
       "Exit code: " & $agentResult.exitCode & "\n" &
-      "Stdout:\n" & agentResult.stdout
+      "Error: " & agentResult.errorMessage & "; log: " & agentResult.logFile
 
     let decision = reviewerSubmission(mcpSession)
     doAssert decision.action in ["approve", "approve_with_warnings", "request_changes"],
       "review agent did not call submit_review with a valid action.\n" &
       "Action: \"" & decision.action & "\"\n" &
       "Feedback: \"" & decision.feedback & "\"\n" &
-      "Stdout:\n" & agentResult.stdout
+      "Error: " & agentResult.errorMessage & "; log: " & agentResult.logFile
 
     check decision.called

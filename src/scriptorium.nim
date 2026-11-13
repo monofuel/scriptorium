@@ -3,7 +3,7 @@ import
   ./scriptorium/[config, dashboard, discord_bot, git_ops, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
-  Version = "19.5.0"
+  Version = "20.0.0-dev"
   Usage = """scriptorium - agent orchestration system
 
 Usage:
@@ -81,10 +81,18 @@ proc cmdStatus() =
     let depList = item.dependsOn.join(", ")
     echo fmt"Waiting: {item.ticketId} (depends on {depList})"
 
+proc resumeArgument(args: seq[string]): string =
+  ## Accept explicit recovery only for native interactive conversations.
+  if args.len > 0 and args[0] == "--resume":
+    if args.len != 2 or args[1].len == 0:
+      raise newException(ValueError, "Use --resume <session-id> without a one-shot prompt")
+    result = args[1]
+
 proc cmdPlan(args: seq[string]) =
   ## Ask the architect model to revise spec.md, interactively or one-shot.
-  if args.len == 0:
-    runInteractivePlanSession(getCurrentDir())
+  let resume = resumeArgument(args)
+  if args.len == 0 or resume.len > 0:
+    runInteractivePlanSession(getCurrentDir(), resumeSessionId = resume)
   else:
     let prompt = args.join(" ").strip()
     let changed = updateSpecFromArchitect(getCurrentDir(), prompt)
@@ -93,14 +101,18 @@ proc cmdPlan(args: seq[string]) =
     else:
       echo "scriptorium: spec.md unchanged"
 
-proc cmdAsk() =
+proc cmdAsk(args: seq[string]) =
   ## Start a read-only Q&A session with the Architect.
-  runInteractiveAskSession(getCurrentDir())
+  let resume = resumeArgument(args)
+  if args.len > 0 and resume.len == 0:
+    raise newException(ValueError, "ask accepts only --resume <session-id>")
+  runInteractiveAskSession(getCurrentDir(), resumeSessionId = resume)
 
 proc cmdDo(args: seq[string]) =
   ## Run the architect as a coding agent with full repo access.
-  if args.len == 0:
-    runInteractiveDoSession(getCurrentDir())
+  let resume = resumeArgument(args)
+  if args.len == 0 or resume.len > 0:
+    runInteractiveDoSession(getCurrentDir(), resumeSessionId = resume)
   else:
     let prompt = args.join(" ").strip()
     runOneShotDoSession(getCurrentDir(), prompt)
@@ -197,7 +209,7 @@ when isMainModule:
     let planArgs = if args.len > 1: args[1..^1] else: @[]
     cmdPlan(planArgs)
   of "ask":
-    cmdAsk()
+    cmdAsk(if args.len > 1: args[1..^1] else: @[])
   of "do":
     let doArgs = if args.len > 1: args[1..^1] else: @[]
     cmdDo(doArgs)
