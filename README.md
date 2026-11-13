@@ -313,8 +313,8 @@ scriptorium plan "Add CI checks for merge queue invariants"
 ```
 
 The Architect reads source from the repository and writes `spec.md` and optional
-`tickets/open/` entries in `.scriptorium/worktrees/plan`. Other writes fail the
-command. Interactive `/show`, `/help`, and `/quit` commands remain available.
+`tickets/open/` entries in `.scriptorium/worktrees/plan`. Other writes are reverted by the
+post-run guard. Interactive `/show`, `/help`, and `/quit` commands remain available.
 Each interactive conversation uses one native ACP session rather than embedding
 previous replies into every prompt.
 
