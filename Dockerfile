@@ -7,8 +7,6 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
 ARG NIM_VERSION=2.2.14
 ARG NIMBY_VERSION=0.2.4
-ARG BUILD_COMMIT=unknown
-ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN curl -fsSL "https://nim-lang.org/download/nim-${NIM_VERSION}-linux_x64.tar.xz" | tar -xJ -C /opt
 RUN curl -fsSL "https://github.com/treeform/nimby/releases/download/${NIMBY_VERSION}/nimby-Linux-X64" -o /usr/local/bin/nimby \
     && chmod +x /usr/local/bin/nimby
@@ -21,6 +19,8 @@ RUN make setup agent-setup
 COPY scriptorium.nimble ./
 COPY src ./src
 COPY scripts ./scripts
+ARG BUILD_COMMIT=unknown
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN make build && cp scriptorium /usr/local/bin/
 RUN useradd -m -s /bin/bash scriptorium \
     && chown -R scriptorium:scriptorium /app/.build
