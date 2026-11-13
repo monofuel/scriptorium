@@ -146,8 +146,9 @@ docker compose exec scriptorium /app/scriptorium worktrees
 - **Tickets completing:** Look for `submit_pr called` followed by
   `merge queue entered`.
 - **Tests passing:** Look for `merge queue: PASS` before merges to master.
-- **Rate limits:** Look for `rate limit detected` — the orchestrator will
-  back off automatically and reduce concurrency.
+- **Agent failures:** Inspect typed ACP failure details and separate stderr
+  diagnostics. Transient transport/timeouts have bounded retries; permanent
+  protocol, configuration, or RPC failures need their underlying cause fixed.
 - **Stuck tickets:** Look for `tickets/stuck/` — these have failed too many
   times. Check the ticket file for failure notes.
 - **Merge conflicts:** Look for `merge failed` — the ticket goes back for
@@ -208,8 +209,8 @@ All scripts `cd` to the repo root and use `docker compose run --rm`.
   The orchestrator picks up spec changes on the next tick.
 
 - **Check agent output:** Each coding agent writes a log file. The path is
-  logged when the agent starts. These contain the full agent stdout including
-  tool calls and reasoning.
+  logged when the agent starts. These contain structured ACP events, tool calls,
+  reasoning, and separate stderr diagnostics.
 
 - **Parallel agents:** With `maxAgents > 1`, multiple coding agents run
   simultaneously on independent areas. Watch for merge conflicts if agents

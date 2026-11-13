@@ -7,7 +7,7 @@ const
   SetupTimeoutMs = 60_000
   CancelGraceMs = 5000
   PollIntervalMs = 25
-  ClientVersion = "20.0.0-dev"
+  ClientVersion = "20.0.0"
 
 type
   PacketKind = enum

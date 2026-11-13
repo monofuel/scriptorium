@@ -3,7 +3,7 @@ import
   ./scriptorium/[config, dashboard, discord_bot, git_ops, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
-  Version = "20.0.0-dev"
+  Version = "20.0.0"
   Usage = """scriptorium - agent orchestration system
 
 Usage:

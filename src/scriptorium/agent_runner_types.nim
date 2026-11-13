@@ -78,6 +78,7 @@ type
     attempt*: int
     attemptCount*: int
     stdout*: string
+      ## Deprecated fixture compatibility; ACP execution leaves this empty.
     logFile*: string
     lastMessageFile*: string
     lastMessage*: string

@@ -15,10 +15,13 @@ RUN curl -fsSL "https://github.com/treeform/nimby/releases/download/${NIMBY_VERS
 ENV PATH="/opt/nim-2.2.14/bin:/usr/local/bin:/app/.build/agent-tools/node_modules/.bin:${PATH}"
 
 WORKDIR /app
-COPY nimby.lock scriptorium.nimble Makefile config.nims package.json package-lock.json ./
+COPY nimby.lock Makefile config.nims package.json package-lock.json ./
+COPY scripts/setup.nim scripts/agent_setup.nim ./scripts/
+RUN make setup agent-setup
+COPY scriptorium.nimble ./
 COPY src ./src
 COPY scripts ./scripts
-RUN make setup agent-setup build && cp scriptorium /usr/local/bin/
+RUN make build && cp scriptorium /usr/local/bin/
 RUN useradd -m -s /bin/bash scriptorium \
     && chown -R scriptorium:scriptorium /app/.build
 USER scriptorium

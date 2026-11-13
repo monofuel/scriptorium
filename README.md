@@ -197,8 +197,7 @@ their commits, and generates `nim.cfg`. It does not change global Nimby packages
 `make agent-setup` installs the locked CLIs and official ACP adapters under
 `.build/agent-tools`, without replacing global installations. Add the resulting
 `node_modules/.bin` directory to PATH when using Scriptorium in another project.
-Use `nix develop` for system libraries on NixOS; the compiler must still meet the
-minimum version.
+Use `nix develop` for the pinned compiler and system libraries on NixOS.
 
 ### 3) Initialize a repo
 
@@ -427,6 +426,8 @@ make docker-build                  # Build locally; does not publish
 
 Docker bundles the pinned compiler, CLI tools, adapters and dependencies. Compose
 mounts the repository and existing Codex, Claude, and Grok credential directories.
+The Mattermost service is optional: enable it with `docker compose --profile chat up`.
+A `.env` file is optional; shell credentials or mounted CLI logins also work.
 Rebuild after changing Scriptorium or its tool/dependency locks. See
 [the v20 migration record](docs/v20.md) and [version runbook](docs/version-runbook.md).
 

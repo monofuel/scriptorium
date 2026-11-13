@@ -6,6 +6,19 @@ import
   helpers
 
 suite "scriptorium import":
+  test "failed ACP turns do not commit a partial spec":
+    let directory = getTempDir() / "scriptorium_test_import_failed_turn"
+    makeInitializedTestRepo(directory)
+    defer: removeDir(directory)
+    let before = planCommitCount(directory)
+    proc failedRunner(request: AgentRunRequest): AgentRunResult =
+      ## Represent a provider failure after a partial permitted edit.
+      writeFile(request.workingDir / "spec.md", "# Incomplete spec\n")
+      AgentRunResult(exitCode: 1, failureKind: failureRpc, errorMessage: "Provider failure")
+    expect IOError:
+      discard importSpecFromRepository(directory, failedRunner)
+    check planCommitCount(directory) == before
+
   test "import prompt reconciles reality while preserving plans":
     let prompt = buildArchitectImportPrompt(
       "/tmp/project",

@@ -32,6 +32,7 @@ services:
     command: ["dashboard"]
 
   mattermost:
+    profiles: ["chat"]
     init: true
     restart: unless-stopped
     build:
@@ -45,7 +46,9 @@ services:
       - ~/.ssh:/home/scriptorium/.ssh:ro
       - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     working_dir: /workspace
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     command: ["mattermost"]
