@@ -25,7 +25,7 @@ jobs:
           curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
           sudo install -m755 "$RUNNER_TEMP/nimby" /usr/local/bin/nimby
           sudo apt-get update
-          sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+          sudo apt-get install -y libssl-dev libcurl4-openssl-dev
           make setup
       - run: make test test-arc
       - run: make build
@@ -44,7 +44,7 @@ jobs:
           curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
           sudo install -m755 "$RUNNER_TEMP/nimby" /usr/local/bin/nimby
           sudo apt-get update
-          sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+          sudo apt-get install -y libssl-dev libcurl4-openssl-dev
           make setup
       - run: make build
       - name: Package linux binary

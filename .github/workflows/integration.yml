@@ -31,7 +31,7 @@ jobs:
           test -n "$ANTHROPIC_API_KEY"
           test -n "$XAI_API_KEY"
       - name: Install system libraries
-        run: sudo apt-get update && sudo apt-get install -y libpcre3-dev libssl-dev libcurl4-openssl-dev
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev libcurl4-openssl-dev
       - name: Install pinned Nimby
         run: |
           curl -fsSL https://github.com/treeform/nimby/releases/download/0.2.4/nimby-Linux-X64 -o "$RUNNER_TEMP/nimby"
