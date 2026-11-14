@@ -6,7 +6,7 @@ NIM_FLAGS ?= --hints:off --warnings:off
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
 
-.PHONY: setup agent-setup build test test-arc test-orc integration-test integration-test-codex integration-test-claude integration-test-grok e2e-test e2e-test-codex e2e-test-claude e2e-test-grok docker-build docker-build-push ci check-updates
+.PHONY: setup agent-setup build test test-arc test-orc integration-test integration-test-codex integration-test-claude integration-test-grok integration-test-hermes e2e-test e2e-test-codex e2e-test-claude e2e-test-grok docker-build docker-build-push ci check-updates
 
 setup: nim.cfg
 
@@ -40,6 +40,9 @@ integration-test-claude: nim.cfg
 
 integration-test-grok: nim.cfg
 	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_acp_harness.nim grok
+
+integration-test-hermes: nim.cfg
+	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_hermes_acp.nim
 
 e2e-test: e2e-test-codex e2e-test-claude e2e-test-grok
 

@@ -399,8 +399,9 @@ interrupted moves and queue changes.
 ```bash
 make test                         # Offline unit tests, bounded parallel jobs
 make test-arc test-orc             # ACP lifecycle under both memory managers
-make integration-test             # Real git/HTTP and all three ACP backends
+make integration-test             # Real git/HTTP and all ACP integrations, including Hermes
 make integration-test-codex        # One real ACP backend (also claude / grok)
+make integration-test-hermes       # System Hermes, Switchyard auto-kev, and real MCP
 make e2e-test                      # Real spec-to-merge workflow for each backend
 make e2e-test-grok                 # One full workflow (also codex / claude)
 ```
@@ -414,6 +415,15 @@ native turns, restore with a fresh MCP endpoint, cancellation/reuse, concurrent
 isolation, and shutdown. Results are retained under `.build/test-results` and
 `.build/live`. Run each suite once per relevant change, rerunning failures after
 fixing their cause.
+
+The Hermes smoke test uses the installed `hermes acp` and Switchyard's
+`https://switchyard.mle.monofuel.dev/v1` endpoint with model `auto-kev`.
+Update system Hermes and install its ACP dependencies before running
+`make integration-test-hermes`. The test checks the live route, writes a proof
+file, and verifies a real scoped `submit_pr` call through Scriptorium's ACP
+runner. Its workspace, configuration, and gateway are temporary; normal Hermes
+settings and project role assignments are not changed. Transcripts remain in
+`.build/live/hermes`. An unavailable route fails the test rather than skipping.
 
 Build/PR CI runs offline tests and packages the binary. Trusted master/manual
 integration and E2E workflows install the pinned CLIs/adapters and require
