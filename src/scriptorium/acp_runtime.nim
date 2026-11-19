@@ -1,5 +1,5 @@
 import
-  std/[json, monotimes, options, os, sha1, strtabs, strutils, tables, times],
+  std/[json, locks, monotimes, options, os, sha1, strtabs, strutils, tables, times],
   acport,
   ./[acp_permissions, agent_runner_types, agent_sessions, agent_usage, config]
 
@@ -7,6 +7,8 @@ const
   SetupTimeoutMs = 60_000
   CancelGraceMs = 5000
   PollIntervalMs = 25
+  InteractionPollMs = 10
+  UrlSchemes = ["https://", "http://"]
   ClientVersion = "20.0.2"
 
 type
@@ -19,6 +21,7 @@ type
     packets: Channel[CallbackPacket]
     policy: AgentAccessPolicy
     scope: cstring
+    interaction: ptr InteractionBridge
   AgentConversation* = ref object
     client: AcpClient
     session: AcpSession
@@ -60,9 +63,82 @@ proc captureDiagnostic(userData: pointer, message: string) {.gcsafe.} =
   let bridge = cast[ptr CallbackBridge](userData)
   bridge.packets.send(CallbackPacket(kind: diagnosticPacket, text: message))
 
+proc newInteractionBridge*(): ptr InteractionBridge =
+  ## Allocate a process-lifetime interaction rendezvous in shared memory.
+  result = cast[ptr InteractionBridge](allocShared0(sizeof(InteractionBridge)))
+  initLock(result.lock)
+  result.requests.open()
+  result.replies.open()
+  result.completions.open()
+
+proc freeInteractionBridge*(bridge: ptr InteractionBridge) =
+  ## Release a bridge after every conversation that referenced it has closed.
+  if bridge == nil: return
+  bridge.requests.close()
+  bridge.replies.close()
+  bridge.completions.close()
+  deinitLock(bridge.lock)
+  deallocShared(bridge)
+
+proc interactionActive*(bridge: ptr InteractionBridge): bool =
+  ## Report whether a native agent is currently waiting for an answer.
+  bridge != nil and atomicLoadN(addr bridge.activeId, ATOMIC_ACQUIRE) != 0
+
+proc nextInteraction*(bridge: ptr InteractionBridge): JsonNode =
+  ## Return the live pending request, discarding requests whose asker gave up.
+  while result.isNil:
+    let (received, text) = bridge.requests.tryRecv()
+    if not received: break
+    let request = parseJson(text)
+    if request["id"].getInt() == atomicLoadN(addr bridge.activeId, ATOMIC_ACQUIRE):
+      result = request
+
+proc nextCompletion*(bridge: ptr InteractionBridge): JsonNode =
+  ## Return the next URL elicitation completion a native agent reported, or nil.
+  let (received, text) = bridge.completions.tryRecv()
+  if received: result = parseJson(text)
+
+proc answerInteraction*(bridge: ptr InteractionBridge, id: int, reply: JsonNode) =
+  ## Deliver an answer; askers ignore answers for requests they abandoned.
+  bridge.replies.send($(%*{"id": id, "reply": reply}))
+
+proc askInteraction(bridge: ptr InteractionBridge, context: RequestContext,
+    kind: string, payload: JsonNode): JsonNode =
+  ## Block a callback worker until the embedding server answers; nil means cancelled.
+  acquire(bridge.lock)
+  defer: release(bridge.lock)
+  inc bridge.nextId
+  let id = bridge.nextId
+  atomicStoreN(addr bridge.activeId, id, ATOMIC_RELEASE)
+  defer: atomicStoreN(addr bridge.activeId, 0, ATOMIC_RELEASE)
+  bridge.requests.send($(%*{"id": id, "kind": kind, "payload": payload}))
+  while result.isNil and not context.isCancelled():
+    let (received, text) = bridge.replies.tryRecv()
+    if received:
+      let reply = parseJson(text)
+      if reply["id"].getInt() == id: result = reply["reply"]
+    else:
+      sleep(InteractionPollMs)
+
+proc confirmPermission(bridge: ptr InteractionBridge, context: RequestContext,
+    request: PermissionRequest, decided: PermissionOutcome): PermissionOutcome =
+  ## Let the embedding client narrow a policy-approved action; it can never widen policy.
+  var allowId, rejectId: string
+  for option in request.options:
+    if option.kind == "allow_once": allowId = option.optionId
+    elif option.kind == "reject_once": rejectId = option.optionId
+  result = decided
+  if allowId.len > 0 and decided.outcome == "selected" and decided.optionId == allowId:
+    let reply = bridge.askInteraction(context, "permission", %*{
+      "permission": request.toJsonNode(), "allowOptionId": allowId,
+      "rejectOptionId": rejectId})
+    if reply.isNil or not reply{"allow"}.getBool():
+      result = if rejectId.len > 0: PermissionOutcome(outcome: "selected", optionId: rejectId)
+        else: PermissionOutcome(outcome: "cancelled")
+
 proc decidePermission(context: RequestContext, request: PermissionRequest,
     userData: pointer): PermissionOutcome {.gcsafe.} =
-  ## Apply immutable operation policy on the permission request worker.
+  ## Apply immutable operation policy, then let an embedding client narrow allowed actions.
   if context.isCancelled(): return PermissionOutcome(outcome: "cancelled")
   let
     bridge = cast[ptr CallbackBridge](userData)
@@ -70,8 +146,36 @@ proc decidePermission(context: RequestContext, request: PermissionRequest,
   var paths: seq[string]
   for path in scope["paths"]: paths.add(path.getStr())
   result = permissionOutcome(request, bridge.policy, scope["cwd"].getStr(), paths)
+  if bridge.interaction != nil:
+    result = bridge.interaction.confirmPermission(context, request, result)
   bridge.packets.send(CallbackPacket(kind: permissionPacket,
     text: $(%*{"permission": request.toJsonNode(), "decision": result.toJsonNode()})))
+
+proc forwardElicitation(context: RequestContext, request: ElicitationRequest,
+    userData: pointer): ElicitationResponse {.gcsafe.} =
+  ## Relay a form or URL question to the embedding client, cancelling when none can answer.
+  ## URLs other than http(s) are declined without asking; the client decides whether to open one.
+  let bridge = cast[ptr CallbackBridge](userData)
+  result = ElicitationResponse(action: cancelElicitation)
+  var forwardable = bridge.interaction != nil and not context.isCancelled()
+  if request.mode == urlElicitation:
+    var allowedScheme = false
+    for scheme in UrlSchemes:
+      if request.url.toLowerAscii().startsWith(scheme): allowedScheme = true
+    if not allowedScheme:
+      result = ElicitationResponse(action: declineElicitation)
+      forwardable = false
+  if forwardable:
+    let reply = bridge.interaction.askInteraction(context, "elicitation", request.toJsonNode())
+    if not reply.isNil: result = parseElicitationResponse(reply)
+  bridge.packets.send(CallbackPacket(kind: permissionPacket,
+    text: $(%*{"elicitation": request.message, "mode": $request.mode, "action": $result.action})))
+
+proc forwardCompletion(completion: ElicitationComplete, userData: pointer) {.gcsafe.} =
+  ## Queue a native URL-flow completion for the embedding server to report to its client.
+  let bridge = cast[ptr CallbackBridge](userData)
+  if bridge.interaction != nil:
+    bridge.interaction.completions.send($(%*{"elicitationId": completion.elicitationId}))
 
 proc close*(conversation: AgentConversation) =
   ## Join callbacks before destroying the application-owned shared bridge.
@@ -171,6 +275,29 @@ proc executablePath*(command: string): string =
   if result.len == 0:
     raise newException(ValueError, "ACP executable not found: " & command & "; run make agent-setup")
 
+proc launchEnvironment(request: AgentRunRequest): StringTableRef =
+  ## Build profile environment overrides and pinned adapter executable paths.
+  result = newStringTable(modeCaseSensitive)
+  for key, value in request.profile.env: result[key] = value
+  if request.homeDirectory.len > 0: result["HOME"] = request.homeDirectory
+  if request.acpAgent == "claude": result["CLAUDECODE"] = ""
+  if request.profile.command == "codex-acp" and getEnv("CODEX_PATH").len == 0 and
+      not result.hasKey("CODEX_PATH"):
+    result["CODEX_PATH"] = executablePath("codex")
+  if request.profile.command == "claude-agent-acp" and
+      getEnv("CLAUDE_CODE_EXECUTABLE").len == 0 and
+      not result.hasKey("CLAUDE_CODE_EXECUTABLE"):
+    result["CLAUDE_CODE_EXECUTABLE"] = executablePath("claude")
+
+proc probeAgentCapabilities*(rawRequest: AgentRunRequest): JsonNode =
+  ## Launch the configured agent only long enough to read its advertised capabilities.
+  let request = normalizeRequest(rawRequest)
+  let client = newAcpClient("scriptorium", ClientVersion)
+  defer: client.close()
+  client.connect(executablePath(request.profile.command), request.profile.args,
+    workingDir = request.workingDir, environment = launchEnvironment(request), workerThreads = 1)
+  result = client.initialize(SetupTimeoutMs).agentCapabilities
+
 proc openConversation*(rawRequest: AgentRunRequest): AgentConversation =
   ## Open a conversation with fresh scoped MCP configuration and matching identity.
   let request = normalizeRequest(rawRequest)
@@ -180,24 +307,20 @@ proc openConversation*(rawRequest: AgentRunRequest): AgentConversation =
   result.bridge = cast[ptr CallbackBridge](allocShared0(sizeof(CallbackBridge)))
   result.bridge.policy = request.accessPolicy
   result.bridge.scope = sharedScope(request)
+  result.bridge.interaction = request.interaction
   result.bridge.packets.open()
-  result.client = newAcpClient("scriptorium", ClientVersion,
-    ClientHandlers(onUpdate: captureUpdate, onPermission: decidePermission,
-      onLog: captureDiagnostic, userData: result.bridge))
+  var handlers = ClientHandlers(onUpdate: captureUpdate, onPermission: decidePermission,
+    onLog: captureDiagnostic, userData: result.bridge)
+  if request.interaction != nil:
+    if formElicitation in request.elicitationModes:
+      handlers.onElicitationForm = forwardElicitation
+    if urlElicitation in request.elicitationModes:
+      handlers.onElicitationUrl = forwardElicitation
+      handlers.onElicitationComplete = forwardCompletion
+  result.client = newAcpClient("scriptorium", ClientVersion, handlers)
   try:
-    let environment = newStringTable(modeCaseSensitive)
-    for key, value in request.profile.env: environment[key] = value
-    if request.homeDirectory.len > 0: environment["HOME"] = request.homeDirectory
-    if request.acpAgent == "claude": environment["CLAUDECODE"] = ""
-    if request.profile.command == "codex-acp" and getEnv("CODEX_PATH").len == 0 and
-        not environment.hasKey("CODEX_PATH"):
-      environment["CODEX_PATH"] = executablePath("codex")
-    if request.profile.command == "claude-agent-acp" and
-        getEnv("CLAUDE_CODE_EXECUTABLE").len == 0 and
-        not environment.hasKey("CLAUDE_CODE_EXECUTABLE"):
-      environment["CLAUDE_CODE_EXECUTABLE"] = executablePath("claude")
     result.client.connect(executablePath(request.profile.command), request.profile.args,
-      workingDir = request.workingDir, environment = environment, workerThreads = 2)
+      workingDir = request.workingDir, environment = launchEnvironment(request), workerThreads = 2)
     let started = getMonoTime()
     let initialized = result.client.initialize(setupTimeout(started))
     var authMethod = request.profile.authMethod
@@ -206,17 +329,19 @@ proc openConversation*(rawRequest: AgentRunRequest): AgentConversation =
         request.profile.env.getOrDefault("XAI_API_KEY").len > 0: "xai.api_key" else: "cached_token"
     if authMethod.len > 0:
       result.client.authenticate(authMethod, setupTimeout(started), meta = %*{"headless": true})
-    let record = if request.restoreSession or request.resumeSessionId.len > 0:
-      readSessionRecord(request) else: AgentSessionRecord()
+    let
+      record = if request.restoreSession or request.resumeSessionId.len > 0:
+        readSessionRecord(request) else: AgentSessionRecord()
+      servers = mcpServers(request.mcpEndpoint) & request.extraMcpServers
     if record.sessionId.len > 0 and not record.completed and
         initialized.agentCapabilities.getOrDefault("loadSession").getBool():
       result.session = result.client.loadSession(record.sessionId, request.workingDir,
-        mcpServers(request.mcpEndpoint), setupTimeout(started))
+        servers, setupTimeout(started), systemPrompt = request.systemPrompt)
     else:
       if record.sessionId.len > 0:
         stderr.writeLine("scriptorium: starting a fresh ACP recovery conversation; session loading unavailable")
       result.session = result.client.newSession(request.workingDir,
-        mcpServers(request.mcpEndpoint), setupTimeout(started))
+        servers, setupTimeout(started), systemPrompt = request.systemPrompt)
     result.configureSession(request, started)
     result.saveSetupPackets("setup")
     saveSessionRecord(request, result.session.id)
@@ -314,12 +439,15 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
     lastHeartbeat = started
     cancelStarted = started
     cancelling = false
-    handle = conversation.session.startPrompt(@[textBlock(request.prompt)])
+    handle = conversation.session.startPrompt(@[textBlock(request.prompt)] & request.attachments)
     consumed = false
   try:
     while true:
       conversation.drainPackets(request, result, transcript, diagnostics, lastOutput, lastTool)
       if handle.isReady(): break
+      if request.interaction.interactionActive():
+        lastOutput = getMonoTime()
+        lastTool = lastOutput
       if not cancelling:
         if not request.cancellationRequested.isNil and request.cancellationRequested():
           result.cancelled = true

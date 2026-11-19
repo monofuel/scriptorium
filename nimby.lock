@@ -10,5 +10,5 @@ libcurl 1.0.0 https://github.com/Araq/libcurl 7a420498f60a31d99fc8513886ce36c4e8
 ws 0.6.0 https://github.com/treeform/ws c9c0c7b51e2e83cc9305a895a0b144a297b4bea8
 guildy 2.0.0 https://github.com/monofuel/guildy cfbc9c3bc7c34a56f6dd2856bbf8b6e1b6806ef2
 mosty 0.1.0 https://github.com/monofuel/mosty 5e905e380641a47b59de1ff43680e79fc1f6d5e4
-ACPort 1.1.1 https://github.com/monofuel/ACPort.git 2f4e48b09db71b79544d681f541094f03ed2b535
+ACPort 1.3.0 https://github.com/monofuel/ACPort.git ddc2c07192ed1e5f649bf18de17d0084a15c3948
 whisky 0.1.3 https://github.com/monofuel/whisky d0009565e4d8f7fd0aa33d023cc26f0b423e67aa

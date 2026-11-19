@@ -34,6 +34,10 @@ proc runningAgentCount*(): int =
   ## Return the number of currently running agent slots.
   result = runningPoolSlots.len
 
+proc runningAgentSlots*(): seq[AgentSlot] =
+  ## Return a copy of the running agent slots, including finished workers whose completion is unreceived.
+  result = runningPoolSlots
+
 proc runningAgentCountByRole*(role: AgentRole): int =
   ## Return the number of running agent slots for a specific role.
   for slot in runningPoolSlots:

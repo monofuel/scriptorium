@@ -43,7 +43,7 @@ make docker-build
 
 - Nim >= 2.2.14
 - nimby for dependency management (not nimble)
-- ACPort >= 1.1.1, MCPort >= 1.2.0, jsony, mummy, guildy, mosty
+- ACPort >= 1.3.0, MCPort >= 1.2.0, jsony, mummy, guildy, mosty
 - Run `make setup` for isolated locked Nim dependencies.
 - Run `make agent-setup` for pinned Codex/Claude/Grok CLIs and official ACP adapters.
 - Node >= 22 (Docker/CI use Node 24).
@@ -139,6 +139,14 @@ git show scriptorium/plan:spec.md | grep -i "keyword"
 - Keep read-only modes, permission decisions, and operation write guards. Stderr and heartbeats are diagnostics, not progress.
 - Persist session identity and MCP completion receipts without credentials or scoped MCP URLs.
 - Use `outputBudgetMB` for transcript bytes, not inferred token usage. `tokenBudgetMB` is a deprecated config alias.
+
+## Architect ACP bridge
+
+- `scriptorium architect-acp` serves this repository's Architect over ACP stdio. ACP stdout carries only protocol frames; logs go to stderr and `.scriptorium/logs/architect-acp`.
+- Turns, Git work and native conversations run on one owner thread. The admin lock is held per turn, never between turns.
+- Outer sessions persist metadata, ordered user content, assistant text and validated images (private, digest-named files) under `.scriptorium/architect-acp`. Never persist client MCP servers, headers, system instructions or built prompts.
+- A start receipt without an outcome means the result is uncertain; an identical prompt is declined once rather than re-executed.
+- Forwarded permissions may only narrow mode policy. Design and container contract: docs/architect-acp.md.
 
 ## Agent completion protocol
 

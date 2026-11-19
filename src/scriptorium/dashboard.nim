@@ -4,7 +4,7 @@ import
   jsony,
   mummy, mummy/routers,
   ./[architect_agent, config, dashboard_views, git_ops, logging, pause_flag,
-      shared_state, ticket_metadata]
+      runtime_status, shared_state, ticket_metadata]
 
 proc listLogIds*(repoPath: string, role: string): seq[string] =
   ## List available log identifiers for a role by scanning the log directory.
@@ -90,20 +90,13 @@ proc getApiStatus*(repoPath: string): DashboardStatus =
   var status: DashboardStatus
   status.paused = isPaused(repoPath)
 
-  let pidPath = orchestratorPidPath(repoPath)
-  if fileExists(pidPath):
-    let pidStr = readFile(pidPath).strip()
-    try:
-      let pid = parseInt(pidStr)
-      let rc = kill(Pid(pid), cint(0))
-      let alive = rc == 0 or (rc == -1 and errno == EPERM)
-      status.pidAlive = alive
-      if alive:
-        let mtime = getFileInfo(pidPath).lastWriteTime
-        let elapsed = (getTime() - mtime).inSeconds
-        status.uptime = some(formatUptime(elapsed))
-    except ValueError:
-      discard
+  let owner = readOrchestratorPidFile(repoPath)
+  if processAlive(owner.pid):
+    status.pidAlive = true
+    let startedAt =
+      if owner.timestamp > 0: fromUnixFloat(owner.timestamp)
+      else: getFileInfo(orchestratorPidPath(repoPath)).lastWriteTime
+    status.uptime = some(formatUptime((getTime() - startedAt).inSeconds))
 
   let iterDirResult = runCommandCapture(repoPath, "git", @["ls-tree", "--name-only", PlanBranch & ":docs/iterations/"])
   if iterDirResult.exitCode == 0 and iterDirResult.output.strip().len > 0:

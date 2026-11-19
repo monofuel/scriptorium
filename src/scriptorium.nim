@@ -1,6 +1,6 @@
 import
   std/[os, strformat, strutils],
-  ./scriptorium/[config, dashboard, discord_bot, git_ops, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
+  ./scriptorium/[architect_acp, config, dashboard, discord_bot, git_ops, guildhall_control, init, mattermost_bot, orchestrator, output_formatting, remote_sync]
 
 const
   Version = "20.0.2"
@@ -10,11 +10,14 @@ Usage:
   scriptorium init [path]      Initialize a new scriptorium workspace
   scriptorium --init [path]    Alias for init
   scriptorium import           Reconcile spec.md with the current repository
-  scriptorium run              Start the orchestrator daemon
+  scriptorium run [--paused]   Start the orchestrator daemon; --paused admits no new work until started
   scriptorium status           Show ticket counts and agent activity
   scriptorium plan             Interactive Architect conversation to build/revise spec.md
   scriptorium plan <prompt>    One-shot: ask the Architect to revise spec.md
   scriptorium ask              Interactive read-only Q&A session with the Architect
+  scriptorium architect-acp    Serve the Architect as an ACP agent over stdio (logs on stderr)
+  scriptorium guildhall-control start|pause|status
+                               Admit or pause new work and print structured JSON status
   scriptorium do               Interactive coding session with full repo access
   scriptorium do <prompt>      One-shot: run an ad-hoc task with full repo access
   scriptorium quest <prompt>   Bounded run: orchestrator drives toward an AI-judged goal
@@ -32,8 +35,12 @@ proc cmdInit(path: string) =
   ## Initialize a new scriptorium workspace at the given path.
   runInit(path)
 
-proc cmdRun() =
-  ## Start the orchestrator daemon.
+proc cmdRun(args: seq[string]) =
+  ## Start the orchestrator daemon, optionally admitting no new work until started.
+  if args.len > 1 or (args.len == 1 and args[0] != "--paused"):
+    raise newException(ValueError, "run accepts only --paused")
+  if args.len == 1:
+    writePauseFlag(getCurrentDir())
   runOrchestrator(getCurrentDir())
 
 proc cmdImport() =
@@ -133,6 +140,12 @@ proc cmdAudit() =
   echo "scriptorium: audit system is temporarily disabled pending stabilization"
   quit(0)
 
+proc cmdArchitectAcp(args: seq[string]) =
+  ## Serve this repository's Architect over ACP stdio.
+  if args.len > 0:
+    raise newException(ValueError, "architect-acp accepts no arguments")
+  runArchitectAcp(getCurrentDir(), Version)
+
 proc cmdDashboard() =
   ## Start the web dashboard HTTP server.
   runDashboard(getCurrentDir())
@@ -197,7 +210,11 @@ when isMainModule:
 
   case args[0]
   of "run":
-    cmdRun()
+    cmdRun(if args.len > 1: args[1..^1] else: @[])
+  of "architect-acp":
+    cmdArchitectAcp(if args.len > 1: args[1..^1] else: @[])
+  of "guildhall-control":
+    runGuildhallControl(getCurrentDir(), if args.len > 1: args[1..^1] else: @[])
   of "import":
     if args.len > 1:
       stderr.writeLine("scriptorium import: no arguments are accepted")

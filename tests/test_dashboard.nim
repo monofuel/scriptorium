@@ -3,7 +3,7 @@
 import
   std/[json, options, os, posix, sequtils, strutils, tempfiles, unittest],
   jsony,
-  scriptorium/[dashboard, dashboard_views, git_ops, pause_flag]
+  scriptorium/[dashboard, dashboard_views, git_ops, lock_management, pause_flag]
 
 suite "formatUptime":
   test "seconds only":
@@ -66,6 +66,16 @@ suite "getApiStatus":
 
     let pid = getpid()
     writeFile(orchestratorPidPath(tmp), $pid)
+
+    let status = getApiStatus(tmp)
+    check status.pidAlive == true
+    check status.uptime.isSome
+
+  test "canonical JSON PID file from the orchestrator guard is detected as alive":
+    let tmp = createTempDir("dashboard_jsonpid_", "", getTempDir())
+    defer: removeDir(tmp)
+    acquireOrchestratorPidGuard(tmp)
+    defer: releaseOrchestratorPidGuard(tmp)
 
     let status = getApiStatus(tmp)
     check status.pidAlive == true

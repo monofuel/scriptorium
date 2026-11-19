@@ -1,5 +1,5 @@
 import
-  std/[json, tables],
+  std/[json, locks, options, tables],
   acport,
   ./[common, config]
 
@@ -27,6 +27,18 @@ type
     update*: SessionUpdate
 
   AgentEventHandler* = proc(event: AgentStreamEvent)
+
+  InteractionBridge* = object
+    ## Shared rendezvous through which an embedding ACP server answers a native
+    ## agent's permission and question requests on its own request thread.
+    lock*: Lock
+    requests*: Channel[string]
+    replies*: Channel[string]
+    completions*: Channel[string]
+      ## URL elicitation completions reported by native agents, in arrival order.
+    activeId*: int
+      ## Identifier of the request currently awaiting an answer, or zero.
+    nextId*: int
 
   AgentRunRequest* = object
     prompt*: string
@@ -61,6 +73,14 @@ type
     onProcessStarted*: ProcessStartedHandler
     cancellationRequested*: CancellationCheck
     allowedTools*: seq[string]
+    attachments*: seq[ContentBlock]
+      ## Structured prompt content sent after the built text prompt.
+    extraMcpServers*: seq[JsonNode]
+      ## Caller-supplied ACP MCP servers; never persisted in session records.
+    systemPrompt*: Option[SystemPrompt]
+    interaction*: ptr InteractionBridge
+    elicitationModes*: set[ElicitationMode]
+      ## Question modes the embedding client advertised; only these reach the native agent.
 
   AgentRunResult* = object
     backend*: Harness

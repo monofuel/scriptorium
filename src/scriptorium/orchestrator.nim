@@ -1,6 +1,6 @@
 import
   std/[os, osproc, posix, strformat, strutils, tables, times],
-  ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, quest_system, recovery, remote_sync, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
+  ./[agent_pool, agent_runner, architect_agent, audit_agent, coding_agent, config, cycle_detection, git_ops, health_checks, init, interactive_sessions, lock_management, logging, loop_system, manager_agent, mcp_server, merge_queue, notifications, output_formatting, pause_flag, prompt_builders, quest_system, recovery, remote_sync, runtime_status, shared_state, stuck_investigation, ticket_analysis, ticket_assignment, ticket_metadata]
 
 export shared_state, git_ops, lock_management, ticket_metadata, prompt_builders, output_formatting, ticket_analysis, health_checks,
   agent_pool, architect_agent, audit_agent, manager_agent, merge_queue, ticket_assignment, coding_agent, mcp_server, interactive_sessions, cycle_detection, recovery, loop_system, quest_system, pause_flag, stuck_investigation
@@ -172,10 +172,17 @@ proc availableDiskSpaceGB*(path: string): float =
   let availBytes = stat.f_bavail.float * stat.f_frsize.float
   result = availBytes / (1024.0 * 1024.0 * 1024.0)
 
+proc publishRuntime(repoPath, phase: string, maxAgents: int) =
+  ## Record the loop phase and actual pool workers as a non-quiescent runtime snapshot.
+  writeRuntimeSnapshot(repoPath, phase, runningAgentSlots(), maxAgents)
+
 proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunner, questMode: bool = false) =
   ## Execute the orchestrator polling loop with interleaved manager/coder execution.
   ## Tick order: poll completions → backoff/health → architect → managers → coders → merge → sleep.
   ## When questMode is true, step 8 runs the architect quest evaluator instead of the loop system.
+  ## Each tick publishes a non-quiescent runtime snapshot before it reads the pause flag or admits
+  ## work; only the paused branch publishes quiescence, after its merge handling and with no workers.
+  publishRuntime(repoPath, "starting", loadConfig(repoPath).concurrency.maxAgents)
   discard recoverFromCrash(repoPath)
   agentRunnerOverride = runner
   sessionStats.startTime = epochTime()
@@ -199,6 +206,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
     try:
       idle = false
       logDebug(&"tick {ticks}")
+      publishRuntime(repoPath, "tick-start", maxAgents)
 
       # Step 0: Remote sync — fetch from remotes and merge from primary.
       if syncCfg.enabled:
@@ -250,18 +258,24 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       # Pause check: skip new assignments but continue merge queue and completions.
       elif isPaused(repoPath):
         logInfo("orchestrator paused, skipping new assignments")
+        writeRuntimeSnapshot(repoPath, "paused-merge", runningAgentSlots(), maxAgents, pauseObserved = true)
         let mergeProcessed = processMergeQueue(repoPath, runner)
         if mergeProcessed:
           logInfo("merge queue: item processed (paused)")
           let cleaned = cleanupStaleTicketWorktrees(repoPath)
           for path in cleaned:
             logInfo(&"worktree cleaned after merge: {path}")
+        let drained = runningAgentCount() == 0 and mergeQueueIdle(repoPath)
+        let pausedPhase = if drained: "paused" else: "paused-draining"
+        writeRuntimeSnapshot(repoPath, pausedPhase, runningAgentSlots(), maxAgents,
+          pauseObserved = true, quiescent = drained)
         idle = true
       elif not hasPlanBranch(repoPath):
         logDebug("waiting: no plan branch")
         idle = true
       else:
         let defaultBranch = resolveDefaultBranch(repoPath)
+        publishRuntime(repoPath, "health-check", maxAgents)
         logDebug(&"tick {ticks}: checking {defaultBranch} health")
         var t0 = epochTime()
         let healthy = isMasterHealthy(repoPath, masterHealthState)
@@ -298,6 +312,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           idle = true
           # Recovery-area tickets are exempt from the unhealthy-master gate.
           if hasOpenRecoveryTicket(repoPath):
+            publishRuntime(repoPath, "recovery-coding", maxAgents)
             let assignment = assignOldestOpenTicket(repoPath, RecoveryAreaName)
             if assignment.inProgressTicket.len > 0:
               let ticketId = ticketIdFromTicketPath(assignment.inProgressTicket)
@@ -317,6 +332,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         elif hasRunnableSpec(repoPath):
           specWaitingLogged = false
           # Step 3: Run architect (sequential, must complete before managers).
+          publishRuntime(repoPath, "architect", maxAgents)
           logDebug("architect: generating areas from spec")
           t0 = epochTime()
           architectChanged = runArchitectAreas(repoPath, runner)
@@ -332,6 +348,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
 
           # Step 4+5: Read areas needing tickets and start managers.
           # Managers are prioritized over coders: they run first to fill slots.
+          publishRuntime(repoPath, "managers", maxAgents)
           logDebug("manager: generating tickets")
           t0 = epochTime()
           if maxAgents <= 1:
@@ -364,6 +381,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           if not shouldRun: break
 
           # Step 6: Start coding agents (use remaining slots after managers).
+          publishRuntime(repoPath, "coding", maxAgents)
           let outputBudgetMB = cfg.concurrency.outputBudgetMB
           if isOutputBudgetExceeded(outputBudgetMB):
             codingStatus = "budget-exceeded"
@@ -408,6 +426,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         if not shouldRun: break
 
         # Step 7: Process at most one merge-queue item.
+        publishRuntime(repoPath, "merge", maxAgents)
         logDebug("merge queue: processing")
         t0 = epochTime()
         let mergeProcessed = processMergeQueue(repoPath, runner)
@@ -436,6 +455,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         )
 
         # Step 7b: Investigate and recover stuck tickets.
+        publishRuntime(repoPath, "recovery", maxAgents)
         let recoveredCount = investigateAndRecoverStuckTickets(repoPath, runner)
         if recoveredCount > 0:
           logInfo(&"recovered {recoveredCount} stuck ticket(s)")
@@ -461,6 +481,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
           runRecoveryAgent(repoPath, runner, masterHealthState.testOutput, masterHealthState.head)
 
         # Step 8: Quest evaluator or loop system.
+        publishRuntime(repoPath, "feedback", maxAgents)
         if questMode:
           try:
             let questDone = runQuestEvalIfDrained(repoPath, runner)
@@ -528,6 +549,7 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
         let stuck = ticketCounts.stuckTickets
         let summary = &"tick {ticks} summary: architect={architectStatus} manager={managerStatus} coding={codingStatus} merge={mergeStatus} agents={running}/{maxAgents}({agentDesc}) open={ticketCounts.openTickets} in-progress={ticketCounts.inProgressTickets} done={ticketCounts.doneTickets} stuck={stuck} loop={loopIterationCount}"
         logInfo(summary)
+        publishRuntime(repoPath, "between-ticks", maxAgents)
     except CatchableError as e:
       logError(&"tick {ticks} failed: {e.msg}")
       idle = true  # backoff on persistent errors to prevent spin-loop

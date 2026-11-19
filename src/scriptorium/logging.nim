@@ -17,6 +17,7 @@ type
 var
   logFile: File
   logFilePath*: string
+  consoleLog: File = stdout
   logInitialized: bool
   minLogLevel*: LogLevel = lvlInfo
   minFileLogLevel*: LogLevel = lvlDebug
@@ -46,6 +47,10 @@ proc closeLog*() =
     close(logFile)
     logInitialized = false
 
+proc setConsoleLog*(output: File) =
+  ## Select the console stream for filtered log lines, such as stderr for stdio protocols.
+  consoleLog = output
+
 proc setLogLevel*(level: LogLevel) =
   ## Set the minimum log level for stdout output.
   minLogLevel = level
@@ -55,13 +60,14 @@ proc setFileLogLevel*(level: LogLevel) =
   minFileLogLevel = level
 
 proc log*(level: LogLevel, msg: string) =
-  ## Write a timestamped log line to stdout (filtered) and the log file (always).
+  ## Write a timestamped log line to the console stream (filtered) and the log file.
   {.cast(gcsafe).}:
     if captureLogs:
       capturedLogs.add((level: level, msg: msg))
     let line = fmt"[{formatTimestamp()}] [{LogLevelLabels[level]}] {msg}"
     if level >= minLogLevel:
-      echo line
+      writeLine(consoleLog, line)
+      flushFile(consoleLog)
     if logInitialized and level >= minFileLogLevel:
       writeLine(logFile, line)
       flushFile(logFile)

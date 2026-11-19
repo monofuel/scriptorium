@@ -313,6 +313,9 @@ proc withLockedPlanWorktree*[T](repoPath: string, operation: proc(planPath: stri
     defer:
       release(planWorktreeLock)
       logDebug("plan worktree lock released (write)")
+    # Waiting for an engineer before taking the commit lock keeps a waiting
+    # orchestrator from holding a commit lock the engineer's turn needs.
+    waitForAdminLock(repoPath)
     result = withCommitLock(repoPath, proc(): T =
       withPlanWorktreeImpl(repoPath, operation)
     )

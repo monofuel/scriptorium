@@ -1,6 +1,6 @@
 import
   std/[os, posix, strformat, strutils],
-  ./[agent_runner, architect_agent, config, git_ops, lock_management, logging, output_formatting, prompt_builders, shared_state]
+  ./[agent_runner, architect_agent, config, git_ops, lock_management, prompt_builders, shared_state]
 
 const
   PlanSessionTicketId = "plan-session"
@@ -19,6 +19,66 @@ proc inputErrorIndicatesInterrupt(message: string): bool =
   ## Return true when one input error string indicates interrupted input.
   let lower = message.toLowerAscii()
   result = lower.contains("interrupted") or lower.contains("eintr")
+
+type
+  ArchitectTurnResult* = object
+    agentResult*: AgentRunResult
+    response*: string
+    specChanged*: bool
+
+proc runArchitectPlanTurn*(
+  runner: AgentRunner,
+  repoPath: string,
+  planPath: string,
+  architect: AgentConfig,
+  history: seq[PlanTurn],
+  line: string,
+  turnNum: int,
+  ticketId: string,
+  onEvent: AgentEventHandler,
+): ArchitectTurnResult =
+  ## Run one planning turn, enforce its write allowlist, and commit tickets and spec only on success.
+  ## Callers must hold the admin lock and own the plan worktree for the whole turn.
+  let prevSpec = readFile(planPath / PlanSpecPath)
+  let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, history, line)
+  result.agentResult = runPlanArchitectRequest(runner, repoPath, planPath, architect,
+    prompt, ticketId, onEvent, PlanHeartbeatIntervalMs)
+  enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+  if result.agentResult.exitCode == 0:
+    let
+      specChanged = readFile(planPath / PlanSpecPath) != prevSpec
+      commitMessage = fmt"scriptorium: plan session turn {turnNum}"
+    discard withCommitLock(repoPath, proc(): bool =
+      ## Commit architect tickets before the revised spec, matching the CLI history.
+      gitRun(planPath, "add", PlanTicketsOpenDir)
+      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+        gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
+      if specChanged:
+        gitRun(planPath, "add", PlanSpecPath)
+        gitRun(planPath, "commit", "-m", commitMessage)
+      true
+    )
+    result.response = result.agentResult.lastMessage.strip()
+    result.specChanged = specChanged
+
+proc runArchitectAskTurn*(
+  runner: AgentRunner,
+  repoPath: string,
+  planPath: string,
+  architect: AgentConfig,
+  history: seq[PlanTurn],
+  line: string,
+  ticketId: string,
+  onEvent: AgentEventHandler,
+): ArchitectTurnResult =
+  ## Run one read-only question turn and revert any plan-worktree writes.
+  let spec = readFile(planPath / PlanSpecPath)
+  let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, history, line)
+  result.agentResult = runPlanArchitectRequest(runner, repoPath, planPath, architect,
+    prompt, ticketId, onEvent, PlanHeartbeatIntervalMs, AskReadOnlyTools)
+  enforceNoWrites(planPath, AskWriteScopeName)
+  if result.agentResult.exitCode == 0:
+    result.response = result.agentResult.lastMessage.strip()
 
 proc runInteractivePlanSession*(
   repoPath: string,
@@ -104,9 +164,7 @@ proc runInteractivePlanSession*(
             echo fmt"scriptorium: unknown command '{line}'"
           continue
 
-      let prevSpec = readFile(planPath / PlanSpecPath)
       inc turnNum
-      let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, (if runner == runAgent: @[] else: history), line)
       var lastStreamLine = "[thinking] working..."
       if not quiet:
         echo lastStreamLine
@@ -118,38 +176,18 @@ proc runInteractivePlanSession*(
         if rendered.len > 0 and rendered != lastStreamLine:
           echo rendered
           lastStreamLine = rendered
-      let agentResult = runPlanArchitectRequest(
-        conversation.runner,
-        repoPath,
-        planPath,
-        cfg.agents.architect,
-        prompt,
-        PlanSessionTicketId,
-        streamEventHandler,
-        PlanHeartbeatIntervalMs,
-      )
-      enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
-
-      agentResult.requireAgentCompleted()
-
-      # Commit any new tickets created by the architect.
-      gitRun(planPath, "add", PlanTicketsOpenDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
-
-      var response = agentResult.lastMessage.strip()
-      if response.len > 0 and not quiet:
-        echo response
+      let turn = runArchitectPlanTurn(conversation.runner, repoPath, planPath,
+        cfg.agents.architect, (if runner == runAgent: @[] else: history), line, turnNum,
+        PlanSessionTicketId, streamEventHandler)
+      turn.agentResult.requireAgentCompleted()
+      if turn.response.len > 0 and not quiet:
+        echo turn.response
 
       history.add(PlanTurn(role: "engineer", text: line))
-      history.add(PlanTurn(role: "architect", text: response))
+      history.add(PlanTurn(role: "architect", text: turn.response))
 
-      let newSpec = readFile(planPath / PlanSpecPath)
-      if newSpec != prevSpec:
-        gitRun(planPath, "add", PlanSpecPath)
-        gitRun(planPath, "commit", "-m", fmt"scriptorium: plan session turn {turnNum}")
-        if not quiet:
-          echo fmt"[spec.md updated — turn {turnNum}]"
+      if turn.specChanged and not quiet:
+        echo fmt"[spec.md updated — turn {turnNum}]"
     0
   )
 
@@ -236,8 +274,6 @@ proc runInteractiveAskSession*(
             echo fmt"scriptorium: unknown command '{line}'"
           continue
 
-      let spec = readFile(planPath / PlanSpecPath)
-      let prompt = buildInteractiveAskPrompt(repoPath, planPath, spec, (if runner == runAgent: @[] else: history), line)
       var lastStreamLine = "[thinking] working..."
       if not quiet:
         echo lastStreamLine
@@ -249,26 +285,15 @@ proc runInteractiveAskSession*(
         if rendered.len > 0 and rendered != lastStreamLine:
           echo rendered
           lastStreamLine = rendered
-      let agentResult = runPlanArchitectRequest(
-        conversation.runner,
-        repoPath,
-        planPath,
-        cfg.agents.architect,
-        prompt,
-        AskSessionTicketId,
-        streamEventHandler,
-        PlanHeartbeatIntervalMs,
-        AskReadOnlyTools,
-      )
-      enforceNoWrites(planPath, AskWriteScopeName)
-      agentResult.requireAgentCompleted()
-
-      var response = agentResult.lastMessage.strip()
-      if response.len > 0 and not quiet:
-        echo response
+      let turn = runArchitectAskTurn(conversation.runner, repoPath, planPath,
+        cfg.agents.architect, (if runner == runAgent: @[] else: history), line,
+        AskSessionTicketId, streamEventHandler)
+      turn.agentResult.requireAgentCompleted()
+      if turn.response.len > 0 and not quiet:
+        echo turn.response
 
       history.add(PlanTurn(role: "engineer", text: line))
-      history.add(PlanTurn(role: "architect", text: response))
+      history.add(PlanTurn(role: "architect", text: turn.response))
     0
   )
 
