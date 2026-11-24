@@ -5,8 +5,9 @@
 
 import
   std/[algorithm, json, locks, options, os, posix, sha1, strutils, sysrand, tables, times],
+  std/net as std_net,
   acport, acport/connection,
-  ./[acp_runtime, agent_runner, agent_sessions, architect_media, chat_common, config, git_ops, guildhall_control, interactive_sessions, lock_management, logging, shared_state]
+  ./[acp_runtime, agent_runner, agent_sessions, architect_media, chat_common, config, git_ops, guildhall_control, interactive_sessions, lock_management, logging, mcp_server, project_reader, shared_state]
 
 const
   StateDirName = "architect-acp"
@@ -23,6 +24,8 @@ const
   ContextEntryLength = 2000
   ReceiptStarted = "started"
   ReceiptInterrupted = "interrupted"
+  ClientCancellation = 1
+  RelayCancellation = 2
   RelayedUpdates = {agentMessageChunk, agentThoughtChunk, toolCall, toolCallUpdate, planUpdate}
   CommandWords = ["/status", "/queue", "/start", "/pause", "/show", "/help"]
   HelpText = """Scriptorium Architect commands:
@@ -50,6 +53,7 @@ type
   TurnLink = object
     events: Channel[string]
     cancelled: bool
+    cancellationSource: int
 
   Job = object
     kind: JobKind
@@ -64,13 +68,14 @@ type
     mcpServers: seq[JsonNode]
     instructions: string
     slots: Table[string, InnerSlot]
+    reader: AgentMcpSession
 
   OwnerState = object
-    repoPath: string
+    repoPath, readEndpoint: string
     capabilities: JsonNode
     sessions: Table[string, ActiveSession]
 
-  OwnerArgs = tuple[repoPath: string, capabilities: string]
+  OwnerArgs = tuple[repoPath: string, capabilities: string, readEndpoint: string]
 
   TurnInput = object
     text, userText, digest, turn: string
@@ -167,9 +172,11 @@ proc finish(link: ptr TurnLink, value: JsonNode) =
   ## Complete an exchange; the owner must not touch the link afterwards.
   link.events.send($(%*{"type": "result", "value": value}))
 
-proc fail(link: ptr TurnLink, code: int, message: string) =
+proc fail(link: ptr TurnLink, code: int, message: string, data: JsonNode = nil) =
   ## Complete an exchange with an ACP error; the owner must not touch the link afterwards.
-  link.events.send($(%*{"type": "error", "code": code, "message": message}))
+  var event = %*{"type": "error", "code": code, "message": message}
+  if data != nil and data.kind != JNull: event["data"] = data
+  link.events.send($event)
 
 proc linkCancelled(link: ptr TurnLink): bool =
   ## Observe client cancellation or process shutdown from the owner thread.
@@ -181,6 +188,8 @@ proc validateMcpServers(servers: seq[JsonNode], capabilities: JsonNode) =
   for server in servers:
     if server.kind != JObject or server{"name"}.getStr().len == 0:
       raise rpcError(InvalidParams, "MCP servers require a name")
+    if server["name"].getStr() == ProjectReadServerName:
+      raise rpcError(InvalidParams, "The project-read MCP server name is reserved")
     let transport = server{"type"}.getStr("stdio")
     case transport
     of "stdio":
@@ -211,6 +220,9 @@ proc closeSlots(session: ActiveSession) =
   for slot in session.slots.values:
     slot.conversation.close()
   session.slots.clear()
+  if not session.reader.isNil:
+    unregisterAgentMcpSession(session.reader)
+    session.reader = nil
 
 proc applySetup(state: var OwnerState, session: ActiveSession, payload: JsonNode) =
   ## Replace in-memory MCP servers and instructions; native sessions reopen with them.
@@ -419,7 +431,9 @@ proc runModelTurn(state: var OwnerState, session: ActiveSession, link: ptr TurnL
     ticketId = "architect-acp-" & mode & "-" & session.id
     nativeInstructions = state.capabilities{"sessionCapabilities"}{"systemPrompt"}.kind == JObject
     sessionId = session.id
-    servers = session.mcpServers
+    readerSupported = state.capabilities{"mcpCapabilities"}{"http"}.getBool()
+    readEndpoint = state.readEndpoint
+  var servers = session.mcpServers
   var userLine = line
   var systemPrompt = none(SystemPrompt)
   if session.instructions.len > 0:
@@ -456,6 +470,16 @@ proc runModelTurn(state: var OwnerState, session: ActiveSession, link: ptr TurnL
   defer: releaseAdminLock(repoPath)
   let turn = withPlanWorktree(repoPath, proc(planPath: string): ArchitectTurnResult =
     ## Run the shared plan or ask turn inside the refreshed plan worktree.
+    if readerSupported:
+      if session.reader.isNil:
+        session.reader = newProjectReadMcpSession(readEndpoint, repoPath, planPath)
+      servers.add(%*{"type": "http", "name": ProjectReadServerName,
+        "url": session.reader.endpoint & "/mcp", "headers": []})
+      userLine = "For reliable file reads, use the " & ProjectReadServerName & " MCP server: " &
+        "get_spec reads the actual current plan specification; read_project_file reads tracked project text " &
+        "using a relative path (AGENTS.md, README.md, source, tests). Prefer these tools to shell/file " &
+        "commands, which may be unavailable inside the container sandbox. The MCP tools cannot execute " &
+        "commands or write files. Finish with an answer or explain any tool failure.\n\n" & userLine
     if mode == PlanMode:
       runArchitectPlanTurn(runner, repoPath, planPath, cfg.agents.architect, @[],
         userLine, turnNumber, ticketId, onEvent)
@@ -498,23 +522,50 @@ proc runReceiptedTurn(state: var OwnerState, session: ActiveSession, link: ptr T
     "preview": input.userText.substr(0, NotePreviewLength - 1), "at": timestamp()})
   let outcome = state.runModelTurn(session, link, line, input.attachments,
     input.turnNumber, elicitation)
-  if outcome.lastMessage.strip().len > 0:
+  let cancellationSource = if outcome.cancellationSource == "caller":
+    if atomicLoadN(addr link.cancellationSource, ATOMIC_ACQUIRE) == ClientCancellation: "client"
+    elif atomicLoadN(addr link.cancellationSource, ATOMIC_ACQUIRE) == RelayCancellation: "relay"
+    elif atomicLoadN(addr shutdownRequested, ATOMIC_ACQUIRE): "shutdown"
+    else: "caller"
+  else:
+    outcome.cancellationSource
+  let nativeStopReason = if outcome.stopReasonReceived: %stopReasonName(outcome.stopReason) else: newJNull()
+  let assistantText = if outcome.transcriptText.len > 0: outcome.transcriptText else: outcome.lastMessage
+  if assistantText.strip().len > 0:
     appendTranscript(state.repoPath, session.id, %*{"kind": "assistant", "turn": input.turn,
-      "text": outcome.lastMessage.strip()})
+      "text": assistantText.strip()})
   let status = case outcome.failureKind
     of failureNone: "completed"
-    of failureCancelled: "cancelled"
+    of failureCancelled:
+      if cancellationSource == "client": "cancelled" else: "failed"
     of failureRefused, failureLimit: "stopped"
     else: "failed"
+  let terminal = %*{"origin": "scriptorium-architect", "delivery": "accepted", "outcome": status,
+    "reason": (if outcome.failureKind == failureCancelled and cancellationSource == "native": "native_cancelled"
+      elif outcome.failureKind == failureProtocol and outcome.lastMessage.strip().len == 0: "missing_answer"
+      else: $outcome.failureKind),
+    "nativeStopReason": nativeStopReason, "cancellationSource": cancellationSource,
+    "finalAnswerPresent": status == "completed" and outcome.lastMessage.strip().len > 0,
+    "failedTools": outcome.failedTools, "deniedPermissions": outcome.deniedPermissions}
   appendTranscript(state.repoPath, session.id, %*{"kind": "receipt", "turn": input.turn,
-    "status": status, "error": outcome.errorMessage, "at": timestamp()})
+    "status": status, "error": outcome.errorMessage,
+    "nativeStopReason": nativeStopReason,
+    "cancellationSource": cancellationSource,
+    "failedTools": outcome.failedTools, "deniedPermissions": outcome.deniedPermissions,
+    "terminal": terminal,
+    "at": timestamp()})
   saveRecord(state.repoPath, session)
   case status
-  of "completed", "stopped": link.finish(%*{"stopReason": stopReasonName(outcome.stopReason)})
-  of "cancelled": link.finish(%*{"stopReason": "cancelled"})
+  of "completed", "stopped":
+    link.finish(%*{"stopReason": stopReasonName(outcome.stopReason), "_meta": {"scriptorium": terminal}})
+  of "cancelled": link.finish(%*{"stopReason": "cancelled", "_meta": {"scriptorium": terminal}})
   else:
     let detail = $outcome.failureKind & ": " & outcome.errorMessage
-    link.fail(InternalError, "Architect turn failed (" & detail & "); see " & outcome.logFile)
+    link.fail(InternalError, "Architect turn failed (" & detail & "); see " & outcome.logFile,
+      %*{"origin": "scriptorium-architect", "terminal": terminal,
+        "failureKind": $outcome.failureKind, "nativeStopReason": nativeStopReason,
+        "cancellationSource": cancellationSource, "failedTools": outcome.failedTools,
+        "deniedPermissions": outcome.deniedPermissions})
 
 proc turnInput(payload: JsonNode, entries: seq[JsonNode]): TurnInput =
   ## Validate prompt content, separate text from attachments and derive the turn's durable identity.
@@ -636,7 +687,8 @@ proc handleJob(state: var OwnerState, job: Job) =
 proc ownerLoop(args: OwnerArgs) {.thread.} =
   ## Own every native conversation, Git operation and lock on one thread.
   {.cast(gcsafe).}:
-    var state = OwnerState(repoPath: args.repoPath, capabilities: parseJson(args.capabilities))
+    var state = OwnerState(repoPath: args.repoPath, capabilities: parseJson(args.capabilities),
+      readEndpoint: args.readEndpoint)
     var running = true
     while running:
       let job = jobs.recv()
@@ -646,7 +698,7 @@ proc ownerLoop(args: OwnerArgs) {.thread.} =
         try:
           state.handleJob(job)
         except AcpRpcError as error:
-          job.link.fail(error.code, error.msg)
+          job.link.fail(error.code, error.msg, error.data)
         except CatchableError as error:
           logError("architect-acp: " & $job.kind & " failed: " & error.msg)
           job.link.fail(InternalError, error.msg)
@@ -725,7 +777,9 @@ proc exchange(context: RequestContext, kind: JobKind, payload: JsonNode,
     final: JsonNode
     relayFailure = ""
   while final.isNil:
-    if context.isCancelled(): atomicStoreN(addr link.cancelled, true, ATOMIC_RELEASE)
+    if context.isCancelled() and not atomicLoadN(addr link.cancelled, ATOMIC_ACQUIRE):
+      atomicStoreN(addr link.cancellationSource, ClientCancellation, ATOMIC_RELEASE)
+      atomicStoreN(addr link.cancelled, true, ATOMIC_RELEASE)
     let (received, text) = link.events.tryRecv()
     if received:
       let event = parseJson(text)
@@ -737,7 +791,9 @@ proc exchange(context: RequestContext, kind: JobKind, payload: JsonNode,
             context.sendUpdate(parseUpdate(event["update"]))
           except AcpError as error:
             relayFailure = error.msg
-            atomicStoreN(addr link.cancelled, true, ATOMIC_RELEASE)
+            if not atomicLoadN(addr link.cancelled, ATOMIC_ACQUIRE):
+              atomicStoreN(addr link.cancellationSource, RelayCancellation, ATOMIC_RELEASE)
+              atomicStoreN(addr link.cancelled, true, ATOMIC_RELEASE)
       else:
         final = event
     elif kind == jobPrompt and interaction.interactionActive():
@@ -745,7 +801,7 @@ proc exchange(context: RequestContext, kind: JobKind, payload: JsonNode,
     else:
       sleep(EventPollMs)
   if final["type"].getStr() == "error":
-    raise rpcError(final["code"].getInt(), final["message"].getStr())
+    raise rpcError(final["code"].getInt(), final["message"].getStr(), final{"data"})
   if relayFailure.len > 0:
     raise newException(AcpTransportError, "Could not relay Architect updates: " & relayFailure)
   result = final["value"]
@@ -834,7 +890,7 @@ proc onPrompt(context: RequestContext, request: PromptRequest,
       of "max_tokens": maxTokens
       of "max_turn_requests": maxTurnRequests
       else: endTurn
-    result = PromptResponse(stopReason: stopReason)
+    result = PromptResponse(stopReason: stopReason, meta: value{"_meta"})
 
 proc serveStdio(agent: AcpAgent) {.thread.} =
   ## Serve ACP over this process's stdio until the client disconnects.
@@ -866,6 +922,13 @@ proc reportExistingState(repoPath: string) =
     else:
       logWarn("architect-acp: admin lock is held by PID " & $holder & "; turns wait until it is released")
 
+proc availableReadPort(): int =
+  ## Ask the kernel for an available loopback port for this process's private MCP host.
+  let socket = std_net.newSocket()
+  defer: socket.close()
+  socket.bindAddr(std_net.Port(0), "127.0.0.1")
+  socket.getLocalAddr()[1].int
+
 proc runArchitectAcp*(repoPath: string, version: string) =
   ## Serve one repository's Architect over ACP stdio until disconnect or a stop signal.
   setConsoleLog(stderr)
@@ -887,11 +950,23 @@ proc runArchitectAcp*(repoPath: string, version: string) =
         sse: capabilities{"mcpCapabilities"}{"sse"}.getBool()),
       systemPrompt: true)
   reportExistingState(repoPath)
+  let
+    readHost = createAgentMcpHost()
+    readPort = availableReadPort()
+    readEndpoint = "http://127.0.0.1:" & $readPort
+  var readThread: Thread[ServerThreadArgs]
+  var readClosed = false
+  createThread(readThread, runHttpServer, (readHost, "127.0.0.1", readPort))
+  defer:
+    if not readClosed:
+      signalServerShutdown()
+      joinThread(readThread)
+  waitForServerReady("127.0.0.1", readPort)
   logInfo("architect-acp: serving " & repoPath)
   interaction = newInteractionBridge()
   initLock(upstreamLock)
   jobs.open()
-  createThread(ownerThread, ownerLoop, (repoPath, $capabilities))
+  createThread(ownerThread, ownerLoop, (repoPath, $capabilities, readEndpoint))
   let agent = newAcpAgent("scriptorium-architect", version, AgentHandlers(
     onNewSession: onNewSession, onLoadSession: onLoadSession, onResumeSession: onResumeSession,
     onListSessions: onListSessions, onCloseSession: onCloseSession, onPrompt: onPrompt,
@@ -907,6 +982,9 @@ proc runArchitectAcp*(repoPath: string, version: string) =
   atomicStoreN(addr shutdownRequested, true, ATOMIC_RELEASE)
   jobs.send(Job(kind: jobShutdown))
   joinThread(ownerThread)
+  signalServerShutdown()
+  joinThread(readThread)
+  readClosed = true
   if stopSignal != 0:
     logInfo("architect-acp: stopped by signal " & $stopSignal)
     closeLog()

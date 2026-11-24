@@ -89,6 +89,7 @@ type
     model*: string
     outputBytes*: int
     stopReason*: StopReason
+    stopReasonReceived*: bool
     failureKind*: AgentFailureKind
     errorCode*: int
     errorMessage*: string
@@ -102,6 +103,11 @@ type
     logFile*: string
     lastMessageFile*: string
     lastMessage*: string
+    transcriptText*: string
+      ## All assistant chunks, including commentary before tool activity.
+    failedTools*: seq[string]
+    deniedPermissions*: int
+    cancellationSource*: string
     timeoutKind*: string
     ticketId*: string
     submitted*: bool

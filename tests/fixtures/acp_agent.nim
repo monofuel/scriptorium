@@ -61,6 +61,7 @@ proc main() =
     mode = "agent"
     urlElicitation = false
     pending: JsonNode
+    pendingRpc = false
   while not stdin.endOfFile():
     let node = parseJson(stdin.readLine())
     let
@@ -107,9 +108,45 @@ proc main() =
           "error": {"code": -32010, "message": "fixture error", "data": {"detail": "retained"}}})
       elif command == "silent":
         pending = id
+      elif command == "silent-rpc":
+        pending = id
+        pendingRpc = true
       elif command == "ticket-hang":
         writeTicket(cwd)
         pending = id
+      elif command == "native-cancel":
+        respond(id, %*{"stopReason": "cancelled"})
+      elif command == "empty":
+        respond(id, %*{"stopReason": "end_turn"})
+      elif command in ["read-final", "read-failed-final", "read-failed-empty", "read-policy-cancel", "read-then-stop"]:
+        update(%*{"sessionUpdate": "agent_message_chunk", "content": {
+          "type": "text", "text": "I will read the spec before answering."}})
+        update(%*{"sessionUpdate": "tool_call", "toolCallId": "read-spec", "title": "Read spec",
+          "kind": "read", "status": "in_progress"})
+        let failed = command != "read-final"
+        update(%*{"sessionUpdate": "tool_call_update", "toolCallId": "read-spec",
+          "status": (if failed: "failed" else: "completed"), "rawOutput": {
+            "exit_code": (if failed: 1 else: 0)}})
+        case command
+        of "read-final":
+          update(%*{"sessionUpdate": "agent_message_chunk", "content": {
+            "type": "text", "text": "Final answer: " & readFile(cwd / "spec.md")}})
+          respond(id, %*{"stopReason": "end_turn"})
+        of "read-failed-final":
+          update(%*{"sessionUpdate": "agent_message_chunk", "content": {
+            "type": "text", "text": "I could not read the spec because the file tool failed."}})
+          respond(id, %*{"stopReason": "end_turn"})
+        of "read-policy-cancel":
+          send(%*{"jsonrpc": "2.0", "id": "denied-execute", "method": "session/request_permission",
+            "params": {"sessionId": "fixture-session", "toolCall": {"toolCallId": "execute-read",
+              "title": "Execute fallback", "kind": "execute", "rawInput": {"command": "cat spec.md"}},
+              "options": [{"optionId": "yes", "name": "Allow", "kind": "allow_once"},
+                {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}})
+          let decision = parseJson(stdin.readLine())
+          record(%*{"method": "permission-decision", "decision": decision["result"]})
+          respond(id, %*{"stopReason": "cancelled"})
+        of "read-then-stop": pending = id
+        else: respond(id, %*{"stopReason": "end_turn"})
       else:
         var reply = command
         if command in ["permission", "permission-spec"]:
@@ -166,8 +203,13 @@ proc main() =
         respond(id, %*{"stopReason": "end_turn"})
     of "session/cancel":
       if pending != nil:
-        respond(pending, %*{"stopReason": "cancelled"})
+        if pendingRpc:
+          send(%*{"jsonrpc": "2.0", "id": pending,
+            "error": {"code": -32800, "message": "fixture cancelled request"}})
+        else:
+          respond(pending, %*{"stopReason": "cancelled"})
         pending = nil
+        pendingRpc = false
     of "$/cancel_request": discard
     else: raise newException(ValueError, "Unexpected method: " & methodName)
 

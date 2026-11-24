@@ -76,6 +76,64 @@ Message, thought, tool call and plan updates stream with the outer session
 identity. User-message echoes, adapter command catalogs and heartbeats are not
 forwarded.
 
+An Architect turn must produce nonempty assistant text after its last tool
+activity before `end_turn` can count as a completed answer. Earlier commentary
+remains in the transcript but cannot stand in for a final answer. A failed tool
+may be recovered, or the Architect may explain that failure in its final answer;
+tool failure alone does not discard a valid explanation. This conversational
+requirement does not apply to internal coding completion through `submit_pr`.
+
+Only cancellation requested by the outer client returns `cancelled`. Native
+cancellation without that request is an ACP error, including cancellation after
+a locally rejected permission. Timeouts and relay failures remain errors.
+Receipts and error data retain `cancellationSource`, `nativeStopReason`,
+`failedTools`, and `deniedPermissions`; `client`, `native`, `timeout`, `relay`,
+and `shutdown` are distinct sources. A `client` cancellation records the protocol
+request, not an inference about whether a human or another caller initiated it.
+Original receipts are never rewritten or automatically retried.
+
+Account/model metadata checks do not prove native tools can run inside a
+container. In particular, a nested Codex sandbox may fail to create namespaces.
+Qualify real file-tool execution and final-answer delivery on disposable state
+under the actual container isolation contract before claiming readiness. Do not
+enable host user namespaces, relax global security settings, or approve an
+ambiguous execute permission to conceal a failed read-only tool.
+
+The Architect provides a private `scriptorium-project` HTTP MCP server through
+standard ACP `mcpServers` session parameters when the native agent supports
+HTTP. The server name is reserved so caller-supplied MCP setup cannot replace
+this capability. It exposes only:
+
+- `get_spec {}`: the actual current plan worktree's `spec.md`.
+- `read_project_file {path, line?, limit?}`: tracked UTF-8 project text, with
+  one-based line pagination (200 lines by default, at most 500).
+
+Reads reject private runtime and credential paths, untracked files, traversal,
+absolute paths, symlinks in any path component, binary data, nonregular files,
+and files above 1 MiB. File descriptors use `openat`/`O_NOFOLLOW`; no shell or
+write operation is exposed. Each outer conversation has a fresh scoped token;
+setup/close unregisters it, and the process owns and stops the loopback host.
+No scoped URL is stored in durable session identity or outer transcripts.
+Restricted native shell execution may still be unavailable in the container;
+the reader does not change that security policy or promise working shell or
+planning-write tools.
+
+Source-origin terminal error data includes `origin: scriptorium-architect` and
+a `terminal` descriptor with `delivery`, `outcome`, `reason`,
+`nativeStopReason`, `cancellationSource`, and `finalAnswerPresent`. Successful
+and client-cancelled replies carry the descriptor under `_meta.scriptorium`.
+`delivery: accepted` describes receipt of the request, not a successful answer;
+the terminal outcome and answer-presence fields establish that distinction.
+
+The explicit `tests/integration_architect_container.nim` acceptance takes a
+disposable container, a common host/container fixture-root path, the project
+config JSON, and the container's Scriptorium executable. It creates synthetic
+Git/spec state, commits a random file-only nonce, and requires a real native
+MCP read followed by the nonce in a final answer. The owner provisions the
+unchanged production isolation/authentication and tears the replica down; the
+test closes its own ACP session and removes its synthetic state. It must never
+target a human chat or start an orchestrator.
+
 Commands answered without the model: `/status`, `/queue`, `/start`, `/pause`,
 `/show`, `/help`.
 

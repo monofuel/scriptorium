@@ -193,6 +193,18 @@ proc adminLockHeld(repo: string): bool =
   dirExists(managedAdminLockPath(repo))
 
 suite "architect ACP bridge":
+  test "caller MCP setup cannot replace the reserved project-read capability":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    expect AcpRpcError:
+      discard client.newSession(repo, @[%*{"type": "http", "name": "scriptorium-project",
+        "url": "http://127.0.0.1:9/mcp"}], TimeoutMs)
+    check promptCount(repo) == 0
+    let session = client.newArchitectSession(repo)
+    check messageText(session.ask("fixture:hello").items) == "hello-tail"
+
   test "stdio framing, structured streaming, forwarded setup and owned cleanup":
     let repo = makeRepo()
     defer: removeDir(repo)
@@ -220,7 +232,7 @@ suite "architect ACP bridge":
     for entry in fixtureLog(repo):
       if entry["method"].getStr() == "session/new":
         created = true
-        check entry["mcpServers"] == %*["campfire"]
+        check entry["mcpServers"] == %*["campfire", "scriptorium-project"]
         check entry["systemPrompt"].getStr() == SecretInstructions
     check created
     for path in walkDirRec(repo / ".scriptorium" / "architect-acp"):
@@ -470,3 +482,115 @@ suite "architect ACP bridge":
     client.close()
     closed = true
     childrenExited(repo)
+
+  test "read tools finish with an answer and failures can be explained without claiming a read":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    session.setMode("ask", TimeoutMs)
+    let answered = session.ask("fixture:read-final")
+    check answered.stop == endTurn
+    check "Final answer: # Spec" in messageText(answered.items)
+    let explained = session.ask("fixture:read-failed-final")
+    check explained.stop == endTurn
+    check "I could not read the spec because the file tool failed." in messageText(explained.items)
+    check not adminLockHeld(repo)
+
+  test "permission-driven native cancellation is an ACP error with durable provenance":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    session.setMode("ask", TimeoutMs)
+    try:
+      discard session.ask("fixture:read-policy-cancel")
+      check false
+    except AcpRpcError as error:
+      check "without a caller cancellation" in error.msg
+      check error.data["nativeStopReason"].getStr() == "cancelled"
+      check error.data["cancellationSource"].getStr() == "native"
+      check error.data["origin"].getStr() == "scriptorium-architect"
+      check error.data["terminal"]["reason"].getStr() == "native_cancelled"
+      check not error.data["terminal"]["finalAnswerPresent"].getBool()
+      check error.data["deniedPermissions"].getInt() == 1
+      check error.data["failedTools"].len == 1
+    let transcript = readFile(repo / ".scriptorium/architect-acp" / (session.id & ".jsonl"))
+    check "\"status\":\"failed\"" in transcript
+    check "\"cancellationSource\":\"native\"" in transcript
+    check "I will read the spec" in transcript
+    check not adminLockHeld(repo)
+    discard drainUpdates()
+    check messageText(session.ask("fixture:hello").items) == "hello-tail"
+
+  test "native cancellation and end-turn without an answer never silently complete":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    session.setMode("ask", TimeoutMs)
+    for command in ["fixture:native-cancel", "fixture:empty", "fixture:read-failed-empty", "fixture:error"]:
+      expect AcpRpcError:
+        discard session.ask(command)
+      check not adminLockHeld(repo)
+      discard drainUpdates()
+    check messageText(session.ask("fixture:hello").items) == "hello-tail"
+
+  test "a real client Stop after a failed tool remains cancelled rather than failed":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    session.setMode("ask", TimeoutMs)
+    var handle = session.startPrompt(@[textBlock("fixture:read-then-stop")])
+    waitFor(proc(): bool =
+      ## Stop only after the client actually observed the failed tool.
+      for item in drainUpdates():
+        if item["update"]{"status"}.getStr() == "failed": return true)
+    session.cancel()
+    check handle.waitForPrompt(TimeoutMs).stopReason == cancelled
+    let transcript = readFile(repo / ".scriptorium/architect-acp" / (session.id & ".jsonl"))
+    check "\"status\":\"cancelled\"" in transcript
+    check "\"cancellationSource\":\"client\"" in transcript
+    check "\"status\":\"failed\"" notin transcript
+    check not adminLockHeld(repo)
+    check messageText(session.ask("fixture:hello").items) == "hello-tail"
+
+  test "watchdog cancellation is a timeout error rather than a client Stop":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    var cfg = loadConfig(repo)
+    cfg.agents.architect.noOutputTimeout = 100
+    writeFile(repo / "scriptorium.json", cfg.toJson())
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    session.setMode("ask", TimeoutMs)
+    try:
+      discard session.ask("fixture:silent")
+      check false
+    except AcpRpcError as error:
+      check error.data["failureKind"].getStr() == "failureTimeout"
+      check error.data["cancellationSource"].getStr() == "timeout"
+      check "timed out" in error.msg
+    check not adminLockHeld(repo)
+
+  test "a native RPC interruption after client Stop preserves cancellation":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    var handle = session.startPrompt(@[textBlock("fixture:silent-rpc")])
+    waitFor(proc(): bool = promptCount(repo) == 1)
+    session.cancel()
+    check handle.waitForPrompt(TimeoutMs).stopReason == cancelled
+    let transcript = readFile(repo / ".scriptorium/architect-acp" / (session.id & ".jsonl"))
+    check "\"status\":\"cancelled\"" in transcript
+    check "\"cancellationSource\":\"client\"" in transcript
+    check "\"nativeStopReason\":null" in transcript
+    check not adminLockHeld(repo)

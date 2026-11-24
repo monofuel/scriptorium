@@ -26,6 +26,15 @@ type
     response*: string
     specChanged*: bool
 
+proc requireArchitectAnswer(response: var AgentRunResult) =
+  ## Reject an otherwise completed conversational turn that produced no answer after tool activity.
+  if response.exitCode == 0 and response.failureKind == failureNone and response.lastMessage.strip().len == 0:
+    response.exitCode = 1
+    response.failureKind = failureProtocol
+    response.errorMessage = "Architect ended the turn without an answer."
+    if response.failedTools.len > 0:
+      response.errorMessage.add(" Failed tools: " & $response.failedTools.len & ".")
+
 proc runArchitectPlanTurn*(
   runner: AgentRunner,
   repoPath: string,
@@ -44,6 +53,7 @@ proc runArchitectPlanTurn*(
   result.agentResult = runPlanArchitectRequest(runner, repoPath, planPath, architect,
     prompt, ticketId, onEvent, PlanHeartbeatIntervalMs)
   enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
+  requireArchitectAnswer(result.agentResult)
   if result.agentResult.exitCode == 0:
     let
       specChanged = readFile(planPath / PlanSpecPath) != prevSpec
@@ -77,6 +87,7 @@ proc runArchitectAskTurn*(
   result.agentResult = runPlanArchitectRequest(runner, repoPath, planPath, architect,
     prompt, ticketId, onEvent, PlanHeartbeatIntervalMs, AskReadOnlyTools)
   enforceNoWrites(planPath, AskWriteScopeName)
+  requireArchitectAnswer(result.agentResult)
   if result.agentResult.exitCode == 0:
     result.response = result.agentResult.lastMessage.strip()
 

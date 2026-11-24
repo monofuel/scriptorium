@@ -6,7 +6,7 @@ import
   mummy,
   mummy/routers,
   webby/httpheaders,
-  ./agent_sessions
+  ./[agent_sessions, project_reader]
 
 const
   OrchestratorServerName = "scriptorium-orchestrator"
@@ -28,6 +28,7 @@ type
     amrManager = "manager"
     amrReviewer = "reviewer"
     amrAudit = "audit"
+    amrProjectRead = "project-read"
 
   AgentMcpSession* = ref object
     token*: string
@@ -357,6 +358,11 @@ proc auditSubmission*(session: AgentMcpSession): tuple[called: bool, report: str
   ensureAgentMcpLockInitialized()
   withLock agentMcpLock:
     result = (called: session.completionCalled, report: session.auditReport)
+
+proc newProjectReadMcpSession*(endpoint, repoPath, planPath: string): AgentMcpSession =
+  ## Register a project-scoped read capability, with no workflow completion or mutating tools.
+  result = AgentMcpSession(role: amrProjectRead, server: newProjectReadServer(repoPath, planPath))
+  registerAgentMcpSession(result, endpoint)
 
 proc mcpRequestMethods*(session: AgentMcpSession): seq[string] =
   ## Return the MCP request methods received for one scoped session.

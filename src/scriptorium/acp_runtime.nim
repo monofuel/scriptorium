@@ -9,7 +9,7 @@ const
   PollIntervalMs = 25
   InteractionPollMs = 10
   UrlSchemes = ["https://", "http://"]
-  ClientVersion = "20.0.3"
+  ClientVersion = "20.0.4"
 
 type
   PacketKind = enum
@@ -394,16 +394,34 @@ proc drainPackets(conversation: AgentConversation, request: AgentRunRequest,
       runResult.outputBytes += packet.text.len + 1
       recordOutputBytes(packet.text.len + 1)
       lastOutput = getMonoTime()
+      if packet.kind == permissionPacket:
+        let entry = parseJson(packet.text)
+        if entry.hasKey("permission"):
+          let
+            decision = entry{"decision"}{"outcome"}
+            selected = decision{"optionId"}.getStr()
+          if decision{"outcome"}.getStr() == "cancelled":
+            inc runResult.deniedPermissions
+          else:
+            for option in entry{"permission"}{"options"}:
+              if option{"optionId"}.getStr() == selected and
+                  option{"kind"}.getStr() in ["reject_once", "reject_always"]:
+                inc runResult.deniedPermissions
       if packet.kind == updatePacket:
         var event = streamEvent(parseUpdate(parseJson(packet.text)))
         if event.kind == agentEventTool:
           let tool = event.update.tool
+          runResult.lastMessage.setLen(0)
+          if tool.status == "failed" and tool.toolCallId notin runResult.failedTools:
+            runResult.failedTools.add(tool.toolCallId)
           if tool.title.len > 0:
             conversation.toolTitles[tool.toolCallId] = tool.title
           event.text = conversation.toolTitles.getOrDefault(tool.toolCallId, "tool")
           if tool.status.len > 0: event.text.add(" " & tool.status)
           lastTool = lastOutput
-        if event.kind == agentEventMessage: runResult.lastMessage.add(event.text)
+        if event.kind == agentEventMessage:
+          runResult.lastMessage.add(event.text)
+          runResult.transcriptText.add(event.text)
         if not request.onEvent.isNil: request.onEvent(event)
   transcript.flushFile()
 
@@ -451,6 +469,7 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
       if not cancelling:
         if not request.cancellationRequested.isNil and request.cancellationRequested():
           result.cancelled = true
+          result.cancellationSource = "caller"
           result.failureKind = failureCancelled
           cancelling = true
         elif request.hardTimeoutMs > 0 and elapsedMs(started) >= request.hardTimeoutMs:
@@ -463,7 +482,10 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
           result.timeoutKind = "progress"
           cancelling = true
         if cancelling:
-          if not result.cancelled: result.failureKind = failureTimeout
+          if not result.cancelled:
+            result.failureKind = failureTimeout
+            result.cancellationSource = "timeout"
+            result.errorMessage = "ACP turn timed out: " & result.timeoutKind
           cancelStarted = getMonoTime()
           conversation.session.cancel()
       elif elapsedMs(cancelStarted) >= CancelGraceMs:
@@ -479,21 +501,31 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
     if not conversation.closed:
       conversation.drainPackets(request, result, transcript, diagnostics, lastOutput, lastTool)
     result.stopReason = completion.stopReason
+    result.stopReasonReceived = true
     if result.failureKind == failureNone:
       case result.stopReason
       of endTurn: discard
       of cancelled:
         result.cancelled = true
         result.failureKind = failureCancelled
+        if not request.cancellationRequested.isNil and request.cancellationRequested():
+          result.cancellationSource = "caller"
+        else:
+          result.cancellationSource = "native"
+          result.errorMessage = "Native agent cancelled without a caller cancellation request."
+          if result.deniedPermissions > 0:
+            result.errorMessage.add(" Scriptorium rejected " & $result.deniedPermissions & " permission request(s).")
+          if result.failedTools.len > 0:
+            result.errorMessage.add(" Failed tools: " & $result.failedTools.len & ".")
       of refused: result.failureKind = failureRefused
       of maxTokens, maxTurnRequests: result.failureKind = failureLimit
   except AcpRpcError as error:
-    result.failureKind = failureRpc
+    if result.failureKind == failureNone: result.failureKind = failureRpc
     result.errorCode = error.code
     result.errorData = error.data
     result.errorMessage = error.msg
   except AcpProtocolError as error:
-    result.failureKind = failureProtocol
+    if result.failureKind == failureNone: result.failureKind = failureProtocol
     result.errorMessage = error.msg
   except AcpTransportError as error:
     if result.failureKind == failureNone: result.failureKind = failureTransport
@@ -507,8 +539,11 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
         diagnostics.writeLine("ACP cleanup settled the pending turn: " & error.msg)
   result.exitCode = if result.failureKind == failureNone: 0 else: 1
   transcript.writeLine($(%*{"event": "completion", "sessionId": result.sessionId,
-    "stopReason": $result.stopReason, "failure": $result.failureKind,
+    "stopReason": (if result.stopReasonReceived: %($result.stopReason) else: newJNull()),
+    "failure": $result.failureKind,
     "error": result.errorMessage, "errorCode": result.errorCode,
+    "cancellationSource": result.cancellationSource, "deniedPermissions": result.deniedPermissions,
+    "failedTools": result.failedTools,
     "outputBytes": result.outputBytes}))
   if not request.onEvent.isNil:
     request.onEvent(AgentStreamEvent(kind: agentEventStatus,

@@ -20,6 +20,30 @@ proc requestFor(directory, prompt: string): AgentRunRequest =
     logRoot: directory / "logs", sessionRoot: directory / "sessions")
 
 suite "shared ACP runner":
+  test "the final message excludes commentary that preceded tools":
+    let directory = createTempDir("scriptorium-acp-final-", "")
+    defer: removeDir(directory)
+    writeFile(directory / "spec.md", "Synthetic specification.")
+    let response = runAgent(requestFor(directory, "fixture:read-final"))
+    check response.exitCode == 0
+    check response.lastMessage == "Final answer: Synthetic specification."
+    check "I will read" in response.transcriptText
+    check response.failedTools.len == 0
+
+  test "a denied permission and native cancellation retain their provenance":
+    let directory = createTempDir("scriptorium-acp-denied-", "")
+    defer: removeDir(directory)
+    var request = requestFor(directory, "fixture:read-policy-cancel")
+    request.accessPolicy = accessReadOnly
+    let response = runAgent(request)
+    check response.exitCode != 0
+    check response.failureKind == failureCancelled
+    check response.cancellationSource == "native"
+    check response.deniedPermissions == 1
+    check response.failedTools == @["read-spec"]
+    check response.lastMessage == ""
+    check "I will read" in response.transcriptText
+
   test "ordered callbacks stay on the caller thread and retain final chunks":
     let directory = createTempDir("scriptorium-acp-", "")
     defer: removeDir(directory)
