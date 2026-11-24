@@ -132,6 +132,20 @@ suite "agent-scoped MCP completion":
     check submission.feedback.len == ReviewFeedbackMaxBytes
     check submission.feedback.endsWith(ReviewTruncationMarker)
 
+  test "invalid review payloads never complete a session":
+    let session = newReviewerMcpSession(TestEndpoint, "invalid-review")
+    defer: unregisterAgentMcpSession(session)
+    for arguments in [newJNull(), %*[], %*{}, %*{"action": true},
+        %*{"action": "approved"}, %*{"action": " approve "},
+        %*{"action": "approve", "feedback": false},
+        %*{"action": "approve", "ticketId": "other-ticket"},
+        %*{"action": "request_changes", "feedback": "  \n"}]:
+      discard invokeAgentMcpTool(session.endpoint, "submit_review", arguments)
+      check not reviewerSubmission(session).called
+    discard invokeAgentMcpTool(session.endpoint, "submit_review", %*{"action": "approve"})
+    check reviewerSubmission(session).called
+    check reviewerSubmission(session).action == "approve"
+
   test "audit report stays in its own session":
     let first = newAuditMcpSession(TestEndpoint)
     let second = newAuditMcpSession(TestEndpoint)

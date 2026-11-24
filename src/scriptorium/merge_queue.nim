@@ -1,5 +1,6 @@
 import
   std/[algorithm, os, osproc, sequtils, strformat, strutils, tables, times],
+  acport,
   ./[agent_runner, agent_sessions, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, notifications, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata]
 
 const
@@ -296,7 +297,17 @@ proc runReviewAgent*(
   let reviewWallDuration = formatDuration(reviewWallTime)
 
   let submission = reviewerSubmission(mcpSession)
-  result = (action: submission.action, feedback: submission.feedback)
+  result = (action: "request_changes", feedback: "")
+  if agentResult.exitCode != 0 or agentResult.failureKind != failureNone or
+      agentResult.stopReason != endTurn or agentResult.cancelled or
+      agentResult.timeoutKind notin ["", "none"]:
+    result.feedback = "The reviewer failed to complete successfully. " & agentResult.errorMessage
+  elif not submission.called:
+    result.feedback = "The reviewer did not call submit_review."
+  elif submission.action notin ["approve", "approve_with_warnings", "request_changes"]:
+    result.feedback = "The reviewer submitted an invalid decision."
+  else:
+    result = (action: submission.action, feedback: submission.feedback)
 
   if result.action == "approve":
     logInfo(fmt"ticket {item.ticketId}: review approved")
@@ -448,7 +459,7 @@ proc processMergeQueue*(repoPath: string, runner: AgentRunner = runAgent): bool 
     # Run review agent before quality gates.
     let ticketContent = readFile(ticketPath)
     let reviewDecision = runReviewAgent(repoPath, planPath, item, ticketContent, item.summary, runner)
-    if reviewDecision.action == "request_changes":
+    if reviewDecision.action notin ["approve", "approve_with_warnings"]:
       let attempts = ticketAttemptCounts.getOrDefault(item.ticketId, 0)
       ticketAttemptCounts[item.ticketId] = attempts + 1
       let startTime = ticketStartTimes.getOrDefault(item.ticketId, 0.0)

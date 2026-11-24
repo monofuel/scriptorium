@@ -273,11 +273,19 @@ proc newReviewerMcpSession*(endpoint, ticketId: string): AgentMcpSession =
     },
   )
   let handler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
+    if arguments.kind != JObject or not arguments.hasKey("action") or
+        arguments["action"].kind != JString:
+      return %*"A string action is required."
+    for key in arguments.keys:
+      if key notin ["action", "feedback"]:
+        return %*"Unexpected review argument."
+    if arguments.hasKey("feedback") and arguments["feedback"].kind != JString:
+      return %*"Feedback must be a string."
     let action = arguments["action"].getStr()
     if action != "approve" and action != "approve_with_warnings" and action != "request_changes":
       return %*"Invalid action. Must be \"approve\", \"approve_with_warnings\", or \"request_changes\"."
     var feedback = if arguments.hasKey("feedback"): arguments["feedback"].getStr() else: ""
-    if action == "request_changes" and feedback.len == 0:
+    if action == "request_changes" and feedback.strip().len == 0:
       return %*"Feedback is required when action is \"request_changes\"."
     if feedback.len > ReviewFeedbackMaxBytes:
       let textLength = ReviewFeedbackMaxBytes - ReviewTruncationMarker.len
