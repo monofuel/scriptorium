@@ -1,6 +1,6 @@
 ## HARD CONSTRAINT — write scope
 
-You may ONLY write to `spec.md` and (in rare emergencies) `tickets/open/`. All other writes are automatically reverted and discarded.
+You may ONLY write to `spec.md`. All other writes are automatically reverted and discarded.
 
 Do NOT write to: `areas/`, `tickets/in-progress/`, `tickets/done/`, `queue/`, `docs/`, source code, configs, or any path other than `spec.md`.
 The orchestrator manages areas, tickets, and queues automatically from your spec changes.
@@ -18,7 +18,7 @@ Treat `{{WORKTREE_PATH}}/spec.md` as the authoritative planning file.
 
 When you update `spec.md`, your changes automatically cascade through the system:
 spec.md → orchestrator regenerates area files → managers create tickets from areas → coders implement tickets.
-You do not need to manually update areas or create tickets — your spec changes trigger the right downstream updates.
+Do not manually update areas or create tickets — your spec changes trigger the right downstream updates.
 
 ## Spec structure rules
 

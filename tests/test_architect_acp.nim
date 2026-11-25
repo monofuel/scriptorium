@@ -281,7 +281,7 @@ suite "architect ACP bridge":
     check atomicLoadN(addr permissionsAsked, ATOMIC_ACQUIRE) == 2
     check messageText(session.ask("fixture:settings").items) == "fixture-model:high:agent-tail"
     check messageText(session.ask("fixture:ticket").items) == "ticket-tail"
-    check gitCheck(repo, "cat-file", "-e", PlanBranch & ":tickets/open/0099-fixture.md") == 0
+    check gitCheck(repo, "cat-file", "-e", PlanBranch & ":tickets/open/0099-fixture.md") != 0
     check not adminLockHeld(repo)
     check ContextMarker notin lastPromptText(repo)
     let options = session.setConfigOption("mode", "ask", TimeoutMs)
@@ -482,6 +482,42 @@ suite "architect ACP bridge":
     client.close()
     closed = true
     childrenExited(repo)
+
+  test "Plan accepts native spec commits, dirty writes, and no-change answers":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    check session.ask("fixture:plan-self-commit").stop == endTurn
+    let nativeHead = gitRunCapture(repo, @["rev-parse", PlanBranch]).output.strip()
+    check "native synthetic spec commit" in gitRunCapture(repo, @["log", "-1", "--format=%s", PlanBranch]).output
+    check messageText(session.ask("fixture:hello").items) == "hello-tail"
+    check gitRunCapture(repo, @["rev-parse", PlanBranch]).output.strip() == nativeHead
+    check session.ask("fixture:plan-dirty").stop == endTurn
+    check "plan session turn 3" in gitRunCapture(repo, @["log", "-1", "--format=%s", PlanBranch]).output
+    let transcript = readFile(repo / ".scriptorium/architect-acp" / (session.id & ".jsonl"))
+    check "\"status\":\"failed\"" notin transcript
+    check "\"finalAnswerPresent\":true" in transcript
+    check not adminLockHeld(repo)
+
+  test "known Plan finalization errors record failed receipts and retain the native answer":
+    let repo = makeRepo()
+    defer: removeDir(repo)
+    let client = connectServer(repo)
+    defer: client.close()
+    let session = client.newArchitectSession(repo)
+    try:
+      discard session.ask("fixture:plan-commit-error")
+      check false
+    except AcpRpcError as error:
+      check "Plan finalization failed" in error.msg
+      check error.data["nativeStopReason"].getStr() == "end_turn"
+      check error.data["terminal"]["outcome"].getStr() == "failed"
+    let transcript = readFile(repo / ".scriptorium/architect-acp" / (session.id & ".jsonl"))
+    check "\"status\":\"failed\"" in transcript
+    check "plan-commit-error-tail" in transcript
+    check not adminLockHeld(repo)
 
   test "read tools finish with an answer and failures can be explained without claiming a read":
     let repo = makeRepo()

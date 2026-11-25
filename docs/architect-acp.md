@@ -140,8 +140,12 @@ Commands answered without the model: `/status`, `/queue`, `/start`, `/pause`,
 ## Modes and policy
 
 The session exposes one setting, `mode` (`plan` or `ask`), both as a config
-option and as a legacy mode. Plan may write `spec.md` and `tickets/open`; ask is
-read-only. Each mode has its own native conversation because access policy is
+option and as a legacy mode. Plan may write only `spec.md`; managers create
+implementation tickets from the spec. Ask is
+read-only. Native spec-only commits are validated and retained; the wrapper
+commits only remaining staged spec changes. No-change answers do not create
+commits. Known Git finalization failures produce failed terminal receipts,
+preserving native text and side effects without replay. Each mode has its own native conversation because access policy is
 part of native session identity.
 
 The engineer still sees one conversation. When a mode's native conversation

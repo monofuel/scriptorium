@@ -67,7 +67,7 @@ proc runPlanArchitectRequest*(
     onEvent: onEvent,
     allowedTools: allowedTools,
     accessPolicy: (if allowedTools.len > 0: accessReadOnly else: accessRestricted),
-    allowedWritePaths: @[PlanSpecPath, PlanTicketsOpenDir],
+    allowedWritePaths: @[PlanSpecPath],
     continuationPromptBuilder: buildAgentsReinjectPrompt,
   ))
 

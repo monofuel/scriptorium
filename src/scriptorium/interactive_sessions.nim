@@ -46,30 +46,45 @@ proc runArchitectPlanTurn*(
   ticketId: string,
   onEvent: AgentEventHandler,
 ): ArchitectTurnResult =
-  ## Run one planning turn, enforce its write allowlist, and commit tickets and spec only on success.
+  ## Run one spec-only planning turn and accept an already committed native spec update.
   ## Callers must hold the admin lock and own the plan worktree for the whole turn.
-  let prevSpec = readFile(planPath / PlanSpecPath)
+  let
+    prevSpec = readFile(planPath / PlanSpecPath)
+    previousHead = gitRunCapture(planPath, @["rev-parse", "HEAD"]).output.strip()
   let prompt = buildInteractivePlanPrompt(repoPath, planPath, prevSpec, history, line)
   result.agentResult = runPlanArchitectRequest(runner, repoPath, planPath, architect,
     prompt, ticketId, onEvent, PlanHeartbeatIntervalMs)
-  enforceWritePrefixAllowlist(planPath, [PlanSpecPath, PlanTicketsOpenDir], PlanWriteScopeName)
   requireArchitectAnswer(result.agentResult)
-  if result.agentResult.exitCode == 0:
-    let
-      specChanged = readFile(planPath / PlanSpecPath) != prevSpec
-      commitMessage = fmt"scriptorium: plan session turn {turnNum}"
-    discard withCommitLock(repoPath, proc(): bool =
-      ## Commit architect tickets before the revised spec, matching the CLI history.
-      gitRun(planPath, "add", PlanTicketsOpenDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", "scriptorium: architect created tickets")
-      if specChanged:
-        gitRun(planPath, "add", PlanSpecPath)
-        gitRun(planPath, "commit", "-m", commitMessage)
-      true
-    )
-    result.response = result.agentResult.lastMessage.strip()
-    result.specChanged = specChanged
+  try:
+    enforceWriteAllowlist(planPath, [PlanSpecPath], PlanWriteScopeName)
+    if result.agentResult.exitCode == 0:
+      let
+        specChanged = readFile(planPath / PlanSpecPath) != prevSpec
+        commitMessage = fmt"scriptorium: plan session turn {turnNum}"
+      discard withCommitLock(repoPath, proc(): bool =
+        ## Validate committed native work and commit only remaining dirty spec bytes.
+        if gitCheck(planPath, "merge-base", "--is-ancestor", previousHead, "HEAD") != 0:
+          raise newException(ValueError, "Native Plan rewrote history; inspect the preserved plan state")
+        let changes = gitRunCapture(planPath, @["log", "--format=", "--name-only", previousHead & "..HEAD"])
+        if changes.exitCode != 0:
+          raise newException(IOError, "Cannot validate native Plan commits: " & changes.output)
+        for path in changes.output.splitLines():
+          if path.len > 0 and path != PlanSpecPath:
+            raise newException(ValueError, "Native Plan commit changed disallowed path: " & path)
+        if specChanged:
+          gitRun(planPath, "add", "--", PlanSpecPath)
+          if gitCheck(planPath, "diff", "--cached", "--quiet", "--", PlanSpecPath) != 0:
+            gitRun(planPath, "commit", "--only", "-m", commitMessage, "--", PlanSpecPath)
+        true
+      )
+      result.response = result.agentResult.lastMessage.strip()
+      result.specChanged = specChanged
+  except CatchableError as error:
+    # Settle known post-turn errors without replaying or rewriting native side effects.
+    if result.agentResult.failureKind == failureNone:
+      result.agentResult.exitCode = 1
+      result.agentResult.failureKind = failureProtocol
+    result.agentResult.errorMessage.add(" Plan finalization failed; native work was preserved: " & error.msg)
 
 proc runArchitectAskTurn*(
   runner: AgentRunner,

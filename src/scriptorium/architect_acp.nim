@@ -151,13 +151,13 @@ proc modeOptions(mode: string): JsonNode =
   ## Advertise the only Architect setting this bridge implements.
   %*[{"id": ModeConfigId, "name": "Mode", "category": "mode", "type": "select",
     "currentValue": mode, "options": [
-      {"value": PlanMode, "name": "Plan", "description": "Revise spec.md and open tickets"},
+      {"value": PlanMode, "name": "Plan", "description": "Revise spec.md; managers create tickets"},
       {"value": AskMode, "name": "Ask", "description": "Read-only questions"}]}]
 
 proc modeState(mode: string): JsonNode =
   ## Mirror the mode option for clients that use legacy session modes.
   %*{"currentModeId": mode, "availableModes": [
-    {"id": PlanMode, "name": "Plan", "description": "Revise spec.md and open tickets"},
+    {"id": PlanMode, "name": "Plan", "description": "Revise spec.md; managers create tickets"},
     {"id": AskMode, "name": "Ask", "description": "Read-only questions"}]}
 
 proc textUpdate(sessionId: string, kind: UpdateKind, text: string): JsonNode =

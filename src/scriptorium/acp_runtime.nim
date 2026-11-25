@@ -9,7 +9,7 @@ const
   PollIntervalMs = 25
   InteractionPollMs = 10
   UrlSchemes = ["https://", "http://"]
-  ClientVersion = "20.0.4"
+  ClientVersion = "20.0.5"
 
 type
   PacketKind = enum

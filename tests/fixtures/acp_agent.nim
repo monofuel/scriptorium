@@ -1,5 +1,5 @@
 import
-  std/[json, os, posix, strutils]
+  std/[json, os, osproc, posix, strutils]
 
 const
   CommandMarker = "fixture:"
@@ -190,6 +190,24 @@ proc main() =
             "priority": "high", "status": "in_progress"}]})
         elif command == "ticket":
           writeTicket(cwd)
+        elif command in ["plan-dirty", "plan-self-commit", "plan-commit-error"]:
+          writeFile(cwd / "spec.md", "# Synthetic revised spec: " & command & "\n")
+          if command == "plan-self-commit":
+            let process = startProcess("git", workingDir = cwd,
+              args = @["commit", "--only", "-m", "native synthetic spec commit", "--", "spec.md"],
+              options = {poUsePath})
+            let code = process.waitForExit()
+            process.close()
+            doAssert code == 0
+          elif command == "plan-commit-error":
+            let hooks = cwd.parentDir / "synthetic-hooks"
+            createDir(hooks)
+            writeFile(hooks / "pre-commit", "#!/bin/sh\nexit 1\n")
+            setFilePermissions(hooks / "pre-commit", {fpUserRead, fpUserWrite, fpUserExec})
+            let process = startProcess("git", workingDir = cwd,
+              args = @["config", "core.hooksPath", hooks], options = {poUsePath})
+            doAssert process.waitForExit() == 0
+            process.close()
         elif command == "noise":
           stderr.writeLine("diagnostic noise")
           stderr.flushFile()
