@@ -6,7 +6,7 @@ NIM_FLAGS ?= --hints:off --warnings:off
 DOCKER_IMAGE ?= gitea.solution-nine.monofuel.dev/monolab/scriptorium:latest
 DOCKER_PLATFORM ?= linux/amd64
 
-.PHONY: setup agent-setup build test test-arc test-orc integration-test integration-test-codex integration-test-claude integration-test-grok integration-test-hermes e2e-test e2e-test-codex e2e-test-claude e2e-test-grok docker-build docker-build-push ci check-updates
+.PHONY: setup agent-setup build test test-arc test-orc integration-test integration-test-mcp integration-test-codex integration-test-claude integration-test-grok integration-test-hermes e2e-test e2e-test-codex e2e-test-claude e2e-test-grok docker-build docker-build-push ci check-updates
 
 setup: nim.cfg
 
@@ -31,6 +31,12 @@ test-orc: nim.cfg
 integration-test: nim.cfg
 	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim integration
 	$(MAKE) integration-test-codex integration-test-claude integration-test-grok
+
+integration-test-mcp: nim.cfg
+	$(NIM) r $(NIM_FLAGS) tests/integration_mcp_scoped_http.nim
+	$(NIM) r $(NIM_FLAGS) tests/integration_project_read_http.nim
+	$(NIM) r $(NIM_FLAGS) --mm:arc --nimcache:.build/test-cache/mcp-arc -o:.build/test-binaries/mcp-arc tests/integration_mcp_concurrency.nim
+	$(NIM) r $(NIM_FLAGS) --mm:orc --nimcache:.build/test-cache/mcp-orc -o:.build/test-binaries/mcp-orc tests/integration_mcp_concurrency.nim
 
 integration-test-codex: nim.cfg
 	$(NIM) r $(NIM_FLAGS) scripts/test_runner.nim tests/integration_acp_harness.nim codex

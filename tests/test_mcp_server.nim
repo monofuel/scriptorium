@@ -1,7 +1,7 @@
 ## Unit tests for agent-scoped MCP servers and completion state.
 
 import
-  std/[json, os, strutils, tables, tempfiles, unittest],
+  std/[json, os, strutils, tables, tempfiles, unicode, unittest],
   scriptorium/mcp_server
 
 const
@@ -51,6 +51,19 @@ suite "agent-scoped MCP completion":
     let directory = createTempDir("scriptorium-mcp-unit-", "")
   teardown:
     removeDir(directory)
+
+  test "multibyte review feedback stays valid at its byte limit":
+    let session = newReviewerMcpSession(TestEndpoint, "unicode-feedback")
+    defer: unregisterAgentMcpSession(session)
+    let boundary = ReviewFeedbackMaxBytes - ReviewTruncationMarker.len
+    let feedback = repeat("a", boundary - 1) & "🎮" & repeat("b", 40)
+    discard invokeAgentMcpTool(session.endpoint, "submit_review", %*{"action": "request_changes", "feedback": feedback})
+    let submission = reviewerSubmission(session)
+    check submission.called
+    check submission.action == "request_changes"
+    check validateUtf8(submission.feedback) < 0
+    check submission.feedback.len <= ReviewFeedbackMaxBytes
+    check submission.feedback.endsWith(ReviewTruncationMarker)
   test "submit_pr rejects missing summaries and binds the assigned ticket":
     let session = newCodingMcpSession(TestEndpoint, "0022", "ticket-0022", (directory / "wt-0022"))
     defer: unregisterAgentMcpSession(session)

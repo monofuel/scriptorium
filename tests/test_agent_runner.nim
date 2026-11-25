@@ -1,7 +1,7 @@
 import
   std/[json, options, os, osproc, strutils, tables, tempfiles, unittest],
   acport,
-  scriptorium/[acp_permissions, agent_runner, agent_sessions, config, lock_management, runtime_status]
+  scriptorium/[acp_permissions, agent_runner, agent_sessions, config, lock_management, prompt_builders, runtime_status]
 
 let fixture = getTempDir() / ("scriptorium-acp-fixture-" & $getCurrentProcessId())
 let compiler = getEnv("NIM", "nim")
@@ -20,6 +20,19 @@ proc requestFor(directory, prompt: string): AgentRunRequest =
     logRoot: directory / "logs", sessionRoot: directory / "sessions")
 
 suite "shared ACP runner":
+  test "historical invalid bytes fail raw ACP but explicit prompt projection completes":
+    let directory = createTempDir("scriptorium-acp-utf8-", "")
+    defer: removeDir(directory)
+    let historical = "# Synthetic ticket\n\n## Agent Run\n\x86 retained original bytes"
+    let invalid = runAgent(requestFor(directory, historical))
+    check invalid.failureKind == failureProtocol
+    check "Outgoing JSON must be UTF-8" in invalid.errorMessage
+    let projected = buildCodingAgentPrompt(directory, directory, "tickets/in-progress/0003.md", historical)
+    let completed = runAgent(requestFor(directory, projected))
+    check completed.failureKind == failureNone
+    check completed.exitCode == 0
+    check completed.lastMessage.len > 0
+
   test "native activity is observed without changing conversation reuse or event forwarding":
     let directory = createTempDir("scriptorium-acp-activity-", "")
     defer: removeDir(directory)

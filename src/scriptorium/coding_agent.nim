@@ -1,6 +1,6 @@
 import
   std/[locks, os, strformat, strutils, tables, times],
-  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, ticket_analysis, ticket_metadata, ticket_assignment]
+  ./[agent_pool, agent_runner, architect_agent, config, continuation_builder, git_ops, journal, lock_management, log_forwarding, logging, mcp_server, merge_queue, output_formatting, prompt_builders, shared_state, text_encoding, ticket_analysis, ticket_metadata, ticket_assignment]
 
 const
   PredictionNoOutputTimeoutMs = 30_000
@@ -93,7 +93,7 @@ proc predictTicketDifficulty*(
       let content = readFile(specPath)
       # Use first 2000 chars as summary to keep the prompt short.
       if content.len > 2000:
-        result = content[0..<2000] & "\n...(truncated)"
+        result = utf8Prefix(content, 2000) & "\n...(truncated)"
       else:
         result = content
   )

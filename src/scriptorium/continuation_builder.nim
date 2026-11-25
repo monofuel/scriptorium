@@ -1,5 +1,6 @@
 import
-  std/os
+  std/os,
+  ./text_encoding
 
 const
   AgentsFileName = "AGENTS.md"
@@ -19,7 +20,7 @@ proc buildAgentsReinjectPrompt*(workingDir: string): string =
 
   var content = readFile(agentsPath)
   if content.len > MaxAgentsFileChars:
-    content = content[0..<MaxAgentsFileChars] & "\n\n(Rules truncated due to length.)"
+    content = utf8Prefix(content, MaxAgentsFileChars) & "\n\n(Rules truncated due to length.)"
 
   result = "The following project rules from AGENTS.md must be followed:\n\n" &
     content & "\n\n" & DefaultContinuationText

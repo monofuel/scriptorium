@@ -1,5 +1,6 @@
 import
-  std/[strformat, strutils]
+  std/[strformat, strutils],
+  ./text_encoding
 
 const
   PromptDirectory = "prompts/"
@@ -75,4 +76,4 @@ proc renderPromptTemplate*(templateText: string, bindings: openArray[PromptBindi
   result = templateText
   for binding in bindings:
     let marker = markerForPlaceholder(binding.name)
-    result = result.replace(marker, binding.value)
+    result = result.replace(marker, renderUtf8Bytes(binding.value))

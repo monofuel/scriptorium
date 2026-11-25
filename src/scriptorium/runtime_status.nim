@@ -1,7 +1,7 @@
 import
   std/[locks, options, os, posix, strutils, tables, times],
   jsony,
-  ./[agent_runner_types, git_ops, lock_management, logging, shared_state]
+  ./[agent_runner_types, git_ops, lock_management, logging, shared_state, text_encoding]
 
 const
   RuntimeSnapshotFileName* = "orchestrator-runtime.json"
@@ -260,7 +260,7 @@ proc installRuntimeActivityObserver*(repoPath: string) =
       let now = epochTime()
       state.active.add(RuntimeAgent(id: id,
         role: (if request.activityRole.len > 0: request.activityRole else: "unknown"),
-        task: request.activityTask.substr(0, 199), workPath: safeActivityWorkPath(repoPath, request.activityWorkPath),
+        task: utf8Prefix(request.activityTask, 200), workPath: safeActivityWorkPath(repoPath, request.activityWorkPath),
         ticketId: request.ticketId,
         areaId: request.activityAreaId, acpAgent: request.acpAgent,
         model: request.model, reasoningEffort: request.reasoningEffort,

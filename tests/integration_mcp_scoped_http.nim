@@ -1,7 +1,7 @@
 ## Integration tests for scoped MCP servers over the real HTTP transport.
 
 import
-  std/[httpclient, json, os, strformat, unittest],
+  std/[httpclient, json, os, strformat, tempfiles, unittest],
   scriptorium/mcp_server
 
 const
@@ -35,9 +35,14 @@ suite "scoped MCP HTTP transport":
     let host = createAgentMcpHost()
     var serverThread: Thread[ServerThreadArgs]
     createThread(serverThread, runHttpServer, (host, "127.0.0.1", port))
+    defer:
+      signalServerShutdown()
+      joinThread(serverThread)
     waitForServerReady("127.0.0.1", port)
 
-    let coding = newCodingMcpSession(endpoint, "0070", "ticket-0070", "/tmp/wt-0070")
+    let directory = createTempDir("scriptorium-mcp-http-", "")
+    defer: removeDir(directory)
+    let coding = newCodingMcpSession(endpoint, "0070", "ticket-0070", directory / "wt-0070")
     let manager = newManagerMcpSession(endpoint, "backend")
     defer: unregisterAgentMcpSession(manager)
 
@@ -65,8 +70,11 @@ suite "scoped MCP HTTP transport":
       "name": "submit_pr",
       "arguments": {},
     })
-    check codingSubmission(coding).called
+    check not codingSubmission(coding).called
     check not managerSubmission(manager).called
+    discard rpcRequest(codingUrl, 6, "tools/call", %*{
+      "name": "submit_pr", "arguments": {"summary": "Finite scoped HTTP completion"}})
+    check codingSubmission(coding).called
 
     unregisterAgentMcpSession(coding)
     var client = newHttpClient(timeout = RpcTimeoutMs)

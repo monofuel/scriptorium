@@ -1,12 +1,12 @@
 import
-  std/[json, locks, os, strformat, strutils, tables, times],
+  std/[json, locks, options, os, strformat, strutils, tables, times],
   std/httpclient as std_httpclient,
   jsony,
   mcport,
   mummy,
   mummy/routers,
   webby/httpheaders,
-  ./[agent_sessions, project_reader]
+  ./[agent_sessions, mcp_session_store, project_reader, text_encoding]
 
 const
   OrchestratorServerName = "scriptorium-orchestrator"
@@ -17,6 +17,7 @@ const
   ReviewTruncationMarker* = "... [truncated]"
   ServerReadyTimeoutMs* = 5000
   ServerReadyPollIntervalMs = 50
+  MaxRecordedMethods = 128
   BuildCommitHash* = block:
     let fromEnv = staticExec("echo $BUILD_COMMIT").strip()
     if fromEnv.len > 0: fromEnv
@@ -39,13 +40,10 @@ type
     branch*: string
     worktree*: string
     areaId*: string
-    completionCalled: bool
-    summary: string
-    tickets: seq[string]
-    reviewAction: string
-    reviewFeedback: string
-    auditReport: string
-    requestMethods: seq[string]
+    repoPath: string
+    planPath: string
+    terminalCompletion: string
+    terminalMethods: string
 
   AgentMcpHost* = ref object
     httpServer*: mummy.Server
@@ -57,19 +55,10 @@ type
   ]
 
 var
-  agentMcpLock: Lock
-  agentMcpLockInitialized = false
-  agentMcpSessions: Table[string, AgentMcpSession]
   shutdownLock: Lock
   shutdownCond: Cond
   shutdownLockInitialized = false
   shutdownRequested = false
-
-proc ensureAgentMcpLockInitialized() {.gcsafe.} =
-  ## Initialize the scoped MCP session registry lock once.
-  if not agentMcpLockInitialized:
-    initLock(agentMcpLock)
-    agentMcpLockInitialized = true
 
 proc ensureShutdownLockInitialized*() =
   ## Initialize the shutdown coordination lock and condition variable.
@@ -107,51 +96,60 @@ proc newAgentMcpToken(): string =
   for value in bytes:
     result.add(value.toHex(2).toLowerAscii())
 
-proc registerAgentMcpSession(session: AgentMcpSession, endpoint: string) =
-  ## Register one scoped MCP session and assign its private endpoint.
-  ensureAgentMcpLockInitialized()
+proc registerAgentMcpSession(session: AgentMcpSession, endpoint: string,
+    completion = "{\"called\":false}") =
+  ## Register serialized metadata without sharing the calling thread's server or closures.
   let endpointBase = normalizedEndpointBase(endpoint)
-  withLock agentMcpLock:
-    var token = newAgentMcpToken()
-    while agentMcpSessions.hasKey(token):
-      token = newAgentMcpToken()
-    session.token = token
-    session.endpoint = endpointBase & AgentMcpRoutePrefix & token
-    agentMcpSessions[token] = session
+  session.token = newAgentMcpToken()
+  session.endpoint = endpointBase & AgentMcpRoutePrefix & session.token
+  let descriptor = $(%*{"role": $session.role, "ticketId": session.ticketId,
+    "branch": session.branch, "worktree": session.worktree, "areaId": session.areaId,
+    "repoPath": session.repoPath, "planPath": session.planPath})
+  createMcpRecord(session.token, McpSessionRecord(descriptor: descriptor,
+    completion: completion, methods: "[]", initialized: session.server.initialized))
 
 proc unregisterAgentMcpSession*(session: AgentMcpSession) =
   ## Remove one scoped MCP session so its endpoint can no longer be called.
   if session.isNil or session.token.len == 0:
     return
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    agentMcpSessions.del(session.token)
+  let final = expireMcpRecord(session.token)
+  if final.isSome:
+    session.terminalCompletion = final.get().completion
+    session.terminalMethods = final.get().methods
+  session.server = nil
 
 proc lookupAgentMcpSession(token: string): AgentMcpSession {.gcsafe.} =
-  ## Return one registered MCP session without holding the registry lock.
-  ensureAgentMcpLockInitialized()
-  {.cast(gcsafe).}:
-    withLock agentMcpLock:
-      result = agentMcpSessions.getOrDefault(token)
+  ## Construct a thread-local handle from copied descriptor bytes, never a shared traced reference.
+  let record = readMcpRecord(token)
+  if record.isNone: return
+  let descriptor = parseJson(record.get().descriptor)
+  result = AgentMcpSession(token: token,
+    role: parseEnum[AgentMcpRole](descriptor["role"].getStr()),
+    ticketId: descriptor["ticketId"].getStr(), branch: descriptor["branch"].getStr(),
+    worktree: descriptor["worktree"].getStr(), areaId: descriptor["areaId"].getStr(),
+    repoPath: descriptor["repoPath"].getStr(), planPath: descriptor["planPath"].getStr())
 
-proc recordCompletion(session: AgentMcpSession, update: proc() {.gcsafe.}): bool {.gcsafe.} =
+proc recordCompletion(session: AgentMcpSession, completion: JsonNode,
+    persist: proc() {.gcsafe.} = nil) {.gcsafe.} =
   ## Record the first completion call for a session and ignore later duplicates.
-  ensureAgentMcpLockInitialized()
-  {.cast(gcsafe).}:
-    withLock agentMcpLock:
-      if session.completionCalled:
-        return false
-      update()
-      session.completionCalled = true
-      result = true
+  updateMcpRecord(session.token, proc(record: var McpSessionRecord) {.gcsafe.} =
+    ## Persist durable coding completion before publishing the first accepted record.
+    if parseJson(record.completion)["called"].getBool(): return
+    if not persist.isNil: persist()
+    record.completion = $completion)
 
 proc recordRequestMethod(session: AgentMcpSession, requestBody: string) {.gcsafe.} =
   ## Record one MCP request method for transport diagnostics.
-  let requestNode = parseJson(requestBody)
-  let methodName = requestNode.getOrDefault("method").getStr("")
-  {.cast(gcsafe).}:
-    withLock agentMcpLock:
-      session.requestMethods.add(methodName)
+  var requestNode: JsonNode
+  try: requestNode = parseJson(requestBody)
+  except JsonParsingError: return
+  if requestNode.kind != JObject or requestNode{"method"}.isNil or requestNode["method"].kind != JString: return
+  let methodName = requestNode["method"].getStr()
+  updateMcpRecord(session.token, proc(record: var McpSessionRecord) {.gcsafe.} =
+    ## Bound diagnostics while leaving malformed input to MCPort's structured parser.
+    var methods = parseJson(record.methods)
+    if methods.len < MaxRecordedMethods: methods.add(%methodName)
+    record.methods = $methods)
 
 proc codingReceiptPath(worktree: string): string =
   ## Locate the durable completion receipt inside managed ticket state.
@@ -159,26 +157,18 @@ proc codingReceiptPath(worktree: string): string =
 
 proc acknowledgeCodingSubmission*(session: AgentMcpSession) =
   ## Mark a durable receipt consumed after its merge-queue transition commits.
+  let completion = readMcpRecord(session.token)
+  let state = parseJson(if completion.isSome: completion.get().completion else: session.terminalCompletion)
   let content = $(%*{"ticketId": session.ticketId, "branch": session.branch,
-    "summary": session.summary, "pending": false})
+    "summary": state{"summary"}.getStr(), "pending": false})
   atomicRuntimeWrite(codingReceiptPath(session.worktree), content)
 
-proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMcpSession =
-  ## Create and register a coding-agent MCP server bound to one ticket.
-  let session = AgentMcpSession(
-    role: amrCoding,
-    ticketId: ticketId,
-    branch: branch,
-    worktree: worktree,
-    server: newMcpServer(OrchestratorServerName & "-coding", OrchestratorServerVersion),
-  )
-  let receiptPath = codingReceiptPath(worktree)
-  if fileExists(receiptPath):
-    let receipt = parseFile(receiptPath)
-    if receipt["ticketId"].getStr() == ticketId and receipt["branch"].getStr() == branch and
-        receipt["pending"].getBool():
-      session.completionCalled = true
-      session.summary = receipt["summary"].getStr()
+proc configureCodingSession(session: AgentMcpSession) =
+  ## Build coding tools entirely on the current request or caller thread.
+  let
+    receiptPath = codingReceiptPath(session.worktree)
+    ticketId = session.ticketId
+    branch = session.branch
   let tool = McpTool(
     name: "submit_pr",
     description: "Signal that the assigned ticket is complete and ready for review",
@@ -201,23 +191,15 @@ proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMc
     let summary = arguments.getOrDefault("summary").getStr().strip()
     if summary.len == 0:
       raise newException(ValueError, "submit_pr requires a nonempty summary; describe the completed changes")
-    discard recordCompletion(session, proc() {.gcsafe.} =
+    recordCompletion(session, %*{"called": true, "summary": summary}, proc() {.gcsafe.} =
       atomicRuntimeWrite(receiptPath, $(%*{"ticketId": ticketId, "branch": branch,
         "summary": summary, "pending": true}))
-      session.summary = summary
     )
     %*"Merge request recorded."
   session.server.registerTool(tool, handler)
-  registerAgentMcpSession(session, endpoint)
-  result = session
 
-proc newManagerMcpSession*(endpoint, areaId: string): AgentMcpSession =
-  ## Create and register a manager MCP server bound to one area.
-  let session = AgentMcpSession(
-    role: amrManager,
-    areaId: areaId,
-    server: newMcpServer(OrchestratorServerName & "-manager", OrchestratorServerVersion),
-  )
+proc configureManagerSession(session: AgentMcpSession) =
+  ## Build manager tools entirely on the current request or caller thread.
   let tool = McpTool(
     name: "submit_tickets",
     description: "Submit generated tickets for the assigned area",
@@ -238,21 +220,12 @@ proc newManagerMcpSession*(endpoint, areaId: string): AgentMcpSession =
     var tickets: seq[string]
     for item in arguments["tickets"]:
       tickets.add(item.getStr())
-    discard recordCompletion(session, proc() {.gcsafe.} =
-      session.tickets = tickets
-    )
+    recordCompletion(session, %*{"called": true, "tickets": tickets})
     %*"Tickets recorded."
   session.server.registerTool(tool, handler)
-  registerAgentMcpSession(session, endpoint)
-  result = session
 
-proc newReviewerMcpSession*(endpoint, ticketId: string): AgentMcpSession =
-  ## Create and register a reviewer MCP server bound to one merge-queue ticket.
-  let session = AgentMcpSession(
-    role: amrReviewer,
-    ticketId: ticketId,
-    server: newMcpServer(OrchestratorServerName & "-reviewer", OrchestratorServerVersion),
-  )
+proc configureReviewerSession(session: AgentMcpSession) =
+  ## Build reviewer tools entirely on the current request or caller thread.
   let tool = McpTool(
     name: "submit_review",
     description: "Submit a review decision for the assigned ticket",
@@ -290,22 +263,13 @@ proc newReviewerMcpSession*(endpoint, ticketId: string): AgentMcpSession =
       return %*"Feedback is required when action is \"request_changes\"."
     if feedback.len > ReviewFeedbackMaxBytes:
       let textLength = ReviewFeedbackMaxBytes - ReviewTruncationMarker.len
-      feedback = feedback[0..<textLength] & ReviewTruncationMarker
-    discard recordCompletion(session, proc() {.gcsafe.} =
-      session.reviewAction = action
-      session.reviewFeedback = feedback
-    )
+      feedback = utf8Prefix(feedback, textLength) & ReviewTruncationMarker
+    recordCompletion(session, %*{"called": true, "action": action, "feedback": feedback})
     %*"Review decision recorded."
   session.server.registerTool(tool, handler)
-  registerAgentMcpSession(session, endpoint)
-  result = session
 
-proc newAuditMcpSession*(endpoint: string): AgentMcpSession =
-  ## Create and register an audit MCP server bound to one audit invocation.
-  let session = AgentMcpSession(
-    role: amrAudit,
-    server: newMcpServer(OrchestratorServerName & "-audit", OrchestratorServerVersion),
-  )
+proc configureAuditSession(session: AgentMcpSession) =
+  ## Build audit tools entirely on the current request or caller thread.
   let tool = McpTool(
     name: "submit_audit_report",
     description: "Submit the audit report for this invocation",
@@ -323,52 +287,96 @@ proc newAuditMcpSession*(endpoint: string): AgentMcpSession =
   )
   let handler: ToolHandler = proc(arguments: JsonNode): JsonNode {.gcsafe.} =
     let report = arguments["report"].getStr()
-    discard recordCompletion(session, proc() {.gcsafe.} =
-      session.auditReport = report
-    )
+    recordCompletion(session, %*{"called": true, "report": report})
     %*"Audit report recorded."
   session.server.registerTool(tool, handler)
-  registerAgentMcpSession(session, endpoint)
-  result = session
+
+proc configureSession(session: AgentMcpSession) =
+  ## Construct a local MCPort server without transferring server graphs or handler closures between threads.
+  if session.role == amrProjectRead:
+    session.server = newProjectReadServer(session.repoPath, session.planPath)
+  else:
+    session.server = newMcpServer(OrchestratorServerName & "-" & $session.role, OrchestratorServerVersion)
+    case session.role
+    of amrCoding: configureCodingSession(session)
+    of amrManager: configureManagerSession(session)
+    of amrReviewer: configureReviewerSession(session)
+    of amrAudit: configureAuditSession(session)
+    else: discard
+  let record = readMcpRecord(session.token)
+  if record.isSome: session.server.initialized = record.get().initialized
+
+proc newCodingMcpSession*(endpoint, ticketId, branch, worktree: string): AgentMcpSession =
+  ## Register a coding capability and restore only its matching pending durable receipt.
+  result = AgentMcpSession(role: amrCoding, ticketId: ticketId, branch: branch, worktree: worktree)
+  var completion = %*{"called": false}
+  let receiptPath = codingReceiptPath(worktree)
+  if fileExists(receiptPath):
+    let receipt = parseFile(receiptPath)
+    if receipt["ticketId"].getStr() == ticketId and receipt["branch"].getStr() == branch and receipt["pending"].getBool():
+      completion = %*{"called": true, "summary": receipt["summary"]}
+  configureSession(result)
+  registerAgentMcpSession(result, endpoint, $completion)
+
+proc newManagerMcpSession*(endpoint, areaId: string): AgentMcpSession =
+  ## Register a manager capability and construct its caller-local catalog.
+  result = AgentMcpSession(role: amrManager, areaId: areaId)
+  configureSession(result)
+  registerAgentMcpSession(result, endpoint)
+
+proc newReviewerMcpSession*(endpoint, ticketId: string): AgentMcpSession =
+  ## Register a reviewer capability and construct its caller-local catalog.
+  result = AgentMcpSession(role: amrReviewer, ticketId: ticketId)
+  configureSession(result)
+  registerAgentMcpSession(result, endpoint)
+
+proc newAuditMcpSession*(endpoint: string): AgentMcpSession =
+  ## Register an audit capability and construct its caller-local catalog.
+  result = AgentMcpSession(role: amrAudit)
+  configureSession(result)
+  registerAgentMcpSession(result, endpoint)
+
+proc completionState(session: AgentMcpSession): JsonNode =
+  ## Read a local copy of active state or the final snapshot retained when this handle expired.
+  let record = readMcpRecord(session.token)
+  let serialized = if record.isSome: record.get().completion else: session.terminalCompletion
+  if serialized.len == 0: return %*{"called": false}
+  parseJson(serialized)
 
 proc codingSubmission*(session: AgentMcpSession): tuple[called: bool, summary: string] =
   ## Return the coding completion state for one scoped session.
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    result = (called: session.completionCalled, summary: session.summary)
+  let state = completionState(session)
+  result = (called: state["called"].getBool(), summary: state{"summary"}.getStr())
 
 proc managerSubmission*(session: AgentMcpSession): tuple[called: bool, tickets: seq[string]] =
   ## Return the manager completion state for one scoped session.
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    result = (called: session.completionCalled, tickets: session.tickets)
+  let state = completionState(session)
+  result.called = state["called"].getBool()
+  if not state{"tickets"}.isNil:
+    for ticket in state["tickets"]: result.tickets.add(ticket.getStr())
 
 proc reviewerSubmission*(session: AgentMcpSession): tuple[called: bool, action: string, feedback: string] =
   ## Return the reviewer completion state for one scoped session.
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    result = (
-      called: session.completionCalled,
-      action: session.reviewAction,
-      feedback: session.reviewFeedback,
-    )
+  let state = completionState(session)
+  result = (called: state["called"].getBool(), action: state{"action"}.getStr(), feedback: state{"feedback"}.getStr())
 
 proc auditSubmission*(session: AgentMcpSession): tuple[called: bool, report: string] =
   ## Return the audit completion state for one scoped session.
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    result = (called: session.completionCalled, report: session.auditReport)
+  let state = completionState(session)
+  result = (called: state["called"].getBool(), report: state{"report"}.getStr())
 
 proc newProjectReadMcpSession*(endpoint, repoPath, planPath: string): AgentMcpSession =
   ## Register a project-scoped read capability, with no workflow completion or mutating tools.
-  result = AgentMcpSession(role: amrProjectRead, server: newProjectReadServer(repoPath, planPath))
+  result = AgentMcpSession(role: amrProjectRead, repoPath: repoPath, planPath: planPath)
+  configureSession(result)
   registerAgentMcpSession(result, endpoint)
 
 proc mcpRequestMethods*(session: AgentMcpSession): seq[string] =
   ## Return the MCP request methods received for one scoped session.
-  ensureAgentMcpLockInitialized()
-  withLock agentMcpLock:
-    result = session.requestMethods
+  let record = readMcpRecord(session.token)
+  let serialized = if record.isSome: record.get().methods else: session.terminalMethods
+  if serialized.len > 0:
+    for item in parseJson(serialized): result.add(item.getStr())
 
 proc invokeAgentMcpTool*(endpoint, toolName: string, arguments: JsonNode): JsonNode =
   ## Invoke a registered scoped tool in process for component tests.
@@ -377,6 +385,8 @@ proc invokeAgentMcpTool*(endpoint, toolName: string, arguments: JsonNode): JsonN
   let session = lookupAgentMcpSession(token)
   if session.isNil:
     raise newException(ValueError, "agent MCP session is not registered")
+  configureSession(session)
+  defer: session.server = nil
   if not session.server.toolHandlers.hasKey(toolName):
     raise newException(ValueError, "agent MCP tool is not registered: " & toolName)
   result = session.server.toolHandlers[toolName](arguments)
@@ -394,7 +404,6 @@ proc respondWithMcpResult(request: Request, mcpResult: McpResult) =
 
 proc newAgentHttpServer(): mummy.Server =
   ## Create the shared HTTP transport host for scoped agent MCP servers.
-  ensureAgentMcpLockInitialized()
   var router: Router
   router.get("/health", proc(request: Request) {.gcsafe.} =
     request.respond(200, body = "ok")
@@ -412,14 +421,22 @@ proc newAgentHttpServer(): mummy.Server =
     if not contentType.startsWith("application/json"):
       request.respond(400, body = "Content-Type must start with application/json")
       return
-    recordRequestMethod(session, request.body)
-    respondWithMcpResult(request, session.server.handleRequest(request.body))
+    configureSession(session)
+    defer: session.server = nil
+    try:
+      recordRequestMethod(session, request.body)
+    except McpSessionExpiredError:
+      request.respond(404, body = "Unknown or expired agent MCP session")
+      return
+    let response = session.server.handleRequest(request.body)
+    if session.server.initialized:
+      markMcpInitialized(session.token)
+    respondWithMcpResult(request, response)
   )
   result = newServer(router, workerThreads = 4)
 
 proc createAgentMcpHost*(): AgentMcpHost =
   ## Allocate a host while leaving Mummy allocations on the serving thread.
-  ensureAgentMcpLockInitialized()
   ensureShutdownLockInitialized()
   withLock shutdownLock:
     shutdownRequested = false

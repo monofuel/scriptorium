@@ -1,6 +1,6 @@
 import
   std/[strformat, strutils],
-  ./[agent_runner, prompt_catalog, shared_state, ticket_metadata]
+  ./[agent_runner, prompt_catalog, shared_state, text_encoding, ticket_metadata]
 
 const
   PlanStreamPreviewChars* = 140
@@ -31,13 +31,8 @@ proc withDevops*(prompt: string, devopsEnabled: bool): string =
     result = prompt
 
 proc truncateTail*(value: string, maxChars: int): string =
-  ## Return at most maxChars from the end of value.
-  if maxChars < 1:
-    result = ""
-  elif value.len <= maxChars:
-    result = value
-  else:
-    result = value[(value.len - maxChars)..^1]
+  ## Return a bounded suffix without splitting a UTF-8 character.
+  utf8Tail(value, maxChars)
 
 proc clipPlanStreamText*(value: string): string =
   ## Clip one stream message for concise interactive status rendering.
@@ -45,7 +40,7 @@ proc clipPlanStreamText*(value: string): string =
   if normalized.len <= PlanStreamPreviewChars:
     result = normalized
   elif PlanStreamPreviewChars > 3:
-    result = normalized[0..<(PlanStreamPreviewChars - 3)] & "..."
+    result = utf8Prefix(normalized, PlanStreamPreviewChars - 3) & "..."
   else:
     result = normalized
 
