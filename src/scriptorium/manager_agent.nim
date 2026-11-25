@@ -67,6 +67,10 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
   block:
     defer: unregisterAgentMcpSession(mcpSession)
     let response = runner(AgentRunRequest(
+      activityRole: "manager",
+      activityTask: "Plan tickets: " & parseTitleFromTicketContent(areaContent),
+      activityAreaId: areaId,
+      activityWorkPath: relativePath(managedPlanWorktreePath(repoPath) / areaRelPath, repoPath),
       prompt: prompt,
       workingDir: repoPath,
       harness: cfg.agents.manager.harness,
@@ -90,14 +94,53 @@ proc executeManagerForArea*(areaId: string, areaContent: string, repoPath: strin
         forwardAgentEvent("manager", areaId, event),
     ))
     response.requireAgentCompleted()
-  result = managerSubmission(mcpSession).tickets
+  let submission = managerSubmission(mcpSession)
+  if not submission.called:
+    raise newException(ValueError, "Manager ended without submit_tickets: " & areaId)
+  result = submission.tickets
+
+proc relocateManagerTickets*(ticketDocs: seq[string], requestedNextId, assignedNextId: int): seq[string] =
+  ## Rebase manager-local IDs and dependencies while preserving references to pre-existing tickets.
+  if requestedNextId < 1 or assignedNextId < 1:
+    raise newException(ValueError, "Manager ticket ID bases must be positive")
+  var documents: seq[string]
+  for doc in ticketDocs:
+    if doc.strip().len > 0: documents.add(doc)
+  for index, doc in documents:
+    let
+      localId = requestedNextId + index
+      assignedId = assignedNextId + index
+      localLabel = &"{localId:04d}"
+      assignedLabel = &"{assignedId:04d}"
+    var lines = doc.splitLines()
+    for line in lines.mitems:
+      if line.startsWith("# " & localLabel) and
+          (line.len == 2 + localLabel.len or line[2 + localLabel.len] in {' ', '-'}):
+        line = "# " & assignedLabel & line[2 + localLabel.len .. ^1]
+      if line.strip().startsWith(DependsFieldPrefix):
+        var dependencies: seq[string]
+        for dependency in parseDependsFromTicketContent(line):
+          let number = parseInt(dependency)
+          if number == localId:
+            raise newException(ValueError, "Manager ticket depends on itself: " & dependency)
+          if number >= requestedNextId:
+            if number >= requestedNextId + documents.len:
+              raise newException(ValueError, "Manager referenced an unknown provisional ticket: " & dependency)
+            let translated = assignedNextId + number - requestedNextId
+            dependencies.add(&"{translated:04d}")
+          else:
+            dependencies.add(dependency)
+        if dependencies.len > 0: line = DependsFieldPrefix & " " & dependencies.join(", ")
+    result.add(lines.join("\n"))
 
 proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
-    ticketDocs: seq[string], nextId: int) =
+    ticketDocs: seq[string], nextId: int, requestedNextId = 0) =
   ## Write ticket document strings for one area into tickets/open/.
   var currentId = nextId
   createDir(planPath / PlanTicketsOpenDir)
-  for doc in ticketDocs:
+  let documents = if requestedNextId > 0: relocateManagerTickets(ticketDocs, requestedNextId, nextId)
+    else: ticketDocs
+  for doc in documents:
     let body = doc.strip()
     if body.len == 0:
       continue
@@ -121,87 +164,61 @@ proc writeTicketsForAreaFromStrings*(planPath: string, areaId: string,
     inc currentId
 
 proc runManagerForAreas*(repoPath: string, runner: AgentRunner = runAgent): bool =
-  ## Run per-area manager agents serially with narrow plan branch locking.
-  ## 1. Brief lock to snapshot area content.
-  ## 2. No lock during agent execution.
-  ## 3. Brief lock per area to write tickets and commit.
+  ## Persist each completed serial manager before assigning the next manager's provisional IDs.
   type AreaSnapshot = object
     areaId: string
-    areaRelPath: string
-    areaContent: string
-    nextId: int
-
-  # Step 1: Brief lock to read area snapshots.
+    content: string
   var areas: seq[AreaSnapshot]
   discard withPlanWorktree(repoPath, proc(planPath: string): bool =
-    if not hasRunnableSpecInPlanPath(planPath):
-      return false
-    let areasToProcess = areasNeedingTicketsInPlanPath(planPath)
-    for areaRelPath in areasToProcess:
-      let areaId = areaIdFromAreaPath(areaRelPath)
-      areas.add(AreaSnapshot(
-        areaId: areaId,
-        areaRelPath: areaRelPath,
-        areaContent: readFile(planPath / areaRelPath),
-        nextId: nextTicketId(planPath),
-      ))
-    false
-  )
-
-  if areas.len == 0:
-    return false
-
-  # Step 2: Execute managers without holding the lock.
-  type AreaResult = object
-    areaId: string
-    ticketDocs: seq[string]
-
-  var results: seq[AreaResult]
+    ## Snapshot the actual area content without holding a Git lock during model calls.
+    if not hasRunnableSpecInPlanPath(planPath): return false
+    for areaRelPath in areasNeedingTicketsInPlanPath(planPath):
+      areas.add(AreaSnapshot(areaId: areaIdFromAreaPath(areaRelPath),
+        content: readFile(planPath / areaRelPath)))
+    true)
   for area in areas:
-    let ticketDocs = executeManagerForArea(area.areaId, area.areaContent, repoPath, area.nextId, runner)
-    if ticketDocs.len > 0:
-      results.add(AreaResult(areaId: area.areaId, ticketDocs: ticketDocs))
-
-  # Step 3: Brief lock per completed manager to write tickets and commit.
-  var hasChanges = false
-  for i in 0..<results.len:
-    let areaId = results[i].areaId
-    let ticketDocs = results[i].ticketDocs
+    let
+      areaId = area.areaId
+      areaContent = area.content
+    let requestedNextId = withPlanWorktree(repoPath, proc(planPath: string): int =
+      ## Include tickets persisted by earlier managers in this same serial batch.
+      nextTicketId(planPath))
+    let documents = executeManagerForArea(areaId, areaContent, repoPath, requestedNextId, runner)
     discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-      let nextId = nextTicketId(planPath)
-      writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
-      gitRun(planPath, "add", PlanTicketsOpenDir)
-      if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
-        gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
-      true
-    )
-    hasChanges = true
-
-  # Update area hashes after all writes.
-  if hasChanges:
-    discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
-      let currentHashes = computeAllAreaHashes(planPath)
-      writeAreaHashes(planPath, currentHashes)
+      ## Resolve any allocation race and record only the area this manager actually planned.
+      if documents.len > 0:
+        writeTicketsForAreaFromStrings(planPath, areaId, documents, nextTicketId(planPath), requestedNextId)
+        gitRun(planPath, "add", PlanTicketsOpenDir)
+        if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
+          gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
+      var hashes = readAreaHashes(planPath)
+      hashes[areaId] = computeContentHash(areaContent)
+      writeAreaHashes(planPath, hashes)
       gitRun(planPath, "add", AreaHashesPath)
       if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
         gitRun(planPath, "commit", "-m", AreaHashesCommitMessage)
-      true
-    )
-
-  result = hasChanges
+      true)
+    if documents.len > 0: result = true
 
 proc managerAgentWorkerThread*(args: AgentThreadArgs) {.thread.} =
   ## Run executeManagerForArea in a background thread and send the result to the pool channel.
   {.cast(gcsafe).}:
     let runner: AgentRunner = if not agentRunnerOverride.isNil: agentRunnerOverride else: runAgent
-    let ticketDocs = executeManagerForArea(args.areaId, args.areaContent, args.repoPath, args.nextId, runner)
-    sendPoolResult(AgentPoolCompletionResult(
+    var completion = AgentPoolCompletionResult(
       role: arManager,
       ticketId: args.ticketId,
       areaId: args.areaId,
       result: AgentRunResult(),
-      managerResult: ticketDocs,
-    ))
+      managerNextId: args.nextId,
+      managerAreaHash: computeContentHash(args.areaContent),
+    )
+    try:
+      completion.managerResult = executeManagerForArea(args.areaId, args.areaContent,
+        args.repoPath, args.nextId, runner)
+    except CatchableError as error:
+      completion.result = AgentRunResult(exitCode: 1, failureKind: failureProtocol,
+        errorMessage: error.msg)
+    sendPoolResult(completion)
 
 proc launchManagerAreasAsync*(repoPath: string, maxAgents: int) =
   ## Launch per-area manager agents asynchronously for parallel execution.

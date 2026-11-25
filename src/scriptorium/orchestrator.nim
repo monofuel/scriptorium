@@ -182,6 +182,8 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
   ## When questMode is true, step 8 runs the architect quest evaluator instead of the loop system.
   ## Each tick publishes a non-quiescent runtime snapshot before it reads the pause flag or admits
   ## work; only the paused branch publishes quiescence, after its merge handling and with no workers.
+  installRuntimeActivityObserver(repoPath)
+  defer: clearRuntimeActivityObserver()
   publishRuntime(repoPath, "starting", loadConfig(repoPath).concurrency.maxAgents)
   discard recoverFromCrash(repoPath)
   agentRunnerOverride = runner
@@ -227,18 +229,21 @@ proc runOrchestratorMainLoop(repoPath: string, maxTicks: int, runner: AgentRunne
       for completion in completions:
         let running = runningAgentCount()
         if completion.role == arManager:
+          completion.result.requireAgentCompleted()
           let areaId = completion.areaId
           let ticketDocs = completion.managerResult
+          let requestedNextId = completion.managerNextId
+          let plannedAreaHash = completion.managerAreaHash
           logInfo(&"agent slots: {running}/{maxAgents} (manager {areaId} finished, {ticketDocs.len} tickets)")
           discard withLockedPlanWorktree(repoPath, proc(planPath: string): bool =
             if ticketDocs.len > 0:
               let nextId = nextTicketId(planPath)
-              writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId)
+              writeTicketsForAreaFromStrings(planPath, areaId, ticketDocs, nextId, requestedNextId)
               gitRun(planPath, "add", PlanTicketsOpenDir)
               if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:
                 gitRun(planPath, "commit", "-m", "scriptorium: create tickets for " & areaId)
-            # Always update area hashes so this area is not re-ticketed next tick.
-            let currentHashes = computeAllAreaHashes(planPath)
+            var currentHashes = readAreaHashes(planPath)
+            currentHashes[areaId] = plannedAreaHash
             writeAreaHashes(planPath, currentHashes)
             gitRun(planPath, "add", AreaHashesPath)
             if gitCheck(planPath, "diff", "--cached", "--quiet") != 0:

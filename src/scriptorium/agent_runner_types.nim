@@ -41,6 +41,10 @@ type
     nextId*: int
 
   AgentRunRequest* = object
+    activityRole*: string
+    activityTask*: string
+    activityAreaId*: string
+    activityWorkPath*: string
     prompt*: string
     workingDir*: string
     homeDirectory*: string
@@ -115,3 +119,8 @@ type
 
   AgentRunner* = proc(request: AgentRunRequest): AgentRunResult
 
+
+var
+  agentActivityStarted*: proc(request: AgentRunRequest): string
+  agentActivityEvent*: proc(id: string, event: AgentStreamEvent)
+  agentActivityFinished*: proc(id: string, response: AgentRunResult, raised: bool)

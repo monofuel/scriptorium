@@ -5,6 +5,7 @@ import
 
 const
   ControlUsage* = "Usage: scriptorium guildhall-control start|pause|status"
+  MaxWorkItems = 32
 
 proc countPlanTickets(repoPath, directory: string): int =
   ## Count committed ticket files without touching the shared plan worktree.
@@ -14,14 +15,46 @@ proc countPlanTickets(repoPath, directory: string): int =
     for line in listing.output.splitLines():
       if line.strip().endsWith(".md"): inc result
 
-proc runtimeAgentsJson(snapshot: RuntimeSnapshot): JsonNode =
-  ## Render the pool workers recorded by a verified runtime snapshot.
+proc runtimeAgentJson(agent: RuntimeAgent, assigned = false): JsonNode =
+  ## Render safe role and task metadata from an observed call or a pool reservation.
+  let endTime = if agent.endedAt > 0: agent.endedAt else: epochTime()
+  let elapsed = formatUptime(int64(endTime - agent.startedAt))
+  %*{"id": agent.id, "role": agent.role, "ticketId": agent.ticketId, "areaId": agent.areaId,
+    "task": agent.task, "workPath": agent.workPath, "acpAgent": agent.acpAgent, "model": agent.model,
+    "reasoningEffort": agent.reasoningEffort, "state": (if assigned: "assigned" else: agent.state),
+    "nativeSessionId": agent.nativeSessionId, "lastEvent": agent.lastEvent,
+    "lastEventAt": agent.lastEventAt, "startedAt": agent.startedAt, "endedAt": agent.endedAt,
+    "failureKind": agent.failureKind, "elapsed": elapsed,
+    "status": (if assigned: "assigned" elif agent.endedAt > 0: agent.state else: "running")}
+
+proc runtimeAgentsJson(snapshot: RuntimeSnapshot, activity: Option[RuntimeActivitySnapshot]): JsonNode =
+  ## Combine actual synchronous and asynchronous native calls with unmatched pool reservations.
   result = newJArray()
-  let now = epochTime()
+  if activity.isSome:
+    for agent in activity.get().active: result.add(runtimeAgentJson(agent))
   for agent in snapshot.agents:
-    let elapsed = formatUptime(int64(now - agent.startedAt))
-    result.add(%*{"role": agent.role, "ticketId": agent.ticketId, "areaId": agent.areaId,
-      "elapsed": elapsed, "status": "running"})
+    var observed = false
+    if activity.isSome:
+      for current in activity.get().active:
+        if current.role == agent.role and current.ticketId == agent.ticketId: observed = true
+    if not observed: result.add(runtimeAgentJson(agent, assigned = true))
+
+proc committedWorkItems(repoPath, directory, kind: string): JsonNode =
+  ## Read a bounded heading inventory from committed plan documents without inferring running calls.
+  result = %*{"source": "committed_plan", "items": [], "truncated": false}
+  let listing = runCommandCapture(repoPath, "git", @["ls-tree", "--name-only", PlanBranch & ":" & directory])
+  if listing.exitCode != 0: return
+  for filename in listing.output.splitLines():
+    if not filename.endsWith(".md"): continue
+    if result["items"].len >= MaxWorkItems:
+      result["truncated"] = %true
+      break
+    let relative = directory / filename
+    let content = runCommandCapture(repoPath, "git", @["show", PlanBranch & ":" & relative])
+    if content.exitCode != 0: continue
+    let workPath = safeActivityWorkPath(repoPath, relativePath(managedPlanWorktreePath(repoPath) / relative, repoPath))
+    result["items"].add(%*{"kind": kind, "path": relative,
+      "title": dashboard.parseTitleFromTicketContent(content.output), "workPath": workPath})
 
 proc guildhallStatus*(repoPath: string): JsonNode =
   ## Build structured orchestrator, ticket, agent and merge state from shared durable records.
@@ -33,8 +66,10 @@ proc guildhallStatus*(repoPath: string): JsonNode =
     planReady = hasPlanBranch(repoPath)
     runtime = readVerifiedRuntime(repoPath)
     verified = runtime.isSome
+    activity = readVerifiedActivity(repoPath)
     snapshot = runtime.get(RuntimeSnapshot())
-    quiescent = verified and status.paused and snapshot.pauseObserved and snapshot.quiescent
+    quiescent = verified and status.paused and snapshot.pauseObserved and snapshot.quiescent and
+      (activity.isNone or activity.get().active.len == 0)
   result = %*{
     "repo": repoPath,
     "planBranch": planReady,
@@ -46,12 +81,19 @@ proc guildhallStatus*(repoPath: string): JsonNode =
     "architect": {"turnActive": adminHeld,
       "adminLockPid": (if adminHeld: lockHolderPid(adminLock) else: 0)},
     "tickets": {"open": 0, "inProgress": 0, "done": 0, "stuck": 0, "inProgressTickets": []},
-    "agents": {"agents": runtimeAgentsJson(snapshot),
+    "agents": {"agents": runtimeAgentsJson(snapshot, activity),
       "maxAgents": loadConfig(repoPath).concurrency.maxAgents,
-      "source": (if verified: "runtime" else: "unavailable")},
+      "source": (if verified or activity.isSome: "runtime" else: "unavailable"),
+      "activityVerified": activity.isSome, "recent": []},
     "mergeQueue": {"pending": [], "active": nil, "recentOutcomes": []},
+    "workItems": {"areas": {"source": "committed_plan", "items": [], "truncated": false},
+      "inProgressTickets": {"source": "committed_plan", "items": [], "truncated": false}},
   }
+  if activity.isSome:
+    for agent in activity.get().recent: result["agents"]["recent"].add(runtimeAgentJson(agent))
   if planReady:
+    result["workItems"]["areas"] = committedWorkItems(repoPath, PlanAreasDir, "area")
+    result["workItems"]["inProgressTickets"] = committedWorkItems(repoPath, PlanTicketsInProgressDir, "ticket")
     var inProgressTickets = newJArray()
     for ticket in getApiAgents(repoPath).agents:
       inProgressTickets.add(%*{"ticketId": ticket.ticketId, "areaId": ticket.areaId})

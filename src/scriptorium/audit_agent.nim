@@ -90,6 +90,8 @@ proc runAuditAgent*(repoPath: string, runner: AgentRunner = nil): string =
     else: DefaultAuditNoOutputTimeoutMs
   let mcpSession = newAuditMcpSession(cfg.endpoints.local)
   let request = AgentRunRequest(
+    activityRole: "audit",
+    activityTask: "Audit specification against implemented changes",
     prompt: prompt,
     workingDir: repoPath,
     harness: auditCfg.harness,

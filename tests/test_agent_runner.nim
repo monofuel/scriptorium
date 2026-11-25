@@ -1,7 +1,7 @@
 import
   std/[json, options, os, osproc, strutils, tables, tempfiles, unittest],
   acport,
-  scriptorium/[acp_permissions, agent_runner, agent_sessions, config]
+  scriptorium/[acp_permissions, agent_runner, agent_sessions, config, lock_management, runtime_status]
 
 let fixture = getTempDir() / ("scriptorium-acp-fixture-" & $getCurrentProcessId())
 let compiler = getEnv("NIM", "nim")
@@ -20,6 +20,66 @@ proc requestFor(directory, prompt: string): AgentRunRequest =
     logRoot: directory / "logs", sessionRoot: directory / "sessions")
 
 suite "shared ACP runner":
+  test "native activity is observed without changing conversation reuse or event forwarding":
+    let directory = createTempDir("scriptorium-acp-activity-", "")
+    defer: removeDir(directory)
+    acquireOrchestratorPidGuard(directory)
+    defer: releaseOrchestratorPidGuard(directory)
+    installRuntimeActivityObserver(directory)
+    defer: clearRuntimeActivityObserver()
+    var request = requestFor(directory, "fixture:stream private-prompt-sentinel")
+    request.activityRole = "manager"
+    request.activityTask = "Plan regression tests"
+    request.activityAreaId = "regression"
+    request.profile = defaultAcpAgents()["codex"]
+    request.profile.env["FIXTURE_LOG"] = directory / "peer.jsonl"
+    let owner = getThreadId()
+    var seen = 0
+    request.onEvent = proc(event: AgentStreamEvent) =
+      ## Observe an actual native call while preserving the original application callback.
+      check getThreadId() == owner
+      inc seen
+      let state = readVerifiedActivity(directory).get()
+      check state.active.len == 1
+      check state.active[0].role == "manager"
+      check state.active[0].model == "fixture-model"
+      check state.active[0].reasoningEffort == "high"
+    let conversation = newConversationRunner(runAgent)
+    defer: conversation.close()
+    let first = conversation.runner(request)
+    check first.exitCode == 0
+    check first.lastMessage == "stream-tail"
+    request.prompt = "fixture:hello"
+    let second = conversation.runner(request)
+    check second.exitCode == 0
+    check second.sessionId == first.sessionId
+    check seen > 0
+    let state = readVerifiedActivity(directory).get()
+    check state.active.len == 0
+    check state.recent.len == 2
+    check state.recent[1].nativeSessionId == first.sessionId
+    check state.recent[1].state == "completed"
+    check "private-prompt-sentinel" notin readFile(runtimeActivityPath(directory))
+    var sessionsCreated = 0
+    for line in lines(directory / "peer.jsonl"):
+      if parseJson(line){"method"}.getStr() == "session/new": inc sessionsCreated
+    check sessionsCreated == 1
+
+  test "activity snapshot I/O failure does not change the native result":
+    let directory = createTempDir("scriptorium-acp-activity-io-", "")
+    defer: removeDir(directory)
+    acquireOrchestratorPidGuard(directory)
+    defer: releaseOrchestratorPidGuard(directory)
+    installRuntimeActivityObserver(directory)
+    defer: clearRuntimeActivityObserver()
+    removeFile(runtimeActivityPath(directory))
+    createDir(runtimeActivityPath(directory))
+    let response = runAgent(requestFor(directory, "fixture:hello"))
+    check response.exitCode == 0
+    check response.lastMessage == "hello-tail"
+    check response.failureKind == failureNone
+    check readVerifiedActivity(directory).isNone
+
   test "the final message excludes commentary that preceded tools":
     let directory = createTempDir("scriptorium-acp-final-", "")
     defer: removeDir(directory)

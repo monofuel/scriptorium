@@ -47,6 +47,9 @@ proc runPlanArchitectRequest*(
     raise newException(ValueError, "agent runner is required")
   let cfg = loadConfig(repoPath)
   result = runner(AgentRunRequest(
+    activityRole: "architect",
+    activityTask: (if allowedTools.len > 0: "Answer project question" else: "Update project specification"),
+    activityWorkPath: relativePath(planPath / PlanSpecPath, repoPath),
     prompt: prompt,
     workingDir: planPath,
     harness: agentCfg.harness,
@@ -85,6 +88,8 @@ proc runDoArchitectRequest*(
     raise newException(ValueError, "agent runner is required")
   let cfg = loadConfig(repoPath)
   result = runner(AgentRunRequest(
+    activityRole: "architect",
+    activityTask: "Project maintenance",
     prompt: prompt,
     workingDir: repoPath,
     harness: agentCfg.harness,
@@ -518,6 +523,9 @@ proc runArchitectAreas*(repoPath: string, runner: AgentRunner = runAgent): bool 
 
     let spec = loadSpecFromPlanPath(planPath)
     let response = runner(AgentRunRequest(
+      activityRole: "architect",
+      activityTask: "Generate area plans from specification",
+      activityWorkPath: relativePath(planPath / PlanSpecPath, repoPath),
       prompt: buildArchitectAreasPrompt(repoPath, planPath, spec),
       workingDir: planPath,
       harness: cfg.agents.architect.harness,

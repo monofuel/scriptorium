@@ -101,15 +101,19 @@ proc predictTicketDifficulty*(
   let prompt = buildPredictionPrompt(ticketContent, areaContent, specSummary)
 
   let request = AgentRunRequest(
+    activityRole: "prediction",
+    activityTask: "Estimate ticket: " & parseTitleFromTicketContent(ticketContent),
+    activityAreaId: areaId,
+    activityWorkPath: relativePath(managedPlanWorktreePath(repoPath) / ticketRelPath, repoPath),
     prompt: prompt,
     workingDir: repoPath,
-    harness: cfg.agents.coding.harness,
-    acpAgent: cfg.agents.coding.acpAgent,
-    profile: cfg.resolveAcpProfile(cfg.agents.coding),
-    configOptions: cfg.agents.coding.configOptions,
+    harness: cfg.agents.architect.harness,
+    acpAgent: cfg.agents.architect.acpAgent,
+    profile: cfg.resolveAcpProfile(cfg.agents.architect),
+    configOptions: cfg.agents.architect.configOptions,
     sessionRoot: repoPath / ".scriptorium" / "sessions",
-    model: cfg.agents.coding.model,
-    reasoningEffort: cfg.agents.coding.reasoningEffort,
+    model: cfg.agents.architect.model,
+    reasoningEffort: cfg.agents.architect.reasoningEffort,
     logRoot: repoPath / ManagedStateDirName / PlanLogDirName / "prediction",
     ticketId: ticketId & "-prediction",
     attempt: 1,
@@ -219,6 +223,10 @@ proc executeAssignedTicket*(
     logInfo(fmt"ticket {ticketId}: coding agent started (model={model}, attempt {currentAttemptBase}/{maxAttempts})")
     let agentStartTime = epochTime()
     let request = AgentRunRequest(
+      activityRole: "coder",
+      activityTask: parseTitleFromTicketContent(ticketContent),
+      activityAreaId: parseAreaFromTicketContent(ticketContent),
+      activityWorkPath: relativePath(managedPlanWorktreePath(repoPath) / ticketRelPath, repoPath),
       prompt: currentPrompt,
       workingDir: assignment.worktree,
       harness: agentCfg.harness,

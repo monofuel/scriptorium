@@ -510,6 +510,7 @@ suite "concurrent agent execution":
           acquire(callOrderLock)
           callOrder.add(request.ticketId)
           release(callOrderLock)
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{"tickets": []})
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.endsWith("-prediction"):
         return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
@@ -841,6 +842,7 @@ suite "token budget gates coding but allows managers":
           acquire(invocationLock)
           managerInvoked = true
           release(invocationLock)
+        discard invokeAgentMcpTool(request.mcpEndpoint, "submit_tickets", %*{"tickets": []})
         return AgentRunResult(exitCode: 0, attemptCount: 1, stdout: "")
       elif request.ticketId.endsWith("-prediction"):
         return AgentRunResult(exitCode: 1, attemptCount: 1, stdout: "")
@@ -869,3 +871,32 @@ suite "token budget gates coding but allows managers":
     # Tick summary log must contain coding=budget-exceeded.
     let summaryLogs = capturedLogs.filterIt(it.msg.contains("tick") and it.msg.contains("coding=budget-exceeded"))
     check summaryLogs.len > 0
+
+suite "manager completion failure ownership":
+  test "missing manager MCP completion fails on the owner without marking its area planned":
+    let tmp = getTempDir() / "scriptorium_test_manager_failure_owner"
+    makeInitializedTestRepo(tmp)
+    defer: removeDir(tmp)
+    addPassingMakefile(tmp)
+    writeSpecInPlan(tmp, "# Spec\n\nSynthetic manager failure.\n")
+    addAreaToPlan(tmp, "unplanned.md", "# Unplanned area\n")
+    var cfg = defaultConfig()
+    cfg.concurrency.maxAgents = 2
+    writeScriptoriumConfig(tmp, cfg)
+    let runner: AgentRunner = proc(request: AgentRunRequest): AgentRunResult =
+      ## End without the required submission to exercise the actual worker failure channel.
+      AgentRunResult()
+    tickSleepOverrideMs = 0
+    defer: tickSleepOverrideMs = -1
+    capturedLogs = @[]
+    captureLogs = true
+    defer:
+      captureLogs = false
+      capturedLogs = @[]
+    runOrchestratorForTicks(tmp, 4, runner)
+    check capturedLogs.anyIt("Manager ended without submit_tickets: unplanned" in it.msg)
+    discard withPlanWorktree(tmp, proc(plan: string): bool =
+      ## Confirm that failure preserved the unplanned area and created no tickets.
+      check "unplanned" notin readAreaHashes(plan)
+      check nextTicketId(plan) == 1
+      true)

@@ -262,6 +262,10 @@ proc runReviewAgent*(
   var reviewReasoning = ""
   let mcpSession = newReviewerMcpSession(cfg.endpoints.local, item.ticketId)
   let request = AgentRunRequest(
+    activityRole: "reviewer",
+    activityTask: parseTitleFromTicketContent(ticketContent),
+    activityAreaId: areaId,
+    activityWorkPath: relativePath(planPath / item.ticketPath, repoPath),
     prompt: prompt,
     workingDir: item.worktree,
     harness: cfg.agents.reviewer.harness,

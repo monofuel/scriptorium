@@ -9,7 +9,7 @@ const
   PollIntervalMs = 25
   InteractionPollMs = 10
   UrlSchemes = ["https://", "http://"]
-  ClientVersion = "20.0.5"
+  ClientVersion = "20.0.6"
 
 type
   PacketKind = enum
@@ -554,10 +554,24 @@ proc runTurn*(conversation: AgentConversation, rawRequest: AgentRunRequest): Age
 proc runInConversation*(conversation: var AgentConversation,
     request: AgentRunRequest): AgentRunResult =
   ## Lazily open a native conversation and reuse it for compatible turns.
+  let
+    eventObserver = agentActivityEvent
+    finishObserver = agentActivityFinished
+    activityId = if agentActivityStarted.isNil: "" else: agentActivityStarted(request)
+  var
+    configured = request
+    raised = true
+  defer:
+    if activityId.len > 0 and not finishObserver.isNil: finishObserver(activityId, result, raised)
+  if activityId.len > 0 and not eventObserver.isNil:
+    configured.onEvent = proc(event: AgentStreamEvent) =
+      ## Preserve event forwarding while publishing safe activity metadata.
+      eventObserver(activityId, event)
+      if not request.onEvent.isNil: request.onEvent(event)
   try:
     if conversation.isNil or conversation.closed:
-      conversation = openConversation(request)
-    result = conversation.runTurn(request)
+      conversation = openConversation(configured)
+    result = conversation.runTurn(configured)
   except AcpError as error:
     conversation.close()
     result = AgentRunResult(exitCode: 1, attempt: max(request.attempt, 1),
@@ -573,3 +587,4 @@ proc runInConversation*(conversation: var AgentConversation,
       result.failureKind = failureTimeout
       result.timeoutKind = "setup"
     else: result.failureKind = failureTransport
+  raised = false

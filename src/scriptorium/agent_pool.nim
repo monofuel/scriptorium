@@ -12,6 +12,8 @@ type
     areaId*: string
     result*: AgentRunResult
     managerResult*: seq[string]
+    managerNextId*: int
+    managerAreaHash*: string
 
 var
   agentPoolResultChan: Channel[AgentPoolCompletionResult]

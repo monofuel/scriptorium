@@ -12,6 +12,11 @@ The tool is already bound to area `{{AREA_ID}}`; do not provide an area ID.
 
 Each ticket must include the line `{{AREA_FIELD_PREFIX}} {{AREA_ID}}`.
 Start IDs at {{NEXT_ID}} and increase monotonically for additional tickets.
+These IDs are provisional within this submission. The orchestrator assigns final
+global IDs and rebases internal `**Depends:**` references when saving the batch.
+External dependencies must already exist with IDs below {{NEXT_ID}}; do not
+reference speculative tickets from other concurrent managers or hardcode
+provisional IDs in prose.
 Each ticket filename should start with a zero-padded numeric ID, then a slug.
 Optionally include `**Depends:** <ticket-ids>` (comma-separated) if a ticket
 must wait for other tickets to complete before it can be started. Only add
